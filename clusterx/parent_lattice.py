@@ -11,7 +11,7 @@ def unique_non_sorted(a):
     return a[np.sort(idx)]
 
 class ParentLattice(Atoms):
-    """Build a parent lattice
+    """Parent lattice class
 
     The parent lattice in a cluster expansion defines the atomic positions,
     the periodicity, the substitutional species, and the spectator sites, i.e. those
@@ -19,15 +19,16 @@ class ParentLattice(Atoms):
     ``ParentLattice`` subclasses the ASE's ``Atoms`` class.
     """
     
-    def __init__(self, atoms=None, substitutions=[]):
-        super(ParentLattice,self).__init__(symbols=atoms)
-        self._atoms = atoms.copy()
+    def __init__(self, atoms=None, substitutions=[],pbc=(1,1,1)):
+        super(ParentLattice,self).__init__(symbols=atoms,pbc=pbc)
+        #self._atoms = atoms.copy()
         self.set_atoms(atoms)
         self._fname = None
         self._fmt = None
         self._subs = []
         self._natoms = len(self._atoms)
         self.set_substitutions(substitutions)
+        
         
     def copy(self):
         """Return a copy."""
@@ -51,7 +52,7 @@ class ParentLattice(Atoms):
         return self._atoms
 
     def get_natoms(self):
-        """Get the Atoms object representing the pristine parent lattice."""
+        """Get the total number of atoms."""
         return len(self._atoms)
 
     def set_substitutions(self,substitutions=[]):
