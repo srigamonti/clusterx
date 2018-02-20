@@ -23,7 +23,7 @@ class CellConfig():
             self.config = json.loads(configstr)[0]
             print(self.config)
         except:
-            print("No %s file present\n"%(self.filename))
+            #print("No %s file present\n"%(self.filename))
             pass
 
     def write(self):    

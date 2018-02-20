@@ -30,5 +30,10 @@ class CorrelationCalculator():
         if self.tool == "corrdump":
             from clusterx.correlation_calculators.corrdump_calculator import get_correlations as get_correlations_corrdump
             corrs = get_correlations_corrdump(structure, self.basis)
-        
+
+        if self.tool == "clusterx":
+            
+            #from clusterx.correlation_calculators.clusterx_calculator import get_correlations as get_correlations_clusterx
+            #corrs = get_correlations_clusterx(structure, self.clpool, self.basis)
+            
         return corrs
