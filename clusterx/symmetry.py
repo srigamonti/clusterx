@@ -38,12 +38,14 @@ def get_spacegroup(atoms, tool):
     if tool == "spglib":
         import spglib
         sg = spglib.get_spacegroup(atoms)
-        print(sg)
+        #print(sg)
         
         sym = spglib.get_symmetry(atoms)
         #print (sym)
-        print(sym['equivalent_atoms'])
-        print("Number of symmetry operations: ",len(sym['rotations']))
-        sym2 = [(r, t) for r, t in zip(sym['rotations'], sym['translations'])]
-        for s in sym2:
-            print(s[0],s[1])
+        #print(sym['equivalent_atoms'])
+        #print("Number of symmetry operations: ",len(sym['rotations']))
+        #sym2 = [(r, t) for r, t in zip(sym['rotations'], sym['translations'])]
+        #for s in sym2:
+        #    print(s[0],s[1])
+
+        return sg, sym

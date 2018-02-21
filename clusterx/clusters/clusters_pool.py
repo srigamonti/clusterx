@@ -13,7 +13,7 @@ class ClustersPool():
         
         self._name = name
         self._filename = name+".json"
-        self._atoms_db = JSONDatabase(filename=self._filename) # For visualization
+        #self._atoms_db = JSONDatabase(filename=self._filename) # For visualization
         self._parent_lattice = parent_lattice
         #self.write(parent_lattice, parent_lattice=True)
         self.clusters_dict = {}
@@ -93,7 +93,8 @@ class ClustersPool():
         cluster-dictionary object.
         """
         cla = self._parse_clusters_out_to_array()
-
+        prim_cell = self._parent_lattice.get_cell()
+            
         cld = {}
         for icl,cl in enumerate(cla):
             cld[icl] = {}
@@ -102,19 +103,64 @@ class ClustersPool():
             cld[icl]["npoints"] = cl[2]
             if cl[2]==0:
                 cld[icl]["positions_lat"] = []
+                cld[icl]["positions_car"] = []
+                cld[icl]["site_basis"] = []
             else:
                 cld[icl]["positions_lat"] = cl[3]
+                cld[icl]["positions_car"] = np.dot(cl[3],prim_cell).tolist()
                 cld[icl]["site_basis"] = cl[4]
                 
         return cld
             
-    def gen_atoms_database(self):
+    def gen_atoms_database(self, scell, db_filename_noextension="clusters"):
         """
         Builds an ASE's json database object (self._atoms_db). Atoms items in 
         the built database are a representation of the clusters
         embedded in a supercell appropriate for visualization
         with ASE's gui.
         """
+        from ase.data import chemical_symbols as cs
+        from ase import Atoms
+        from ase.db.jsondb import JSONDatabase
+        from clusterx.utils import isclose
+        from subprocess import call
+
+        rtol = 1e-3
+        cld = self.get_clusters_dict()
+        prim_cell = self._parent_lattice.get_cell()
+
+        call(["rm","-f",db_filename_noextension+".json"])
+        atoms_db = JSONDatabase(filename=db_filename_noextension+".json") # For visualization
+        sites = scell.get_sites()
+        for kcl,icl in cld.items():
+
+            #wrap cluster positions
+            chem = []
+            for c in icl["site_basis"]:
+                chem.append(cs[c[1]])
+
+            atoms = Atoms(symbols=chem,positions=icl["positions_car"],cell=scell.get_cell(),pbc=scell.get_pbc())
+            atoms.wrap(center=[0.5,0.5,0.5])
+            wrapped_pos = atoms.get_positions()
+
+            # Dummy species
+            chem = []
+            for i in range(scell.get_natoms()):
+                chem.append("H")
+
+            # Map cluster to supercell
+            #for p,c in zip(icl["positions_car"],icl["site_basis"]):
+            for p,c in zip(wrapped_pos,icl["site_basis"]):
+                for ir,r in enumerate(scell.get_positions()):
+                    if isclose(r,p,rtol=1e-2):
+                        chem[ir] = cs[sites[ir][c[1]+1]]
+
+            atoms = Atoms(symbols=chem,positions=scell.get_positions(),cell=scell.get_cell(),pbc=scell.get_pbc())
+            atoms_db.write(atoms)
+
+        
+        """
+        # Old implementation
         from clusterx.super_cell import SuperCell
         from ase.data import chemical_symbols as cs
 
@@ -146,7 +192,7 @@ class ClustersPool():
 
             #view(super_cell)
             self._atoms_db.write(super_cell)
-
+        """
 
         
     def _parse_clusters_out_to_array(self):
