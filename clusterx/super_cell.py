@@ -81,3 +81,37 @@ class SuperCell(ParentLattice):
                     rndstr[atom_index].number = idx_subs[tag][i+1]
 
         return rndstr
+
+
+    def enumerate_decorations(self, npoints=None, radii=None):
+        from ase.db.jsondb import JSONDatabase
+        from ase.neighborlist import NeighborList
+        from subprocess import call
+
+        atoms = self.get_pristine()
+        natoms = len(atoms)
+        sites = self.get_sites()
+        call(["rm","-f","neighbors.json"])
+        atoms_db = JSONDatabase(filename="neighbors.json") # For visualization
+        
+        rmax = np.full(len(atoms),np.amax(radii)/2.0)
+        nl = NeighborList(rmax, self_interaction=True, bothways=True, skin=0.0)
+        nl.build(atoms)
+        distances = atoms.get_all_distances(mic=True)
+
+        for id1 in range(natoms):
+            neigs = atoms.copy()
+            indices, offsets = nl.get_neighbors(id1)
+            
+            for i, offset in zip(indices,offsets):
+                #pos.append(atoms.positions[i] + np.dot(offset, atoms.get_cell()))
+                #pos.append(atoms.positions[i])
+                #chem_num.append(atoms.numbers[i])
+                spi = len(sites[i])-1
+                neigs[i].number = sites[i][spi]
+                neigs[i].position = atoms.positions[i] + np.dot(offset, atoms.get_cell())
+                
+
+            #neigs = Atoms(numbers=chem_num,positions=pos,cell=self.get_cell(),pbc=self.get_pbc())
+
+            atoms_db.write(neigs)

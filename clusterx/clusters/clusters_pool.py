@@ -111,7 +111,13 @@ class ClustersPool():
                 cld[icl]["site_basis"] = cl[4]
                 
         return cld
-            
+
+    def gen_cluster_orbits(self):
+        cd = self.clusters_dict
+        pl = self._parent_lattice
+
+        
+        
     def gen_atoms_database(self, scell, db_filename_noextension="clusters"):
         """
         Builds an ASE's json database object (self._atoms_db). Atoms items in 
