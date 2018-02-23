@@ -183,19 +183,22 @@ class ClustersPool():
                 
         return cld
 
-    def get_cluster_orbit2(self, super_cell, cluster_sites, tol = 1e-3):
+    def get_cluster_orbit(self, super_cell, cluster_sites, tol = 1e-3):
         """
         cluster_sites, array of atom indices referred to the super_cell.
         """
-        from clusterx.symmetry import get_spacegroup
+        from clusterx.symmetry import get_spacegroup, get_scaled_positions
         from scipy.spatial.distance import cdist
         from sympy.utilities.iterables import multiset_permutations
         import sys
         sc_sg, sc_sym = get_spacegroup(self._parent_lattice.get_pristine(), tool="spglib")
         
-        spos = super_cell.get_scaled_positions(wrap=True)
-        sp0 = np.array([spos[site] for site in cluster_sites]) # Original scalar positions
+        pos = super_cell.get_positions(wrap=True) # Super cell cartesian positions
+        p0 = np.array([pos[site] for site in cluster_sites]) # Original cluster cartesian positions
 
+        # sp0: scaled claster positions with respect to parent lattice
+        sp0 = get_scaled_positions(p0, self._parent_lattice.get_cell(), pbc = super_cell.get_pbc(), wrap = True)
+        
         orbit = []
         for r,t in zip(sc_sym['rotations'], sc_sym['translations']):
             ts = np.tile(t,(len(sp0),1)).T
@@ -227,7 +230,7 @@ class ClustersPool():
 
         return np.array(orbit)
 
-    def get_cluster_orbit(self, super_cell, cluster_sites, tol = 1e-3):
+    def get_cluster_orbit2(self, super_cell, cluster_sites, tol = 1e-3):
         """
         cluster_sites, array of atom indices referred to the super_cell.
         This has the problem that symmetries are taken from supercell and not parent cell.

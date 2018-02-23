@@ -49,3 +49,23 @@ def get_spacegroup(atoms, tool):
         #    print(s[0],s[1])
 
         return sg, sym
+
+
+def get_scaled_positions(positions, cell, pbc=(True,True,True), wrap=True):
+    """Get scaled positions.
+    """
+    from numpy.linalg import solve
+    s = solve(cell().T,positions.T).T
+
+    if wrap:
+        s = wrap_scaled_positions(s, pbc)
+
+    return s
+
+def wrap_scaled_positions(s, pbc):
+    s = np.around(s, decimals=8)
+    for i, pbc in enumerate(pbc):
+        if pbc:
+            s[:, i] %= 1.0
+
+    return s
