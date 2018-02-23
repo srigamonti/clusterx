@@ -111,6 +111,27 @@ class ClustersPool():
     def get_cluster(self, cln):
         return self.clusters_dict[cln]
 
+    def write_orbit_db(self, orbit, super_cell, db_name):
+        """Write cluster orbit to Atoms database
+        """
+        from ase.db.jsondb import JSONDatabase
+        from subprocess import call
+
+        atnums = super_cell.get_atomic_numbers()
+        sites = super_cell.get_sites()
+        idx_subs = super_cell.get_idx_subs()
+        tags = super_cell.get_tags()
+
+        call(["rm","-f",db_name])
+        atoms_db = JSONDatabase(filename=db_name) # For visualization
+        for cl in orbit:
+            atoms = super_cell.copy()
+            ans = atnums.copy()
+            for site in cl:
+                ans[site] = sites[site][1]
+            atoms.set_atomic_numbers(ans)
+            atoms_db.write(atoms)
+
     def _write_clusters_out_corrdump(self):
         """
         Writes clusters.out array as needed by corrdump program.
@@ -162,17 +183,17 @@ class ClustersPool():
                 
         return cld
 
-    def get_cluster_orbit(self, super_cell, cluster_sites, tol = 1e-3):
+    def get_cluster_orbit2(self, super_cell, cluster_sites, tol = 1e-3):
         """
         cluster_sites, array of atom indices referred to the super_cell.
         """
         from clusterx.symmetry import get_spacegroup
         from scipy.spatial.distance import cdist
-        
-        sc_sg, sc_sym = get_spacegroup(super_cell.get_pristine(), tool="spglib")
+        from sympy.utilities.iterables import multiset_permutations
+        import sys
+        sc_sg, sc_sym = get_spacegroup(self._parent_lattice.get_pristine(), tool="spglib")
         
         spos = super_cell.get_scaled_positions(wrap=True)
-
         sp0 = np.array([spos[site] for site in cluster_sites]) # Original scalar positions
 
         orbit = []
@@ -180,16 +201,75 @@ class ClustersPool():
             ts = np.tile(t,(len(sp0),1)).T
             _sp1 = np.add(np.dot(r,sp0.T),ts).T # Apply rotation, then translation
 
-            for i, periodic in enumerate(super_cell.pbc):
+            _sp1 =np.around(_sp1,decimals=8)
+            for i, periodic in enumerate(super_cell.pbc): # Wrap cluster positions inside super cell
                 if periodic: # Following ASE's Atoms.get_scaled_positions, we do this twice
                     _sp1[:, i] %= 1.0
                     _sp1[:, i] %= 1.0
  
             distances = cdist(_sp1, spos, metric='euclidean') # Evaluate all (scaled) distances between cluster points to scell sites
             _cl = np.argwhere(np.abs(distances) < tol)[:,1] # Extract indices when distance is less than tol
+            
+            include = True
+            for cl in orbit:
+                for _pcl in multiset_permutations(_cl):
+                    if (cl == _pcl).all():
+                        include = False
+                        break
+                if not include:
+                    break
 
-            if _cl not in orbit:
+            if include:
                 orbit.append(_cl)
+                
+            #if np.permute(_cl) not in np.array(orbit) and len(_cl) == len(cluster_sites):
+            #    orbit.append(_cl)
+
+        return np.array(orbit)
+
+    def get_cluster_orbit(self, super_cell, cluster_sites, tol = 1e-3):
+        """
+        cluster_sites, array of atom indices referred to the super_cell.
+        This has the problem that symmetries are taken from supercell and not parent cell.
+        """
+        from clusterx.symmetry import get_spacegroup
+        from scipy.spatial.distance import cdist
+        from sympy.utilities.iterables import multiset_permutations
+        import sys
+        sc_sg, sc_sym = get_spacegroup(super_cell.get_pristine(), tool="spglib")
+        
+        spos = super_cell.get_scaled_positions(wrap=True)
+        sp0 = np.array([spos[site] for site in cluster_sites]) # Original scalar positions
+
+        orbit = []
+        for r,t in zip(sc_sym['rotations'], sc_sym['translations']):
+            print(r,t)
+            ts = np.tile(t,(len(sp0),1)).T
+            _sp1 = np.add(np.dot(r,sp0.T),ts).T # Apply rotation, then translation
+
+            _sp1 =np.around(_sp1,decimals=8)
+            for i, periodic in enumerate(super_cell.pbc): # Wrap cluster positions inside super cell
+                if periodic: # Following ASE's Atoms.get_scaled_positions, we do this twice
+                    _sp1[:, i] %= 1.0
+                    _sp1[:, i] %= 1.0
+ 
+            distances = cdist(_sp1, spos, metric='euclidean') # Evaluate all (scaled) distances between cluster points to scell sites
+            _cl = np.argwhere(np.abs(distances) < tol)[:,1] # Extract indices when distance is less than tol
+            
+            include = True
+            for cl in orbit:
+                for _pcl in multiset_permutations(_cl):
+                    if (cl == _pcl).all():
+                        include = False
+                        break
+                if not include:
+                    break
+
+            if include:
+                orbit.append(_cl)
+                
+            #if np.permute(_cl) not in np.array(orbit) and len(_cl) == len(cluster_sites):
+            #    orbit.append(_cl)
 
         return np.array(orbit)
                     
