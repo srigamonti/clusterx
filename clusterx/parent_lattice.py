@@ -84,16 +84,16 @@ class ParentLattice(Atoms):
 
         Now suppose that::
 
-          a1.get_chemical_symbols() -> [Si,Si,Si,Ba,Ba]
-          a2.get_chemical_symbols() -> [Al,Al,Al,Ba,Ba]
-          a3.get_chemical_symbols() -> [Si,Si,Si, X, X]
-          a4.get_chemical_symbols() -> [Si,Si,Si,Sr,Sr]
+          a1.get_chemical_symbols() -> [Si,Si,Si,Ba,Ba,Na]
+          a2.get_chemical_symbols() -> [Al,Al,Al,Ba,Ba,Na]
+          a3.get_chemical_symbols() -> [Si,Si,Si, X, X,Na]
+          a4.get_chemical_symbols() -> [Si,Si,Si,Sr,Sr,Na]
 
         Then::
 
-          tags -> [0,0,0,1,1]
-          idx_subs -> {0: [14,13], 1: [56,0,38]}
-          sites -> {0: [14,13], 1: [14,13], 2: [14,13], 3: [56,0,38], 4: [56,0,38]}
+          tags -> [0,0,0,1,1,2]
+          idx_subs -> {0: [14,13], 1: [56,0,38], 2:[11]}
+          sites -> {0: [14,13], 1: [14,13], 2: [14,13], 3: [56,0,38], 4: [56,0,38], 5:[11]}
 
         This means that sites with tag=0 can be occupied by species 14 and 13,
         and sites with tag=1 can be occupied by species 56, vacancy, or species 38.

@@ -8,7 +8,7 @@ import numpy as np
 import json
 
 class ClustersPool():
-    def __init__(self,parent_lattice, npoints=None, radii=None,tool="corrdump", name=None, filename=None):
+    def __init__(self,parent_lattice, npoints=None, radii=None, tool="clusterx", name="_clusters_pool", filename=None):
 
         
         self._name = name
@@ -20,18 +20,68 @@ class ClustersPool():
 
         self._npoints = npoints
         self._radii = radii
-
-        if npoints is not None and radii is not None:
-            self.gen_clusters(npoints, radii, tool)
-
-    def gen_clusters(self, npoints=None, radii=None, tool="corrdump"):
-        self._npoints = npoints
-        self._radii = radii
-        if tool=="corrdump":
+        self._tool = tool
+        
+    def gen_clusters(self):
+        if self._tool=="corrdump":
             self._gen_clusters_corrdump()
             self.clusters_dict = self._parse_clusters_out()
             subprocess.call(["rm","clusters.out"])
+        if self._tool=="clusterx":
+            self._gen_clusters_clusterx()
 
+    def _gen_clusters_clusterx(self):
+        from clusterx.symmetry import get_spacegroup
+        from numpy import linalg as LA
+        from clusterx.super_cell import SuperCell
+        npoints = self._npoints
+        radii = self._radii
+
+        # Estimate minimal supercell containing largest cluster and create supercell
+        rmax = np.amax(radii)
+        pcell = self._parent_lattice.get_cell()
+        l = LA.norm(pcell, axis=1) # Lengths of the cell vectors
+        n = [int(n) for n in np.ceil(rmax/l)] # number of repetitions of unit cell along each lattice vector to contain largest cluster
+        scell =  SuperCell(self._parent_lattice, np.diag(n))
+        nsc = scell.get_natoms()
+        sites = scell.get_sites()
+        idx_subs = scell.get_idx_subs()
+        tags = scell.get_tags()
+        # Example for these arrays:
+        #a1.get_chemical_symbols() -> [Si,Si,Si,Ba,Ba,Na]
+        #a2.get_chemical_symbols() -> [Al,Al,Al,Ba,Ba,Na]
+        #a3.get_chemical_symbols() -> [Si,Si,Si, X, X,Na]
+        #a4.get_chemical_symbols() -> [Si,Si,Si,Sr,Sr,Na]
+        #
+        #Then::
+        #
+        #  tags -> [0,0,0,1,1,2]
+        #  idx_subs -> {0: [14,13], 1: [56,0,38], 2:[11]}
+        #  sites -> {0: [14,13], 1: [14,13], 2: [14,13], 3: [56,0,38], 4: [56,0,38], 5:[11]}
+
+        # Get symmetry operations of the pristine supercell
+        scell_sg, scell_sym = get_spacegroup(scell.get_pristine(), tool="spglib")
+
+        # Get list of substitutional sites
+        ss = []
+        for i in range(nsc):
+            if len(sites[i]) > 1:
+               ss.append(i)
+
+        # Get list of inequivalent positions
+        ineq_pos = []
+        for i1 in ss:
+            for r,t in zip(scell_sym['rotations'], scell_sym['translations']):
+                ts = np.tile(t,(len(wrapped_scaled_pos),1)).T
+                new_sca_pos = np.add(np.dot(r,wrapped_scaled_pos.T),ts).T
+                new_car_pos = np.dot(new_sca_pos,self.scell.get_cell()).tolist()
+
+                
+        for si1,ch1 in sites.items():
+            print(si1,ch1)
+            for fu1 in ch1:
+                print(fu1)
+            
     def serialize(self, fmt):
         if fmt == "atomsdb":
             self.gen_atoms_database()
@@ -112,12 +162,37 @@ class ClustersPool():
                 
         return cld
 
-    def gen_cluster_orbits(self):
-        cd = self.clusters_dict
-        pl = self._parent_lattice
+    def get_cluster_orbit(self, super_cell, cluster_sites, tol = 1e-3):
+        """
+        cluster_sites, array of atom indices referred to the super_cell.
+        """
+        from clusterx.symmetry import get_spacegroup
+        from scipy.spatial.distance import cdist
+        
+        sc_sg, sc_sym = get_spacegroup(super_cell.get_pristine(), tool="spglib")
+        
+        spos = super_cell.get_scaled_positions(wrap=True)
 
-        
-        
+        sp0 = np.array([spos[site] for site in cluster_sites]) # Original scalar positions
+
+        orbit = []
+        for r,t in zip(sc_sym['rotations'], sc_sym['translations']):
+            ts = np.tile(t,(len(sp0),1)).T
+            _sp1 = np.add(np.dot(r,sp0.T),ts).T # Apply rotation, then translation
+
+            for i, periodic in enumerate(super_cell.pbc):
+                if periodic: # Following ASE's Atoms.get_scaled_positions, we do this twice
+                    _sp1[:, i] %= 1.0
+                    _sp1[:, i] %= 1.0
+ 
+            distances = cdist(_sp1, spos, metric='euclidean') # Evaluate all (scaled) distances between cluster points to scell sites
+            _cl = np.argwhere(np.abs(distances) < tol)[:,1] # Extract indices when distance is less than tol
+
+            if _cl not in orbit:
+                orbit.append(_cl)
+
+        return np.array(orbit)
+                    
     def gen_atoms_database(self, scell, db_filename_noextension="clusters"):
         """
         Builds an ASE's json database object (self._atoms_db). Atoms items in 

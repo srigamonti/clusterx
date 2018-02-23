@@ -17,11 +17,12 @@ def test(testslist=False, name=None):
         return()
     else:
         if name is not None:
-            path = os.path.join(os.path.dirname(tm.__file__),name,".py")
+            path = os.path.join(os.path.dirname(tm.__file__),name+".py")
+            print(path)
         else:
             path = os.path.dirname(tm.__file__)
             
-        pytest.main([os.path.dirname(tm.__file__),"-v","--cache-clear","--capture=no","--junit-xml=testlog.xml"])
+        pytest.main([path,"-v","--cache-clear","--capture=no","--junit-xml=testlog.xml"])
         return ()
 
 
