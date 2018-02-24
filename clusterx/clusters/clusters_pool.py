@@ -193,11 +193,14 @@ class ClustersPool():
         import sys
 
         # Get symmetry operations of the parent lattice
-        sc_sg, sc_sym = get_spacegroup(self._parent_lattice.get_pristine(), tool="spglib")
-        internal_trans = get_internal_translations(self._parent_lattice, super_cell)
-        pos = super_cell.get_positions(wrap=True) # Super cell cartesian positions
+        sc_sg, sc_sym = get_spacegroup(self._parent_lattice.get_pristine(), tool="spglib") # Scaled parent_lattice
+        internal_trans = get_internal_translations(self._parent_lattice, super_cell) # Scaled super_cell
+
+        # Get original cluster cartesian positions (p0)
+        pos = super_cell.get_positions(wrap=True)
+        p0 = np.array([pos[site] for site in cluster_sites])
+        
         spos = super_cell.get_scaled_positions(wrap=True) # Super cell scaled positions
-        p0 = np.array([pos[site] for site in cluster_sites]) # Original cluster cartesian positions
         # sp0: scaled claster positions with respect to parent lattice
         sp0 = get_scaled_positions(p0, self._parent_lattice.get_cell(), pbc = super_cell.get_pbc(), wrap = False)
         orbit = []
@@ -209,9 +212,9 @@ class ClustersPool():
             _p1 = np.dot(self._parent_lattice.get_cell(),_sp1.T).T
             _sp1 = get_scaled_positions(_p1, super_cell.get_cell(), pbc = super_cell.get_pbc(), wrap = True)
             for tr in internal_trans:
-                _sp1 = np.add(_sp1, tr)
-                _sp1 = wrap_scaled_positions(_sp1,super_cell.get_pbc())
-                distances = cdist(_sp1, spos, metric='euclidean') # Evaluate all (cartesian) distances between cluster points to scell sites
+                __sp1 = np.add(_sp1, tr)
+                __sp1 = wrap_scaled_positions(__sp1,super_cell.get_pbc())
+                distances = cdist(__sp1, spos, metric='euclidean') # Evaluate all (scaled) distances between cluster points to scell sites
                 _cl = np.argwhere(np.abs(distances) < tol)[:,1] # Extract indices when distance is less than tol
 
                 include = True

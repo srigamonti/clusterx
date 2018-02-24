@@ -63,11 +63,14 @@ def get_scaled_positions(positions, cell, pbc=(True,True,True), wrap=True):
     return s
 
 def wrap_scaled_positions(s, pbc):
+    """
+    Wrap scaled coordinates to the unit cell
+    """
     s = np.around(s, decimals=8)
     for i, pbc in enumerate(pbc):
         if pbc:
             s[:, i] %= 1.0
-
+            
     return s
 
 
