@@ -55,7 +55,7 @@ def get_scaled_positions(positions, cell, pbc=(True,True,True), wrap=True):
     """Get scaled positions.
     """
     from numpy.linalg import solve
-    s = solve(cell().T,positions.T).T
+    s = solve(cell.T,positions.T).T
 
     if wrap:
         s = wrap_scaled_positions(s, pbc)
@@ -69,3 +69,18 @@ def wrap_scaled_positions(s, pbc):
             s[:, i] %= 1.0
 
     return s
+
+
+def get_internal_translations(parent_lattice, super_cell):
+    """
+    Return the internal translations of a parent lattice with respect to a super cell.
+    Translations are expressed in scaled coordinates with respect to the super cell.
+    """
+    from ase import Atoms
+    from clusterx.super_cell import SuperCell
+    from clusterx.parent_lattice import ParentLattice
+    
+    atoms0 = Atoms(symbols=['H'], positions=[(0,0,0)], cell=parent_lattice.get_cell(), pbc=parent_lattice.get_pbc())
+    atoms1 = ParentLattice(atoms=atoms0,pbc=parent_lattice.get_pbc())
+    atoms2 = SuperCell(atoms1, super_cell.get_transformation())
+    return atoms2.get_scaled_positions(wrap=True)

@@ -46,7 +46,7 @@ class SuperCell(ParentLattice):
         """
         return self._plat
 
-    def get_transormation(self):
+    def get_transformation(self):
         """
         Return the transformation matrix that defines the supercell from the 
         defining parent lattice.
