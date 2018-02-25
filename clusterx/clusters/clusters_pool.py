@@ -191,6 +191,7 @@ class ClustersPool():
         from scipy.spatial.distance import cdist
         from sympy.utilities.iterables import multiset_permutations
         import sys
+        from collections import Counter
 
         # Get symmetry operations of the parent lattice
         sc_sg, sc_sym = get_spacegroup(self._parent_lattice.get_pristine(), tool="spglib") # Scaled parent_lattice
@@ -219,13 +220,10 @@ class ClustersPool():
 
                 include = True
                 for cl in orbit:
-                    for _pcl in multiset_permutations(_cl):
-                        if (cl == _pcl).all():
-                            include = False
-                            break
-                    if not include:
+                    if Counter(cl) == Counter(_cl):
+                        include = False
                         break
-
+                    
                 if include:
                     orbit.append(_cl)
                 
