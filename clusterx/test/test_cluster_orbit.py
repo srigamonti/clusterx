@@ -74,14 +74,13 @@ def test_cluster_orbit():
             scell = SuperCell(plat,[(2,0,0),(0,1,0),(0,0,1)])
 
             cl = ClustersPool(plat)
-            #orbit3 = cl.get_cluster_orbit(scell, [0,24]) # 24k-16i pair cluster
-            #orbit3 = cl.get_cluster_orbit(scell, [0,44]) # 24k-6c pair cluster
             orbit = cl.get_cluster_orbit(scell, [19,17]) # 24k-24k pair cluster
             db_name = "test_orbit%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
             
         if test_case == 3:
+            # Al(111) surface with Na substitution on the first layer. Test a 3-point cluster.
             from ase.build import fcc111, add_adsorbate
             pri = fcc111('Al', size=(1,1,3), vacuum=10.0)
             sub = pri.copy()
@@ -93,10 +92,11 @@ def test_cluster_orbit():
             scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)])
 
             cl = ClustersPool(plat)
-            orbit = cl.get_cluster_orbit(scell, [0,1])
+            orbit = cl.get_cluster_orbit(scell, [2,14,5])
             db_name = "test_orbit%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
+            print(orbit)
             
     print ("\n\n========Test writes========")
     print (test_cluster_orbit.__doc__)
