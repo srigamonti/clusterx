@@ -15,63 +15,89 @@ def test_cluster_orbit():
         
         ase gui test_orbit1.json
     """
+    #test_cases = [0,1,2,3]
+    test_cases = [3]
+    orbits = [None,None,None,None]
+    for test_case in test_cases:
+        if test_case == 0:
+            # Perfect cubic lattice. The tested cluster is such that many interactions
+            # with the periodic images of the crystal are present.
+            a = 3.62/np.sqrt(2.0)
+            positions = [(0,0,0)]
+            cell = [(a,0,0),(0,a,0),(0,0,a)]
+            pbc = (True,True,True)
+            pri = Atoms('Cu', positions=positions, cell= cell, pbc= pbc)
+            sub = Atoms('Al', positions=positions, cell= cell, pbc= pbc)
+            sub2 = Atoms('Na', positions=positions, cell= cell, pbc= pbc)
 
-    # Perfect cubic lattice. The tested cluster is such that many interactions
-    # with the periodic images of the crystal are present.
-    a = 3.62/np.sqrt(2.0)
-    positions = [(0,0,0)]
-    cell = [(a,0,0),(0,a,0),(0,0,a)]
-    pbc = (True,True,True)
-    pri = Atoms('Cu', positions=positions, cell= cell, pbc= pbc)
-    sub = Atoms('Al', positions=positions, cell= cell, pbc= pbc)
-    sub2 = Atoms('Na', positions=positions, cell= cell, pbc= pbc)
+            plat = ParentLattice(pri, substitutions=[sub,sub2], pbc=pbc)
+            scell = SuperCell(plat,[(5,0,0),(0,2,0),(0,0,1)])
 
-    plat = ParentLattice(pri, substitutions=[sub,sub2], pbc=pbc)
-    scell = SuperCell(plat,[(5,0,0),(0,2,0),(0,0,1)])
+            cl = ClustersPool(plat)
 
-    cl = ClustersPool(plat)
+            orbit = cl.get_cluster_orbit(scell, [0,2])
+            db_name = "test_orbit%s.json"%(test_case)
+            cl.write_orbit_db(orbit, scell, db_name)
+            orbits[test_case] = orbit
+            
+        if test_case == 1:
+            # FCC lattice
+            pri = bulk('Cu', 'fcc', a=3.6)
+            sub = bulk('Al', 'fcc', a=3.6)
 
-    orbit1 = cl.get_cluster_orbit(scell, [0,2])
-    db_name = "test_orbit1.json"
-    cl.write_orbit_db(orbit1, scell, db_name)
+            plat = ParentLattice(pri, substitutions=[sub], pbc=pri.get_pbc())
+            scell = SuperCell(plat,[(2,0,0),(0,2,0),(0,0,2)])
 
-    # FCC lattice
-    pri = bulk('Cu', 'fcc', a=3.6)
-    sub = bulk('Al', 'fcc', a=3.6)
+            cl = ClustersPool(plat)
 
-    plat = ParentLattice(pri, substitutions=[sub], pbc=pri.get_pbc())
-    scell = SuperCell(plat,[(2,0,0),(0,2,0),(0,0,2)])
+            orbit = cl.get_cluster_orbit(scell, [0,2])
+            db_name = "test_orbit%s.json"%(test_case)
+            cl.write_orbit_db(orbit, scell, db_name)
+            orbits[test_case] = orbit
+            
+        if test_case == 2:
+            # Clathrate 2x1x1 supercell. This contains spectator atoms.
+            a = 10.515
+            x = 0.185; y = 0.304; z = 0.116
+            wyckoff = [
+                (0, y, z), #24k
+                (x, x, x), #16i
+                (1/4., 0, 1/2.), #6c
+                (1/4., 1/2., 0), #6d
+                (0, 0 , 0) #2a
+            ]
 
-    cl = ClustersPool(plat)
+            pri = crystal(['Si','Si','Si','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a*1.0, a*1.0, a*1.0, 90, 90, 90])
+            sub = crystal(['Al','Al','Al','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a*1.0, a*1.0, a*1.0, 90, 90, 90])
 
-    orbit2 = cl.get_cluster_orbit(scell, [0,2])
-    db_name = "test_orbit2.json"
-    cl.write_orbit_db(orbit2, scell, db_name)
+            plat = ParentLattice(atoms=pri,substitutions=[sub])
+            scell = SuperCell(plat,[(2,0,0),(0,1,0),(0,0,1)])
 
-    # Clathrate 2x1x1 supercell. This contains spectator atoms.
-    a = 10.515
-    x = 0.185; y = 0.304; z = 0.116
-    wyckoff = [
-        (0, y, z), #24k
-        (x, x, x), #16i
-        (1/4., 0, 1/2.), #6c
-        (1/4., 1/2., 0), #6d
-        (0, 0 , 0) #2a
-    ]
+            cl = ClustersPool(plat)
+            #orbit3 = cl.get_cluster_orbit(scell, [0,24]) # 24k-16i pair cluster
+            #orbit3 = cl.get_cluster_orbit(scell, [0,44]) # 24k-6c pair cluster
+            orbit = cl.get_cluster_orbit(scell, [19,17]) # 24k-24k pair cluster
+            db_name = "test_orbit%s.json"%(test_case)
+            cl.write_orbit_db(orbit, scell, db_name)
+            orbits[test_case] = orbit
+            
+        if test_case == 3:
+            from ase.build import fcc111, add_adsorbate
+            pri = fcc111('Al', size=(1,1,3), vacuum=10.0)
+            sub = pri.copy()
+            for atom in sub:
+                if atom.tag == 1:
+                    atom.number = 11
+        
+            plat = ParentLattice(atoms=pri,substitutions=[sub])
+            scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)])
 
-    pri = crystal(['Si','Si','Si','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a*1.0, a*1.0, a*1.0, 90, 90, 90])
-    sub = crystal(['Al','Al','Al','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a*1.0, a*1.0, a*1.0, 90, 90, 90])
-
-    plat = ParentLattice(atoms=pri,substitutions=[sub])
-    scell = SuperCell(plat,[(2,0,0),(0,1,0),(0,0,1)])
-
-    cl = ClustersPool(plat)
-    #orbit3 = cl.get_cluster_orbit(scell, [0,24]) # 24k-16i pair cluster
-    #orbit3 = cl.get_cluster_orbit(scell, [0,44]) # 24k-6c pair cluster
-    orbit3 = cl.get_cluster_orbit(scell, [19,17]) # 24k-24k pair cluster
-    db_name = "test_orbit3.json"
-    cl.write_orbit_db(orbit3, scell, db_name)
-    
+            cl = ClustersPool(plat)
+            orbit = cl.get_cluster_orbit(scell, [0,1])
+            db_name = "test_orbit%s.json"%(test_case)
+            cl.write_orbit_db(orbit, scell, db_name)
+            orbits[test_case] = orbit
+            
     print ("\n\n========Test writes========")
     print (test_cluster_orbit.__doc__)
     #print(np.array2string(orbit1,separator=","))
@@ -80,15 +106,14 @@ def test_cluster_orbit():
     print ("===========================\n")
 
     print ("========Asserts========")
-    
-    assert check_result(1, orbit1)
-    assert check_result(2, orbit2)
-    assert check_result(3, orbit3)
+
+    for test_case in test_cases:
+        assert check_result(test_case, orbits[test_case])
 
     
 def check_result(testnr, orbit):
     isok = True
-    if testnr == 1:
+    if testnr == 0:
         rorbit = np.array([
             [0,2],
             [1,3],
@@ -117,7 +142,7 @@ def check_result(testnr, orbit):
             [9,9]])
 
     
-    if testnr == 2:
+    if testnr == 1:
         rorbit = np.array([
             [0,2],
             [1,3],
@@ -144,7 +169,7 @@ def check_result(testnr, orbit):
             [4,5],
             [6,7]])
 
-    if testnr == 3:
+    if testnr == 2:
         rorbit = np.array(
             [[19,17],
              [73,71],
@@ -171,6 +196,9 @@ def check_result(testnr, orbit):
              [ 3, 1],
              [57,55]] 
         )
+
+    if testnr == 3:
+        return True
 
     if len(orbit) != len(rorbit):
         return False

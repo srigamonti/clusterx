@@ -111,7 +111,21 @@ class ParentLattice(Atoms):
 
         self.idx_subs = {i: unique_non_sorted(unique_subs[i]) for i in range(len(unique_subs))}
         self.sites = { i:self.idx_subs[j] for i,j in enumerate(tags)}
-        
+
+    def get_substitutional_tags():
+        st = []
+        for tag in self.get_tags():
+            if len(idx_subs[tag]) > 1:
+                st.append(tag)
+        return st
+    
+    def get_spectator_tags():
+        st = []
+        for tag in self.get_tags():
+            if len(idx_subs[tag]) == 1:
+                st.append(tag)
+        return st
+    
     def get_substitutions(self):
         return self._subs
 
