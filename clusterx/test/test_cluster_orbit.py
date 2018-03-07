@@ -16,8 +16,8 @@ def test_cluster_orbit():
         ase gui test_orbit1.json
     """
     #test_cases = [0,1,2,3]
-    test_cases = [3]
-    orbits = [None,None,None,None]
+    test_cases = [4]
+    orbits = [None,None,None,None,None]
     for test_case in test_cases:
         if test_case == 0:
             # Perfect cubic lattice. The tested cluster is such that many interactions
@@ -93,6 +93,35 @@ def test_cluster_orbit():
 
             cl = ClustersPool(plat)
             orbit = cl.get_cluster_orbit(scell, [2,14,5])
+            db_name = "test_orbit%s.json"%(test_case)
+            cl.write_orbit_db(orbit, scell, db_name)
+            orbits[test_case] = orbit
+            print(orbit)
+            
+        if test_case == 4:
+            # Al(111) surface with Na substitution on the first layer and on-top O adsorption.
+            from ase.build import fcc111, add_adsorbate
+            from ase.visualize import view
+            
+            pri = fcc111('Al', size=(1,1,3))
+            add_adsorbate(pri,'X',1.5,'ontop')
+            pri.center(vacuum=10.0, axis=2)
+            
+            sub1 = pri.copy() # Na substitution on the first Al layer
+            for atom in sub1:
+                if atom.tag == 1:
+                    atom.number = 11
+                    
+            sub2 = pri.copy() # O on-top adsorbates
+            for atom in sub2:
+                if atom.tag == 0:
+                    atom.number = 8
+            
+            plat = ParentLattice(atoms=pri,substitutions=[sub1,sub2])
+            scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)])
+
+            cl = ClustersPool(plat)
+            orbit = cl.get_cluster_orbit(scell, [3,18])
             db_name = "test_orbit%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
@@ -198,6 +227,9 @@ def check_result(testnr, orbit):
         )
 
     if testnr == 3:
+        return True
+    
+    if testnr == 4:
         return True
 
     if len(orbit) != len(rorbit):
