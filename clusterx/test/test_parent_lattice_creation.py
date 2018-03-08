@@ -9,7 +9,7 @@ def test_parent_lattice_creation():
     
     After successful execution of the test, the generated parent lattices may be visualized with the command::
         
-        ase gui parent_lattice#.json
+        ase gui test_parent_lattice_creation#.json
     """
     # Quaternary zincblende crystal
     cual = bulk('CuAl','zincblende',a=6.1)
@@ -18,7 +18,7 @@ def test_parent_lattice_creation():
     cuc = bulk('CuC','zincblende',a=6.1)
 
     parent_lattice0 = ParentLattice(atoms=cual,substitutions=[agal,sral,cuc])
-    parent_lattice0.serialize(fmt="json",fname="parent_lattice0.json")
+    parent_lattice0.serialize(fmt="json",fname="test_parent_lattice_creation_0.json")
     # Clathrate
     a = 10.515
     x = 0.185; y = 0.304; z = 0.116
@@ -36,7 +36,7 @@ def test_parent_lattice_creation():
     sub3 = crystal(['Si','Si','Si','Sr','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
 
     parent_lattice1 = ParentLattice(atoms=pri,substitutions=[sub1,sub2,sub3])
-    parent_lattice1.serialize(fmt="json",fname="parent_lattice1.json")
+    parent_lattice1.serialize(fmt="json",fname="test_parent_lattice_creation_1.json")
 
     print ("\n\n========Test writes========")
     print (test_parent_lattice_creation.__doc__)

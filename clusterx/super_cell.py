@@ -24,7 +24,7 @@ class SuperCell(ParentLattice):
             self._p[2,0] = 0
             self._p[2,1] = 0
             self._p[2,2] = 1
-            self.pbc[2] = 0
+            self.set_pbc((True,True,False))
 
         prist = make_supercell(parent_lattice.get_atoms(),p)
         subs = [make_supercell(atoms,p) for atoms in parent_lattice.get_substitutions()]

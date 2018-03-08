@@ -191,12 +191,12 @@ class ParentLattice(Atoms):
             suffix=".db"
         elif fmt=="cif":
             suffix=".cif"
-        elif fmt=="ATAT":
+        elif fmt=="ATAT" or fmt=="atat":
             suffix=".in"
             
 
         # serialize
-        if fmt == "ATAT":
+        if fmt == "ATAT" or fmt == "atat":
             if tmp is True:
                 f = tempfile.NamedTemporaryFile(mode='w', bufsize=-1, suffix=suffix, prefix=prefix, dir=".")
             else:

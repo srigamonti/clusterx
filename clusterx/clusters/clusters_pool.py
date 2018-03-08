@@ -82,9 +82,9 @@ class ClustersPool():
             for fu1 in ch1:
                 print(fu1)
             
-    def serialize(self, fmt):
-        if fmt == "atomsdb":
-            self.gen_atoms_database()
+    def serialize(self, fmt, fname=None):
+        if fmt == "json":
+            self.gen_atoms_database(fname)
 
         if fmt == "atat":
             self._write_clusters_out_corrdump()
@@ -93,7 +93,7 @@ class ClustersPool():
         return self.clusters_dict
 
     def dump_clusters_dict(self):
-        print( json.dumps(self.clusters_dict,indent=4))
+        print(json.dumps(self.clusters_dict,indent=4))
             
     def get_clusters_array(self):
         cld = self.get_clusters_dict()
@@ -287,8 +287,25 @@ class ClustersPool():
             #    orbit.append(_cl)
 
         return np.array(orbit)
-                    
-    def gen_atoms_database(self, scell, db_filename_noextension="clusters"):
+
+    def get_containing_supercell(self):
+        """
+        Return a supercell able to contain all clusters in the pool
+        """
+        from clusterx.super_cell import SuperCell
+        
+        posl = []
+        for cln, cl in self.clusters_dict.items():
+            for pos in cl["positions_lat"]:
+                posl.append(pos)
+        posl = np.array(posl)
+
+        dn = 2*(np.ceil(np.max(posl,axis=0)).astype(int) - np.floor(np.min(posl,axis=0)).astype(int)) 
+        sc = SuperCell(self._parent_lattice,np.diag(dn))
+        
+        return sc
+        
+    def gen_atoms_database(self, fname="clusters.json"):
         """
         Builds an ASE's json database object (self._atoms_db). Atoms items in 
         the built database are a representation of the clusters
@@ -304,9 +321,10 @@ class ClustersPool():
         rtol = 1e-3
         cld = self.get_clusters_dict()
         prim_cell = self._parent_lattice.get_cell()
-
-        call(["rm","-f",db_filename_noextension+".json"])
-        atoms_db = JSONDatabase(filename=db_filename_noextension+".json") # For visualization
+        scell = self.get_containing_supercell()
+        
+        call(["rm","-f",fname])
+        atoms_db = JSONDatabase(filename=fname) # For visualization
         sites = scell.get_sites()
         for kcl,icl in cld.items():
 

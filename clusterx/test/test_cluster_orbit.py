@@ -13,7 +13,7 @@ def test_cluster_orbit():
 
     After running the test, the orbit can be visualized with the command::
         
-        ase gui test_orbit1.json
+        ase gui test_cluster_orbit_#.json
     """
     test_cases = [0,1,2,3,4]
     #test_cases = [3]
@@ -36,7 +36,7 @@ def test_cluster_orbit():
             cl = ClustersPool(plat)
 
             orbit = cl.get_cluster_orbit(scell, [0,2])
-            db_name = "test_orbit%s.json"%(test_case)
+            db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
             
@@ -51,7 +51,7 @@ def test_cluster_orbit():
             cl = ClustersPool(plat)
 
             orbit = cl.get_cluster_orbit(scell, [0,2])
-            db_name = "test_orbit%s.json"%(test_case)
+            db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
             
@@ -75,7 +75,7 @@ def test_cluster_orbit():
 
             cl = ClustersPool(plat)
             orbit = cl.get_cluster_orbit(scell, [19,17]) # 24k-24k pair cluster
-            db_name = "test_orbit%s.json"%(test_case)
+            db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
             
@@ -93,7 +93,7 @@ def test_cluster_orbit():
 
             cl = ClustersPool(plat)
             orbit = cl.get_cluster_orbit(scell, [2,14,5])
-            db_name = "test_orbit%s.json"%(test_case)
+            db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
             
@@ -121,7 +121,7 @@ def test_cluster_orbit():
 
             cl = ClustersPool(plat)
             orbit = cl.get_cluster_orbit(scell, [3,18])
-            db_name = "test_orbit%s.json"%(test_case)
+            db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
             
