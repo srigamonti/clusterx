@@ -167,7 +167,7 @@ class ParentLattice(Atoms):
         """
         return self._fmt
     
-    def serialize(self, fmt="db", tmp=False):
+    def serialize(self, fmt="db", tmp=False, fname=None):
         import os
         from ase.data import chemical_symbols as cs
 
@@ -227,7 +227,9 @@ class ParentLattice(Atoms):
                 self._fname = f.name
         elif fmt in  ["xyz", "cif", "traj","json","db"]:
             from ase.io import write
-            fname = prefix+suffix
+            
+            if fname is None:
+                fname = prefix+suffix
 
             images = []
             images.append(self.get_pristine())

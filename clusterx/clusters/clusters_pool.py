@@ -26,7 +26,7 @@ class ClustersPool():
         if self._tool=="corrdump":
             self._gen_clusters_corrdump()
             self.clusters_dict = self._parse_clusters_out()
-            subprocess.call(["rm","clusters.out"])
+            subprocess.call(["rm","-f","clusters.out"])
         if self._tool=="clusterx":
             self._gen_clusters_clusterx()
 

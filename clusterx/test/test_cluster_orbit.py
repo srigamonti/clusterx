@@ -15,8 +15,8 @@ def test_cluster_orbit():
         
         ase gui test_orbit1.json
     """
-    #test_cases = [0,1,2,3]
-    test_cases = [4]
+    test_cases = [0,1,2,3,4]
+    #test_cases = [3]
     orbits = [None,None,None,None,None]
     for test_case in test_cases:
         if test_case == 0:
@@ -67,8 +67,8 @@ def test_cluster_orbit():
                 (0, 0 , 0) #2a
             ]
 
-            pri = crystal(['Si','Si','Si','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a*1.0, a*1.0, a*1.0, 90, 90, 90])
-            sub = crystal(['Al','Al','Al','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a*1.0, a*1.0, a*1.0, 90, 90, 90])
+            pri = crystal(['Si','Si','Si','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
+            sub = crystal(['Al','Al','Al','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
 
             plat = ParentLattice(atoms=pri,substitutions=[sub])
             scell = SuperCell(plat,[(2,0,0),(0,1,0),(0,0,1)])
@@ -96,10 +96,9 @@ def test_cluster_orbit():
             db_name = "test_orbit%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
-            print(orbit)
             
         if test_case == 4:
-            # Al(111) surface with Na substitution on the first layer and on-top O adsorption.
+            # Al(111) surface with Na substitution on the first layer and on-top Oxygen adsorption.
             from ase.build import fcc111, add_adsorbate
             from ase.visualize import view
             
@@ -125,13 +124,10 @@ def test_cluster_orbit():
             db_name = "test_orbit%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
-            print(orbit)
             
     print ("\n\n========Test writes========")
     print (test_cluster_orbit.__doc__)
     #print(np.array2string(orbit1,separator=","))
-    #print(np.array2string(orbit2,separator=","))
-    #print(np.array2string(orbit3,separator=","))
     print ("===========================\n")
 
     print ("========Asserts========")
@@ -227,10 +223,122 @@ def check_result(testnr, orbit):
         )
 
     if testnr == 3:
-        return True
+        rorbit = np.array(
+            [[ 2, 14,  5],
+             [ 5, 17,  8],
+             [ 8, 20, 11],
+             [11, 23,  2],
+             [14, 26, 17],
+             [17, 29, 20],
+             [20, 32, 23],
+             [23, 35, 14],
+             [26, 38, 29],
+             [29, 41, 32],
+             [32, 44, 35],
+             [35, 47, 26],
+             [38,  2, 41],
+             [41,  5, 44],
+             [44,  8, 47],
+             [47, 11, 38]])
     
     if testnr == 4:
-        return True
+        rorbit = np.array(
+            [[ 3, 18],
+             [ 7, 22],
+             [11, 26],
+             [15, 30],
+             [19, 34],
+             [23, 38],
+             [27, 42],
+             [31, 46],
+             [35, 50],
+             [39, 54],
+             [43, 58],
+             [47, 62],
+             [51,  2],
+             [55,  6],
+             [59, 10],
+             [63, 14],
+             [ 3, 54],
+             [ 7, 58],
+             [11, 62],
+             [15, 50],
+             [19,  6],
+             [23, 10],
+             [27, 14],
+             [31,  2],
+             [35, 22],
+             [39, 26],
+             [43, 30],
+             [47, 18],
+             [51, 38],
+             [55, 42],
+             [59, 46],
+             [63, 34],
+             [ 3, 14],
+             [ 7,  2],
+             [11,  6],
+             [15, 10],
+             [19, 30],
+             [23, 18],
+             [27, 22],
+             [31, 26],
+             [35, 46],
+             [39, 34],
+             [43, 38],
+             [47, 42],
+             [51, 62],
+             [55, 50],
+             [59, 54],
+             [63, 58],
+             [ 3, 30],
+             [ 7, 18],
+             [11, 22],
+             [15, 26],
+             [19, 46],
+             [23, 34],
+             [27, 38],
+             [31, 42],
+             [35, 62],
+             [39, 50],
+             [43, 54],
+             [47, 58],
+             [51, 14],
+             [55,  2],
+             [59,  6],
+             [63, 10],
+             [ 3, 50],
+             [ 7, 54],
+             [11, 58],
+             [15, 62],
+             [19,  2],
+             [23,  6],
+             [27, 10],
+             [31, 14],
+             [35, 18],
+             [39, 22],
+             [43, 26],
+             [47, 30],
+             [51, 34],
+             [55, 38],
+             [59, 42],
+             [63, 46],
+             [ 3,  6],
+             [ 7, 10],
+             [11, 14],
+             [15,  2],
+             [19, 22],
+             [23, 26],
+             [27, 30],
+             [31, 18],
+             [35, 38],
+             [39, 42],
+             [43, 46],
+             [47, 34],
+             [51, 54],
+             [55, 58],
+             [59, 62],
+             [63, 50]])
 
     if len(orbit) != len(rorbit):
         return False
