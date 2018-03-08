@@ -36,7 +36,13 @@ def test_clusters_generation():
     cp.gen_clusters()
     #print(cp.get_clusters_dict())
     cp.serialize("atat")
-    cp.serialize("json",fname = "test_clusters_generation_0.json")
+    cp.serialize("json", fname = "test_clusters_generation_0.json")
     
     #subprocess.call(["rm","-f","parlat.in"])
     #subprocess.call(["rm","-f","clusters.out"])
+
+    cp = ClustersPool(pl, npoints=[2], radii=[2.5], tool="clusterx")
+    cp.gen_clusters()
+    #print(cp.get_clusters_dict())
+    cp.serialize("atat")
+    cp.serialize("json", fname = "test_clusters_generation_0.json")

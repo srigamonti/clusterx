@@ -288,21 +288,31 @@ class ClustersPool():
 
         return np.array(orbit)
 
-    def get_containing_supercell(self):
+    def get_containing_supercell(self, use = "pool"):
         """
         Return a supercell able to contain all clusters in the pool
+        use: "pool" or "radii"
         """
         from clusterx.super_cell import SuperCell
-        
-        posl = []
-        for cln, cl in self.clusters_dict.items():
-            for pos in cl["positions_lat"]:
-                posl.append(pos)
-        posl = np.array(posl)
 
-        dn = 2*(np.ceil(np.max(posl,axis=0)).astype(int) - np.floor(np.min(posl,axis=0)).astype(int)) 
-        sc = SuperCell(self._parent_lattice,np.diag(dn))
-        
+        if use == "pool":
+            posl = []
+            for cln, cl in self.clusters_dict.items():
+                for pos in cl["positions_lat"]:
+                    posl.append(pos)
+            posl = np.array(posl)
+
+            dn = 2*(np.ceil(np.max(posl,axis=0)).astype(int) - np.floor(np.min(posl,axis=0)).astype(int)) 
+            sc = SuperCell(self._parent_lattice,np.diag(dn))
+
+        if use == "radii":
+            # Estimate minimal supercell containing largest cluster and create supercell
+            rmax = np.amax(radii)
+            pcell = self._parent_lattice.get_cell()
+            l = LA.norm(pcell, axis=1) # Lengths of the cell vectors
+            n = [int(n) for n in np.ceil(rmax/l)] # number of repetitions of unit cell along each lattice vector to contain largest cluster
+            scell =  SuperCell(self._parent_lattice, np.diag(n))
+
         return sc
         
     def gen_atoms_database(self, fname="clusters.json"):
