@@ -32,17 +32,18 @@ def test_clusters_generation():
 
     pl = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
 
+    """
     cp = ClustersPool(pl, npoints=[2], radii=[2.5], tool="corrdump")
     cp.gen_clusters()
     #print(cp.get_clusters_dict())
     cp.serialize("atat")
     cp.serialize("json", fname = "test_clusters_generation_0.json")
-    
+    """
     #subprocess.call(["rm","-f","parlat.in"])
     #subprocess.call(["rm","-f","clusters.out"])
 
-    cp = ClustersPool(pl, npoints=[2], radii=[2.5], tool="clusterx")
+    cp = ClustersPool(pl, npoints=[1], radii=[0.0], tool="clusterx")
     cp.gen_clusters()
     #print(cp.get_clusters_dict())
-    cp.serialize("atat")
-    cp.serialize("json", fname = "test_clusters_generation_0.json")
+    #cp.serialize("atat")
+    #cp.serialize("json", fname = "test_clusters_generation_0.json")

@@ -32,55 +32,44 @@ class ClustersPool():
 
     def _gen_clusters_clusterx(self):
         from clusterx.symmetry import get_spacegroup
-        from numpy import linalg as LA
         from clusterx.super_cell import SuperCell
         npoints = self._npoints
         radii = self._radii
 
-        # Estimate minimal supercell containing largest cluster and create supercell
-        rmax = np.amax(radii)
-        pcell = self._parent_lattice.get_cell()
-        l = LA.norm(pcell, axis=1) # Lengths of the cell vectors
-        n = [int(n) for n in np.ceil(rmax/l)] # number of repetitions of unit cell along each lattice vector to contain largest cluster
-        scell =  SuperCell(self._parent_lattice, np.diag(n))
-        nsc = scell.get_natoms()
+        scell = self.get_containing_supercell(use="radii")
+        natoms = scell.get_natoms()
         sites = scell.get_sites()
+        satoms = scell.get_substitutional_sites()
+        nsatoms = len(satoms)
         idx_subs = scell.get_idx_subs()
         tags = scell.get_tags()
-        # Example for these arrays:
-        #a1.get_chemical_symbols() -> [Si,Si,Si,Ba,Ba,Na]
-        #a2.get_chemical_symbols() -> [Al,Al,Al,Ba,Ba,Na]
-        #a3.get_chemical_symbols() -> [Si,Si,Si, X, X,Na]
-        #a4.get_chemical_symbols() -> [Si,Si,Si,Sr,Sr,Na]
-        #
-        #Then::
-        #
-        #  tags -> [0,0,0,1,1,2]
-        #  idx_subs -> {0: [14,13], 1: [56,0,38], 2:[11]}
-        #  sites -> {0: [14,13], 1: [14,13], 2: [14,13], 3: [56,0,38], 4: [56,0,38], 5:[11]}
+        distances = scell.get_all_distances(mic=True) # Use Minimum Image Convention
 
+        # Check if supercell is large enough
+        if np.amax(radii)>np.amax(distances):
+            sys.exit("Supercell is too small to find clusters pool")
+            
+        # Generate all possible clusters in the supercell, constrained to radii
+
+        # Two-point clusters
+        print(sites)
+        print(idx_subs)
+        print(tags)
+        print(satoms)
+        allcl = np.zeros((nsatoms,5),dtype=int)
+        for i1,idx1 in enumerate(satoms): # loop over substitutional atoms
+            for is1,s1 in enumerate(sites[idx1][1:]): # loop over substitutional species of atom i1
+                allcl[i1]= [idx1,tags[i1],is1,s1]
+            
         # Get symmetry operations of the pristine supercell
         scell_sg, scell_sym = get_spacegroup(scell.get_pristine(), tool="spglib")
 
         # Get list of substitutional sites
         ss = []
-        for i in range(nsc):
+        for i in range(natoms):
             if len(sites[i]) > 1:
                ss.append(i)
 
-        # Get list of inequivalent positions
-        ineq_pos = []
-        for i1 in ss:
-            for r,t in zip(scell_sym['rotations'], scell_sym['translations']):
-                ts = np.tile(t,(len(wrapped_scaled_pos),1)).T
-                new_sca_pos = np.add(np.dot(r,wrapped_scaled_pos.T),ts).T
-                new_car_pos = np.dot(new_sca_pos,self.scell.get_cell()).tolist()
-
-                
-        for si1,ch1 in sites.items():
-            print(si1,ch1)
-            for fu1 in ch1:
-                print(fu1)
             
     def serialize(self, fmt, fname=None):
         if fmt == "json":
@@ -111,7 +100,7 @@ class ClustersPool():
     def get_cluster(self, cln):
         return self.clusters_dict[cln]
 
-    def write_orbit_db(self, orbit, super_cell, db_name):
+    def write_orbit_db(self, orbit, super_cell, db_name, orbit_species=None):
         """Write cluster orbit to Atoms database
         """
         from ase.db.jsondb import JSONDatabase
@@ -124,11 +113,14 @@ class ClustersPool():
 
         call(["rm","-f",db_name])
         atoms_db = JSONDatabase(filename=db_name) # For visualization
-        for cl in orbit:
+        for icl,cl in enumerate(orbit):
             atoms = super_cell.copy()
             ans = atnums.copy()
-            for site in cl:
-                ans[site] = sites[site][1]
+            for i,site in enumerate(cl):
+                if orbit_species is None:
+                    ans[site] = sites[site][1]
+                else:
+                    ans[site] = orbit_species[icl][i]
             atoms.set_atomic_numbers(ans)
             atoms_db.write(atoms)
 
@@ -183,7 +175,7 @@ class ClustersPool():
                 
         return cld
 
-    def get_cluster_orbit(self, super_cell, cluster_sites, tol = 1e-3):
+    def get_cluster_orbit(self, super_cell, cluster_sites, cluster_species=None, tol = 1e-3):
         """
         Get cluster orbit inside a supercell.
         cluster_sites: array of atom indices of the cluster, referred to the supercell.
@@ -198,8 +190,10 @@ class ClustersPool():
         for _icl in cluster_sites:
             if _icl not in substitutional_sites:
                 return None
-                #pass
-                
+
+        shash = None
+        if cluster_species is not None:
+            cluster_species = np.array(cluster_species)
         # Get symmetry operations of the parent lattice
         sc_sg, sc_sym = get_spacegroup(self._parent_lattice.get_pristine(), tool="spglib") # Scaled parent_lattice
         internal_trans = get_internal_translations(self._parent_lattice, super_cell) # Scaled super_cell
@@ -211,37 +205,75 @@ class ClustersPool():
         # sp0: scaled cluster positions with respect to parent lattice
         sp0 = get_scaled_positions(p0, self._parent_lattice.get_cell(), pbc = super_cell.get_pbc(), wrap = False)
         orbit = []
+        orbit_species = []
         for r,t in zip(sc_sym['rotations'], sc_sym['translations']):
-            ts = np.tile(t,(len(sp0),1)).T
+            ts = np.tile(t,(len(sp0),1)).T # Every column represents the same translation for every cluster site 
             _sp1 = np.add(np.dot(r,sp0.T),ts).T # Apply rotation, then translation
             # Get cartesian, then scaled to supercell
             _p1 = np.dot(_sp1, self._parent_lattice.get_cell())
             _sp1 = get_scaled_positions(_p1, super_cell.get_cell(), pbc = super_cell.get_pbc(), wrap = True)
 
-            for tr in internal_trans:
+            for tr in internal_trans: # Now apply the internal translations
                 __sp1 = np.add(_sp1, tr)
                 __sp1 = wrap_scaled_positions(__sp1,super_cell.get_pbc())
                 distances = cdist(__sp1, spos, metric='euclidean') # Evaluate all (scaled) distances between cluster points to scell sites
-                _cl = np.argwhere(np.abs(distances) < tol)[:,1] # Extract indices when distance is less than tol
-                
+                _cl = np.argwhere(np.abs(distances) < tol)[:,1] # Atom indexes of the transformed cluster
+
                 include = True
-                
+                shash = np.arange(len(_cl))
                 for _icl in _cl:
                     if _icl not in substitutional_sites:
                         include = False
                         break
-                        
+                print("orig at idx:  ",cluster_sites)        
+                print("tran at idx:  ",_cl)
+                if len(_cl)>1:
+                    for i in range(len(_cl)):
+                        for j in range(i+1,len(_cl)):
+                            if _cl[i] == _cl[j] and cluster_species[i] != cluster_species[j]:
+                                include = False
                 if include:
                     for cl in orbit:
-                        if Counter(cl) == Counter(_cl):
-                            include = False
-                            break
-                    
+                        if cluster_species is None:
+                            if Counter(cl) == Counter(_cl):
+                                include = False
+                                break
+                        else:
+                            if Counter(cl) == Counter(_cl):
+                                    
+                                shash = self._find_hash(cl,_cl)
+
+                                csh = cluster_species[shash[:]]
+                                print('orig species  ',cluster_species)
+                                print('tran species  ',csh)
+                                print('hash table    ',shash)
+                                if (cluster_species == csh).all():
+                                    include = False
+                                    break
+                                #for i in range(len(cl)):
+                                    #if cluster_species[i] == cluster_species[shash[i]]: 
+                                    #    include = False
+                                    #    break
+                                #break
+                print("include?", include)    
                 if include:
                     orbit.append(_cl)
+                    if cluster_species is not None:
+                        #print('cluster_species',cluster_species)
+                        #print('shash',shash)
+                        #print('cluster_species[shash]',cluster_species[shash])
+                        orbit_species.append(cluster_species)
 
-        return np.array(orbit)
+        return np.array(orbit), np.array(orbit_species)
 
+    def _find_hash(self,a,b):
+        table = np.zeros(len(a),dtype=int)
+        for i,ia in enumerate(a):
+            for j, jb in enumerate(b):
+                if ia == jb and j not in table:
+                    table[i] = j
+        return table
+    
     def get_cluster_orbit2(self, super_cell, cluster_sites, tol = 1e-3):
         """
         cluster_sites, array of atom indices referred to the super_cell.
@@ -292,6 +324,8 @@ class ClustersPool():
         """
         Return a supercell able to contain all clusters in the pool
         use: "pool" or "radii"
+        If "pool", it returns the supercell twice as large as the largest cluster in the pool.
+        If "radii", it returns the supercell which contains a sphere of diameter at least as large as the largest cluster radius.
         """
         from clusterx.super_cell import SuperCell
 
@@ -306,12 +340,16 @@ class ClustersPool():
             sc = SuperCell(self._parent_lattice,np.diag(dn))
 
         if use == "radii":
-            # Estimate minimal supercell containing largest cluster and create supercell
-            rmax = np.amax(radii)
-            pcell = self._parent_lattice.get_cell()
-            l = LA.norm(pcell, axis=1) # Lengths of the cell vectors
+            from numpy import linalg as LA
+            rmax = np.amax(self._radii)
+            if rmax == 0:
+                rmax = 1e-2
+            l = LA.norm(self._parent_lattice.get_cell(), axis=1) # Lengths of the cell vectors
             n = [int(n) for n in np.ceil(rmax/l)] # number of repetitions of unit cell along each lattice vector to contain largest cluster
-            scell =  SuperCell(self._parent_lattice, np.diag(n))
+            for i, p in enumerate(self._parent_lattice.get_pbc()): # Apply pbc's
+                if not p:
+                    n[i] = 1
+            sc =  SuperCell(self._parent_lattice, np.diag(n))
 
         return sc
         

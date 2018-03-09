@@ -15,9 +15,9 @@ def test_cluster_orbit():
         
         ase gui test_cluster_orbit_#.json
     """
-    test_cases = [0,1,2,3,4]
-    #test_cases = [3]
-    orbits = [None,None,None,None,None]
+    #test_cases = [0,1,2,3,4]
+    test_cases = [5]
+    orbits = [None,None,None,None,None,None]
     for test_case in test_cases:
         if test_case == 0:
             # Perfect cubic lattice. The tested cluster is such that many interactions
@@ -35,7 +35,7 @@ def test_cluster_orbit():
 
             cl = ClustersPool(plat)
 
-            orbit = cl.get_cluster_orbit(scell, [0,2])
+            orbit,_ = cl.get_cluster_orbit(scell, [0,2])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
@@ -124,6 +124,30 @@ def test_cluster_orbit():
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
+            
+        if test_case == 5:
+            # Perfect cubic lattice. The tested cluster is such that many interactions
+            # with the periodic images of the crystal are present.
+            a = 3.62/np.sqrt(2.0)
+            positions = [(0,0,0)]
+            cell = [(a,0,0),(0,a,0),(0,0,a)]
+            pbc = (True,True,True)
+            pri = Atoms('Cu', positions=positions, cell= cell, pbc= pbc)
+            sub = Atoms('Al', positions=positions, cell= cell, pbc= pbc)
+            sub2 = Atoms('Na', positions=positions, cell= cell, pbc= pbc)
+
+            plat = ParentLattice(pri, substitutions=[sub,sub2], pbc=pbc)
+            scell = SuperCell(plat,[(5,0,0),(0,2,0),(0,0,1)])
+            sites = scell.get_sites()
+            cl = ClustersPool(plat)
+
+            orbit, orbit_species = cl.get_cluster_orbit(scell, [0,2], cluster_species=[sites[0][1],sites[2][2]])
+            #print(orbit)
+            #print(orbit_species)
+            db_name = "test_cluster_orbit_%s.json"%(test_case)
+            cl.write_orbit_db(orbit, scell, db_name,orbit_species=orbit_species)
+            orbits[test_case] = orbit
+            
             
     print ("\n\n========Test writes========")
     print (test_cluster_orbit.__doc__)
@@ -340,6 +364,9 @@ def check_result(testnr, orbit):
              [59, 62],
              [63, 50]])
 
+    if testnr == 5:
+        return True
+    
     if len(orbit) != len(rorbit):
         return False
     
