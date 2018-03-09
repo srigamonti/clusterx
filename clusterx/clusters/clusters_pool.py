@@ -120,7 +120,7 @@ class ClustersPool():
                 if orbit_species is None:
                     ans[site] = sites[site][1]
                 else:
-                    ans[site] = orbit_species[icl][i]
+                    ans[site] = orbit_species[i]
             atoms.set_atomic_numbers(ans)
             atoms_db.write(atoms)
 
@@ -205,7 +205,6 @@ class ClustersPool():
         # sp0: scaled cluster positions with respect to parent lattice
         sp0 = get_scaled_positions(p0, self._parent_lattice.get_cell(), pbc = super_cell.get_pbc(), wrap = False)
         orbit = []
-        orbit_species = []
         for r,t in zip(sc_sym['rotations'], sc_sym['translations']):
             ts = np.tile(t,(len(sp0),1)).T # Every column represents the same translation for every cluster site 
             _sp1 = np.add(np.dot(r,sp0.T),ts).T # Apply rotation, then translation
@@ -225,13 +224,14 @@ class ClustersPool():
                     if _icl not in substitutional_sites:
                         include = False
                         break
-                print("orig at idx:  ",cluster_sites)        
-                print("tran at idx:  ",_cl)
-                if len(_cl)>1:
-                    for i in range(len(_cl)):
-                        for j in range(i+1,len(_cl)):
-                            if _cl[i] == _cl[j] and cluster_species[i] != cluster_species[j]:
-                                include = False
+                    
+                if cluster_species is not None:
+                    if len(_cl)>1:
+                        for i in range(len(_cl)):
+                            for j in range(i+1,len(_cl)):
+                                if _cl[i] == _cl[j] and cluster_species[i] != cluster_species[j]:
+                                    include = False
+                                    
                 if include:
                     for cl in orbit:
                         if cluster_species is None:
@@ -244,27 +244,14 @@ class ClustersPool():
                                 shash = self._find_hash(cl,_cl)
 
                                 csh = cluster_species[shash[:]]
-                                print('orig species  ',cluster_species)
-                                print('tran species  ',csh)
-                                print('hash table    ',shash)
                                 if (cluster_species == csh).all():
                                     include = False
                                     break
-                                #for i in range(len(cl)):
-                                    #if cluster_species[i] == cluster_species[shash[i]]: 
-                                    #    include = False
-                                    #    break
-                                #break
-                print("include?", include)    
+                                
                 if include:
                     orbit.append(_cl)
-                    if cluster_species is not None:
-                        #print('cluster_species',cluster_species)
-                        #print('shash',shash)
-                        #print('cluster_species[shash]',cluster_species[shash])
-                        orbit_species.append(cluster_species)
 
-        return np.array(orbit), np.array(orbit_species)
+        return np.array(orbit)
 
     def _find_hash(self,a,b):
         table = np.zeros(len(a),dtype=int)

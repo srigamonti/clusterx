@@ -15,8 +15,8 @@ def test_cluster_orbit():
         
         ase gui test_cluster_orbit_#.json
     """
-    #test_cases = [0,1,2,3,4]
-    test_cases = [5]
+    test_cases = [0,1,2,3,4,5]
+    #test_cases = [5]
     orbits = [None,None,None,None,None,None]
     for test_case in test_cases:
         if test_case == 0:
@@ -35,7 +35,7 @@ def test_cluster_orbit():
 
             cl = ClustersPool(plat)
 
-            orbit,_ = cl.get_cluster_orbit(scell, [0,2])
+            orbit = cl.get_cluster_orbit(scell, [0,2])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
@@ -141,11 +141,11 @@ def test_cluster_orbit():
             sites = scell.get_sites()
             cl = ClustersPool(plat)
 
-            orbit, orbit_species = cl.get_cluster_orbit(scell, [0,2], cluster_species=[sites[0][1],sites[2][2]])
-            #print(orbit)
-            #print(orbit_species)
+            atom_idxs = [0,2]
+            atom_species = [sites[0][1],sites[2][2]]
+            orbit = cl.get_cluster_orbit(scell, atom_idxs, cluster_species=atom_species)
             db_name = "test_cluster_orbit_%s.json"%(test_case)
-            cl.write_orbit_db(orbit, scell, db_name,orbit_species=orbit_species)
+            cl.write_orbit_db(orbit, scell, db_name,orbit_species=atom_species)
             orbits[test_case] = orbit
             
             
@@ -157,6 +157,7 @@ def test_cluster_orbit():
     print ("========Asserts========")
 
     for test_case in test_cases:
+        print("test orbit: ",test_case)
         assert check_result(test_case, orbits[test_case])
 
     
