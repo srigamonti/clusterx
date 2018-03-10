@@ -2,7 +2,6 @@ import numpy as np
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.clusters.clusters_pool import ClustersPool
-from clusterx.symmetry import get_spacegroup
 from ase import Atoms
 from ase.spacegroup import crystal
 from ase.build import bulk

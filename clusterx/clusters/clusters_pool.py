@@ -23,7 +23,6 @@ class ClustersPool():
         self._cpool_dict = {}
         
     def gen_clusters(self):
-        from clusterx.symmetry import get_spacegroup
         from clusterx.super_cell import SuperCell
         from itertools import product, combinations
         npoints = self._npoints
@@ -163,7 +162,8 @@ class ClustersPool():
         if cluster_species is not None:
             cluster_species = np.array(cluster_species)
         # Get symmetry operations of the parent lattice
-        sc_sg, sc_sym = get_spacegroup(self._plat.get_pristine(), tool="spglib") # Scaled parent_lattice
+        #sc_sg, sc_sym = get_spacegroup(self._plat.get_pristine(), tool="spglib") # Scaled parent_lattice
+        sc_sg, sc_sym = get_spacegroup(self._plat) # Scaled parent_lattice
         internal_trans = get_internal_translations(self._plat, super_cell) # Scaled super_cell
         # Get original cluster cartesian positions (p0)
         pos = super_cell.get_positions(wrap=True)
