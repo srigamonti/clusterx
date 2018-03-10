@@ -12,20 +12,17 @@ class ClustersPool():
     """
     Clusters pool class
     """
-    def __init__(self,parent_lattice, npoints=None, radii=None, name="_clusters_pool", filename=None):
+    def __init__(self, parent_lattice, npoints, radii, name="_clusters_pool", filename=None):
         self._npoints = npoints
         self._radii = radii
         self._name = name
         self._filename = name+".json"
-        self._parent_lattice = parent_lattice
+        self._plat = parent_lattice
         self._cpool = []
         self._cpool_scell = self.get_containing_supercell(use="radii")
         self._cpool_dict = {}
         
     def gen_clusters(self):
-        self._gen_clusters_clusterx()
-
-    def _gen_clusters_clusterx(self):
         from clusterx.symmetry import get_spacegroup
         from clusterx.super_cell import SuperCell
         from itertools import product, combinations
@@ -42,10 +39,8 @@ class ClustersPool():
         distances = scell.get_all_distances(mic=False) # Use Minimum Image Convention
         # Check if supercell is large enough
         if np.amax(radii)>np.amax(distances):
-            sys.exit("Supercell is too small to find clusters pool")
+            sys.exit("Containing supercell is too small to find clusters pool.")
         
-        clrs = []
-
         for npts,radius in zip(npoints,radii):
             clrs_full = []
             for idxs in combinations(satoms,npts):
@@ -168,21 +163,21 @@ class ClustersPool():
         if cluster_species is not None:
             cluster_species = np.array(cluster_species)
         # Get symmetry operations of the parent lattice
-        sc_sg, sc_sym = get_spacegroup(self._parent_lattice.get_pristine(), tool="spglib") # Scaled parent_lattice
-        internal_trans = get_internal_translations(self._parent_lattice, super_cell) # Scaled super_cell
+        sc_sg, sc_sym = get_spacegroup(self._plat.get_pristine(), tool="spglib") # Scaled parent_lattice
+        internal_trans = get_internal_translations(self._plat, super_cell) # Scaled super_cell
         # Get original cluster cartesian positions (p0)
         pos = super_cell.get_positions(wrap=True)
         p0 = np.array([pos[site] for site in cluster_sites])
         
         spos = super_cell.get_scaled_positions(wrap=True) # Super-cell scaled positions
         # sp0: scaled cluster positions with respect to parent lattice
-        sp0 = get_scaled_positions(p0, self._parent_lattice.get_cell(), pbc = super_cell.get_pbc(), wrap = False)
+        sp0 = get_scaled_positions(p0, self._plat.get_cell(), pbc = super_cell.get_pbc(), wrap = False)
         orbit = []
         for r,t in zip(sc_sym['rotations'], sc_sym['translations']):
             ts = np.tile(t,(len(sp0),1)).T # Every column represents the same translation for every cluster site 
             _sp1 = np.add(np.dot(r,sp0.T),ts).T # Apply rotation, then translation
             # Get cartesian, then scaled to supercell
-            _p1 = np.dot(_sp1, self._parent_lattice.get_cell())
+            _p1 = np.dot(_sp1, self._plat.get_cell())
             _sp1 = get_scaled_positions(_p1, super_cell.get_cell(), pbc = super_cell.get_pbc(), wrap = True)
 
             for tr in internal_trans: # Now apply the internal translations
@@ -258,19 +253,19 @@ class ClustersPool():
             posl = np.array(posl)
 
             dn = 2*(np.ceil(np.max(posl,axis=0)).astype(int) - np.floor(np.min(posl,axis=0)).astype(int)) 
-            sc = SuperCell(self._parent_lattice,np.diag(dn))
+            sc = SuperCell(self._plat,np.diag(dn))
 
         if use == "radii":
             from numpy import linalg as LA
             rmax = np.amax(self._radii)
             if rmax == 0:
                 rmax = 1e-2
-            l = LA.norm(self._parent_lattice.get_cell(), axis=1) # Lengths of the cell vectors
+            l = LA.norm(self._plat.get_cell(), axis=1) # Lengths of the cell vectors
             n = [int(n) for n in np.ceil(rmax/l)] # number of repetitions of unit cell along each lattice vector to contain largest cluster
-            for i, p in enumerate(self._parent_lattice.get_pbc()): # Apply pbc's
+            for i, p in enumerate(self._plat.get_pbc()): # Apply pbc's
                 if not p:
                     n[i] = 1
-            sc =  SuperCell(self._parent_lattice, np.diag(n))
+            sc =  SuperCell(self._plat, np.diag(n))
 
         return sc
         
@@ -289,7 +284,7 @@ class ClustersPool():
 
         rtol = 1e-3
         cld = self.get_cpool_dict()
-        prim_cell = self._parent_lattice.get_cell()
+        prim_cell = self._plat.get_cell()
         scell = self.get_containing_supercell()
         
         call(["rm","-f",fname])

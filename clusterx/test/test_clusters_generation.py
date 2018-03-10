@@ -14,7 +14,6 @@ def test_clusters_generation():
 
     """
 
-    # Clusters pool with corrdump
     cell = [[3,0,0],
             [0,1,0],
             [0,0,5]]
@@ -29,27 +28,11 @@ def test_clusters_generation():
     su2 = Atoms(['H','He','H'], positions=positions, cell=cell, pbc=pbc)
     su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
 
-
     pl = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
 
-    """
-    cp = ClustersPool(pl, npoints=[2], radii=[2.5], tool="corrdump")
-    cp.gen_clusters()
-    #print(cp.get_clusters_dict())
-    cp.serialize("atat")
-    cp.serialize("json", fname = "test_clusters_generation_0.json")
-    """
-    #subprocess.call(["rm","-f","parlat.in"])
-    #subprocess.call(["rm","-f","clusters.out"])
-
-    #cp = ClustersPool(pl, npoints=[1,2,3,4,5], radii=[0,2.4,1.5,1.5,2.4])
-    cp = ClustersPool(pl, npoints=[1,2,3,4,5], radii=[0,3.1,3.1,3.1,3.1])
-    #cp = ClustersPool(pl, npoints=[3], radii=[3.1])
-    #cp = ClustersPool(pl, npoints=[1,2,3], radii=[0,2.4,1.5])
+    #cp = ClustersPool(pl, npoints=[1,2,3,4,5], radii=[0,3.1,3.1,3.1,3.1])
+    cp = ClustersPool(pl, npoints=[1,2,3,4], radii=[0,3.1,3.1,3.1])
     cp.gen_clusters()
     atom_idxs, atom_nrs = cp.get_cpool_orbit()
     scell = cp.get_cpool_scell()
     cp.write_orbit_db(atom_idxs,scell,"test_clusters_generation_0.json",orbit_species=atom_nrs)
-    #print(cp.get_clusters_dict())
-    #cp.serialize("atat")
-    #cp.serialize("json", fname = "test_clusters_generation_0.json")
