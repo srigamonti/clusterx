@@ -9,29 +9,21 @@ import numpy as np
 import json
 
 class ClustersPool():
-    def __init__(self,parent_lattice, npoints=None, radii=None, tool="clusterx", name="_clusters_pool", filename=None):
-
-        
-        self._name = name
-        self._filename = name+".json"
-        #self._atoms_db = JSONDatabase(filename=self._filename) # For visualization
-        self._parent_lattice = parent_lattice
-        self._cpool = []
-        self._cpool_scell = None
-        #self.write(parent_lattice, parent_lattice=True)
-        self.clusters_dict = {}
-
+    """
+    Clusters pool class
+    """
+    def __init__(self,parent_lattice, npoints=None, radii=None, name="_clusters_pool", filename=None):
         self._npoints = npoints
         self._radii = radii
-        self._tool = tool
+        self._name = name
+        self._filename = name+".json"
+        self._parent_lattice = parent_lattice
+        self._cpool = []
+        self._cpool_scell = self.get_containing_supercell(use="radii")
+        self._cpool_dict = {}
         
     def gen_clusters(self):
-        if self._tool=="corrdump":
-            self._gen_clusters_corrdump()
-            self.clusters_dict = self._parse_clusters_out()
-            subprocess.call(["rm","-f","clusters.out"])
-        if self._tool=="clusterx":
-            self._gen_clusters_clusterx()
+        self._gen_clusters_clusterx()
 
     def _gen_clusters_clusterx(self):
         from clusterx.symmetry import get_spacegroup
@@ -40,8 +32,7 @@ class ClustersPool():
         npoints = self._npoints
         radii = self._radii
 
-        scell = self.get_containing_supercell(use="radii")
-        self._cpool_scell = scell
+        scell = self._cpool_scell
         natoms = scell.get_natoms()
         sites = scell.get_sites()
         satoms = scell.get_substitutional_sites()
@@ -49,10 +40,6 @@ class ClustersPool():
         idx_subs = scell.get_idx_subs()
         tags = scell.get_tags()
         distances = scell.get_all_distances(mic=False) # Use Minimum Image Convention
-        for i1 in range(natoms):
-            for i2 in range(i1+1,natoms):
-                print(i1,i2,distances[i1,i2])
-        
         # Check if supercell is large enough
         if np.amax(radii)>np.amax(distances):
             sys.exit("Supercell is too small to find clusters pool")
@@ -67,43 +54,14 @@ class ClustersPool():
                     sites_arrays.append(sites[idx][1:])
                 for ss in product(*sites_arrays):
                     cl = Cluster(idxs,ss)
-                    if self.get_cluster_radius(distances,cl) < radius:
+                    if self.get_cluster_radius(distances,cl) <= radius:
                         if cl not in clrs_full:
                             self._cpool.append(cl)
                             clrs_full.append(cl)
-                            orbit = self.get_cluster_orbit(scell, cl.get_idxs(), cluster_species=cl.get_nrs())
+                            orbit = self.get_cluster_orbit(scell, cl.get_idxs(), cluster_species=cl.get_nrs(),tight=True,distances=distances)
                             for cl_idxs in orbit:
                                 clrs_full.append(Cluster(cl_idxs,cl.get_nrs()))
 
-        """
-        # Three-point clusters
-        clrs_full = []
-                            
-        for idx1, idx2, idx3 in combinations(satoms,3):
-            for s1, s2, s3 in product(sites[idx1][1:],sites[idx2][1:],sites[idx3][1:]):
-                cl = Cluster([idx1,idx2,idx3],[s1,s2,s3])
-                if self.get_cluster_radius(distances,cl) < radii[1]:
-                    if cl not in clrs_full:
-                        self._cpool.append(cl)
-                        clrs_full.append(cl)
-                        orbit = self.get_cluster_orbit(scell, cl.get_idxs(), cluster_species=cl.get_nrs())
-                        for cl_idxs in orbit:
-                            clrs_full.append(Cluster(cl_idxs,cl.get_nrs()))
-
-       
-        for i1,idx1 in enumerate(satoms):
-            for i2,idx2 in enumerate(satoms[i1+1:]):
-                for is1,s1 in enumerate(sites[idx1][1:]):
-                    for is2,s2 in enumerate(sites[idx2][1:]):
-                        cl = Cluster([idx1,idx2],[s1,s2])
-                        if self.get_cluster_radius(distances,cl) < radii[0]:
-                            if cl not in clrs_full:
-                                self._cpool.append(cl)
-                                clrs_full.append(cl)
-                                orbit = self.get_cluster_orbit(scell, cl.get_idxs(), cluster_species=cl.get_nrs())
-                                for cl_idxs in orbit:
-                                    clrs_full.append(Cluster(cl_idxs,cl.get_nrs()))
-        """
             
     def get_cpool_scell(self):
         return self._cpool_scell
@@ -136,17 +94,14 @@ class ClustersPool():
         if fmt == "json":
             self.gen_atoms_database(fname)
 
-        if fmt == "atat":
-            self._write_clusters_out_corrdump()
+    def get_cpool_dict(self):
+        return self._cpool_dict
 
-    def get_clusters_dict(self):
-        return self.clusters_dict
-
-    def dump_clusters_dict(self):
-        print(json.dumps(self.clusters_dict,indent=4))
+    def dump_cpool_dict(self):
+        print(json.dumps(self._cpool_dict,indent=4))
             
     def get_clusters_array(self):
-        cld = self.get_clusters_dict()
+        cld = self.get_cpool_dict()
         cla = []
         for key,item in cld.items():
             cla.append([])
@@ -159,7 +114,7 @@ class ClustersPool():
         return cla
 
     def get_cluster(self, cln):
-        return self.clusters_dict[cln]
+        return self._cpool_dict[cln]
 
     def write_orbit_db(self, orbit, super_cell, db_name, orbit_species=None):
         """Write cluster orbit to Atoms database
@@ -185,58 +140,8 @@ class ClustersPool():
             atoms.set_atomic_numbers(ans)
             atoms_db.write(atoms)
 
-    def _write_clusters_out_corrdump(self):
-        """
-        Writes clusters.out array as needed by corrdump program.
 
-        Notes: First converts the clusters dictionary to array and then serializes.
-               Should be improved by serializing directly from the dictionary. 
-        """
-        cla = self.get_clusters_array()
-        f = open("clusters.out","w")
-
-        for cl in cla:
-            if len(cl) > 3:
-                for cll in cl[:-1]:
-                    if isinstance(cll,list) and len(cll[0]) == 3:
-                        for site in zip(cll,cl[-1]):
-                            f.write( '{:f} {:f} {:f} {:d} {:d}\n'.format(site[0][0],site[0][1],site[0][2],site[1][0],site[1][1]))
-                    else:
-                        f.write(str(cll)+"\n")
-            else:
-                for cll in cl:
-                    f.write(str(cll)+"\n")
-            f.write("\n")
-                    
-
-        f.close()
-        
-    def _parse_clusters_out(self):
-        """
-        Converts clusters.out file as used by corrdump to cell's 
-        cluster-dictionary object.
-        """
-        cla = self._parse_clusters_out_to_array()
-        prim_cell = self._parent_lattice.get_cell()
-            
-        cld = {}
-        for icl,cl in enumerate(cla):
-            cld[icl] = {}
-            cld[icl]["multiplicity"] = cl[0]
-            cld[icl]["radius"] = cl[1]
-            cld[icl]["npoints"] = cl[2]
-            if cl[2]==0:
-                cld[icl]["positions_lat"] = []
-                cld[icl]["positions_car"] = []
-                cld[icl]["site_basis"] = []
-            else:
-                cld[icl]["positions_lat"] = cl[3]
-                cld[icl]["positions_car"] = np.dot(cl[3],prim_cell).tolist()
-                cld[icl]["site_basis"] = cl[4]
-                
-        return cld
-
-    def get_cluster_orbit(self, super_cell, cluster_sites, cluster_species=None, tol = 1e-3):
+    def get_cluster_orbit(self, super_cell, cluster_sites, cluster_species=None, tol = 1e-3, tight=False, distances=None):
         """
         Get cluster orbit inside a supercell.
         cluster_sites: array of atom indices of the cluster, referred to the supercell.
@@ -252,6 +157,13 @@ class ClustersPool():
             if _icl not in substitutional_sites:
                 return None
 
+        radius = None
+        if tight:
+            if cluster_species is None:
+                radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_sites))
+            else:
+                radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_species))
+            
         shash = None
         if cluster_species is not None:
             cluster_species = np.array(cluster_species)
@@ -276,8 +188,8 @@ class ClustersPool():
             for tr in internal_trans: # Now apply the internal translations
                 __sp1 = np.add(_sp1, tr)
                 __sp1 = wrap_scaled_positions(__sp1,super_cell.get_pbc())
-                distances = cdist(__sp1, spos, metric='euclidean') # Evaluate all (scaled) distances between cluster points to scell sites
-                _cl = np.argwhere(np.abs(distances) < tol)[:,1] # Atom indexes of the transformed cluster
+                sdistances = cdist(__sp1, spos, metric='euclidean') # Evaluate all (scaled) distances between cluster points to scell sites
+                _cl = np.argwhere(np.abs(sdistances) < tol)[:,1] # Atom indexes of the transformed cluster
 
                 include = True
                 shash = np.arange(len(_cl))
@@ -292,7 +204,14 @@ class ClustersPool():
                             for j in range(i+1,len(_cl)):
                                 if _cl[i] == _cl[j] and cluster_species[i] != cluster_species[j]:
                                     include = False
-                                    
+                if tight:
+                    if cluster_species is None:
+                        _radius = self.get_cluster_radius(distances,Cluster(_cl,_cl))
+                    else:
+                        _radius = self.get_cluster_radius(distances,Cluster(_cl,cluster_species))
+                    if _radius > radius:
+                        include = False
+                    
                 if include:
                     for cl in orbit:
                         if cluster_species is None:
@@ -321,52 +240,6 @@ class ClustersPool():
                 if ia == jb and j not in table:
                     table[i] = j
         return table
-    
-    def get_cluster_orbit2(self, super_cell, cluster_sites, tol = 1e-3):
-        """
-        cluster_sites, array of atom indices referred to the super_cell.
-        This has the problem that symmetries are taken from supercell and not parent cell.
-        """
-        from clusterx.symmetry import get_spacegroup
-        from scipy.spatial.distance import cdist
-        from sympy.utilities.iterables import multiset_permutations
-        import sys
-        sc_sg, sc_sym = get_spacegroup(super_cell.get_pristine(), tool="spglib")
-        
-        spos = super_cell.get_scaled_positions(wrap=True)
-        sp0 = np.array([spos[site] for site in cluster_sites]) # Original scalar positions
-
-        orbit = []
-        for r,t in zip(sc_sym['rotations'], sc_sym['translations']):
-            print(r,t)
-            ts = np.tile(t,(len(sp0),1)).T
-            _sp1 = np.add(np.dot(r,sp0.T),ts).T # Apply rotation, then translation
-
-            _sp1 =np.around(_sp1,decimals=8)
-            for i, periodic in enumerate(super_cell.pbc): # Wrap cluster positions inside super cell
-                if periodic: # Following ASE's Atoms.get_scaled_positions, we do this twice
-                    _sp1[:, i] %= 1.0
-                    _sp1[:, i] %= 1.0
- 
-            distances = cdist(_sp1, spos, metric='euclidean') # Evaluate all (scaled) distances between cluster points to scell sites
-            _cl = np.argwhere(np.abs(distances) < tol)[:,1] # Extract indices when distance is less than tol
-            
-            include = True
-            for cl in orbit:
-                for _pcl in multiset_permutations(_cl):
-                    if (cl == _pcl).all():
-                        include = False
-                        break
-                if not include:
-                    break
-
-            if include:
-                orbit.append(_cl)
-                
-            #if np.permute(_cl) not in np.array(orbit) and len(_cl) == len(cluster_sites):
-            #    orbit.append(_cl)
-
-        return np.array(orbit)
 
     def get_containing_supercell(self, use = "pool"):
         """
@@ -379,7 +252,7 @@ class ClustersPool():
 
         if use == "pool":
             posl = []
-            for cln, cl in self.clusters_dict.items():
+            for cln, cl in self._cpool_dict.items():
                 for pos in cl["positions_lat"]:
                     posl.append(pos)
             posl = np.array(posl)
@@ -393,7 +266,7 @@ class ClustersPool():
             if rmax == 0:
                 rmax = 1e-2
             l = LA.norm(self._parent_lattice.get_cell(), axis=1) # Lengths of the cell vectors
-            n = [int(2*n) for n in np.ceil(rmax/l)] # number of repetitions of unit cell along each lattice vector to contain largest cluster
+            n = [int(n) for n in np.ceil(rmax/l)] # number of repetitions of unit cell along each lattice vector to contain largest cluster
             for i, p in enumerate(self._parent_lattice.get_pbc()): # Apply pbc's
                 if not p:
                     n[i] = 1
@@ -415,7 +288,7 @@ class ClustersPool():
         from subprocess import call
 
         rtol = 1e-3
-        cld = self.get_clusters_dict()
+        cld = self.get_cpool_dict()
         prim_cell = self._parent_lattice.get_cell()
         scell = self.get_containing_supercell()
         
@@ -449,227 +322,4 @@ class ClustersPool():
             atoms_db.write(atoms)
 
         
-        """
-        # Old implementation
-        from clusterx.super_cell import SuperCell
-        from ase.data import chemical_symbols as cs
-
-        cld = self.get_clusters_dict()
-        sc = 5
-        parent =  self._parent_lattice
-        prim_cell = parent.get_cell()
-        for kcl,icl in cld.items():
-            # Obtain cartesian coordinates of the cluster
-            if icl["npoints"]!=0:
-                cllat = np.array( icl["positions_lat"] )
-                clcar = np.dot(cllat,prim_cell)
-
-            # Build supercell
-            super_cell = SuperCell(parent,[[sc,0,0],[0,sc,0],[0,0,sc]])
-            super_cell.wrap(center=[0,0,0])
-            
-            # Set chemical symbols in the supercell
-            chem = super_cell.get_chemical_symbols()
-            sites = super_cell.get_sites()
-            for ir,r in enumerate(super_cell.get_positions()):
-                chem[ir] = "H"
-                if icl["npoints"]!=0:
-                    for p,c in zip(clcar,icl["site_basis"]):
-                        if np.linalg.norm(r-p) < 1e-2:
-                            chem[ir] = cs[sites[ir][c[1]+1]]
-            #print chem
-            super_cell.set_chemical_symbols(chem)    
-
-            #view(super_cell)
-            self._atoms_db.write(super_cell)
-        """
-
-        
-    def _parse_clusters_out_to_array(self):
-        if not os.path.isfile("clusters.out"):
-            sys.exit("Error (clusterx.parse_clusters_out): file clusters.out does not exist.")
-
-        f = open("clusters.out","r")
-
-        flines = f.read().splitlines()
-
-        clusters = []
-        ic = -1
-        new = True
-        il = 0
-
-        #fmt = '%.'+str(c.PRECISION)+'f'
-
-        for l in flines:
-
-            ls = l.split()
-
-            if not new and len(ls)>0:
-                il = il + 1
-                if il == 1:
-                    clusters[ic].append(float(ls[0]))
-                if il == 2:
-                    clusters[ic].append(int(ls[0]))
-                if il == 3:    
-                    clusters[ic].append([])
-                    clusters[ic].append([])
-                if il >= 3:
-                    clusters[ic][3].append([float(ls[0]),float(ls[1]),float(ls[2])])
-                    clusters[ic][4].append([int(ls[3]),int(ls[4])])
-                      
-            if not new and len(ls)==0:
-                new = True
-                il = 0
-                
-            if len(ls)>0 and new:
-                ic = ic + 1
-                clusters.append([])
-                clusters[ic].append(int(ls[0]))
-                new = False
-
-        #print np.array(clusters)
-        #sys.exit()
-        #print clusters
-        return clusters
- 
-
-
-    def _gen_clusters_corrdump(self, latfile_path="parlat.in"):
-
-        #if not os.path.isfile(latfile_path):
-        #    sys.exit("Error (clusterx.gen_clusters): lattice file %s not present."%(latfile_path))
-
-        self._parent_lattice.serialize(fmt="ATAT")
-        cmdarr = ["corrdump","-clus","-sig="+str(c.PRECISION)]
-        for np,r in zip(self._npoints,self._radii):
-            if np<2:
-                continue
-            else:
-                cmdarr.append("-%d=%f"%(int(np),float(r)))
-
-        cmdarr.append("-l=%s"%(latfile_path))
-
-        eps = 1e-5
-
-        if c.T2D:
-            latin = c.parse_lat()
-            v11 = latin[0][0][0]
-            v12 = latin[0][0][1]
-            v13 = latin[0][0][2]
-            v21 = latin[0][1][0]
-            v22 = latin[0][1][1]
-            v23 = latin[0][1][2]
-            v31 = latin[0][2][0]
-            v32 = latin[0][2][1]
-            v33 = latin[0][2][2]
-            l1 = np.sqrt( v11*v11 + v12*v12 )
-            l2 = np.sqrt( v21*v21 + v22*v22 )
-
-
-            if abs(v13) > eps or abs(v23) > eps:
-                sys.exit("Error (clusterx.gen_clusters): the lattice vectors defined in lat.in do not correspond to a 2d lattice in the x-y plane.")
-
-            if abs(v31) > eps or abs(v32) > eps:
-                sys.exit("Error (clusterx.gen_clusters): in 2D mode, the third lattice vector in lat.in should have the form 0.00 0.00 z, with z a real number.")
-
-            for at in latin[2][0:]:
-                if at[0][2] < 0 or at[0][2] >= 1:
-                    sys.exit("Error (clusterx.gen_clusters): in 2D mode, the z lattice coordinates of atoms are expected to lie in the interval [0,1].")
-
-
-            """ 
-            # This commented modification takes care of a situation in which the unit unit cell vectors defined in lat.in 
-            # are such that clusters in the plane can be equivalent to out-of-plane clusters. It patches the situation
-            # by making sure this symmetry is broken. However, as it is now, the modification is always applied, even
-            # when this symmetry is not present in lat.in. This is 
-            # not a desired behaviour, so for the moment  the user must take care of the lat.in not having this symmetry.
-
-            latin_c = deepcopy(latin)
-
-            # make sure clusters are generated in some xy plane by breaking this symmetry.
-
-            latin_c[0][2][2] = (np.pi - 2.0) * max(l1,l2)
-            factor = latin_c[0][2][2]/abs(v33)
-
-            for i in range(len(latin_c[2])):
-                latin_c[2][i][0][2] = latin_c[2][i][0][2]/factor 
-
-            c.str_to_file(latin_c,"./lat2d.tmp.in")
-
-            cmdarr.append("-l=lat2d.tmp.in")
-            """
-
-        process = subprocess.Popen(cmdarr, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        corr, err = process.communicate()
-
-
-        if c.T2D:
-            #latin = c.parse_lat()
-            """
-            z = []
-            for at in latin[2][0:]:
-                z.append(at[0][2])
-
-            z0 = min(z)
-            z1 = max(z)
-            """
-            clusters = c.parse_clusters_out()
-            clusters_new = []
-
-            zs = []
-            nsubsites = len(latin[2])
-            for i in range(nsubsites):
-                if len(latin[2][i][1])==2:
-                    zs.append(latin[2][i][0][2])
-
-            z0 = min(zs) - 1e-4
-            z1 = max(zs) + 1e-4
-
-            for cl in clusters:
-                add = True
-                if len(cl) > 3:
-                    for i in range(cl[2]):
-                        if cl[3][i][2] > z1 or cl[3][i][2] < z0:
-
-                            add = False
-                            break
-
-                if add:
-                    clusters_new.append(cl)
-                    """
-            for cl in clusters:
-                if len(cl) > 3:
-                    n = cl[3][0][2] // 1
-                    for i in range(3,3+cl[2]):
-                        # the application of this factor is related to symmetry breaking commented above. 
-                        #cl[3][i-3][2] = factor * (cl[3][i-3][2] - n)
-                        cl[3][i-3][2] = cl[3][i-3][2] - n
-
-            for cl in clusters:
-                add = True
-                if len(cl) > 3:
-                    zcl = []
-                    for i in range(3,3+cl[2]):
-                        zcl.append(cl[3][i-3][2])
-
-                    for i in range(len(zcl)):
-                        for j in range(len(zcl)):
-                            if abs(zcl[i]-zcl[j]) >= 1:
-                                add = False
-                                break
-                        if not add:
-                            break
-
-                if add:
-                    clusters_new.append(cl)
-            """
-                    subprocess.call(["rm","clusters.out"])
-                    # the erased file here is related to symmetry breaking commented above. 
-                    #subprocess.call(["rm","lat2d.tmp.in"])
-
-            c.write_clusters_file(clusters_new,fname="clusters.out")
-
-        subprocess.call(["rm","-f","sym.out"])
-
-        return
 
