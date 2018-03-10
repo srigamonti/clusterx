@@ -1,6 +1,7 @@
 from ase.db.jsondb import JSONDatabase
 from ase.atoms import Atoms
 import clusterx as c
+from clusterx.clusters.cluster import Cluster
 import os
 import sys
 import subprocess
@@ -15,6 +16,8 @@ class ClustersPool():
         self._filename = name+".json"
         #self._atoms_db = JSONDatabase(filename=self._filename) # For visualization
         self._parent_lattice = parent_lattice
+        self._cpool = []
+        self._cpool_scell = None
         #self.write(parent_lattice, parent_lattice=True)
         self.clusters_dict = {}
 
@@ -33,44 +36,102 @@ class ClustersPool():
     def _gen_clusters_clusterx(self):
         from clusterx.symmetry import get_spacegroup
         from clusterx.super_cell import SuperCell
+        from itertools import product, combinations
         npoints = self._npoints
         radii = self._radii
 
         scell = self.get_containing_supercell(use="radii")
+        self._cpool_scell = scell
         natoms = scell.get_natoms()
         sites = scell.get_sites()
         satoms = scell.get_substitutional_sites()
         nsatoms = len(satoms)
         idx_subs = scell.get_idx_subs()
         tags = scell.get_tags()
-        distances = scell.get_all_distances(mic=True) # Use Minimum Image Convention
-
+        distances = scell.get_all_distances(mic=False) # Use Minimum Image Convention
+        for i1 in range(natoms):
+            for i2 in range(i1+1,natoms):
+                print(i1,i2,distances[i1,i2])
+        
         # Check if supercell is large enough
         if np.amax(radii)>np.amax(distances):
             sys.exit("Supercell is too small to find clusters pool")
-            
-        # Generate all possible clusters in the supercell, constrained to radii
+        
+        clrs = []
 
-        # Two-point clusters
-        print(sites)
-        print(idx_subs)
-        print(tags)
-        print(satoms)
-        allcl = np.zeros((nsatoms,5),dtype=int)
-        for i1,idx1 in enumerate(satoms): # loop over substitutional atoms
-            for is1,s1 in enumerate(sites[idx1][1:]): # loop over substitutional species of atom i1
-                allcl[i1]= [idx1,tags[i1],is1,s1]
-            
-        # Get symmetry operations of the pristine supercell
-        scell_sg, scell_sym = get_spacegroup(scell.get_pristine(), tool="spglib")
+        for npts,radius in zip(npoints,radii):
+            clrs_full = []
+            for idxs in combinations(satoms,npts):
+                sites_arrays = []
+                for idx in idxs:
+                    sites_arrays.append(sites[idx][1:])
+                for ss in product(*sites_arrays):
+                    cl = Cluster(idxs,ss)
+                    if self.get_cluster_radius(distances,cl) < radius:
+                        if cl not in clrs_full:
+                            self._cpool.append(cl)
+                            clrs_full.append(cl)
+                            orbit = self.get_cluster_orbit(scell, cl.get_idxs(), cluster_species=cl.get_nrs())
+                            for cl_idxs in orbit:
+                                clrs_full.append(Cluster(cl_idxs,cl.get_nrs()))
 
-        # Get list of substitutional sites
-        ss = []
-        for i in range(natoms):
-            if len(sites[i]) > 1:
-               ss.append(i)
+        """
+        # Three-point clusters
+        clrs_full = []
+                            
+        for idx1, idx2, idx3 in combinations(satoms,3):
+            for s1, s2, s3 in product(sites[idx1][1:],sites[idx2][1:],sites[idx3][1:]):
+                cl = Cluster([idx1,idx2,idx3],[s1,s2,s3])
+                if self.get_cluster_radius(distances,cl) < radii[1]:
+                    if cl not in clrs_full:
+                        self._cpool.append(cl)
+                        clrs_full.append(cl)
+                        orbit = self.get_cluster_orbit(scell, cl.get_idxs(), cluster_species=cl.get_nrs())
+                        for cl_idxs in orbit:
+                            clrs_full.append(Cluster(cl_idxs,cl.get_nrs()))
 
+       
+        for i1,idx1 in enumerate(satoms):
+            for i2,idx2 in enumerate(satoms[i1+1:]):
+                for is1,s1 in enumerate(sites[idx1][1:]):
+                    for is2,s2 in enumerate(sites[idx2][1:]):
+                        cl = Cluster([idx1,idx2],[s1,s2])
+                        if self.get_cluster_radius(distances,cl) < radii[0]:
+                            if cl not in clrs_full:
+                                self._cpool.append(cl)
+                                clrs_full.append(cl)
+                                orbit = self.get_cluster_orbit(scell, cl.get_idxs(), cluster_species=cl.get_nrs())
+                                for cl_idxs in orbit:
+                                    clrs_full.append(Cluster(cl_idxs,cl.get_nrs()))
+        """
             
+    def get_cpool_scell(self):
+        return self._cpool_scell
+    
+    def get_cpool_orbit(self):
+        atom_idxs = []
+        atom_nrs = []
+
+        for cl in self._cpool:
+            atom_idxs.append(cl.get_idxs())
+            atom_nrs.append(cl.get_nrs())
+
+        return atom_idxs, atom_nrs
+        
+    def get_cluster_radius(self, distances, cluster):
+        npoints = len(cluster)
+        atom_idxs = cluster.get_idxs()
+        r = 0
+        if npoints == 0 or npoints == 1:
+            return 0
+        if npoints > 1:
+            for i1, idx1 in enumerate(atom_idxs):
+                for idx2 in atom_idxs[i1+1:]:
+                    d = distances[idx1,idx2]
+                    if r < d:
+                        r = d
+        return r
+    
     def serialize(self, fmt, fname=None):
         if fmt == "json":
             self.gen_atoms_database(fname)
@@ -116,11 +177,11 @@ class ClustersPool():
         for icl,cl in enumerate(orbit):
             atoms = super_cell.copy()
             ans = atnums.copy()
-            for i,site in enumerate(cl):
+            for i,atom_idx in enumerate(cl):
                 if orbit_species is None:
-                    ans[site] = sites[site][1]
+                    ans[atom_idx] = sites[atom_idx][1]
                 else:
-                    ans[site] = orbit_species[i]
+                    ans[atom_idx] = orbit_species[icl][i]
             atoms.set_atomic_numbers(ans)
             atoms_db.write(atoms)
 
@@ -332,7 +393,7 @@ class ClustersPool():
             if rmax == 0:
                 rmax = 1e-2
             l = LA.norm(self._parent_lattice.get_cell(), axis=1) # Lengths of the cell vectors
-            n = [int(n) for n in np.ceil(rmax/l)] # number of repetitions of unit cell along each lattice vector to contain largest cluster
+            n = [int(2*n) for n in np.ceil(rmax/l)] # number of repetitions of unit cell along each lattice vector to contain largest cluster
             for i, p in enumerate(self._parent_lattice.get_pbc()): # Apply pbc's
                 if not p:
                     n[i] = 1

@@ -42,8 +42,11 @@ def test_clusters_generation():
     #subprocess.call(["rm","-f","parlat.in"])
     #subprocess.call(["rm","-f","clusters.out"])
 
-    cp = ClustersPool(pl, npoints=[1], radii=[0.0], tool="clusterx")
+    cp = ClustersPool(pl, npoints=[2,3], radii=[2.4,1.5], tool="clusterx")
     cp.gen_clusters()
+    atom_idxs, atom_nrs = cp.get_cpool_orbit()
+    scell = cp.get_cpool_scell()
+    cp.write_orbit_db(atom_idxs,scell,"test_clusters_generation_0.json",orbit_species=atom_nrs)
     #print(cp.get_clusters_dict())
     #cp.serialize("atat")
     #cp.serialize("json", fname = "test_clusters_generation_0.json")

@@ -42,7 +42,10 @@ class Cluster():
         
         else:
             return False
-    
+
+    def __len__(self):
+        return len(self.ais)
+        
     def get_idxs(self):
         return self.ais
     
