@@ -57,3 +57,5 @@ class Cluster():
     
     def set_nrs(self, atom_numbers):
         self.ans = atom_numbers
+
+    
