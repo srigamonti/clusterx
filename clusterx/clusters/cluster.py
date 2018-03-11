@@ -1,7 +1,9 @@
 from collections import Counter
+from clusterx.symmetry import get_scaled_positions
+import numpy as np
 
 class Cluster():
-    def __new__(cls, atom_indexes, atom_numbers):
+    def __new__(cls, atom_indexes, atom_numbers, super_cell):
         for iai, ai in enumerate(atom_indexes):
             for _iai, _ai in enumerate(atom_indexes):
                 if ai == _ai and atom_numbers[iai] != atom_numbers[_iai]:
@@ -11,13 +13,19 @@ class Cluster():
             raise ValueError("Initialization error, number of sites in cluster different from number of species.")
                     
         cl = super(Cluster,cls).__new__(cls)
-        cl.__init__(atom_indexes, atom_numbers)
+        cl.__init__(atom_indexes, atom_numbers, super_cell)
         return cl
     
-    def __init__(self, atom_indexes, atom_numbers):
+    def __init__(self, atom_indexes, atom_numbers, super_cell):
         self.ais = atom_indexes
         self.ans = atom_numbers
+        self.npoints = len(atom_numbers)
+        self.positions_cartesian = np.zeros((self.npoints,3)) 
+        for ip, idx in enumerate(atom_indexes):
+            self.positions_cartesian[ip] = super_cell.get_positions(wrap=True)[idx]
+            
         self.npoints = len(self.ais)
+
         
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -58,4 +66,6 @@ class Cluster():
     def set_nrs(self, atom_numbers):
         self.ans = atom_numbers
 
-    
+        
+    def get_positions(self):
+        return self.positions_cartesian

@@ -6,7 +6,7 @@ def get_spacegroup(parent_lattice):
     Get space symmetry of a ParentLattice object. Sites allowing different substitutional species are treated as symetrically distinct.
     """
 
-    atoms = parent_lattice.get_pristine()
+    atoms = parent_lattice.get_pristine().copy()
 
     # Create a fictitious atoms object with species set to site type.
     # This way, two sites which are symetrically equivalent in the pristine lattice

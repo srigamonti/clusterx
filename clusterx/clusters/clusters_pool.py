@@ -21,7 +21,11 @@ class ClustersPool():
         self._cpool = []
         self._cpool_scell = self.get_containing_supercell(use="radii")
         self._cpool_dict = {}
-        
+        self.gen_clusters()
+
+    def __len__(self):
+        return len(self._cpool)
+    
     def gen_clusters(self):
         from clusterx.super_cell import SuperCell
         from itertools import product, combinations
@@ -47,20 +51,25 @@ class ClustersPool():
                 for idx in idxs:
                     sites_arrays.append(sites[idx][1:])
                 for ss in product(*sites_arrays):
-                    cl = Cluster(idxs,ss)
+                    cl = Cluster(idxs,ss,scell)
                     if self.get_cluster_radius(distances,cl) <= radius:
                         if cl not in clrs_full:
                             self._cpool.append(cl)
                             clrs_full.append(cl)
                             orbit = self.get_cluster_orbit(scell, cl.get_idxs(), cluster_species=cl.get_nrs(),tight=True,distances=distances)
-                            for cl_idxs in orbit:
-                                clrs_full.append(Cluster(cl_idxs,cl.get_nrs()))
+                            #for cl_idxs in orbit:
+                            #    clrs_full.append(Cluster(cl_idxs,cl.get_nrs(),scell))
+                            for _cl in orbit:
+                                clrs_full.append(_cl)
 
             
     def get_cpool_scell(self):
         return self._cpool_scell
     
-    def get_cpool_orbit(self):
+    def get_cpool(self):
+        return self._cpool
+    
+    def get_cpool_arrays(self):
         atom_idxs = []
         atom_nrs = []
 
@@ -126,7 +135,7 @@ class ClustersPool():
         for icl,cl in enumerate(orbit):
             atoms = super_cell.copy()
             ans = atnums.copy()
-            for i,atom_idx in enumerate(cl):
+            for i,atom_idx in enumerate(cl.get_idxs()):
                 if orbit_species is None:
                     ans[atom_idx] = sites[atom_idx][1]
                 else:
@@ -154,9 +163,9 @@ class ClustersPool():
         radius = None
         if tight:
             if cluster_species is None:
-                radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_sites))
+                radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_sites,super_cell))
             else:
-                radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_species))
+                radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_species,super_cell))
             
         shash = None
         if cluster_species is not None:
@@ -201,21 +210,21 @@ class ClustersPool():
                                     include = False
                 if tight:
                     if cluster_species is None:
-                        _radius = self.get_cluster_radius(distances,Cluster(_cl,_cl))
+                        _radius = self.get_cluster_radius(distances,Cluster(_cl,_cl,super_cell))
                     else:
-                        _radius = self.get_cluster_radius(distances,Cluster(_cl,cluster_species))
+                        _radius = self.get_cluster_radius(distances,Cluster(_cl,cluster_species,super_cell))
                     if _radius > radius:
                         include = False
                     
                 if include:
-                    for cl in orbit:
+                    for cl_obj in orbit:
+                        cl = cl_obj.get_idxs()
                         if cluster_species is None:
                             if Counter(cl) == Counter(_cl):
                                 include = False
                                 break
                         else:
                             if Counter(cl) == Counter(_cl):
-                                    
                                 shash = self._find_hash(cl,_cl)
 
                                 csh = cluster_species[shash[:]]
@@ -224,7 +233,8 @@ class ClustersPool():
                                     break
                                 
                 if include:
-                    orbit.append(_cl)
+                    #orbit.append(_cl)
+                    orbit.append(Cluster(_cl,cluster_species,super_cell))
 
         return np.array(orbit)
 

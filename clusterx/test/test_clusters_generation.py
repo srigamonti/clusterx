@@ -2,7 +2,6 @@ import clusterx as c
 from clusterx.parent_lattice import ParentLattice
 from clusterx.clusters.clusters_pool import ClustersPool
 from ase import Atoms
-import subprocess
 
 
 def test_clusters_generation():
@@ -33,6 +32,6 @@ def test_clusters_generation():
     #cp = ClustersPool(pl, npoints=[1,2,3,4,5], radii=[0,3.1,3.1,3.1,3.1])
     cp = ClustersPool(pl, npoints=[1,2,3,4], radii=[0,3.1,3.1,3.1])
     cp.gen_clusters()
-    atom_idxs, atom_nrs = cp.get_cpool_orbit()
+    atom_idxs, atom_nrs = cp.get_cpool_arrays()
     scell = cp.get_cpool_scell()
     cp.write_orbit_db(atom_idxs,scell,"test_clusters_generation_0.json",orbit_species=atom_nrs)

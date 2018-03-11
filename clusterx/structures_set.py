@@ -11,24 +11,32 @@ from ase.db.core import connect
 from ase.db.core import Database
 import inspect
 
-class StructuresSet(JSONDatabase):
-    def __init__(self,parent_lattice, name=None, filename=None, create_indices=True,
+class StructuresSet():
+    def __init__(self,parent_lattice, name=None, filename="structures_set.json", create_indices=True,
                  use_lock_file=False, serial=False, calculator = None):
 
         self._name = name
         filename = name+".json"
-        super(StructuresSet,self).__init__(filename=filename)
         self._metadata = {}
+        self._structures = []
         self._parent_lattice = parent_lattice
         self.write(parent_lattice, parent_lattice=True)
+        self.json_db = JSONDatabase.__init__(filename=filename) 
         if isinstance(calculator,Calculator):
             self.set_calculator(calculator)
         
-    def write(self, super_cell, key_value_pairs={}, data={}, **kwargs):
-        super(StructuresSet,self).write(super_cell,key_value_pairs,
-                                        data={"tags":super_cell.get_tags(),"idx_subs":super_cell.get_idx_subs()},**kwargs)
+    def write(self, structure, key_value_pairs={}, data={}, **kwargs):
+        self.json_db.write(super_cell,key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
 
-    def get_structure(self, sid):
+    def add_structure(self,structure,write_to_db = False):
+        self._structures.append(structure)
+        if write_to_db:
+            self.json_db.write(super_cell,key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
+        
+    def get_structure(self,sid):
+        return self._structures[sid]
+        
+    def get_structure_atoms(self, sid):
         """
         Return Atoms object for db row sid.
         """

@@ -17,22 +17,13 @@ class SuperCell(ParentLattice):
     def __init__(self, parent_lattice, p):
         self._plat = parent_lattice
         self._p = p
-        #super(SuperCell, self).__init__()
-        if (parent_lattice.get_pbc()==(1,1,0)).all():
-            self._p[0,2] = 0
-            self._p[1,2] = 0
-            self._p[2,0] = 0
-            self._p[2,1] = 0
-            self._p[2,2] = 1
-            self.set_pbc((True,True,False))
-
         prist = make_supercell(parent_lattice.get_atoms(),p)
         subs = [make_supercell(atoms,p) for atoms in parent_lattice.get_substitutions()]
         #ParentLattice.__init__(self, atoms = prist, substitutions = subs )
         super(SuperCell,self).__init__(atoms = prist, substitutions = subs )
         self._natoms = len(self)
 
-        self.set_pbc(self.pbc)
+        self.set_pbc(self._plat.get_pbc())
 
     def copy(self):
         """Return a copy."""
