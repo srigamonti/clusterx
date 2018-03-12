@@ -120,11 +120,16 @@ class ClustersPool():
     def get_cluster(self, cln):
         return self._cpool_dict[cln]
 
-    def write_orbit_db(self, orbit, super_cell, db_name, orbit_species):
+    def write_orbit_db(self, orbit, super_cell, db_name):
         """Write cluster orbit to Atoms database
         """
         from ase.db.jsondb import JSONDatabase
         from subprocess import call
+        orbit_nrs = []
+        orbit_idxs = []
+        for cluster in orbit:
+            orbit_nrs.append(cluster.get_nrs())
+            orbit_idxs.append(cluster.get_idxs())
 
         atnums = super_cell.get_atomic_numbers()
         sites = super_cell.get_sites()
@@ -137,7 +142,7 @@ class ClustersPool():
             atoms = super_cell.copy()
             ans = atnums.copy()
             for i,atom_idx in enumerate(cl.get_idxs()):
-                ans[atom_idx] = orbit_species[icl][i]
+                ans[atom_idx] = orbit_nrs[icl][i]
             atoms.set_atomic_numbers(ans)
             atoms_db.write(atoms)
 

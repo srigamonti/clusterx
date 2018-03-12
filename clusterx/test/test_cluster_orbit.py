@@ -14,8 +14,8 @@ def test_cluster_orbit():
         
         ase gui test_cluster_orbit_#.json
     """
-    #test_cases = [0,1,2,3,4,5]
-    test_cases = [0]
+    test_cases = [0,1,2,3,4,5]
+    #test_cases = [5]
     orbits = [None,None,None,None,None,None]
     for test_case in test_cases:
         if test_case == 0:
@@ -36,13 +36,8 @@ def test_cluster_orbit():
 
             orbit = cl.get_cluster_orbit(scell, [0,2], [11,11])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
-            orbit_nrs = []
-            orbit_idxs = []
-            for cluster in orbit:
-                orbit_nrs.append(cluster.get_nrs())
-                orbit_idxs.append(cluster.get_idxs())
-            cl.write_orbit_db(orbit, scell, db_name,np.array(orbit_nrs))
-            orbits[test_case] = orbit_idxs
+            cl.write_orbit_db(orbit, scell, db_name)
+            orbits[test_case] = orbit
             
         if test_case == 1:
             # FCC lattice
@@ -54,7 +49,7 @@ def test_cluster_orbit():
 
             cl = ClustersPool(plat)
 
-            orbit = cl.get_cluster_orbit(scell, [0,2])
+            orbit = cl.get_cluster_orbit(scell, [0,2],[13,13])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
@@ -78,7 +73,7 @@ def test_cluster_orbit():
             scell = SuperCell(plat,[(2,0,0),(0,1,0),(0,0,1)])
 
             cl = ClustersPool(plat)
-            orbit = cl.get_cluster_orbit(scell, [19,17]) # 24k-24k pair cluster
+            orbit = cl.get_cluster_orbit(scell, [19,17],[13,13]) # 24k-24k pair cluster
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
@@ -96,7 +91,7 @@ def test_cluster_orbit():
             scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)])
 
             cl = ClustersPool(plat)
-            orbit = cl.get_cluster_orbit(scell, [2,14,5])
+            orbit = cl.get_cluster_orbit(scell, [2,14,5],[11,11,11])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
@@ -124,7 +119,7 @@ def test_cluster_orbit():
             scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)])
 
             cl = ClustersPool(plat)
-            orbit = cl.get_cluster_orbit(scell, [3,18])
+            orbit = cl.get_cluster_orbit(scell, [3,18],[8,11])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
@@ -149,7 +144,7 @@ def test_cluster_orbit():
             atom_species = [sites[0][1],sites[2][2]]
             orbit = cl.get_cluster_orbit(scell, atom_idxs, cluster_species=atom_species)
             db_name = "test_cluster_orbit_%s.json"%(test_case)
-            cl.write_orbit_db(orbit, scell, db_name,orbit_species=atom_species)
+            cl.write_orbit_db(orbit, scell, db_name)
             orbits[test_case] = orbit
             
             
@@ -167,6 +162,12 @@ def test_cluster_orbit():
     
 def check_result(testnr, orbit):
     isok = True
+    orbit_nrs = []
+    orbit_idxs = []
+    for cluster in orbit:
+        orbit_nrs.append(cluster.get_nrs())
+        orbit_idxs.append(cluster.get_idxs())
+
     if testnr == 0:
         rorbit = np.array([
             [0,2],
@@ -375,7 +376,7 @@ def check_result(testnr, orbit):
     if len(orbit) != len(rorbit):
         return False
     
-    for cl,rcl in zip(orbit,rorbit):
+    for cl,rcl in zip(orbit_idxs,rorbit):
         if (cl != rcl).any():
             isok = False
             break
