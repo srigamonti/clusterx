@@ -12,16 +12,14 @@ from ase.db.core import Database
 import inspect
 
 class StructuresSet():
-    def __init__(self,parent_lattice, name=None, filename="structures_set.json", create_indices=True,
-                 use_lock_file=False, serial=False, calculator = None):
+    def __init__(self,parent_lattice, filename="structures_set.json", serial=False, calculator = None):
 
-        self._name = name
-        filename = name+".json"
+        self._filename = filename
         self._metadata = {}
         self._structures = []
         self._parent_lattice = parent_lattice
         self.write(parent_lattice, parent_lattice=True)
-        self.json_db = JSONDatabase.__init__(filename=filename) 
+        self.json_db = JSONDatabase.__init__(filename=self._filename) 
         if isinstance(calculator,Calculator):
             self.set_calculator(calculator)
         

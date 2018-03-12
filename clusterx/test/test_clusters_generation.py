@@ -35,4 +35,4 @@ def test_clusters_generation():
     atom_idxs, atom_nrs = cp.get_cpool_arrays()
     scell = cp.get_cpool_scell()
     #cp.write_orbit_db(atom_idxs,scell,"test_clusters_generation_0.json",orbit_species=atom_nrs)
-    cp.write_orbit_db(cp.get_cpool(),scell,"test_clusters_generation_0.json",orbit_species=atom_nrs)
+    cp.write_orbit_db(cp.get_cpool(),scell,"test_clusters_generation_0.json")
