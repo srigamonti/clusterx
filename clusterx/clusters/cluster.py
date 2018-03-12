@@ -3,7 +3,7 @@ from clusterx.symmetry import get_scaled_positions
 import numpy as np
 
 class Cluster():
-    def __new__(cls, atom_indexes, atom_numbers, super_cell):
+    def __new__(cls, atom_indexes, atom_numbers, super_cell=None):
         for iai, ai in enumerate(atom_indexes):
             for _iai, _ai in enumerate(atom_indexes):
                 if ai == _ai and atom_numbers[iai] != atom_numbers[_iai]:
@@ -16,15 +16,16 @@ class Cluster():
         cl.__init__(atom_indexes, atom_numbers, super_cell)
         return cl
     
-    def __init__(self, atom_indexes, atom_numbers, super_cell):
+    def __init__(self, atom_indexes, atom_numbers, super_cell=None):
         self.ais = atom_indexes
         self.ans = atom_numbers
         self.npoints = len(atom_numbers)
-        self.positions_cartesian = np.zeros((self.npoints,3)) 
-        for ip, idx in enumerate(atom_indexes):
-            self.positions_cartesian[ip] = super_cell.get_positions(wrap=True)[idx]
+        self.positions_cartesian = None
+        if super_cell is not None:
+            self.positions_cartesian = np.zeros((self.npoints,3)) 
+            for ip, idx in enumerate(atom_indexes):
+                self.positions_cartesian[ip] = super_cell.get_positions(wrap=True)[idx]
             
-        self.npoints = len(self.ais)
 
         
     def __eq__(self, other):

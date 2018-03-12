@@ -30,8 +30,9 @@ def test_clusters_generation():
     pl = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
 
     #cp = ClustersPool(pl, npoints=[1,2,3,4,5], radii=[0,3.1,3.1,3.1,3.1])
-    cp = ClustersPool(pl, npoints=[1,2,3,4], radii=[0,3.1,3.1,3.1])
-    cp.gen_clusters()
+    #cp = ClustersPool(pl, npoints=[1,2,3,4], radii=[0,3.1,3.1,3.1])
+    cp = ClustersPool(pl, npoints=[1,2,3], radii=[0,3.1,1.5])
     atom_idxs, atom_nrs = cp.get_cpool_arrays()
     scell = cp.get_cpool_scell()
-    cp.write_orbit_db(atom_idxs,scell,"test_clusters_generation_0.json",orbit_species=atom_nrs)
+    #cp.write_orbit_db(atom_idxs,scell,"test_clusters_generation_0.json",orbit_species=atom_nrs)
+    cp.write_orbit_db(cp.get_cpool(),scell,"test_clusters_generation_0.json",orbit_species=atom_nrs)

@@ -12,7 +12,7 @@ class ClustersPool():
     """
     Clusters pool class
     """
-    def __init__(self, parent_lattice, npoints, radii, name="_clusters_pool", filename=None):
+    def __init__(self, parent_lattice, npoints=np.array([[0]]), radii=np.array([[0]]), name="_clusters_pool", filename=None):
         self._npoints = npoints
         self._radii = radii
         self._name = name
@@ -21,7 +21,8 @@ class ClustersPool():
         self._cpool = []
         self._cpool_scell = self.get_containing_supercell(use="radii")
         self._cpool_dict = {}
-        self.gen_clusters()
+        if (npoints != np.array([[0]])).any():
+            self.gen_clusters()
 
     def __len__(self):
         return len(self._cpool)
@@ -39,7 +40,7 @@ class ClustersPool():
         nsatoms = len(satoms)
         idx_subs = scell.get_idx_subs()
         tags = scell.get_tags()
-        distances = scell.get_all_distances(mic=False) # Use Minimum Image Convention
+        distances = scell.get_all_distances(mic=False)
         # Check if supercell is large enough
         if np.amax(radii)>np.amax(distances):
             sys.exit("Containing supercell is too small to find clusters pool.")
@@ -119,7 +120,7 @@ class ClustersPool():
     def get_cluster(self, cln):
         return self._cpool_dict[cln]
 
-    def write_orbit_db(self, orbit, super_cell, db_name, orbit_species=None):
+    def write_orbit_db(self, orbit, super_cell, db_name, orbit_species):
         """Write cluster orbit to Atoms database
         """
         from ase.db.jsondb import JSONDatabase
@@ -136,15 +137,12 @@ class ClustersPool():
             atoms = super_cell.copy()
             ans = atnums.copy()
             for i,atom_idx in enumerate(cl.get_idxs()):
-                if orbit_species is None:
-                    ans[atom_idx] = sites[atom_idx][1]
-                else:
-                    ans[atom_idx] = orbit_species[icl][i]
+                ans[atom_idx] = orbit_species[icl][i]
             atoms.set_atomic_numbers(ans)
             atoms_db.write(atoms)
 
 
-    def get_cluster_orbit(self, super_cell, cluster_sites, cluster_species=None, tol = 1e-3, tight=False, distances=None):
+    def get_cluster_orbit(self, super_cell, cluster_sites, cluster_species, tol = 1e-3, tight=False, distances=None):
         """
         Get cluster orbit inside a supercell.
         cluster_sites: array of atom indices of the cluster, referred to the supercell.
@@ -162,18 +160,13 @@ class ClustersPool():
 
         radius = None
         if tight:
-            if cluster_species is None:
-                radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_sites,super_cell))
-            else:
-                radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_species,super_cell))
+            radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_species,super_cell))
             
         shash = None
-        if cluster_species is not None:
-            cluster_species = np.array(cluster_species)
+        cluster_species = np.array(cluster_species)
         # Get symmetry operations of the parent lattice
-        #sc_sg, sc_sym = get_spacegroup(self._plat.get_pristine(), tool="spglib") # Scaled parent_lattice
-        sc_sg, sc_sym = get_spacegroup(self._plat) # Scaled parent_lattice
-        internal_trans = get_internal_translations(self._plat, super_cell) # Scaled super_cell
+        sc_sg, sc_sym = get_spacegroup(self._plat) # Scaled to parent_lattice
+        internal_trans = get_internal_translations(self._plat, super_cell) # Scaled to super_cell
         # Get original cluster cartesian positions (p0)
         pos = super_cell.get_positions(wrap=True)
         p0 = np.array([pos[site] for site in cluster_sites])
@@ -202,38 +195,29 @@ class ClustersPool():
                         include = False
                         break
                     
-                if cluster_species is not None:
-                    if len(_cl)>1:
-                        for i in range(len(_cl)):
-                            for j in range(i+1,len(_cl)):
-                                if _cl[i] == _cl[j] and cluster_species[i] != cluster_species[j]:
-                                    include = False
+                if len(_cl)>1:
+                    for i in range(len(_cl)):
+                        for j in range(i+1,len(_cl)):
+                            if _cl[i] == _cl[j] and cluster_species[i] != cluster_species[j]:
+                                include = False
+                                
                 if tight:
-                    if cluster_species is None:
-                        _radius = self.get_cluster_radius(distances,Cluster(_cl,_cl,super_cell))
-                    else:
-                        _radius = self.get_cluster_radius(distances,Cluster(_cl,cluster_species,super_cell))
+                    _radius = self.get_cluster_radius(distances,Cluster(_cl,cluster_species,super_cell))
                     if _radius > radius:
                         include = False
                     
                 if include:
                     for cl_obj in orbit:
                         cl = cl_obj.get_idxs()
-                        if cluster_species is None:
-                            if Counter(cl) == Counter(_cl):
+                        if Counter(cl) == Counter(_cl):
+                            shash = self._find_hash(cl,_cl)
+
+                            csh = cluster_species[shash[:]]
+                            if (cluster_species == csh).all():
                                 include = False
                                 break
-                        else:
-                            if Counter(cl) == Counter(_cl):
-                                shash = self._find_hash(cl,_cl)
-
-                                csh = cluster_species[shash[:]]
-                                if (cluster_species == csh).all():
-                                    include = False
-                                    break
                                 
                 if include:
-                    #orbit.append(_cl)
                     orbit.append(Cluster(_cl,cluster_species,super_cell))
 
         return np.array(orbit)
