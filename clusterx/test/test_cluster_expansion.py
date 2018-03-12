@@ -8,6 +8,7 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
 from ase import Atoms
 import numpy as np
+from clusterx.calculators.emt import EMT2
 
 def test_cluster_expansion():
     """Test generation of clusters pools.
@@ -50,20 +51,22 @@ def test_cluster_expansion():
     strset.add_structure(Structure(scell,[6,1,1,6,2,1,1,1,1]),write_to_db=True)
 
     comat = corrcal.get_correlation_matrix(strset)
+    strset.set_calculator(EMT2())
+    energies = strset.calculate_property()
     
     reg = linear_model.LinearRegression()
-    reg.fit (comat, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    reg.fit(comat, energies)
     #LinearRegression(copy_X=True, fit_intercept=True, n_jobs=1, normalize=False)
     print("Js",reg.coef_)
 
     reg = linear_model.Ridge(alpha = .001)
-    reg.fit (comat, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) 
+    reg.fit(comat, energies) 
     print("Js l2: ",reg.coef_)
     print("intercept: ",reg.intercept_ )
 
 
     reg = linear_model.RidgeCV(alphas=[0.001, 0.005, 0.1])
-    reg.fit(comat, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])       
+    reg.fit(comat, energies)       
     print("Js l2: ",reg.coef_)
     print("intercept: ",reg.intercept_ )
     print("alpha:  ", reg.alpha_)
