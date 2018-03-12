@@ -8,11 +8,12 @@ from ase import Atoms
 import numpy as np
 
 def test_cluster_correlations():
-    """Test generation of clusters pools.
+    """Test calculation of cluster correlations.
     
-    After successful execution of the test, the generated clusters may be visualized with the command::
+    After successful execution of the test, the generated structure and clusters pool may be visualized with the command::
         
-        ase gui test_clusters_generation_#.json
+        ase gui test_clusters_correlations_structure.json
+        ase gui test_clusters_correlations_cpool.json
 
     """
 
@@ -40,6 +41,7 @@ def test_cluster_correlations():
     
     # Generate output
     print ("\n\n========Test writes========")
+    print (test_cluster_correlations.__doc__)
     atom_idxs, atom_nrs = cpool.get_cpool_arrays()
     scell = cpool.get_cpool_scell()
     cpool.write_orbit_db(cpool.get_cpool(),scell,"test_cluster_correlations_cpool.json")

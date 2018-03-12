@@ -36,30 +36,32 @@ def test_cluster_expansion():
     corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
 
     scell = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
-    structures = []
-    structures.append(Structure(scell,[1,2,1,6,7,1,1,2,1]))
-    structures.append(Structure(scell,[6,1,1,1,1,1,1,1,1]))
-    structures.append(Structure(scell,[1,2,1,1,7,1,6,7,1]))
-    structures.append(Structure(scell,[1,1,1,6,1,1,1,7,1]))
-    structures.append(Structure(scell,[6,7,1,6,7,1,6,2,1]))
-    structures.append(Structure(scell,[1,7,1,6,2,1,1,1,1]))
-    structures.append(Structure(scell,[6,1,1,1,1,1,1,1,1]))
-    structures.append(Structure(scell,[1,1,1,1,7,1,6,7,1]))
-    structures.append(Structure(scell,[1,2,1,6,2,1,6,2,1]))
-    structures.append(Structure(scell,[6,1,1,6,2,1,1,1,1]))
-    strset = StructuresSet(plat, filename="structures_set.json")
-    corrs = corrcal.get_cluster_correlations(structure)
+    strset = StructuresSet(plat, filename="test_cluster_expansion_structures_set.json")
+    strset.add_structure(Structure(scell,[1,2,1,6,7,1,1,2,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[6,1,1,1,1,1,1,1,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[1,2,1,1,7,1,6,7,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[1,1,1,6,1,1,1,7,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[6,7,1,6,7,1,6,2,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[1,7,1,6,2,1,1,1,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[6,1,1,1,1,1,1,1,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[1,1,1,1,7,1,6,7,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[1,2,1,6,2,1,6,2,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[6,1,1,6,2,1,1,1,1]),write_to_db=True)
+
+    corrs = corrcal.get_correlation_matrix(strset)
+
+    
     
     # Generate output
     print ("\n\n========Test writes========")
     atom_idxs, atom_nrs = cpool.get_cpool_arrays()
     scell = cpool.get_cpool_scell()
-    cpool.write_orbit_db(cpool.get_cpool(),scell,"test_cluster_correlations_cpool.json")
-    structure.serialize(fmt="json",fname="test_cluster_correlations_structure.json")
-    print("Correlations: ",corrs)
+    cpool.write_orbit_db(cpool.get_cpool(),scell,"test_cluster_expansion_cpool.json")
+    print("Correlation matrix:\n")
+    print(np.array2string(corrs,separator=",",max_line_width=1000))
     print ("===========================\n")
 
     print ("========Asserts========")
     
-    assert np.allclose([-0.33333333,0.,-0.,0.33333333,0.57735027,-0.33333333,-0.25,-0.,-0.25],corrs,atol=1e-5)
+    #assert np.allclose([-0.33333333,0.,-0.,0.33333333,0.57735027,-0.33333333,-0.25,-0.,-0.25],corrs,atol=1e-5)
     #print(corrs)

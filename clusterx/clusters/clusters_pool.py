@@ -78,7 +78,7 @@ class ClustersPool():
             atom_idxs.append(cl.get_idxs())
             atom_nrs.append(cl.get_nrs())
 
-        return atom_idxs, atom_nrs
+        return np.array(atom_idxs), np.array(atom_nrs)
         
     def get_cluster_radius(self, distances, cluster):
         npoints = len(cluster)

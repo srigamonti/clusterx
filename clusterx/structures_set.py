@@ -14,22 +14,43 @@ import inspect
 class StructuresSet():
     def __init__(self,parent_lattice, filename="structures_set.json", serial=False, calculator = None):
 
+        self._iter = 0
+        self._nstructures = 0
         self._filename = filename
         self._metadata = {}
         self._structures = []
         self._parent_lattice = parent_lattice
-        self.write(parent_lattice, parent_lattice=True)
-        self.json_db = JSONDatabase.__init__(filename=self._filename) 
+        #self.write(parent_lattice, parent_lattice=True)
+        #self.json_db = JSONDatabase.__init__(filename=self._filename) 
+        self.json_db = JSONDatabase(filename=self._filename) 
         if isinstance(calculator,Calculator):
             self.set_calculator(calculator)
-        
-    def write(self, structure, key_value_pairs={}, data={}, **kwargs):
-        self.json_db.write(super_cell,key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
 
-    def add_structure(self,structure,write_to_db = False):
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self._iter < self._nstructures:
+            i = self._iter
+            self._iter += 1
+            return self._structures[i]
+        else :
+            raise StopIteration
+
+    def __len__(self):
+        return self._nstructures
+        
+    def get_nstr(self):
+        return self._nstructures
+    
+    def write(self, structure, key_value_pairs={}, data={}, **kwargs):
+        self.json_db.write(structure,key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
+
+    def add_structure(self,structure, key_value_pairs={}, write_to_db = False, **kwargs):
         self._structures.append(structure)
+        self._nstructures += 1
         if write_to_db:
-            self.json_db.write(super_cell,key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
+            self.json_db.write(structure,key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
         
     def get_structure(self,sid):
         return self._structures[sid]

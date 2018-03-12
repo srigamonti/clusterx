@@ -56,7 +56,7 @@ class CorrelationsCalculator():
         cluster_orbits = None
         for i, scell in enumerate(self._scells):
             if np.allclose(structure.get_positions(),scell.get_positions(),atol=1e-3):
-                cluster_orbits = self.cluster_orbits_set[i]
+                cluster_orbits = self._cluster_orbits_set[i]
                 break
             
         if cluster_orbits is None:
@@ -88,3 +88,10 @@ class CorrelationsCalculator():
             correlations[icl] /= len(cluster_orbit)
         
         return np.around(correlations,decimals=12)
+
+    def get_correlation_matrix(self, structrues_set):
+        corrs = np.empty((len(structrues_set),len(self._cpool)))
+        for i,st in enumerate(structrues_set):
+            corrs[i] = self.get_cluster_correlations(st)
+
+        return corrs
