@@ -44,7 +44,7 @@ def test_cluster_correlations():
     # Generate output
     atom_idxs, atom_nrs = cpool.get_cpool_arrays()
     scell = cpool.get_cpool_scell()
-    cpool.write_orbit_db(atom_idxs,scell,"test_cluster_correlations_cpool.json",orbit_species=atom_nrs)
+    cpool.write_orbit_db(cpool.get_cpool(),scell,"test_cluster_correlations_cpool.json",orbit_species=atom_nrs)
     structure.serialize(fmt="json",fname="test_cluster_correlations_structure.json")
     
     #print(corrs)

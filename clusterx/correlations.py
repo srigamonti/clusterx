@@ -76,8 +76,6 @@ class CorrelationsCalculator():
                             cl_idxs.append(idx)
 
                 cluster_orbit = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs())
-                #db_name = "test_cluster_orbit_%s.json"%(icl)
-                #self._cpool.write_orbit_db(cluster_orbit, scell, db_name,orbit_species=np.tile(cluster.get_nrs(),(len(cluster_orbit),1)))
                 cluster_orbits.append(cluster_orbit)
 
             self._scells.append(scell) # Add supercell to calculator
@@ -89,6 +87,6 @@ class CorrelationsCalculator():
             for cluster in cluster_orbit:
                 print(self.cluster_function(cluster, structure.get_sites(), structure.get_atomic_numbers()))
                 correlations[icl] += self.cluster_function(cluster, structure.get_sites(), structure.get_atomic_numbers())
-            
+            correlations[icl] /= len(cluster_orbit)
         
-        return correlations
+        return np.around(correlations,decimals=12)
