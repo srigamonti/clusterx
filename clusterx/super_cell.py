@@ -26,11 +26,12 @@ class SuperCell(ParentLattice):
         self.set_pbc(self._plat.get_pbc())
 
     def copy(self):
-        """Return a copy."""
-        pl = self.__class__(self._plat, self._p)
+        #Return a copy.
 
-        return pl
-        
+        sc = self.__class__(self._plat, self._p)
+
+        return sc
+    
     def get_parent_lattice(self):
         """
         Return the parent lattice object which defines the supercell.

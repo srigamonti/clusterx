@@ -12,7 +12,7 @@ def test_cluster_correlations():
     
     After successful execution of the test, the generated structure and clusters pool may be visualized with the command::
         
-        ase gui test_clusters_correlations_structure.json
+        ase gui test_clusters_correlations_structure_#.json
         ase gui test_clusters_correlations_cpool.json
 
     """
@@ -35,21 +35,29 @@ def test_cluster_correlations():
     cpool = ClustersPool(plat, npoints=[1,2], radii=[0,1.2])
     corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
 
-    scell = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
-    structure = Structure(scell,[1,1,1,6,7,1,1,2,1])
-    corrs = corrcal.get_cluster_correlations(structure)
-    
+    scell1 = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
+    structure1 = Structure(scell1,[1,1,1,6,7,1,1,2,1])
+    corrs1 = corrcal.get_cluster_correlations(structure1)
+
+    # Doubling of structure1. Correlations should not change.
+    scell2 = SuperCell(plat,np.array([(1,0,0),(0,6,0),(0,0,1)]))
+    structure2 = Structure(scell2,[1,1,1,6,7,1,1,2,1,1,1,1,6,7,1,1,2,1])
+    corrs2 = corrcal.get_cluster_correlations(structure2)
+
     # Generate output
     print ("\n\n========Test writes========")
     print (test_cluster_correlations.__doc__)
-    atom_idxs, atom_nrs = cpool.get_cpool_arrays()
+    #atom_idxs, atom_nrs = cpool.get_cpool_arrays()
     scell = cpool.get_cpool_scell()
     cpool.write_orbit_db(cpool.get_cpool(),scell,"test_cluster_correlations_cpool.json")
-    structure.serialize(fmt="json",fname="test_cluster_correlations_structure.json")
-    print("Correlations: ",corrs)
+    structure1.serialize(fmt="json",fname="test_cluster_correlations_structure_1.json")
+    structure2.serialize(fmt="json",fname="test_cluster_correlations_structure_2.json")
+    #print("Correlations 1: ",corrs1)
+    #print("Correlations 2: ",corrs2)
     print ("===========================\n")
 
     print ("========Asserts========")
     
-    assert np.allclose([-0.33333333,0.,-0.,0.33333333,0.57735027,-0.33333333,-0.25,-0.,-0.25],corrs,atol=1e-5)
+    assert np.allclose([-0.33333333,0.,-0.,0.33333333,0.57735027,-0.33333333,-0.25,-0.,-0.25],corrs1,atol=1e-5)
+    assert np.allclose([-0.33333333,0.,-0.,0.33333333,0.57735027,-0.33333333,-0.25,-0.,-0.25],corrs2,atol=1e-5)
     #print(corrs)

@@ -1,4 +1,3 @@
-from sklearn import linear_model
 import clusterx as c
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
@@ -6,15 +5,16 @@ from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
+from clusterx.calculators.emt import EMT2
 from ase import Atoms
 import numpy as np
 
-def test_cluster_expansion():
-    """Test generation of clusters pools.
+def test_emt2_calculator():
+    """Test calcualtion of energies with EMT2 calculator.
     
-    After successful execution of the test, the generated structures and clusters pool may be visualized with the command::
+    After successful execution of the test, the generated structures may be visualized with the command::
         
-        ase gui test_cluster_expansion_[...].json
+        ase gui test_emt2_calculator#.json
 
     """
 
@@ -33,8 +33,6 @@ def test_cluster_expansion():
     su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
 
     plat = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
-    cpool = ClustersPool(plat, npoints=[1,2], radii=[0,1.2])
-    corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
 
     scell = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
     strset = StructuresSet(plat, filename="test_cluster_expansion_structures_set.json")
@@ -49,35 +47,19 @@ def test_cluster_expansion():
     strset.add_structure(Structure(scell,[1,2,1,6,2,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,6,2,1,1,1,1]),write_to_db=True)
 
-    comat = corrcal.get_correlation_matrix(strset)
     
-    reg = linear_model.LinearRegression()
-    reg.fit (comat, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-    #LinearRegression(copy_X=True, fit_intercept=True, n_jobs=1, normalize=False)
-    print("Js",reg.coef_)
-
-    reg = linear_model.Ridge(alpha = .001)
-    reg.fit (comat, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) 
-    print("Js l2: ",reg.coef_)
-    print("intercept: ",reg.intercept_ )
-
-
-    reg = linear_model.RidgeCV(alphas=[0.001, 0.005, 0.1])
-    reg.fit(comat, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])       
-    print("Js l2: ",reg.coef_)
-    print("intercept: ",reg.intercept_ )
-    print("alpha:  ", reg.alpha_)
+    strset.set_calculator(EMT2())
+    energies = strset.calculate_property()
     
     # Generate output
     print ("\n\n========Test writes========")
-    atom_idxs, atom_nrs = cpool.get_cpool_arrays()
-    scell = cpool.get_cpool_scell()
-    cpool.write_orbit_db(cpool.get_cpool(),scell,"test_cluster_expansion_cpool.json")
-    print("Correlation matrix:\n")
-    print(np.array2string(comat,separator=",",max_line_width=1000))
+    print(test_emt2_calculator.__doc__)
+    print("Energies:\n")
+    print(np.array2string(energies,separator=",",max_line_width=1000))
     print ("===========================\n")
 
     print ("========Asserts========")
     
-    #assert np.allclose([-0.33333333,0.,-0.,0.33333333,0.57735027,-0.33333333,-0.25,-0.,-0.25],comat,atol=1e-5)
+    assert np.allclose( [ 420.02464215,  11.85279614, 200.11679975,  27.15487534, 162.41156144, 193.56777501,  11.85279614,  35.84803264, 585.51975722, 213.05311213], energies,atol=1e-5)
     #print(comat)
+

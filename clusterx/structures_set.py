@@ -20,6 +20,7 @@ class StructuresSet():
         self._metadata = {}
         self._structures = []
         self._parent_lattice = parent_lattice
+        self._props = None
         #self.write(parent_lattice, parent_lattice=True)
         #self.json_db = JSONDatabase.__init__(filename=self._filename) 
         self.json_db = JSONDatabase(filename=self._filename) 
@@ -111,7 +112,10 @@ class StructuresSet():
     def get_metadata(self, dct):
         return self.metadata
 
-    def calculate_property(self, prop):
+    def get_property(self):
+        return self._props
+        
+    def calculate_property(self, prop="energy"):
         """
         Return calculated property for all structures in the structures set.
 
@@ -120,6 +124,17 @@ class StructuresSet():
         a different key, e.g. energy2 instead of energy.
         """
         calc = self.get_calculator()
+        props = np.empty(len(self))
+        
+        for i, st in enumerate(self):
+            ats = st.get_atoms()
+            ats.set_calculator(calc)
+            props[i] = ats.get_potential_energy()
+            
+        self._props = props 
+        return props
+    
+        """
         for row in self.select():
             a = self.get_atoms(selection = row.id)
             a.set_calculator(calc)
@@ -127,6 +142,5 @@ class StructuresSet():
                 e = a.get_potential_energy()
                 #self.update(row.id,energy2=e)
                 self.update(row.id,energy2=e)
-
-
-                
+            
+        """

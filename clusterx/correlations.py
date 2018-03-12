@@ -55,9 +55,10 @@ class CorrelationsCalculator():
     def get_cluster_correlations(self, structure):
         cluster_orbits = None
         for i, scell in enumerate(self._scells):
-            if np.allclose(structure.get_positions(),scell.get_positions(),atol=1e-3):
-                cluster_orbits = self._cluster_orbits_set[i]
-                break
+            if cluster_orbits is None:
+                if len(structure.get_positions()) == len(scell.get_positions()):
+                    if np.allclose(structure.get_positions(),scell.get_positions(),atol=1e-3):
+                        cluster_orbits = self._cluster_orbits_set[i]
             
         if cluster_orbits is None:
             # Add new super cell and recalculate cluster orbits for it.
