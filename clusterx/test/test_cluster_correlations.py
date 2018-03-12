@@ -35,16 +35,19 @@ def test_cluster_correlations():
     corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
 
     scell = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
-    print("AAA: ",plat)
-    print("VVV: ",scell)
     structure = Structure(scell,[1,1,1,6,7,1,1,2,1])
     corrs = corrcal.get_cluster_correlations(structure)
-    print(corrs)
     
     # Generate output
+    print ("\n\n========Test writes========")
     atom_idxs, atom_nrs = cpool.get_cpool_arrays()
     scell = cpool.get_cpool_scell()
     cpool.write_orbit_db(cpool.get_cpool(),scell,"test_cluster_correlations_cpool.json",orbit_species=atom_nrs)
     structure.serialize(fmt="json",fname="test_cluster_correlations_structure.json")
+    print("Correlations: ",corrs)
+    print ("===========================\n")
+
+    print ("========Asserts========")
     
+    assert np.allclose([-0.33333333,0.,-0.,0.33333333,0.57735027,-0.33333333,-0.25,-0.,-0.25],corrs,atol=1e-5)
     #print(corrs)

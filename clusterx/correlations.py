@@ -30,7 +30,6 @@ class CorrelationsCalculator():
         if len(sigma) == 0:
             sys.exit("Error: structure atomic number not in allowed species for site.")
         sigma = sigma[0]
-        
         m = len(site_atomic_nrs)
         if self.basis == "trigonometric":
             # Axel van de Walle, CALPHAD 33, 266 (2009)
@@ -46,7 +45,6 @@ class CorrelationsCalculator():
     def cluster_function(self, cluster, sites, structure_atomic_nrs):
         cluster_atomic_idxs = cluster.get_idxs()
         cluster_atomic_nrs = cluster.get_nrs()
-
         cf = 1.0
         for cl_nr,cl_idx in zip(cluster_atomic_nrs,cluster_atomic_idxs):
             site_atomic_nrs = sites[cl_idx]
@@ -85,8 +83,8 @@ class CorrelationsCalculator():
         for icl, cluster in enumerate(self._cpool.get_cpool()):
             cluster_orbit = cluster_orbits[icl]
             for cluster in cluster_orbit:
-                print(self.cluster_function(cluster, structure.get_sites(), structure.get_atomic_numbers()))
-                correlations[icl] += self.cluster_function(cluster, structure.get_sites(), structure.get_atomic_numbers())
+                cf = self.cluster_function(cluster, structure.get_sites(), structure.get_atomic_numbers())
+                correlations[icl] += cf
             correlations[icl] /= len(cluster_orbit)
         
         return np.around(correlations,decimals=12)
