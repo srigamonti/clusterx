@@ -5,6 +5,7 @@ import sys
 from ase.visualize import view
 from ase.build import make_supercell
 from clusterx.parent_lattice import ParentLattice
+import clusterx
 
 class SuperCell(ParentLattice):
     """
@@ -63,7 +64,7 @@ class SuperCell(ParentLattice):
         tags = self.get_tags()
 
         rndstr = SuperCell(self._plat,self._p)
-        
+        decoration = rndstr.get_atomic_numbers()
         for tag, nsub in nsubs.items():
             #list all atom indices with the given tag
             sub_idxs = np.where(tags==tag)[0]
@@ -76,9 +77,10 @@ class SuperCell(ParentLattice):
                 sub_list = np.random.choice(sub_idxs,n,replace=False)
 
                 for atom_index in sub_list:
-                    rndstr[atom_index].number = idx_subs[tag][i+1]
+                    #rndstr[atom_index].number = idx_subs[tag][i+1]
+                    decoration[atom_index] = idx_subs[tag][i+1]
 
-        return rndstr
+        return clusterx.structure.Structure(rndstr,decoration)
 
 
     def enumerate_decorations(self, npoints=None, radii=None):
