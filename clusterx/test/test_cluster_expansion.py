@@ -1,4 +1,3 @@
-from sklearn import linear_model
 import clusterx as c
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
