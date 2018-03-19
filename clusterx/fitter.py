@@ -25,13 +25,33 @@ class Fitter():
         See explanation for method 
     """
     def __init__(self, method, **kwargs):
+        self.method = method
         self.alpha = kwargs.pop("alpha",0.0)
         self.alphas = kwargs.pop("alphas",np.zeros(1))
         self.fit_intercept = kwargs.pop("fit_intercept",True)
-        self.reg = None
+        self.normalize = kwargs.pop("normalize",True)
+        self.skl_reg = None
         self.update()
-
-    def update(self):
         
-        if method == "skl_LinearRegression":
-            self.reg = linear_model.LinearRegression(**kwargs)
+    def update(self):
+        if self.method == "skl_LinearRegression":
+            self.skl_reg = linear_model.LinearRegression(fit_intercept=self.fit_intercept, normalize=self.normalize)
+
+
+    def set_alpha(self,alpha):
+        self.alpha = alpha
+        if self.method == "skl_Ridge":
+            self.update()
+            
+    def set_alphas(self,alphas):
+        self.alphas = alphas
+
+    def fit(self, data, target, sample_weight = None):
+        if self.method == "skl_LinearRegression":
+            self.skl_reg.fit(data, target, sample_weight)
+            
+
+    def predict(self, data):
+        if self.method == "skl_LinearRegression":
+            return self.skl_reg.predict(data)
+            

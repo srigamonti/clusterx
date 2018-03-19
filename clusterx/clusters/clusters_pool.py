@@ -23,6 +23,7 @@ class ClustersPool():
         self._cpool_dict = {}
         if (npoints != np.array([[0]])).any():
             self.gen_clusters()
+        self._orbit_atoms = []
 
     def __len__(self):
         return len(self._cpool)
@@ -144,8 +145,11 @@ class ClustersPool():
             for i,atom_idx in enumerate(cl.get_idxs()):
                 ans[atom_idx] = orbit_nrs[icl][i]
             atoms.set_atomic_numbers(ans)
+            self._orbit_atoms.append(atoms)
             atoms_db.write(atoms)
 
+    def get_orbit_atoms(self):
+        return self._orbit_atoms
 
     def get_cluster_orbit(self, super_cell, cluster_sites, cluster_species, tol = 1e-3, tight=False, distances=None):
         """

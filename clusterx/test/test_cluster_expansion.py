@@ -5,6 +5,7 @@ from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
+from clusterx.model import ModelConstructor
 from ase import Atoms
 import numpy as np
 from clusterx.calculators.emt import EMT2
@@ -52,7 +53,18 @@ def test_cluster_expansion():
     comat = corrcal.get_correlation_matrix(strset)
     strset.set_calculator(EMT2())
     energies = strset.calculate_property()
-    
+
+    flr = Fitter(method = "skl_LinearRegression")
+
+    mctr = ModelConstructor(
+        prop = "energy",
+        training_set = strset,
+        fitter = flr,
+        clusters_selector,
+        correlations_calculator = corrcal
+    )
+
+    """
     reg = linear_model.LinearRegression()
     reg.fit(comat, energies)
     #LinearRegression(copy_X=True, fit_intercept=True, n_jobs=1, normalize=False)
@@ -83,3 +95,4 @@ def test_cluster_expansion():
     
     #assert np.allclose([-0.33333333,0.,-0.,0.33333333,0.57735027,-0.33333333,-0.25,-0.,-0.25],comat,atol=1e-5)
     #print(comat)
+    """

@@ -32,7 +32,7 @@ ase.calculators.emt.parameters.update( {
 })
 
 
-class EMT2(EMT,object):
+class EMT2(EMT):
     def __init__(self, **kwargs):
         EMT.__init__(self, **kwargs)
 
