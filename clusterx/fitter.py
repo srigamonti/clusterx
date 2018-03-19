@@ -30,12 +30,12 @@ class Fitter():
         self.alphas = kwargs.pop("alphas",np.zeros(1))
         self.fit_intercept = kwargs.pop("fit_intercept",True)
         self.normalize = kwargs.pop("normalize",True)
-        self.skl_reg = None
+        self.skl_estimator = None
         self.update()
         
     def update(self):
         if self.method == "skl_LinearRegression":
-            self.skl_reg = linear_model.LinearRegression(fit_intercept=self.fit_intercept, normalize=self.normalize)
+            self.skl_estimator = linear_model.LinearRegression(fit_intercept=self.fit_intercept, normalize=self.normalize)
 
 
     def set_alpha(self,alpha):
@@ -46,12 +46,20 @@ class Fitter():
     def set_alphas(self,alphas):
         self.alphas = alphas
 
-    def fit(self, data, target, sample_weight = None):
+    def fit(self, data, target, sample_weight = None): # Needed by sci-kit
         if self.method == "skl_LinearRegression":
-            self.skl_reg.fit(data, target, sample_weight)
+            self.skl_estimator.fit(data, target, sample_weight)
             
+ 
+    def predict(self, data): # Needed by sci-kit
+        if self.method == "skl_LinearRegression":
+            return self.skl_estimator.predict(data)
+            
+    def score(self, data, target): # Needed by sci-kit
+        if self.method == "skl_LinearRegression":
+            return self.skl_estimator.score(data,target)
 
-    def predict(self, data):
+
+    def get_params(self, deep=True): # Needed by sci-kit
         if self.method == "skl_LinearRegression":
-            return self.skl_reg.predict(data)
-            
+            return self.skl_estimator.get_params(deep)

@@ -23,11 +23,72 @@ class ClustersPool():
         self._cpool_dict = {}
         if (npoints != np.array([[0]])).any():
             self.gen_clusters()
+            self.nclusters = len(self._cpool)
         self._orbit_atoms = []
 
     def __len__(self):
         return len(self._cpool)
+
+    def get_unique_radii(self):
+        unique_radii = []
+        for cl in self._cpool:
+            unique_radii.append(cl.radius)
+
+        unique_radii = np.unique(np.around(np.array(unique_radii), decimals=5))
+
+        return unique_radii
+        
+        
+    def get_clusters_sets(self, grouping_strategy = "size", nclmax = 0):
+        """Return cluster sets for cluster selection based on CV
+
+        Parameters:
+
+        grouping_strategy: string
+            Can take the values "size" and "combinations". If "size", a set in the clusters set
+            is determined by two parametrs, the maximum number of points and the maximum radius.
+            Thus, a set is formed by all clusters in the pool whose radius and npoints are smaller 
+            or equal then the respective maxima for the set.
+            When "combinations" is used, all possible sets up to nclmax number of clusters
+            are returned.
+
+        nclmax: integer
+            The maximum clusters-set size when strategy="combinations" is used.
     
+        """
+        if grouping_strategy == "size":
+            from collections import Counter
+            clsets = []
+            nsets = 0
+            unique_radii = self.get_unique_radii()
+            for np in self._npoints:
+                for r in unique_radii:
+                    _clset = []
+                    for icl, cl in enumerate(self._cpool):
+                        if cl.npoints <= np and cl.radius <= r + 1e-4:
+                            _clset.append(icl)
+
+                    # Check whether in _clset there's at least one cluster with np number of points
+                    include = False
+                    for icl in _clset:
+                        if self._cpool[icl].npoints == np:
+                            include = True
+                            break
+
+                    # Check whether _clset is already in clsets
+                    if include:
+                        for clset in clsets:
+                            if Counter(clset) == Counter(_clset):
+                                include = False
+                                break
+
+                    if include:
+                        clsets.append(_clset)        
+                        nsets += 1
+                        
+            return clsets
+        
+                
     def gen_clusters(self):
         from clusterx.super_cell import SuperCell
         from itertools import product, combinations
@@ -53,14 +114,13 @@ class ClustersPool():
                 for idx in idxs:
                     sites_arrays.append(sites[idx][1:])
                 for ss in product(*sites_arrays):
-                    cl = Cluster(idxs,ss,scell)
-                    if self.get_cluster_radius(distances,cl) <= radius:
+                    cl = Cluster(idxs, ss, scell)
+                    #if self.get_cluster_radius(distances,cl) <= radius:
+                    if cl.radius <= radius:
                         if cl not in clrs_full:
                             self._cpool.append(cl)
                             clrs_full.append(cl)
                             orbit = self.get_cluster_orbit(scell, cl.get_idxs(), cluster_species=cl.get_nrs(),tight=True,distances=distances)
-                            #for cl_idxs in orbit:
-                            #    clrs_full.append(Cluster(cl_idxs,cl.get_nrs(),scell))
                             for _cl in orbit:
                                 clrs_full.append(_cl)
 
@@ -80,7 +140,7 @@ class ClustersPool():
             atom_nrs.append(cl.get_nrs())
 
         return np.array(atom_idxs), np.array(atom_nrs)
-        
+    """
     def get_cluster_radius(self, distances, cluster):
         npoints = len(cluster)
         atom_idxs = cluster.get_idxs()
@@ -94,7 +154,7 @@ class ClustersPool():
                     if r < d:
                         r = d
         return r
-    
+    """
     def serialize(self, fmt, fname=None):
         if fmt == "json":
             self.gen_atoms_database(fname)
@@ -169,7 +229,8 @@ class ClustersPool():
 
         radius = None
         if tight:
-            radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_species,super_cell))
+            #radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_species,super_cell))
+            radius = Cluster(cluster_sites,cluster_species,super_cell).radius
             
         shash = None
         cluster_species = np.array(cluster_species)
@@ -211,7 +272,8 @@ class ClustersPool():
                                 include = False
                                 
                 if tight:
-                    _radius = self.get_cluster_radius(distances,Cluster(_cl,cluster_species,super_cell))
+                    #_radius = self.get_cluster_radius(distances,Cluster(_cl,cluster_species,super_cell))
+                    _radius = Cluster(_cl,cluster_species,super_cell).radius
                     if _radius > radius:
                         include = False
                     

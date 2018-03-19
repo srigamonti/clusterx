@@ -17,6 +17,12 @@ class ParentLattice(Atoms):
     the periodicity, the substitutional species, and the spectator sites, i.e. those
     atoms which are present in the crystal but are not substituted.
     ``ParentLattice`` subclasses the ASE's ``Atoms`` class.
+
+    TODO:
+        override get_distance and get_distances from Atoms. Such that if get_all_distances
+        was ever called, it sets a self.distances attribute which is used for get_distance
+        and get_distances, saving computation time. Care should be paid in cases where
+        positions are updated either by relaxation or deformation of the lattice.
     """
     
     def __init__(self, atoms=None, substitutions=[],pbc=(1,1,1)):

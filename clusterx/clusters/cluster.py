@@ -21,11 +21,24 @@ class Cluster():
         self.ans = atom_numbers
         self.npoints = len(atom_numbers)
         self.positions_cartesian = None
+        self.radius = None
         if super_cell is not None:
+            # Set positions
             self.positions_cartesian = np.zeros((self.npoints,3)) 
             for ip, idx in enumerate(atom_indexes):
                 self.positions_cartesian[ip] = super_cell.get_positions(wrap=True)[idx]
-            
+
+            # Set radius
+            r = 0.0
+            if self.npoints > 1:
+                for i1, idx1 in enumerate(self.ais):
+                    for idx2 in self.ais[i1+1:]:
+                        d = super_cell.get_distance(idx1,idx2,mic=False,vector=False)
+                        if r < d:
+                            r = d
+            self.radius = r
+
+                
 
         
     def __eq__(self, other):

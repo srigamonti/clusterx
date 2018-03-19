@@ -5,7 +5,8 @@ from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
-from clusterx.model import ModelConstructor
+#from clusterx.model import ModelConstructor
+from clusterx.fitter import Fitter
 from ase import Atoms
 import numpy as np
 from clusterx.calculators.emt import EMT2
@@ -50,11 +51,44 @@ def test_cluster_expansion():
     strset.add_structure(Structure(scell,[1,2,1,6,2,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,6,2,1,1,1,1]),write_to_db=True)
 
+    # Get the DATA(comat) + TARGET(energies)
     comat = corrcal.get_correlation_matrix(strset)
     strset.set_calculator(EMT2())
     energies = strset.calculate_property()
+    
+    #fitter_cv = Fitter(method = "skl_LinearRegression")
+    fitter_model = Fitter(method = "skl_LinearRegression")
 
-    flr = Fitter(method = "skl_LinearRegression")
+    clsets = cpool.get_clusters_sets(grouping_strategy = "size")
+
+    from sklearn.model_selection import LeaveOneOut
+    from sklearn.model_selection import cross_val_score
+    from sklearn import linear_model
+    
+    fitter_cv = linear_model.LinearRegression(fit_intercept=True, normalize=True)
+    
+    cvs = []
+    rows = np.arange(len(energies))
+    for clset in clsets:
+        _comat = comat[np.ix_(rows,clset)]
+        _cvs = cross_val_score(fitter_cv, _comat, energies, cv=LeaveOneOut())
+        print(np.mean(_cvs))
+
+        
+        """
+        for train_index, test_index in loo.split(_comat):
+            _comat_train = _comat[train_index]
+            _energy_train = energies[train_index]
+
+            #fitter_cv.fit(_comat_train,_energy_train)
+        """   
+
+    # Select the clusters by cross-validation
+
+    #clsets = cpool.get_sets(strategy = "size")
+    
+    
+    """
 
     mctr = ModelConstructor(
         prop = "energy",
@@ -63,6 +97,7 @@ def test_cluster_expansion():
         clusters_selector,
         correlations_calculator = corrcal
     )
+    """
 
     """
     reg = linear_model.LinearRegression()
