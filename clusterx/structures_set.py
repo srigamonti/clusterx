@@ -28,6 +28,7 @@ class StructuresSet():
             self.set_calculator(calculator)
 
     def __iter__(self):
+        self._iter = 0
         return self
 
     def __next__(self):
@@ -124,13 +125,11 @@ class StructuresSet():
         a different key, e.g. energy2 instead of energy.
         """
         calc = self.get_calculator()
-        props = np.empty(len(self))
-        
-        for i, st in enumerate(self):
+        props = np.zeros(len(self))
+        for i,st in enumerate(self):
             ats = st.get_atoms()
             ats.set_calculator(calc)
             props[i] = ats.get_potential_energy()
-            
         self._props = props 
         return props
     

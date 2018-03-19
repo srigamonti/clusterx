@@ -35,11 +35,16 @@ def test_cluster_expansion():
     su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
 
     plat = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
-    cpool = ClustersPool(plat, npoints=[1,2], radii=[0,1.2])
+    cpool = ClustersPool(plat, npoints=[1,2,3], radii=[0,1.2,1.42])
+    cpool.write_orbit_db(cpool.get_cpool(),cpool.get_cpool_scell(),"cpool.json")
     corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
 
     scell = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
     strset = StructuresSet(plat, filename="test_cluster_expansion_structures_set.json")
+    nstr = 20
+    print(scell.get_idx_subs())
+    #for i in range(nstr):
+    #    strset.add_structure(scell.gen_random(nsubs={}))
     strset.add_structure(Structure(scell,[1,2,1,6,7,1,1,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,1,1,1,1,1,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,2,1,1,7,1,6,7,1]),write_to_db=True)
@@ -50,6 +55,16 @@ def test_cluster_expansion():
     strset.add_structure(Structure(scell,[1,1,1,1,7,1,6,7,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,2,1,6,2,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,6,2,1,1,1,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[1,1,1,6,7,1,1,2,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[1,2,1,6,2,1,1,1,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[1,7,1,1,1,1,6,7,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[6,1,1,1,7,1,1,7,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[1,2,1,6,7,1,6,2,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[1,7,1,1,2,1,1,1,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[6,7,1,1,7,1,1,1,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[6,2,1,6,1,1,6,7,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[1,7,1,1,1,1,6,2,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[6,1,1,1,7,1,1,1,1]),write_to_db=True)
 
     # Get the DATA(comat) + TARGET(energies)
     comat = corrcal.get_correlation_matrix(strset)
@@ -64,24 +79,35 @@ def test_cluster_expansion():
     from sklearn.model_selection import LeaveOneOut
     from sklearn.model_selection import cross_val_score
     from sklearn import linear_model
+    from sklearn.metrics import make_scorer, r2_score, mean_squared_error
     
-    fitter_cv = linear_model.LinearRegression(fit_intercept=True, normalize=True)
+    fitter_cv = linear_model.LinearRegression(fit_intercept=True, normalize=False)
     
     cvs = []
     rows = np.arange(len(energies))
     for clset in clsets:
         _comat = comat[np.ix_(rows,clset)]
-        _cvs = cross_val_score(fitter_cv, _comat, energies, cv=LeaveOneOut())
-        print(np.mean(_cvs))
+        fitter_cv.fit(_comat,energies)
+        print('predictions',fitter_cv.predict(_comat))
+        print('score',fitter_cv.score(_comat,energies),np.sqrt(mean_squared_error(fitter_cv.predict(_comat),energies)))
+        #sc = make_scorer(r2_score)
+        #print("sss",sc(_comat,energies))
+        _cvs = cross_val_score(fitter_cv, _comat, energies, cv=LeaveOneOut(), scoring = make_scorer(mean_squared_error))
+        print('_cvs',_cvs)
+        print('m_cvs',np.sqrt(np.mean(_cvs)))
 
-        
-        """
+    fitter_cv.fit(comat,energies)
+    print(energies)
+    print(fitter_cv.predict(comat))
+    print(fitter_cv.score(comat,energies))
+    #print(energies)
+    """
         for train_index, test_index in loo.split(_comat):
             _comat_train = _comat[train_index]
             _energy_train = energies[train_index]
 
             #fitter_cv.fit(_comat_train,_energy_train)
-        """   
+    """   
 
     # Select the clusters by cross-validation
 
