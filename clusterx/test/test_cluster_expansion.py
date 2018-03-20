@@ -35,7 +35,7 @@ def test_cluster_expansion():
     su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
 
     plat = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
-    cpool = ClustersPool(plat, npoints=[1,2,3], radii=[0,1.2,1.42])
+    cpool = ClustersPool(plat, npoints=[1,2,3,4], radii=[0,2.3,1.42,1.42])
     cpool.write_orbit_db(cpool.get_cpool(),cpool.get_cpool_scell(),"cpool.json")
     corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
 
@@ -51,13 +51,13 @@ def test_cluster_expansion():
     strset.add_structure(Structure(scell,[1,1,1,6,1,1,1,7,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,7,1,6,7,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,7,1,6,2,1,1,1,1]),write_to_db=True)
-    strset.add_structure(Structure(scell,[6,1,1,1,1,1,1,1,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[6,1,1,1,1,1,1,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,1,1,1,7,1,6,7,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,2,1,6,2,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,6,2,1,1,1,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,1,1,6,7,1,1,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,2,1,6,2,1,1,1,1]),write_to_db=True)
-    strset.add_structure(Structure(scell,[1,7,1,1,1,1,6,7,1]),write_to_db=True)
+    strset.add_structure(Structure(scell,[1,7,1,1,1,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,1,7,1,1,7,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,2,1,6,7,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,7,1,1,2,1,1,1,1]),write_to_db=True)
@@ -71,7 +71,6 @@ def test_cluster_expansion():
     strset.set_calculator(EMT2())
     energies = strset.calculate_property()
     
-    #fitter_cv = Fitter(method = "skl_LinearRegression")
     fitter_model = Fitter(method = "skl_LinearRegression")
 
     clsets = cpool.get_clusters_sets(grouping_strategy = "size")
@@ -87,19 +86,15 @@ def test_cluster_expansion():
     rows = np.arange(len(energies))
     for clset in clsets:
         _comat = comat[np.ix_(rows,clset)]
-        fitter_cv.fit(_comat,energies)
-        print('predictions',fitter_cv.predict(_comat))
-        print('score',fitter_cv.score(_comat,energies),np.sqrt(mean_squared_error(fitter_cv.predict(_comat),energies)))
-        #sc = make_scorer(r2_score)
-        #print("sss",sc(_comat,energies))
         _cvs = cross_val_score(fitter_cv, _comat, energies, cv=LeaveOneOut(), scoring = make_scorer(mean_squared_error))
-        print('_cvs',_cvs)
+        print("clusters set: ",clset)
         print('m_cvs',np.sqrt(np.mean(_cvs)))
-
+        print("")
+        
     fitter_cv.fit(comat,energies)
-    print(energies)
-    print(fitter_cv.predict(comat))
-    print(fitter_cv.score(comat,energies))
+    print("target",energies)
+    print("predictions",fitter_cv.predict(comat))
+    print("score",np.sqrt(mean_squared_error(fitter_cv.predict(comat),energies)))
     #print(energies)
     """
         for train_index, test_index in loo.split(_comat):

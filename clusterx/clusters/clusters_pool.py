@@ -11,8 +11,11 @@ import json
 class ClustersPool():
     """
     Clusters pool class
+
+    TODO
+    implement method add_cluster(). This should accept either cartesian coo
     """
-    def __init__(self, parent_lattice, npoints=np.array([[0]]), radii=np.array([[0]]), name="_clusters_pool", filename=None):
+    def __init__(self, parent_lattice, npoints=np.array([0]), radii=np.array([0]), name="_clusters_pool", filename=None):
         self._npoints = npoints
         self._radii = radii
         self._name = name
@@ -21,7 +24,7 @@ class ClustersPool():
         self._cpool = []
         self._cpool_scell = self.get_containing_supercell(use="radii")
         self._cpool_dict = {}
-        if (npoints != np.array([[0]])).any():
+        if (npoints != np.array([0])).any():
             self.gen_clusters()
             self.nclusters = len(self._cpool)
         self._orbit_atoms = []
@@ -221,6 +224,10 @@ class ClustersPool():
         from sympy.utilities.iterables import multiset_permutations
         import sys
         from collections import Counter
+
+        # empty cluster
+        if len(cluster_sites) == 0:
+            return np.array([Cluster([],[],super_cell)])
         
         substitutional_sites = super_cell.get_substitutional_sites()
         for _icl in cluster_sites:

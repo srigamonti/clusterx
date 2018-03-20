@@ -33,8 +33,7 @@ def test_clusters_generation():
     #cp = ClustersPool(pl, npoints=[1,2,3,4], radii=[0,3.1,3.1,3.1])
     cp = ClustersPool(pl, npoints=[1,2,3], radii=[0,3.1,1.5])
     atom_idxs, atom_nrs = cp.get_cpool_arrays()
-    scell = cp.get_cpool_scell()
-    cp.write_orbit_db(cp.get_cpool(),scell,"test_clusters_generation_0.json")
+    cp.write_orbit_db(cp.get_cpool(),cp.get_cpool_scell(),"test_clusters_generation_0.json")
 
 
     print ("\n\n========Test writes========")
