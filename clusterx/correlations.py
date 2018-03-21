@@ -18,19 +18,10 @@ class CorrelationsCalculator():
         self._2pi = 2*np.pi
         
         
-    def site_basis_function(self, cluster_atomic_nr, site_atomic_nrs, structure_atomic_nr):
+    def site_basis_function(self, alpha, sigma, m):
         """
         Calculates the site basis function. 
         """
-        alpha = np.argwhere(site_atomic_nrs == cluster_atomic_nr).flatten()
-        if len(alpha) == 0:
-            sys.exit("Error: cluster atomic number not in allowed species for site.")
-        alpha = alpha[0]
-        sigma = np.argwhere(site_atomic_nrs == structure_atomic_nr).flatten()
-        if len(sigma) == 0:
-            sys.exit("Error: structure atomic number not in allowed species for site.")
-        sigma = sigma[0]
-        m = len(site_atomic_nrs)
         if self.basis == "trigonometric":
             # Axel van de Walle, CALPHAD 33, 266 (2009)
             if alpha == 0:
@@ -46,13 +37,13 @@ class CorrelationsCalculator():
             # Only for binary alloys. Allows for simple interpretation of cluster interactions
             return sigma
                 
-    def cluster_function(self, cluster, sites, structure_atomic_nrs):
+                
+    def cluster_function(self, cluster, structure_sigmas,ems):
         cluster_atomic_idxs = cluster.get_idxs()
-        cluster_atomic_nrs = cluster.get_nrs()
+        cluster_alphas = cluster.alphas
         cf = 1.0
-        for cl_nr,cl_idx in zip(cluster_atomic_nrs,cluster_atomic_idxs):
-            site_atomic_nrs = sites[cl_idx]
-            cf *= self.site_basis_function(cl_nr, site_atomic_nrs, structure_atomic_nrs[cl_idx])
+        for cl_alpha, cl_idx in zip(cluster_alphas,cluster_atomic_idxs):
+            cf *= self.site_basis_function(cl_alpha, structure_sigmas[cl_idx], ems[cl_idx])
             
         return cf
     
@@ -61,17 +52,14 @@ class CorrelationsCalculator():
         if mc and self._cluster_orbits_set != []:
             cluster_orbits = self._cluster_orbits_set[0]
         elif not mc:
-            print("Searching for stored super cell")
             for i, scell in enumerate(self._scells):
                 if cluster_orbits is None:
                     if len(structure.get_positions()) == len(scell.get_positions()):
                         if np.allclose(structure.get_positions(),scell.get_positions(),atol=1e-3):
                             cluster_orbits = self._cluster_orbits_set[i]
                             break
-            
                     
         if cluster_orbits is None:
-            print("Determining cluster orbits.")
             # Add new super cell and calculate cluster orbits for it.
             cluster_orbits = []
             scell = structure.get_supercell()
@@ -95,11 +83,12 @@ class CorrelationsCalculator():
         for icl, cluster in enumerate(self._cpool.get_cpool()):
             cluster_orbit = cluster_orbits[icl]
             for cluster in cluster_orbit:
-                cf = self.cluster_function(cluster, structure.get_sites(), structure.get_atomic_numbers())
+                cf = self.cluster_function(cluster, structure.sigmas, structure.ems)
                 correlations[icl] += cf
             correlations[icl] /= len(cluster_orbit)
         
         return np.around(correlations,decimals=12)
+
 
     def get_correlation_matrix(self, structrues_set):
         corrs = np.empty((len(structrues_set),len(self._cpool)))

@@ -68,7 +68,7 @@ def test_clathrate_mc():
     ]
     multE = [1,24,16,6,12,8,48,24,24,24]
     corcE = CorrelationsCalculator("binary-linear",plat,cpoolE)
-    scellE = SuperCell(plat,[(1,0,0),(0,1,0),(0,0,1)])
+    scellE = SuperCell(plat,[(2,0,0),(0,2,0),(0,0,2)])
     
     nmc = 100
     struc = scellE.gen_random({0:[16]})
@@ -83,7 +83,7 @@ def test_clathrate_mc():
     print("end sim")
     
     for i in range(nmc):
-        #struc = scellE.gen_random({0:[16]})
+        struc = scellE.gen_random({0:[16]})
         corrs = corcE.get_cluster_correlations(struc,mc=True)
         erg = 0
         for j in range(len(ecisE)):
@@ -103,4 +103,4 @@ def test_clathrate_mc():
     #db_name = "test_clathrate_mc-cluster_orbit.json"
     #cl.write_orbit_db(orbit, scell, db_name)
     
-    scell = SuperCell(plat,[(1,0,0),(0,1,0),(0,0,1)])
+    scell = SuperCell(plat,[(2,0,0),(0,2,0),(0,0,2)])

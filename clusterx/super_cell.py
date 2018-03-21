@@ -23,7 +23,6 @@ class SuperCell(ParentLattice):
         #ParentLattice.__init__(self, atoms = prist, substitutions = subs )
         super(SuperCell,self).__init__(atoms = prist, substitutions = subs )
         self._natoms = len(self)
-
         self.set_pbc(self._plat.get_pbc())
 
     def copy(self):
@@ -71,9 +70,10 @@ class SuperCell(ParentLattice):
         tags = self.get_tags()
 
         rndstr = SuperCell(self._plat,self._p)
-        decoration = self.gen_random_decoration(nsubs)
+        decoration, sigmas = self.gen_random_decoration(nsubs)
         
-        return clusterx.structure.Structure(rndstr,decoration)
+        #return clusterx.structure.Structure(rndstr,decoration)
+        return clusterx.structure.Structure(rndstr,sigmas=sigmas)
 
     def gen_random_decoration(self,nsubs):
         """
@@ -87,6 +87,7 @@ class SuperCell(ParentLattice):
         
         #decoration = np.zeros(len(tags),dtype=np.int8)
         decoration = self.get_atomic_numbers()
+        sigmas = np.zeros(len(tags),dtype=np.int8)
         for tag, nsub in nsubs.items():
             #list all atom indices with the given tag
             sub_idxs = np.where(tags==tag)[0]
@@ -100,8 +101,8 @@ class SuperCell(ParentLattice):
 
                 for atom_index in sub_list:
                     decoration[atom_index] = idx_subs[tag][i+1]
-
-        return decoration
+                    sigmas[atom_index] = i+1
+        return decoration, sigmas
 
 
     def enumerate_decorations(self, npoints=None, radii=None):

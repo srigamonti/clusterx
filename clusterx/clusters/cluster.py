@@ -23,11 +23,19 @@ class Cluster():
         self.positions_cartesian = None
         self.radius = None
         if super_cell is not None:
-            # Set positions
+            # Set alphas, site_type, and positions
+            self.alphas = np.zeros(len(atom_indexes))
+            self.site_type = np.zeros(len(atom_indexes))
+            sites = super_cell.get_sites()
+            idx_subs = super_cell.get_idx_subs()
+            tags = super_cell.get_tags()
+            
             self.positions_cartesian = np.zeros((self.npoints,3)) 
             for ip, idx in enumerate(atom_indexes):
                 self.positions_cartesian[ip] = super_cell.get_positions(wrap=True)[idx]
-
+                self.site_type[ip] = tags[idx]
+                self.alphas[ip] = np.argwhere(sites[idx] == self.ans[ip])
+                
             # Set radius
             r = 0.0
             if self.npoints > 1:
