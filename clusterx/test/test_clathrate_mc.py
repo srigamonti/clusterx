@@ -71,20 +71,11 @@ def test_clathrate_mc():
     scellE = SuperCell(plat,[(2,0,0),(0,2,0),(0,0,2)])
     
     nmc = 100
-    struc = scellE.gen_random({0:[16]})
-    struc_nrs = struc.get_atomic_numbers()
-    print("start sim")
-    for i in range(nmc):
-        corrs = 0
-        for j in range(len(ecisE)):
-            for k in range(multE[j]):
-                corrs += struc_nrs[j]*struc_nrs[k]
-        print(i)
-    print("end sim")
     
     for i in range(nmc):
         struc = scellE.gen_random({0:[16]})
         corrs = corcE.get_cluster_correlations(struc,mc=True)
+        print(corrs)
         erg = 0
         for j in range(len(ecisE)):
             erg += multE[j] * ecisE[j] * corrs[j]

@@ -1,12 +1,13 @@
 from clusterx.super_cell import SuperCell
 from ase import Atoms
 import numpy as np
+import random
 
 class Structure(SuperCell):
     def __init__(self, super_cell, decoration = None, sigmas = None):
         self.scell = super_cell
+        self.sites = super_cell.get_sites()
         if sigmas is None:
-            sites = super_cell.get_sites()
             self.decor = decoration
             self.sigmas = np.zeros(len(decoration),dtype=np.int8)
             self.ems = np.zeros(len(decoration),dtype=np.int8)
@@ -16,11 +17,10 @@ class Structure(SuperCell):
         else:
             self.decor = np.zeros(len(sigmas),dtype=np.int8)
             self.ems = np.zeros(len(sigmas),dtype=np.int8)
-            sites = super_cell.get_sites()
             self.sigmas = sigmas
             for idx, sigma in enumerate(sigmas):
-                self.decor[idx] = sites[idx][sigma]
-                self.ems[idx] = len(sites[idx])
+                self.decor[idx] = self.sites[idx][sigma]
+                self.ems[idx] = len(self.sites[idx])
         
         super(Structure,self).__init__(super_cell.get_parent_lattice(),super_cell.get_transformation())
         self.atoms = Atoms(numbers = self.decor, positions = super_cell.get_positions(), tags = super_cell.get_tags(), cell = super_cell.get_cell(),pbc = super_cell.get_pbc())
@@ -41,3 +41,15 @@ class Structure(SuperCell):
         write(fname,images=self,format=fmt)
 
         self._fname = fname
+
+    def swap_random(self, site_type):
+        tags=self.get_tags()
+        idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == 0 and tags[index] == site_type]
+        idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == 1 and tags[index] == site_type]
+        ridx1 = random.choice(idx1)
+        ridx2 = random.choice(idx2)
+        self.sigmas[ridx1] = 1
+        self.sigmas[ridx2] = 0
+        self.decor[ridx1] = self.sites[ridx1][1]
+        self.decor[ridx2] = self.sites[ridx2][0]
+        
