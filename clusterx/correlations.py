@@ -17,6 +17,7 @@ class CorrelationsCalculator():
         self._cpool = clusters_pool
         self._2pi = 2*np.pi
         
+        
     def site_basis_function(self, cluster_atomic_nr, site_atomic_nrs, structure_atomic_nr):
         """
         Calculates the site basis function. 
@@ -25,7 +26,6 @@ class CorrelationsCalculator():
         if len(alpha) == 0:
             sys.exit("Error: cluster atomic number not in allowed species for site.")
         alpha = alpha[0]
-        
         sigma = np.argwhere(site_atomic_nrs == structure_atomic_nr).flatten()
         if len(sigma) == 0:
             sys.exit("Error: structure atomic number not in allowed species for site.")
@@ -41,6 +41,10 @@ class CorrelationsCalculator():
 
             else:
                 return -np.sin(self._2pi*np.ceil(alpha/2.0)*sigma/m)
+            
+        if self.basis == "binary-linear":
+            # Only for binary alloys. Allows for simple interpretation of cluster interactions
+            return sigma
                 
     def cluster_function(self, cluster, sites, structure_atomic_nrs):
         cluster_atomic_idxs = cluster.get_idxs()
@@ -52,16 +56,23 @@ class CorrelationsCalculator():
             
         return cf
     
-    def get_cluster_correlations(self, structure):
+    def get_cluster_correlations(self, structure, mc = False):
         cluster_orbits = None
-        for i, scell in enumerate(self._scells):
-            if cluster_orbits is None:
-                if len(structure.get_positions()) == len(scell.get_positions()):
-                    if np.allclose(structure.get_positions(),scell.get_positions(),atol=1e-3):
-                        cluster_orbits = self._cluster_orbits_set[i]
+        if mc and self._cluster_orbits_set != []:
+            cluster_orbits = self._cluster_orbits_set[0]
+        elif not mc:
+            print("Searching for stored super cell")
+            for i, scell in enumerate(self._scells):
+                if cluster_orbits is None:
+                    if len(structure.get_positions()) == len(scell.get_positions()):
+                        if np.allclose(structure.get_positions(),scell.get_positions(),atol=1e-3):
+                            cluster_orbits = self._cluster_orbits_set[i]
+                            break
             
+                    
         if cluster_orbits is None:
-            # Add new super cell and recalculate cluster orbits for it.
+            print("Determining cluster orbits.")
+            # Add new super cell and calculate cluster orbits for it.
             cluster_orbits = []
             scell = structure.get_supercell()
             for icl,cluster in enumerate(self._cpool.get_cpool()):

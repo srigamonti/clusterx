@@ -2,6 +2,8 @@ from ase.db.jsondb import JSONDatabase
 from ase.atoms import Atoms
 import clusterx as c
 from clusterx.clusters.cluster import Cluster
+from clusterx.super_cell import SuperCell
+from clusterx.parent_lattice import ParentLattice
 import os
 import sys
 import subprocess
@@ -15,23 +17,33 @@ class ClustersPool():
     TODO
     implement method add_cluster(). This should accept either cartesian coo
     """
-    def __init__(self, parent_lattice, npoints=np.array([0]), radii=np.array([0]), name="_clusters_pool", filename=None):
-        self._npoints = npoints
-        self._radii = radii
+    def __init__(self, parent_lattice, npoints=[], radii=[], name="_clusters_pool", filename=None, super_cell=None):
+        self._npoints = np.array(npoints)
+        self._radii = np.array(radii)
         self._name = name
         self._filename = name+".json"
         self._plat = parent_lattice
         self._cpool = []
-        self._cpool_scell = self.get_containing_supercell(use="radii")
+        if isinstance(super_cell, SuperCell) or isinstance(super_cell, ParentLattice):
+            self._cpool_scell = super_cell
+        elif (self._npoints < 2).all():
+            self._cpool_scell = parent_lattice
+        else:
+            self._cpool_scell = self.get_containing_supercell(use="radii")
         self._cpool_dict = {}
-        if (npoints != np.array([0])).any():
+        #if (npoints != np.array([0])).any():
+        if self._npoints.size != 0:
             self.gen_clusters()
-            self.nclusters = len(self._cpool)
+        self.nclusters = len(self._cpool)
         self._orbit_atoms = []
 
     def __len__(self):
         return len(self._cpool)
 
+    def add_cluster(self, cluster):
+        self._cpool.append(cluster)
+        self.nclusters = len(self._cpool)
+        
     def get_unique_radii(self):
         unique_radii = []
         for cl in self._cpool:
@@ -41,7 +53,20 @@ class ClustersPool():
 
         return unique_radii
         
+    def get_subpool(self, cluster_indexes):
+        """Return a ClustersPool object formed by a subset of the clusters pool
+
+        Parameters:
         
+        cluster_indexes: array of integers
+            The indexes of the clusters to build the subpool from.
+        """
+        subpool = ClustersPool(self._plat, super_cell = self._cpool_scell)
+        for i,cl in enumerate(self._cpool):
+            if i in cluster_indexes:
+                subpool.add_cluster(cl)
+        return subpool
+            
     def get_clusters_sets(self, grouping_strategy = "size", nclmax = 0):
         """Return cluster sets for cluster selection based on CV
 

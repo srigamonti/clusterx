@@ -159,6 +159,12 @@ class ParentLattice(Atoms):
         return self._atoms
 
     def get_idx_subs(self):
+        """Return dictionary of site type indexes and substitutional species
+
+        The format of the returned dictionary is ``{'0':[pri0,sub00,sub01,...],'1':[pri1,sub10,sub11,...]...}``
+        where the key indicates the site type, ``pri#`` the chemical number of the pristine structure and
+        ``sub##`` the possible substitutional chemical numbers for the site.
+        """
         return self.idx_subs
 
     def get_fname(self):

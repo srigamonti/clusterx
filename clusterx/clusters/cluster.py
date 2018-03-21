@@ -17,8 +17,8 @@ class Cluster():
         return cl
     
     def __init__(self, atom_indexes, atom_numbers, super_cell=None):
-        self.ais = atom_indexes
-        self.ans = atom_numbers
+        self.ais = np.array(atom_indexes)
+        self.ans = np.array(atom_numbers)
         self.npoints = len(atom_numbers)
         self.positions_cartesian = None
         self.radius = None

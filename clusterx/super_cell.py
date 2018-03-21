@@ -53,7 +53,29 @@ class SuperCell(ParentLattice):
         view(self)
     
 
-    def gen_random(self,nsubs={}):
+    def gen_random(self,nsubs):
+        """
+        Generate a random Structure with given number of substitutions.
+
+        Parameters:
+
+        nsubs: dictionary 
+            The nsubs argument must have the format ``{site_type0:[nsub01,nsub02,...], site_type1: ...}``
+            where ``site_type#`` and ``nsub##`` are, respectively, an integer indicating 
+            the site type index and the number of substitutional species of each kind, as returned by
+            ``SuperCell.get_idx_subs``. 
+        """
+        import clusterx.structure
+
+        idx_subs = self.get_idx_subs()
+        tags = self.get_tags()
+
+        rndstr = SuperCell(self._plat,self._p)
+        decoration = self.gen_random_decoration(nsubs)
+        
+        return clusterx.structure.Structure(rndstr,decoration)
+
+    def gen_random_decoration(self,nsubs):
         """
         Generate a random decoration of the super cell with given number of substitutions.
 
@@ -62,9 +84,9 @@ class SuperCell(ParentLattice):
         """
         idx_subs = self.get_idx_subs()
         tags = self.get_tags()
-
-        rndstr = SuperCell(self._plat,self._p)
-        decoration = rndstr.get_atomic_numbers()
+        
+        #decoration = np.zeros(len(tags),dtype=np.int8)
+        decoration = self.get_atomic_numbers()
         for tag, nsub in nsubs.items():
             #list all atom indices with the given tag
             sub_idxs = np.where(tags==tag)[0]
@@ -77,10 +99,9 @@ class SuperCell(ParentLattice):
                 sub_list = np.random.choice(sub_idxs,n,replace=False)
 
                 for atom_index in sub_list:
-                    #rndstr[atom_index].number = idx_subs[tag][i+1]
                     decoration[atom_index] = idx_subs[tag][i+1]
 
-        return clusterx.structure.Structure(rndstr,decoration)
+        return decoration
 
 
     def enumerate_decorations(self, npoints=None, radii=None):
