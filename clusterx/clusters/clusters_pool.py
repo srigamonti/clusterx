@@ -14,8 +14,8 @@ class ClustersPool():
     """
     Clusters pool class
 
-    TODO
-    implement method add_cluster(). This should accept either cartesian coo
+    TODO:
+    compute multiplicites in gen_clusters
     """
     def __init__(self, parent_lattice, npoints=[], radii=[], name="_clusters_pool", filename=None, super_cell=None):
         self._npoints = np.array(npoints)
@@ -76,7 +76,7 @@ class ClustersPool():
             Can take the values "size" and "combinations". If "size", a set in the clusters set
             is determined by two parametrs, the maximum number of points and the maximum radius.
             Thus, a set is formed by all clusters in the pool whose radius and npoints are smaller 
-            or equal then the respective maxima for the set.
+            or equal than the respective maxima for the set.
             When "combinations" is used, all possible sets up to nclmax number of clusters
             are returned.
 

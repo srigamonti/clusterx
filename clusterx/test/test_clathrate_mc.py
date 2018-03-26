@@ -49,8 +49,6 @@ def test_clathrate_mc():
     cpool.add_cluster(Cluster([11,10],[s,s],cpsc))
     cpool.add_cluster(Cluster([18,9],[s,s],cpsc))
     cpool.add_cluster(Cluster([18,43],[s,s],cpsc))
-    #for cl in cpool._cpool:
-    #    print("cl_idxs: ",cl.get_idxs())
 
     # Energy
     cpoolE = cpool.get_subpool([0,1,2,3,4,5,6,7,9,15])
@@ -68,9 +66,9 @@ def test_clathrate_mc():
     ]
     multE = [1,24,16,6,12,8,48,24,24,24]
     corcE = CorrelationsCalculator("binary-linear",plat,cpoolE)
-    scellE = SuperCell(plat,[(3,0,0),(0,3,0),(0,0,3)])
+    scellE = SuperCell(plat,[(2,0,0),(0,2,0),(0,0,2)])
     
-    nmc = 1000
+    nmc = 10
     for i in range(nmc):
         struc = scellE.gen_random({0:[16]})
         corrs = corcE.get_cluster_correlations(struc,mc=True)
@@ -80,16 +78,5 @@ def test_clathrate_mc():
 
         print(i,erg)
             
-    #for cl in cpoolE._cpool:
-    #    print("cl_idxsE: ",cl.get_idxs())
-    
-    # print(plat.get_idx_subs())
-    
-    #cl = ClustersPool(plat)
     cpool.write_orbit_db(cpool.get_cpool(),cpool.get_cpool_scell(),"test_clathrate_mc-cpool.json")
 
-    #orbit = cpool.get_cluster_orbit(scell, [19,17],[13,13]) # 24k-24k pair cluster
-    #db_name = "test_clathrate_mc-cluster_orbit.json"
-    #cl.write_orbit_db(orbit, scell, db_name)
-    
-    scell = SuperCell(plat,[(2,0,0),(0,2,0),(0,0,2)])

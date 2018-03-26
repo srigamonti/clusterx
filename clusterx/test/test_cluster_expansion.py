@@ -71,7 +71,7 @@ def test_cluster_expansion():
     strset.set_calculator(EMT2())
     energies = strset.calculate_property()
     
-    fitter_model = Fitter(method = "skl_LinearRegression")
+    #fitter_model = Fitter(method = "skl_LinearRegression")
 
     clsets = cpool.get_clusters_sets(grouping_strategy = "size")
 
@@ -86,9 +86,11 @@ def test_cluster_expansion():
     rows = np.arange(len(energies))
     for clset in clsets:
         _comat = comat[np.ix_(rows,clset)]
-        _cvs = cross_val_score(fitter_cv, _comat, energies, cv=LeaveOneOut(), scoring = make_scorer(mean_squared_error))
+        #_cvs = cross_val_score(fitter_cv, _comat, energies, cv=LeaveOneOut(), scoring = make_scorer(mean_squared_error))
+        _cvs = cross_val_score(fitter_cv, _comat, energies, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
         print("clusters set: ",clset)
-        print('m_cvs',np.sqrt(np.mean(_cvs)))
+        print('_cvs',_cvs)
+        print('m_cvs',np.sqrt(-np.mean(_cvs)))
         print("")
         
     fitter_cv.fit(comat,energies)
