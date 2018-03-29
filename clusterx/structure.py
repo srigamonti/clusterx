@@ -52,4 +52,17 @@ class Structure(SuperCell):
         self.sigmas[ridx2] = 0
         self.decor[ridx1] = self.sites[ridx1][1]
         self.decor[ridx2] = self.sites[ridx2][0]
-        
+
+        return ridx1,ridx2
+
+    def reswap(self, site_type, ridx1, ridx2):
+        tags=self.get_tags()
+        #idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == 0 and tags[index] == site_type]
+        #idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == 1 and tags[index] == site_type]
+        #ridx1 = random.choice(idx1)
+        #ridx2 = random.choice(idx2)
+        self.sigmas[ridx2] = 1
+        self.sigmas[ridx1] = 0
+        self.decor[ridx2] = self.sites[ridx2][1]
+        self.decor[ridx1] = self.sites[ridx1][0]
+    
