@@ -16,11 +16,11 @@ class CorrelationsCalculator():
         ####
         self._cpool = clusters_pool
         self._2pi = 2*np.pi
-        
-        
+
+
     def site_basis_function(self, alpha, sigma, m):
         """
-        Calculates the site basis function. 
+        Calculates the site basis function.
         """
         if self.basis == "trigonometric":
             # Axel van de Walle, CALPHAD 33, 266 (2009)
@@ -32,21 +32,29 @@ class CorrelationsCalculator():
 
             else:
                 return -np.sin(self._2pi*np.ceil(alpha/2.0)*sigma/m)
-            
+
         if self.basis == "binary-linear":
             # Only for binary alloys. Allows for simple interpretation of cluster interactions
             return sigma
-                
-                
+
+
     def cluster_function(self, cluster, structure_sigmas,ems):
         cluster_atomic_idxs = cluster.get_idxs()
         cluster_alphas = cluster.alphas
         cf = 1.0
         for cl_alpha, cl_idx in zip(cluster_alphas,cluster_atomic_idxs):
             cf *= self.site_basis_function(cl_alpha, structure_sigmas[cl_idx], ems[cl_idx])
-            
+
         return cf
-    
+
+    def get_binary_random_structure_correlations(self,concentration):
+        correlations = np.zeros(len(self._cpool))
+        if self.basis == "binary-linear":
+            for icl,cl in enumerate(self._cpool.get_cpool()):
+                correlations[icl]=np.power(concentration,cl.npoints)
+
+        return np.around(correlations,decimals=12)
+
     def get_cluster_correlations(self, structure, mc = False):
         cluster_orbits = None
         if mc and self._cluster_orbits_set != []:
@@ -58,7 +66,7 @@ class CorrelationsCalculator():
                         if np.allclose(structure.get_positions(),scell.get_positions(),atol=1e-3):
                             cluster_orbits = self._cluster_orbits_set[i]
                             break
-                    
+
         if cluster_orbits is None:
             # Add new super cell and calculate cluster orbits for it.
             cluster_orbits = []
@@ -86,7 +94,7 @@ class CorrelationsCalculator():
                 cf = self.cluster_function(cluster, structure.sigmas, structure.ems)
                 correlations[icl] += cf
             correlations[icl] /= len(cluster_orbit)
-        
+
         return np.around(correlations,decimals=12)
 
 

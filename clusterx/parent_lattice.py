@@ -24,7 +24,7 @@ class ParentLattice(Atoms):
         and get_distances, saving computation time. Care should be paid in cases where
         positions are updated either by relaxation or deformation of the lattice.
     """
-    
+
     def __init__(self, atoms=None, substitutions=[],pbc=(1,1,1)):
         super(ParentLattice,self).__init__(symbols=atoms,pbc=pbc)
         #self._atoms = atoms.copy()
@@ -34,8 +34,8 @@ class ParentLattice(Atoms):
         self._subs = []
         self._natoms = len(self._atoms)
         self.set_substitutions(substitutions)
-        
-        
+
+
     def copy(self):
         """Return a copy."""
         pl = self.__class__(atoms=self._atoms, substitutions=self._subs)
@@ -45,14 +45,14 @@ class ParentLattice(Atoms):
             pl.arrays[name] = a.copy()
         pl.constraints = copy.deepcopy(self.constraints)
         return pl
-        
+
     def set_atoms(self, atoms=None):
         """Set the Atoms object representing the pristine parent lattice."""
         if atoms is not None:
             self._atoms = atoms
         else:
             self._atoms = None
-        
+
     def get_atoms(self):
         """Get the Atoms object representing the pristine parent lattice."""
         return self._atoms
@@ -69,23 +69,23 @@ class ParentLattice(Atoms):
                                      (len(self._atoms), len(substitutions)))
                 else:
                     self._subs.append(atoms)
-                    
+
         self._max_nsub = len(self._subs)
         self._set_tags()
 
-        
+
     def _set_tags(self):
         """
         Set the ``tags`` attribute of the Atoms object, and the attributes
         ``idx_subs`` and ``sites`` which define the substitutional framework
         of a ParentLattice.
 
-        Example: Supose a ParentLattice object was initialized with four Atoms objects 
+        Example: Supose a ParentLattice object was initialized with four Atoms objects
         a1, a2, a3 and a4::
-         
+
           parlat = ParentLattice(a1,[a2,a3,a4])
 
-        i.e. a1 represents the pristine lattice and a2 to a4 are the 
+        i.e. a1 represents the pristine lattice and a2 to a4 are the
         possible substitutions.
 
         Now suppose that::
@@ -126,7 +126,12 @@ class ParentLattice(Atoms):
             if tag in st:
                 ss.append(i)
         return ss
-        
+
+    def get_n_sub_sites(self):
+        """Return total number of substitutional sites
+        """
+        return len(self.get_substitutional_tags())
+
     def get_spectator_sites(self):
         st = self.get_spectator_tags()
         ss = []
@@ -134,21 +139,21 @@ class ParentLattice(Atoms):
             if tag in st:
                 ss.append(i)
         return ss
-        
+
     def get_substitutional_tags(self):
         st = []
         for tag in self.get_tags():
             if len(self.idx_subs[tag]) > 1:
                 st.append(tag)
         return st
-    
+
     def get_spectator_tags(self):
         st = []
         for tag in self.get_tags():
             if len(self.idx_subs[tag]) == 1:
                 st.append(tag)
         return st
-    
+
     def get_substitutions(self):
         return self._subs
 
@@ -178,13 +183,13 @@ class ParentLattice(Atoms):
         Get file format of serialized parent lattice
         """
         return self._fmt
-    
+
     def serialize(self, fmt="db", tmp=False, fname=None):
         import os
         from ase.data import chemical_symbols as cs
 
         self._fmt=fmt
-        
+
         # get basic info
         cell = self._atoms.get_cell()
         positions = self._atoms.get_scaled_positions()
@@ -205,7 +210,7 @@ class ParentLattice(Atoms):
             suffix=".cif"
         elif fmt=="ATAT" or fmt=="atat":
             suffix=".in"
-            
+
 
         # serialize
         if fmt == "ATAT" or fmt == "atat":
@@ -225,21 +230,21 @@ class ParentLattice(Atoms):
             #for pos, s in zip(positions, symbols):
             for pos in positions:
                 stri = u"%2.12f\t%2.12f\t%2.12f\t"%(pos[0],pos[1],pos[2])
-                if len(self.sites[i])>1:    
+                if len(self.sites[i])>1:
                     for z in self.sites[i][:-1]:
                         stri = stri + "%s,\t"%cs[z]
                 stri = stri + "%s\n"%cs[self.sites[i][-1]]
-                
+
                 f.write(stri)
                 i = i+1
-                
+
             if tmp is True:
                 return f
             else:
                 self._fname = f.name
         elif fmt in  ["xyz", "cif", "traj","json","db"]:
             from ase.io import write
-            
+
             if fname is None:
                 fname = prefix+suffix
 
@@ -247,14 +252,7 @@ class ParentLattice(Atoms):
             images.append(self.get_pristine())
             for sub in self.get_substitutions():
                 images.append(sub)
-                
+
             write(fname,images=images,format=fmt)
 
             self._fname = fname
-
-            
-        
-    
-
-
-        

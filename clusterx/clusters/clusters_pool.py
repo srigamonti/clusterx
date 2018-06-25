@@ -40,10 +40,13 @@ class ClustersPool():
     def __len__(self):
         return len(self._cpool)
 
+    def sort(self):
+        self._cpool.sort()
+
     def add_cluster(self, cluster):
         self._cpool.append(cluster)
         self.nclusters = len(self._cpool)
-        
+
     def get_unique_radii(self):
         unique_radii = []
         for cl in self._cpool:
@@ -52,12 +55,12 @@ class ClustersPool():
         unique_radii = np.unique(np.around(np.array(unique_radii), decimals=5))
 
         return unique_radii
-        
+
     def get_subpool(self, cluster_indexes):
         """Return a ClustersPool object formed by a subset of the clusters pool
 
         Parameters:
-        
+
         cluster_indexes: array of integers
             The indexes of the clusters to build the subpool from.
         """
@@ -66,7 +69,7 @@ class ClustersPool():
             if i in cluster_indexes:
                 subpool.add_cluster(cl)
         return subpool
-            
+
     def get_clusters_sets(self, grouping_strategy = "size", nclmax = 0):
         """Return cluster sets for cluster selection based on CV
 
@@ -75,14 +78,14 @@ class ClustersPool():
         grouping_strategy: string
             Can take the values "size" and "combinations". If "size", a set in the clusters set
             is determined by two parametrs, the maximum number of points and the maximum radius.
-            Thus, a set is formed by all clusters in the pool whose radius and npoints are smaller 
+            Thus, a set is formed by all clusters in the pool whose radius and npoints are smaller
             or equal than the respective maxima for the set.
             When "combinations" is used, all possible sets up to nclmax number of clusters
             are returned.
 
         nclmax: integer
             The maximum clusters-set size when strategy="combinations" is used.
-    
+
         """
         if grouping_strategy == "size":
             from collections import Counter
@@ -111,12 +114,12 @@ class ClustersPool():
                                 break
 
                     if include:
-                        clsets.append(_clset)        
+                        clsets.append(_clset)
                         nsets += 1
-                        
+
             return clsets
-        
-                
+
+
     def gen_clusters(self):
         from clusterx.super_cell import SuperCell
         from itertools import product, combinations
@@ -134,7 +137,7 @@ class ClustersPool():
         # Check if supercell is large enough
         if np.amax(radii)>np.amax(distances):
             sys.exit("Containing supercell is too small to find clusters pool.")
-        
+
         for npts,radius in zip(npoints,radii):
             clrs_full = []
             for idxs in combinations(satoms,npts):
@@ -152,13 +155,13 @@ class ClustersPool():
                             for _cl in orbit:
                                 clrs_full.append(_cl)
 
-            
+
     def get_cpool_scell(self):
         return self._cpool_scell
-    
+
     def get_cpool(self):
         return self._cpool
-    
+
     def get_cpool_arrays(self):
         atom_idxs = []
         atom_nrs = []
@@ -168,6 +171,7 @@ class ClustersPool():
             atom_nrs.append(cl.get_nrs())
 
         return np.array(atom_idxs), np.array(atom_nrs)
+
     """
     def get_cluster_radius(self, distances, cluster):
         npoints = len(cluster)
@@ -183,6 +187,7 @@ class ClustersPool():
                         r = d
         return r
     """
+
     def serialize(self, fmt, fname=None):
         if fmt == "json":
             self.gen_atoms_database(fname)
@@ -192,7 +197,7 @@ class ClustersPool():
 
     def dump_cpool_dict(self):
         print(json.dumps(self._cpool_dict,indent=4))
-            
+
     def get_clusters_array(self):
         cld = self.get_cpool_dict()
         cla = []
@@ -253,7 +258,7 @@ class ClustersPool():
         # empty cluster
         if len(cluster_sites) == 0:
             return np.array([Cluster([],[],super_cell)])
-        
+
         substitutional_sites = super_cell.get_substitutional_sites()
         for _icl in cluster_sites:
             if _icl not in substitutional_sites:
@@ -263,7 +268,7 @@ class ClustersPool():
         if tight:
             #radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_species,super_cell))
             radius = Cluster(cluster_sites,cluster_species,super_cell).radius
-            
+
         shash = None
         cluster_species = np.array(cluster_species)
         # Get symmetry operations of the parent lattice
@@ -272,13 +277,13 @@ class ClustersPool():
         # Get original cluster cartesian positions (p0)
         pos = super_cell.get_positions(wrap=True)
         p0 = np.array([pos[site] for site in cluster_sites])
-        
+
         spos = super_cell.get_scaled_positions(wrap=True) # Super-cell scaled positions
         # sp0: scaled cluster positions with respect to parent lattice
         sp0 = get_scaled_positions(p0, self._plat.get_cell(), pbc = super_cell.get_pbc(), wrap = False)
         orbit = []
         for r,t in zip(sc_sym['rotations'], sc_sym['translations']):
-            ts = np.tile(t,(len(sp0),1)).T # Every column represents the same translation for every cluster site 
+            ts = np.tile(t,(len(sp0),1)).T # Every column represents the same translation for every cluster site
             _sp1 = np.add(np.dot(r,sp0.T),ts).T # Apply rotation, then translation
             # Get cartesian, then scaled to supercell
             _p1 = np.dot(_sp1, self._plat.get_cell())
@@ -319,7 +324,7 @@ class ClustersPool():
                             if (cluster_species == csh).all():
                                 include = False
                                 break
-                                
+
                 if include:
                     orbit.append(Cluster(_cl,cluster_species,super_cell))
 
@@ -349,7 +354,7 @@ class ClustersPool():
                     posl.append(pos)
             posl = np.array(posl)
 
-            dn = 2*(np.ceil(np.max(posl,axis=0)).astype(int) - np.floor(np.min(posl,axis=0)).astype(int)) 
+            dn = 2*(np.ceil(np.max(posl,axis=0)).astype(int) - np.floor(np.min(posl,axis=0)).astype(int))
             sc = SuperCell(self._plat,np.diag(dn))
 
         if use == "radii":
@@ -365,10 +370,10 @@ class ClustersPool():
             sc =  SuperCell(self._plat, np.diag(n))
 
         return sc
-        
+
     def gen_atoms_database(self, fname="clusters.json"):
         """
-        Builds an ASE's json database object (self._atoms_db). Atoms items in 
+        Builds an ASE's json database object (self._atoms_db). Atoms items in
         the built database are a representation of the clusters
         embedded in a supercell appropriate for visualization
         with ASE's gui.
@@ -383,7 +388,7 @@ class ClustersPool():
         cld = self.get_cpool_dict()
         prim_cell = self._plat.get_cell()
         scell = self.get_containing_supercell()
-        
+
         call(["rm","-f",fname])
         atoms_db = JSONDatabase(filename=fname) # For visualization
         sites = scell.get_sites()
@@ -412,6 +417,3 @@ class ClustersPool():
 
             atoms = Atoms(symbols=chem,positions=scell.get_positions(),cell=scell.get_cell(),pbc=scell.get_pbc())
             atoms_db.write(atoms)
-
-        
-

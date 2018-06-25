@@ -41,7 +41,7 @@ def HatZnO_10m10(a=3.2493, c=5.2054, u=0.345, nlayers=12, ads_symbol="X",vacuum 
     znos.set_cell(cell)
     znos.center(vacuum=vacuum/2.0,axis=2)
     znos.translate([0,0,-vacuum/2.0])
-    print(znos.get_cell())
+    znos.set_pbc([True,True,False])
     add_adsorbate(znos,ads_symbol,1.769,position=(0.5*a,0.3826*c)) # H@Zn
     add_adsorbate(znos,ads_symbol,0.986,position=(0.5*a,0.9500*c)) # H@O
     return znos

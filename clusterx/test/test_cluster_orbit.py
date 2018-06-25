@@ -383,3 +383,6 @@ def check_result(testnr, orbit):
         
     return isok
     
+
+if __name__ == "__main__":
+    test_cluster_orbit()
