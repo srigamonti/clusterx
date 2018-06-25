@@ -296,19 +296,19 @@ class ClustersPool():
                     if _icl not in substitutional_sites:
                         include = False
                         break
-                    
+
                 if len(_cl)>1:
                     for i in range(len(_cl)):
                         for j in range(i+1,len(_cl)):
                             if _cl[i] == _cl[j] and cluster_species[i] != cluster_species[j]:
                                 include = False
-                                
+
                 if tight:
                     #_radius = self.get_cluster_radius(distances,Cluster(_cl,cluster_species,super_cell))
                     _radius = Cluster(_cl,cluster_species,super_cell).radius
-                    if _radius > radius:
+                    if np.abs(_radius - radius) > 1e-3:
                         include = False
-                    
+
                 if include:
                     for cl_obj in orbit:
                         cl = cl_obj.get_idxs()
