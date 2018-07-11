@@ -14,7 +14,7 @@ class SuperCell(ParentLattice):
     A SuperCell object acts as a blue-print for the creation of structures
     with arbitrary decorations.
     """
-    
+
     def __init__(self, parent_lattice, p):
         self._plat = parent_lattice
         self._p = p
@@ -31,7 +31,7 @@ class SuperCell(ParentLattice):
         sc = self.__class__(self._plat, self._p)
 
         return sc
-    
+
     def get_parent_lattice(self):
         """
         Return the parent lattice object which defines the supercell.
@@ -40,17 +40,17 @@ class SuperCell(ParentLattice):
 
     def get_transformation(self):
         """
-        Return the transformation matrix that defines the supercell from the 
+        Return the transformation matrix that defines the supercell from the
         defining parent lattice.
         """
         return self._p
-        
+
     def plot(self):
         """
         Plot the pristine supercell object.
         """
         view(self)
-    
+
 
     def gen_random(self,nsubs):
         """
@@ -58,11 +58,11 @@ class SuperCell(ParentLattice):
 
         Parameters:
 
-        nsubs: dictionary 
+        nsubs: dictionary
             The nsubs argument must have the format ``{site_type0:[nsub01,nsub02,...], site_type1: ...}``
-            where ``site_type#`` and ``nsub##`` are, respectively, an integer indicating 
+            where ``site_type#`` and ``nsub##`` are, respectively, an integer indicating
             the site type index and the number of substitutional species of each kind, as returned by
-            ``SuperCell.get_idx_subs``. 
+            ``SuperCell.get_idx_subs``.
         """
         import clusterx.structure
 
@@ -71,25 +71,40 @@ class SuperCell(ParentLattice):
 
         rndstr = SuperCell(self._plat,self._p)
         decoration, sigmas = self.gen_random_decoration(nsubs)
-        
+
         #return clusterx.structure.Structure(rndstr,decoration)
         return clusterx.structure.Structure(rndstr,sigmas=sigmas)
 
     def gen_random_decoration(self,nsubs):
-        """
-        Generate a random decoration of the super cell with given number of substitutions.
+        """Generate a random decoration of the super cell with given number of substitutions.
 
-        The nsubs argument must have the format:
-        ...
+        Parameters:
+
+        nsubs: dictionary
+            The format of the dictionary is as follows::
+
+                {site_type1:[n11,n12,...], site_type2:[n21,n22,...], ...}
+
+            it indicates how many substitutional atoms of every kind (n#1, n#2, ...)
+            may replace the pristine species for sites of site_type#.
+
+        Returns:
+
+        decoration: list of int
+            list with the same length as the pristine structure.
+            decoration[atom_idx] = species number sitting at site idx.
+        sigmas: list of int
+            sigma[atom_index] is an integer between 0 and M-1, where M is the
+            total number of different species which may substitute an atom
+            in this position.
         """
         idx_subs = self.get_idx_subs()
-        tags = self.get_tags()
-        
-        #decoration = np.zeros(len(tags),dtype=np.int8)
+        tags = self.get_tags() # tags[atom_index] = site_type
+
         decoration = self.get_atomic_numbers()
         sigmas = np.zeros(len(tags),dtype=np.int8)
         for tag, nsub in nsubs.items():
-            #list all atom indices with the given tag
+            #list all atom indices with the given tag or site_type
             sub_idxs = np.where(tags==tag)[0]
 
             #select nsub such indices for each substitutional
@@ -115,7 +130,7 @@ class SuperCell(ParentLattice):
         sites = self.get_sites()
         call(["rm","-f","neighbors.json"])
         atoms_db = JSONDatabase(filename="neighbors.json") # For visualization
-        
+
         rmax = np.full(len(atoms),np.amax(radii)/2.0)
         nl = NeighborList(rmax, self_interaction=True, bothways=True, skin=0.0)
         nl.build(atoms)
@@ -124,7 +139,7 @@ class SuperCell(ParentLattice):
         for id1 in range(natoms):
             neigs = atoms.copy()
             indices, offsets = nl.get_neighbors(id1)
-            
+
             for i, offset in zip(indices,offsets):
                 #pos.append(atoms.positions[i] + np.dot(offset, atoms.get_cell()))
                 #pos.append(atoms.positions[i])
@@ -132,7 +147,7 @@ class SuperCell(ParentLattice):
                 spi = len(sites[i])-1
                 neigs[i].number = sites[i][spi]
                 neigs[i].position = atoms.positions[i] + np.dot(offset, atoms.get_cell())
-                
+
 
             #neigs = Atoms(numbers=chem_num,positions=pos,cell=self.get_cell(),pbc=self.get_pbc())
 

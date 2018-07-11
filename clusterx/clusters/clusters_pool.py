@@ -149,9 +149,20 @@ class ClustersPool():
                     #if self.get_cluster_radius(distances,cl) <= radius:
                     if cl.radius <= radius:
                         if cl not in clrs_full:
+                            """
                             self._cpool.append(cl)
                             clrs_full.append(cl)
+                            #orbit = self.get_cluster_orbit(scell, cl.get_idxs(), cluster_species=cl.get_nrs(),tight=True,distances=distances)
+                            orbit = self.get_cluster_orbit(scell, cl.get_idxs(), cluster_species=cl.get_nrs(),tight=False,distances=distances)
+                            for _cl in orbit:
+                                clrs_full.append(_cl)
+                            """
+                            clrs_full.append(cl)
+                            #orbit = self.get_cluster_orbit(scell, cl.get_idxs(), cluster_species=cl.get_nrs(),tight=True,distances=distances)
                             orbit = self.get_cluster_orbit(scell, cl.get_idxs(), cluster_species=cl.get_nrs(),tight=True,distances=distances)
+                            orbit.sort() # with tight=False, this avoids adding to the returned pool non-compact translations of the cluster.
+                            self._cpool.append(orbit[0])
+
                             for _cl in orbit:
                                 clrs_full.append(_cl)
 
@@ -214,9 +225,14 @@ class ClustersPool():
     def get_cluster(self, cln):
         return self._cpool_dict[cln]
 
-    def write_orbit_db(self, orbit, super_cell, db_name):
+    def write_clusters_db(self, orbit=None, super_cell=None, db_name="cpool.json"):
         """Write cluster orbit to Atoms database
         """
+        if orbit is None:
+            orbit = self.get_cpool()
+        if super_cell is None:
+            super_cell = self.get_cpool_scell()
+            
         from ase.db.jsondb import JSONDatabase
         from subprocess import call
         orbit_nrs = []

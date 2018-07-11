@@ -13,7 +13,7 @@ def test_clathrate_mc():
 
     subprocess.call(["rm","-f","test_clathrate_mc-cluster_orbit.json"])
     subprocess.call(["rm","-f","test_clathrate_mc-cpool.json"])
-    
+
     a = 10.5148
     x = 0.185; y = 0.304; z = 0.116
     wyckoff = [
@@ -67,7 +67,7 @@ def test_clathrate_mc():
     multE = [1,24,16,6,12,8,48,24,24,24]
     corcE = CorrelationsCalculator("binary-linear",plat,cpoolE)
     scellE = SuperCell(plat,[(2,0,0),(0,2,0),(0,0,2)])
-    
+
     nmc = 10
     for i in range(nmc):
         struc = scellE.gen_random({0:[16]})
@@ -77,6 +77,5 @@ def test_clathrate_mc():
             erg += multE[j] * ecisE[j] * corrs[j]
 
         print(i,erg)
-            
-    cpool.write_orbit_db(cpool.get_cpool(),cpool.get_cpool_scell(),"test_clathrate_mc-cpool.json")
 
+    cpool.write_clusters_db(cpool.get_cpool(),cpool.get_cpool_scell(),"test_clathrate_mc-cpool.json")

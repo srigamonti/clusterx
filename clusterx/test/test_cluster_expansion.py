@@ -37,7 +37,7 @@ def test_cluster_expansion():
 
     plat = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
     cpool = ClustersPool(plat, npoints=[1,2,3,4], radii=[0,2.3,1.42,1.42])
-    cpool.write_orbit_db(cpool.get_cpool(),cpool.get_cpool_scell(),"cpool.json")
+    cpool.write_clusters_db(cpool.get_cpool(),cpool.get_cpool_scell(),"cpool.json")
     corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
 
     scell = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
@@ -145,7 +145,7 @@ def test_cluster_expansion():
     print ("\n\n========Test writes========")
     atom_idxs, atom_nrs = cpool.get_cpool_arrays()
     scell = cpool.get_cpool_scell()
-    cpool.write_orbit_db(cpool.get_cpool(),scell,"test_cluster_expansion_cpool.json")
+    cpool.write_clusters_db(cpool.get_cpool(),scell,"test_cluster_expansion_cpool.json")
     print("Correlation matrix:\n")
     print(np.array2string(comat,separator=",",max_line_width=1000))
     print ("===========================\n")
