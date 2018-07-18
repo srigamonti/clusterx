@@ -11,29 +11,139 @@ def unique_non_sorted(a):
     return a[np.sort(idx)]
 
 class ParentLattice(Atoms):
-    """Parent lattice class
+    """**Parent lattice class**
 
     The parent lattice in a cluster expansion defines the atomic positions,
     the periodicity, the substitutional species, and the spectator sites, i.e. those
     atoms which are present in the crystal but are not substituted.
-    ``ParentLattice`` subclasses the ASE's ``Atoms`` class.
+    ``ParentLattice`` subclasses ASE's ``Atoms`` class.
 
-    TODO:
+    **Parameters:**
+
+    atoms: ASE's Atoms object
+        atoms object corresponding to the pristine lattice.
+    substitutions: list of ASE's Atoms objects.
+        Every Atoms object in the list, corresponds to a possible full
+        substitution of only one sublattice. If set, overrides ``sites`` (see
+        below).
+    sites: list of integer arrays
+        This is an array of length equal to the number of atoms in the parent
+        lattice. Every element in the array is an array with species numbers,
+        representing the species which can occupy the crystal
+        sites (see examples below). This is overriden by ``substitutions``
+        if set.
+
+    **Examples:**
+
+    In all the examples below, you may visualize the created parent lattice
+    by executing::
+
+        $> ase gui plat.json
+
+    In this example, the parent lattice for a simple binary fcc CuAl Alloy
+    is built::
+
+        from ase.build import bulk
+        from clusterx.parent_lattice import ParentLattice
+
+        pri = bulk('Cu', 'fcc', a=3.6)
+        sub = bulk('Al', 'fcc', a=3.6)
+
+        plat = ParentLattice(pri, substitutions=[sub], pbc=pri.get_pbc())
+        plat.serialize(fmt="json",fname="plat.json")
+
+    In the next example, a parent lattice for a complex clathrate compound is
+    defined. This definition corresponds to the chemical formula
+    :math:`Si_{46-x-y} Al_x Vac_y Ba_{8-z} Sr_z` ::
+
+        from ase.spacegroup import crystal
+
+        a = 10.515
+        x = 0.185; y = 0.304; z = 0.116
+        wyckoff = [
+            (0, y, z), #24k
+            (x, x, x), #16i
+            (1/4., 0, 1/2.), #6c
+            (1/4., 1/2., 0), #6d
+            (0, 0 , 0) #2a
+        ]
+
+        from clusterx.parent_lattice import ParentLattice
+        pri = crystal(['Si','Si','Si','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
+        sub1 = crystal(['Al','Al','Al','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
+        sub2 = crystal(['X','X','X','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
+        sub3 = crystal(['Si','Si','Si','Sr','Sr'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
+
+        plat = ParentLattice(atoms=pri,substitutions=[sub1,sub2,sub3])
+        plat.serialize(fmt="json",fname="plat.json")
+
+    This example uses the optional ``sites`` parameter instead of the ``substitutions``
+    parameter::
+
+        from ase import Atoms
+        from clusterx.parent_lattice import ParentLattice
+
+        a = 5.0
+        cell = [[a,0,0],[0,a,0],[0,0,a]]
+        scaled_positions = [[0,0,0],[0.25,0.25,0.25],[0.5,0.5,0.5],[0.75,0.75,0.75],[0.5,0.5,0]]
+        sites = [[11,13],[25,0,27],[11,13],[13,11],[5]]
+
+        plat = ParentLattice(Atoms(scaled_positions=scaled_positions,cell=cell), sites=sites)
+        plat.serialize(fmt="json",fname="plat.json")
+
+    Defined in this way, the crystal site located at [0,0,0] may be occupied by
+    species numbers 11 and 13; the crystal site at [0.25,0.25,0.25] may be occupied
+    by species numbers 25, 0 (vacancy) or 27; and so on. The pristine lattice has
+    species numbers [11,25,11,13,5] (i.e. the first element in every of the lists in sites).
+    Notice that sites with atom index 0 and 2 belong to a common sublattice (i.e. [11,13])
+    while site with atom index 3 (i.e. [13,11]) determines a different sublattice.
+
+    .. todo::
         override get_distance and get_distances from Atoms. Such that if get_all_distances
         was ever called, it sets a self.distances attribute which is used for get_distance
         and get_distances, saving computation time. Care should be paid in cases where
         positions are updated either by relaxation or deformation of the lattice.
     """
 
-    def __init__(self, atoms=None, substitutions=[],pbc=(1,1,1)):
+    def __init__(self, atoms, substitutions=None, sites=None, pbc=(1,1,1)):
         super(ParentLattice,self).__init__(symbols=atoms,pbc=pbc)
         #self._atoms = atoms.copy()
-        self.set_atoms(atoms)
         self._fname = None
         self._fmt = None
-        self._subs = []
+
+        self._set_atoms(atoms)
         self._natoms = len(self._atoms)
-        self.set_substitutions(substitutions)
+
+        if sites is not None and substitutions is None:
+            unique_sites = np.unique(sites)
+            tags = np.zeros(self._natoms).astype(int)
+            for ius, us in enumerate(unique_sites):
+                for idx in range(self._natoms):
+                    if sites[idx] == us:
+                        tags[idx] = int(ius)
+
+            numbers = np.zeros(self._natoms).astype(int)
+            numbers_pris = np.zeros(self._natoms).astype(int)
+            for idx in range(self._natoms):
+                numbers_pris[idx] = sites[idx][0]
+            self.set_atomic_numbers(numbers_pris)
+            self._atoms.set_atomic_numbers(numbers_pris)
+
+            substitutions = []
+            for ius, us in enumerate(unique_sites):
+                for isp in range(1,len(us)):
+                    for idx in range(self._natoms):
+                        if tags[idx] == ius:
+                            numbers[idx] = us[isp]
+                        else:
+                            numbers[idx] = sites[idx][0]
+
+                    substitutions.append(Atoms(positions=self.get_positions(),cell=self.get_cell(),pbc=self.get_pbc(),numbers=numbers))
+
+        if substitutions is None:
+            substitutions = []
+        self._subs = []
+        self._set_substitutions(substitutions)
 
 
     def copy(self):
@@ -46,7 +156,7 @@ class ParentLattice(Atoms):
         pl.constraints = copy.deepcopy(self.constraints)
         return pl
 
-    def set_atoms(self, atoms=None):
+    def _set_atoms(self, atoms=None):
         """Set the Atoms object representing the pristine parent lattice."""
         if atoms is not None:
             self._atoms = atoms
@@ -61,7 +171,7 @@ class ParentLattice(Atoms):
         """Get the total number of atoms."""
         return len(self._atoms)
 
-    def set_substitutions(self,substitutions=[]):
+    def _set_substitutions(self,substitutions=[]):
         if len(substitutions) != 0:
             for atoms in substitutions:
                 if self._natoms != len(atoms):
@@ -75,12 +185,13 @@ class ParentLattice(Atoms):
 
 
     def _set_tags(self):
-        """
-        Set the ``tags`` attribute of the Atoms object, and the attributes
-        ``idx_subs`` and ``sites`` which define the substitutional framework
-        of a ParentLattice.
+        """Set the ``tags`` attribute of the Atoms object, and the ParentLattice
+        attributes ``idx_subs`` and ``sites`` which define the substitutional
+        framework of a ParentLattice.
 
-        Example: Supose a ParentLattice object was initialized with four Atoms objects
+        Example:
+
+        Supose a ParentLattice object was initialized with four Atoms objects
         a1, a2, a3 and a4::
 
           parlat = ParentLattice(a1,[a2,a3,a4])

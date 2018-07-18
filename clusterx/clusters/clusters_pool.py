@@ -12,16 +12,34 @@ import json
 
 class ClustersPool():
     """
-    Clusters pool class
+    **Clusters pool class**
 
-    TODO:
-    compute multiplicites in gen_clusters
+    **Parameters:**
+
+    ``parent_lattice``: ParentLattice object
+        Parent lattice of the system.
+    ``npoints``: array of integers
+        The number of points of the clusters in the pool. Must be of the same
+        dimension as ``radii``.
+    ``radii``: array of float
+        The radii of the clusters in the pool, for each corresponding number
+        of points in ``npoints``.
+    ``super_cell``: SuperCell object
+        If present, ``radii`` is overriden and the pool will consist of all
+        possible simmetrically distinct clusters in the given super cell.
+        Periodic boundary conditions of the parent lattice are taken into
+        account (thus, e.g., if a supercell of side :math:`a` of a square
+        lattice is given, then in the directions of periodicity the clusters
+        will not be longer than :math:`a/2`).
+
+    .. todo:
+        compute multiplicites in gen_clusters
+
+    **Methods:**
     """
-    def __init__(self, parent_lattice, npoints=[], radii=[], name="_clusters_pool", filename=None, super_cell=None):
+    def __init__(self, parent_lattice, npoints=[], radii=[], super_cell=None):
         self._npoints = np.array(npoints)
         self._radii = np.array(radii)
-        self._name = name
-        self._filename = name+".json"
         self._plat = parent_lattice
         self._cpool = []
         if isinstance(super_cell, SuperCell) or isinstance(super_cell, ParentLattice):
@@ -232,7 +250,7 @@ class ClustersPool():
             orbit = self.get_cpool()
         if super_cell is None:
             super_cell = self.get_cpool_scell()
-            
+
         from ase.db.jsondb import JSONDatabase
         from subprocess import call
         orbit_nrs = []

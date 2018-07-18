@@ -9,10 +9,31 @@ import clusterx
 
 class SuperCell(ParentLattice):
     """
-    Builds a super cell
+    **Build a super cell**
 
     A SuperCell object acts as a blue-print for the creation of structures
     with arbitrary decorations.
+
+    **Parameters:**
+
+    parent_lattice: ParentLattice object
+        In **CELL**, a super cell is a periodic repetition of a parent lattice
+        object. This parameter defines such a parent lattice for the created
+        super cell.
+    p: 3x3 integer array
+        Transformation matrix :math:`P`. The cartesian coordinates of the
+        latttice vectors defining the created SuperCell object, are the rows of
+        the matrix :math:`S` defined by:
+
+        .. math::
+
+            S = PV
+
+        where the rows of :math:`V` are the cartesian coordinates of the lattice
+        vectors of the ParentLattice object. That is, the value of
+        `parent_lattice.get_cell()`.
+
+
     """
 
     def __init__(self, parent_lattice, p):
