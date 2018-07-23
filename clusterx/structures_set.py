@@ -12,6 +12,28 @@ from ase.db.core import Database
 import inspect
 
 class StructuresSet():
+    """
+    **StructureSet class**
+
+    Objects of this class contain a set of structures. This set can be used for
+    various purposes, for instance as a training data set for
+    cluster expansion, or as a validation set for cross validation.
+
+    **Parameters:**
+
+    ``parent_lattice``: ParentLattice object
+        All the structures on a structures set must derive from the same parent
+        lattice given here.
+
+    ``filename``: String
+        The structures in the data set are added to a json database
+        (specifically an ASE's JSONDatabase object), which can be serialized
+        to a json file with the path given here.
+
+    **Examples:**
+
+    **Methods:**
+    """
     def __init__(self,parent_lattice, filename="structures_set.json", serial=False, calculator = None):
 
         self._iter = 0
@@ -22,8 +44,8 @@ class StructuresSet():
         self._parent_lattice = parent_lattice
         self._props = None
         #self.write(parent_lattice, parent_lattice=True)
-        #self.json_db = JSONDatabase.__init__(filename=self._filename) 
-        self.json_db = JSONDatabase(filename=self._filename) 
+        #self.json_db = JSONDatabase.__init__(filename=self._filename)
+        self.json_db = JSONDatabase(filename=self._filename)
         if isinstance(calculator,Calculator):
             self.set_calculator(calculator)
 
@@ -41,10 +63,10 @@ class StructuresSet():
 
     def __len__(self):
         return self._nstructures
-        
+
     def get_nstr(self):
         return self._nstructures
-    
+
     def write(self, structure, key_value_pairs={}, data={}, **kwargs):
         self.json_db.write(structure,key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
 
@@ -53,17 +75,17 @@ class StructuresSet():
         self._nstructures += 1
         if write_to_db:
             self.json_db.write(structure,key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
-        
+
     def get_structure(self,sid):
         return self._structures[sid]
-        
+
     def get_structure_atoms(self, sid):
         """
         Return Atoms object for db row sid.
         """
         return self.get_atoms(id=sid)
 
-        
+
     def get_json_string(self, super_cell):
         fn = self.filename
 
@@ -73,13 +95,13 @@ class StructuresSet():
         import sys
         old_stdout = sys.stdout
         sys.stdout = mystdout = StringIO()
-        
+
         self.write(super_cell)
-        
+
         #restore filename and stdout
         sys.stdout = old_stdout
         self.filename = fn
-        
+
         return  mystdout.getvalue()
         """
         #should try something like this, from ase jsondb.py
@@ -88,7 +110,7 @@ class StructuresSet():
 
         """
 
-    
+
     def set_calculator(self, calc):
         """
         for row in self.select():
@@ -99,7 +121,7 @@ class StructuresSet():
         self.update(ids, cell_calculator = calculator_name)
         """
         #self.metadata = {"calculator" : calc.name.lower(), "calculator_parameters" : calc.todict()}
-        self._calculator = calc 
+        self._calculator = calc
         self.set_metadata({"calculator" : calc.name.lower(),
                            "calculator_parameters" : calc.todict()})
 
@@ -115,13 +137,13 @@ class StructuresSet():
 
     def get_property(self):
         return self._props
-        
+
     def calculate_property(self, prop="energy"):
         """
         Return calculated property for all structures in the structures set.
 
-        Fix needed: protected keys in ase db class impede to 
-        update the value of energy. Patching this now by using 
+        Fix needed: protected keys in ase db class impede to
+        update the value of energy. Patching this now by using
         a different key, e.g. energy2 instead of energy.
         """
         calc = self.get_calculator()
@@ -130,9 +152,9 @@ class StructuresSet():
             ats = st.get_atoms()
             ats.set_calculator(calc)
             props[i] = ats.get_potential_energy()
-        self._props = props 
+        self._props = props
         return props
-    
+
         """
         for row in self.select():
             a = self.get_atoms(selection = row.id)
@@ -141,5 +163,5 @@ class StructuresSet():
                 e = a.get_potential_energy()
                 #self.update(row.id,energy2=e)
                 self.update(row.id,energy2=e)
-            
+
         """

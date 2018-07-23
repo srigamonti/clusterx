@@ -6,9 +6,9 @@ import numpy as np
 
 def test_clusters_generation():
     """Test generation of clusters pools.
-    
+
     After successful execution of the test, the generated clusters may be visualized with the command::
-        
+
         ase gui test_clusters_generation_#.json
 
     """
@@ -33,7 +33,7 @@ def test_clusters_generation():
     #cp = ClustersPool(pl, npoints=[1,2,3,4], radii=[0,3.1,3.1,3.1])
     cp = ClustersPool(pl, npoints=[1,2,3], radii=[0,3.1,1.5])
     atom_idxs, atom_nrs = cp.get_cpool_arrays()
-    cp.write_orbit_db(cp.get_cpool(),cp.get_cpool_scell(),"test_clusters_generation_0.json")
+    cp.write_clusters_db(cp.get_cpool(),cp.get_cpool_scell(),"test_clusters_generation_0.json")
 
 
     print ("\n\n========Test writes========")
@@ -60,7 +60,7 @@ def test_clusters_generation():
         if not np.allclose(ai,rai):
             isok = False
     assert isok
-    
+
     isok = True
     for an,ran in zip(atom_nrs,ratom_nrs):
         if not np.allclose(an,ran):

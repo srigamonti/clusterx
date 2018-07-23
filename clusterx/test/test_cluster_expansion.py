@@ -13,9 +13,10 @@ from clusterx.calculators.emt import EMT2
 
 def test_cluster_expansion():
     """Test generation of clusters pools.
-    
-    After successful execution of the test, the generated structures and clusters pool may be visualized with the command::
-        
+
+    After successful execution of the test, the generated structures and
+    clusters pool may be visualized with the command::
+
         ase gui test_cluster_expansion_[...].json
 
     """
@@ -36,7 +37,7 @@ def test_cluster_expansion():
 
     plat = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
     cpool = ClustersPool(plat, npoints=[1,2,3,4], radii=[0,2.3,1.42,1.42])
-    cpool.write_orbit_db(cpool.get_cpool(),cpool.get_cpool_scell(),"cpool.json")
+    cpool.write_clusters_db(cpool.get_cpool(),cpool.get_cpool_scell(),"cpool.json")
     corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
 
     scell = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
@@ -70,8 +71,8 @@ def test_cluster_expansion():
     comat = corrcal.get_correlation_matrix(strset)
     strset.set_calculator(EMT2())
     energies = strset.calculate_property()
-    
-    fitter_model = Fitter(method = "skl_LinearRegression")
+
+    #fitter_model = Fitter(method = "skl_LinearRegression")
 
     clsets = cpool.get_clusters_sets(grouping_strategy = "size")
 
@@ -79,18 +80,20 @@ def test_cluster_expansion():
     from sklearn.model_selection import cross_val_score
     from sklearn import linear_model
     from sklearn.metrics import make_scorer, r2_score, mean_squared_error
-    
+
     fitter_cv = linear_model.LinearRegression(fit_intercept=True, normalize=False)
-    
+
     cvs = []
     rows = np.arange(len(energies))
     for clset in clsets:
         _comat = comat[np.ix_(rows,clset)]
-        _cvs = cross_val_score(fitter_cv, _comat, energies, cv=LeaveOneOut(), scoring = make_scorer(mean_squared_error))
+        #_cvs = cross_val_score(fitter_cv, _comat, energies, cv=LeaveOneOut(), scoring = make_scorer(mean_squared_error))
+        _cvs = cross_val_score(fitter_cv, _comat, energies, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
         print("clusters set: ",clset)
-        print('m_cvs',np.sqrt(np.mean(_cvs)))
+        print('_cvs',_cvs)
+        print('m_cvs',np.sqrt(-np.mean(_cvs)))
         print("")
-        
+
     fitter_cv.fit(comat,energies)
     print("target",energies)
     print("predictions",fitter_cv.predict(comat))
@@ -102,13 +105,13 @@ def test_cluster_expansion():
             _energy_train = energies[train_index]
 
             #fitter_cv.fit(_comat_train,_energy_train)
-    """   
+    """
 
     # Select the clusters by cross-validation
 
     #clsets = cpool.get_sets(strategy = "size")
-    
-    
+
+
     """
 
     mctr = ModelConstructor(
@@ -127,28 +130,28 @@ def test_cluster_expansion():
     print("Js",reg.coef_)
 
     reg = linear_model.Ridge(alpha = .001)
-    reg.fit(comat, energies) 
+    reg.fit(comat, energies)
     print("Js l2: ",reg.coef_)
     print("intercept: ",reg.intercept_ )
 
 
     reg = linear_model.RidgeCV(alphas=[0.001, 0.005, 0.1])
-    reg.fit(comat, energies)       
+    reg.fit(comat, energies)
     print("Js l2: ",reg.coef_)
     print("intercept: ",reg.intercept_ )
     print("alpha:  ", reg.alpha_)
-    
+
     # Generate output
     print ("\n\n========Test writes========")
     atom_idxs, atom_nrs = cpool.get_cpool_arrays()
     scell = cpool.get_cpool_scell()
-    cpool.write_orbit_db(cpool.get_cpool(),scell,"test_cluster_expansion_cpool.json")
+    cpool.write_clusters_db(cpool.get_cpool(),scell,"test_cluster_expansion_cpool.json")
     print("Correlation matrix:\n")
     print(np.array2string(comat,separator=",",max_line_width=1000))
     print ("===========================\n")
 
     print ("========Asserts========")
-    
+
     #assert np.allclose([-0.33333333,0.,-0.,0.33333333,0.57735027,-0.33333333,-0.25,-0.,-0.25],comat,atol=1e-5)
     #print(comat)
     """

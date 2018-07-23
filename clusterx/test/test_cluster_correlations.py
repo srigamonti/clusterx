@@ -9,9 +9,9 @@ import numpy as np
 
 def test_cluster_correlations():
     """Test calculation of cluster correlations.
-    
+
     After successful execution of the test, the generated structure and clusters pool may be visualized with the command::
-        
+
         ase gui test_clusters_correlations_structure_#.json
         ase gui test_clusters_correlations_cpool.json
 
@@ -49,7 +49,7 @@ def test_cluster_correlations():
     print (test_cluster_correlations.__doc__)
     #atom_idxs, atom_nrs = cpool.get_cpool_arrays()
     scell = cpool.get_cpool_scell()
-    cpool.write_orbit_db(cpool.get_cpool(),scell,"test_cluster_correlations_cpool.json")
+    cpool.write_clusters_db(cpool.get_cpool(),scell,"test_cluster_correlations_cpool.json")
     structure1.serialize(fmt="json",fname="test_cluster_correlations_structure_1.json")
     structure2.serialize(fmt="json",fname="test_cluster_correlations_structure_2.json")
     #print("Correlations 1: ",corrs1)
@@ -57,7 +57,7 @@ def test_cluster_correlations():
     print ("===========================\n")
 
     print ("========Asserts========")
-    
+
     assert np.allclose([-0.33333333,0.,-0.,0.33333333,0.57735027,-0.33333333,-0.25,-0.,-0.25],corrs1,atol=1e-5)
     assert np.allclose([-0.33333333,0.,-0.,0.33333333,0.57735027,-0.33333333,-0.25,-0.,-0.25],corrs2,atol=1e-5)
     #print(corrs)

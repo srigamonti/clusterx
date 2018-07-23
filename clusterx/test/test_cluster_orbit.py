@@ -11,7 +11,7 @@ def test_cluster_orbit():
     """Test creation of cluster orbit in supercell using spglib
 
     After running the test, the orbit can be visualized with the command::
-        
+
         ase gui test_cluster_orbit_#.json
     """
     test_cases = [0,1,2,3,4,5]
@@ -36,9 +36,9 @@ def test_cluster_orbit():
 
             orbit = cl.get_cluster_orbit(scell, [0,2], [11,11])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
-            cl.write_orbit_db(orbit, scell, db_name)
+            cl.write_clusters_db(orbit, scell, db_name)
             orbits[test_case] = orbit
-            
+
         if test_case == 1:
             # FCC lattice
             pri = bulk('Cu', 'fcc', a=3.6)
@@ -51,9 +51,9 @@ def test_cluster_orbit():
 
             orbit = cl.get_cluster_orbit(scell, [0,2],[13,13])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
-            cl.write_orbit_db(orbit, scell, db_name)
+            cl.write_clusters_db(orbit, scell, db_name)
             orbits[test_case] = orbit
-            
+
         if test_case == 2:
             # Clathrate 2x1x1 supercell. This contains spectator atoms.
             a = 10.515
@@ -75,9 +75,9 @@ def test_cluster_orbit():
             cl = ClustersPool(plat)
             orbit = cl.get_cluster_orbit(scell, [19,17],[13,13]) # 24k-24k pair cluster
             db_name = "test_cluster_orbit_%s.json"%(test_case)
-            cl.write_orbit_db(orbit, scell, db_name)
+            cl.write_clusters_db(orbit, scell, db_name)
             orbits[test_case] = orbit
-            
+
         if test_case == 3:
             # Al(111) surface with Na substitution on the first layer. Test a 3-point cluster.
             from ase.build import fcc111, add_adsorbate
@@ -86,44 +86,44 @@ def test_cluster_orbit():
             for atom in sub:
                 if atom.tag == 1:
                     atom.number = 11
-        
+
             plat = ParentLattice(atoms=pri,substitutions=[sub])
             scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)])
 
             cl = ClustersPool(plat)
             orbit = cl.get_cluster_orbit(scell, [2,14,5],[11,11,11])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
-            cl.write_orbit_db(orbit, scell, db_name)
+            cl.write_clusters_db(orbit, scell, db_name)
             orbits[test_case] = orbit
-            
+
         if test_case == 4:
             # Al(111) surface with Na substitution on the first layer and on-top Oxygen adsorption.
             from ase.build import fcc111, add_adsorbate
             from ase.visualize import view
-            
+
             pri = fcc111('Al', size=(1,1,3))
             add_adsorbate(pri,'X',1.5,'ontop')
             pri.center(vacuum=10.0, axis=2)
-            
+
             sub1 = pri.copy() # Na substitution on the first Al layer
             for atom in sub1:
                 if atom.tag == 1:
                     atom.number = 11
-                    
+
             sub2 = pri.copy() # O on-top adsorbates
             for atom in sub2:
                 if atom.tag == 0:
                     atom.number = 8
-            
+
             plat = ParentLattice(atoms=pri,substitutions=[sub1,sub2])
             scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)])
 
             cl = ClustersPool(plat)
             orbit = cl.get_cluster_orbit(scell, [3,18],[8,11])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
-            cl.write_orbit_db(orbit, scell, db_name)
+            cl.write_clusters_db(orbit, scell, db_name)
             orbits[test_case] = orbit
-            
+
         if test_case == 5:
             # Perfect cubic lattice. The tested cluster is such that many interactions
             # with the periodic images of the crystal are present.
@@ -144,10 +144,10 @@ def test_cluster_orbit():
             atom_species = [sites[0][1],sites[2][2]]
             orbit = cl.get_cluster_orbit(scell, atom_idxs, cluster_species=atom_species)
             db_name = "test_cluster_orbit_%s.json"%(test_case)
-            cl.write_orbit_db(orbit, scell, db_name)
+            cl.write_clusters_db(orbit, scell, db_name)
             orbits[test_case] = orbit
-            
-            
+
+
     print ("\n\n========Test writes========")
     print (test_cluster_orbit.__doc__)
     #print(np.array2string(orbit1,separator=","))
@@ -159,7 +159,7 @@ def test_cluster_orbit():
         print("test orbit: ",test_case)
         assert check_result(test_case, orbits[test_case])
 
-    
+
 def check_result(testnr, orbit):
     isok = True
     orbit_nrs = []
@@ -196,7 +196,7 @@ def check_result(testnr, orbit):
             [8,8],
             [9,9]])
 
-    
+
     if testnr == 1:
         rorbit = np.array([
             [0,2],
@@ -249,7 +249,7 @@ def check_result(testnr, orbit):
              [54,56],
              [ 0, 2],
              [ 3, 1],
-             [57,55]] 
+             [57,55]]
         )
 
     if testnr == 3:
@@ -270,7 +270,7 @@ def check_result(testnr, orbit):
              [41,  5, 44],
              [44,  8, 47],
              [47, 11, 38]])
-    
+
     if testnr == 4:
         rorbit = np.array(
             [[ 3, 18],
@@ -372,14 +372,17 @@ def check_result(testnr, orbit):
 
     if testnr == 5:
         return True
-    
+
     if len(orbit) != len(rorbit):
         return False
-    
+
     for cl,rcl in zip(orbit_idxs,rorbit):
         if (cl != rcl).any():
             isok = False
             break
-        
+
     return isok
-    
+
+
+if __name__ == "__main__":
+    test_cluster_orbit()
