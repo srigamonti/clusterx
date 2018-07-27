@@ -125,18 +125,19 @@ class ParentLattice(Atoms):
         self._natoms = len(self._atoms)
 
         if sites is not None and substitutions is None:
+            #try:
+            #    unique_sites = np.unique(sites,axis=0)
+            #except AttributeError:
             try:
-                unique_sites = np.unique(sites,axis=0)
+                unique_sites = np.unique(sites)
             except AttributeError:
-                try:
-                    unique_sites = np.unique(sites)
-                except AttributeError:
-                    raise AttributeError("sites array has problems, look at the documentation.")
+                raise AttributeError("sites array has problems, look at the documentation.")
 
             tags = np.zeros(self._natoms).astype(int)
             for ius, us in enumerate(unique_sites):
                 for idx in range(self._natoms):
-                    if (sites[idx] == us).all():
+                    #if (sites[idx] == us).all():
+                    if bool(sites[idx] == us):
                         tags[idx] = int(ius)
 
             numbers = np.zeros(self._natoms).astype(int)
