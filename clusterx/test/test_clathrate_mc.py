@@ -67,14 +67,9 @@ def test_clathrate_mc():
     multE = [1,24,16,6,12,8,48,24,24,24]
     corcE = CorrelationsCalculator("binary-linear",plat,cpoolE)
     scellE = SuperCell(plat,[(2,0,0),(0,2,0),(0,0,2)])
-<<<<<<< HEAD
-    
-    nmc = 100
-    
-=======
 
     nmc = 10
->>>>>>> master
+
     for i in range(nmc):
         struc = scellE.gen_random({0:[16]})
         corrs = corcE.get_cluster_correlations(struc,mc=True)

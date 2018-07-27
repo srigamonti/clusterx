@@ -88,14 +88,14 @@ class ClustersPool():
                 subpool.add_cluster(cl)
         return subpool
 
-    def get_clusters_sets(self, grouping_strategy = "size", nclmax = 0):
+    def get_clusters_sets(self, grouping_strategy = "size", nclmax = 0, set0=[0,0]):
         """Return cluster sets for cluster selection based on CV
 
         Parameters:
 
         grouping_strategy: string
             Can take the values "size" and "combinations". If "size", a set in the clusters set
-            is determined by two parametrs, the maximum number of points and the maximum radius.
+            is determined by two parameters, the maximum number of points and the maximum radius.
             Thus, a set is formed by all clusters in the pool whose radius and npoints are smaller
             or equal than the respective maxima for the set.
             When "combinations" is used, all possible sets up to nclmax number of clusters
@@ -103,6 +103,11 @@ class ClustersPool():
 
         nclmax: integer
             The maximum clusters-set size when strategy="combinations" is used.
+
+        set0: [points, radius]
+            The clusters-set, which is defined by the two parameters - maximum number of points (points) 
+            and the maximum radius, [points, radius] -, is included in all combinations, 
+            when strategy="size+combinations" is used.
 
         """
         if grouping_strategy == "size":
@@ -135,7 +140,52 @@ class ClustersPool():
                         clsets.append(_clset)
                         nsets += 1
 
-            return clsets
+        if grouping_strategy == "combinations":
+            import itertools
+            clsets = []
+
+            cl_list=[x for x in range(len(self._cpool))]
+
+            if nclmax<len(cl_list):
+                ncl=nclmax
+            else:
+                ncl=len(cl_list)
+            
+            for icl in range(1,ncl+1):
+                for x in itertools.combinations(cl_list,icl):
+                    clsets.append([el for el in x])
+            
+        if grouping_strategy == "size+combinations":
+            import itertools
+
+            clsets = []
+            nsets = 0
+            np=int(set0[0])
+            r=float(set0[1])
+
+            _clset0 = []
+            _clset1 = []
+            for icl, cl in enumerate(self._cpool):
+                if cl.npoints <= np and cl.radius <= r + 1e-4:
+                    _clset0.append(icl)
+                else:
+                    _clset1.append(icl)
+            
+            if nclmax<len(_clset1):
+                ncl=nclmax
+            else:
+                ncl=len(_clset1)
+
+            print(_clset0)
+
+            print(_clset1)
+            for icl1 in range(0,ncl+1):
+                for x in itertools.combinations(_clset1,icl1):
+                    clset=_clset0+[el for el in x]
+                    clset.sort()
+                    clsets.append(clset)
+                
+        return clsets
 
 
     def gen_clusters(self):

@@ -29,15 +29,15 @@ class Structure(SuperCell):
             self.sigmas = np.zeros(len(decoration),dtype=np.int8)
             self.ems = np.zeros(len(decoration),dtype=np.int8)
             for idx, species in enumerate(decoration):
-                self.sigmas[idx] = np.argwhere(sites[idx] == species)
-                self.ems[idx] = len(sites[idx])
+                self.sigmas[idx] = np.argwhere(self.sites[idx] == species)
+                self.ems[idx] = len(self.sites[idx])
         else:
             self.decor = np.zeros(len(sigmas),dtype=np.int8)
             self.ems = np.zeros(len(sigmas),dtype=np.int8)
             self.sigmas = sigmas
             for idx, sigma in enumerate(sigmas):
-                self.decor[idx] = sites[idx][sigma]
-                self.ems[idx] = len(sites[idx])
+                self.decor[idx] = self.sites[idx][sigma]
+                self.ems[idx] = len(self.sites[idx])
 
         super(Structure,self).__init__(super_cell.get_parent_lattice(),super_cell.get_transformation())
         self.atoms = Atoms(numbers = self.decor, positions = super_cell.get_positions(), tags = super_cell.get_tags(), cell = super_cell.get_cell(),pbc = super_cell.get_pbc())
@@ -59,27 +59,23 @@ class Structure(SuperCell):
 
         self._fname = fname
 
-    def swap_random(self, site_type):
+    def swap_random_binary(self, site_type):
         tags=self.get_tags()
         idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == 0 and tags[index] == site_type]
         idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == 1 and tags[index] == site_type]
         ridx1 = random.choice(idx1)
         ridx2 = random.choice(idx2)
-        self.sigmas[ridx1] = 1
-        self.sigmas[ridx2] = 0
-        self.decor[ridx1] = self.sites[ridx1][1]
-        self.decor[ridx2] = self.sites[ridx2][0]
+
+        self.swap(site_type,ridx1,ridx2)
 
         return ridx1,ridx2
 
-    def reswap(self, site_type, ridx1, ridx2):
+    def swap(self, site_type, ridx1, ridx2):
         tags=self.get_tags()
-        #idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == 0 and tags[index] == site_type]
-        #idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == 1 and tags[index] == site_type]
-        #ridx1 = random.choice(idx1)
-        #ridx2 = random.choice(idx2)
-        self.sigmas[ridx2] = 1
-        self.sigmas[ridx1] = 0
-        self.decor[ridx2] = self.sites[ridx2][1]
-        self.decor[ridx1] = self.sites[ridx1][0]
-    
+        sigma1=self.sigmas[ridx1]
+        sigma2=self.sigmas[ridx2]
+         
+        self.sigmas[ridx1] = sigma2
+        self.sigmas[ridx2] = sigma1
+        self.decor[ridx1] = self.sites[ridx1][sigma2]
+        self.decor[ridx2] = self.sites[ridx2][sigma1]
