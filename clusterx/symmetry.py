@@ -1,20 +1,38 @@
 import numpy as np
 import spglib
-    
+
 def get_spacegroup(parent_lattice):
     """
     Get space symmetry of a ParentLattice object. Sites allowing different substitutional species are treated as symetrically distinct.
     """
 
     atoms = parent_lattice.get_pristine().copy()
+    
+    # Break possible symmetries along non-periodic directions to get correct
+    # symmetries with spglib.
+    new_cell = []
+    cell = atoms.get_cell()
+    for i, bc in enumerate(atoms.get_pbc()):
+        if not bc:
+            new_cell.append(cell[i]*np.pi)
+        else:
+            new_cell.append(cell[i])
 
+    atoms.set_cell(new_cell,scale_atoms=False)
     # Create a fictitious atoms object with species set to site type.
     # This way, two sites which are symetrically equivalent in the pristine lattice
     # become inequivalent if those sites can be occupied by different species.
     atoms.set_atomic_numbers(parent_lattice.get_tags() + 1)
-    
+
     sg = spglib.get_spacegroup(atoms)
     sym = spglib.get_symmetry(atoms)
+
+    # After finding symmetries, undo the previous re-scaling done to break
+    # symmetries
+    for it in range(len(sym['translations'])):
+        for i, bc in enumerate(atoms.get_pbc()):
+            if not bc:
+                sym['translations'][it][i] = sym['translations'][it][i]*np.pi
 
     return sg, sym
 
@@ -38,7 +56,7 @@ def wrap_scaled_positions(s, pbc):
     for i, pbc in enumerate(pbc):
         if pbc:
             s[:, i] %= 1.0
-            
+
     return s
 
 
@@ -50,8 +68,21 @@ def get_internal_translations(parent_lattice, super_cell):
     from ase import Atoms
     from clusterx.super_cell import SuperCell
     from clusterx.parent_lattice import ParentLattice
-    
+
     atoms0 = Atoms(symbols=['H'], positions=[(0,0,0)], cell=parent_lattice.get_cell(), pbc=parent_lattice.get_pbc())
     atoms1 = ParentLattice(atoms=atoms0,pbc=parent_lattice.get_pbc())
     atoms2 = SuperCell(atoms1, super_cell.get_transformation())
-    return atoms2.get_scaled_positions(wrap=True)
+
+    tra0 = atoms2.get_scaled_positions(wrap=True)
+    tra1 = []
+    for tr in tra0:
+        include_tr = True
+        for id, bd in enumerate(parent_lattice.get_pbc()):
+            if tr[id] != 0 and not bd: # exclude translation vectors along non-periodic directions
+                include_tr = False
+                break
+
+        if include_tr:
+            tra1.append(tr)
+
+    return np.array(tra1)

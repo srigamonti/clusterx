@@ -20,18 +20,21 @@ class ParentLattice(Atoms):
 
     **Parameters:**
 
-    atoms: ASE's Atoms object
-        atoms object corresponding to the pristine lattice.
-    substitutions: list of ASE's Atoms objects.
-        Every Atoms object in the list, corresponds to a possible full
+    ``atoms``: ASE's ``Atoms`` object
+        ``atoms`` object corresponding to the pristine lattice.
+    ``substitutions``: list of ASE's ``Atoms`` objects.
+        Every ``Atoms`` object in the list, corresponds to a possible full
         substitution of only one sublattice. If set, overrides ``sites`` (see
         below).
-    sites: list of integer arrays
+    ``sites``: list of integer arrays
         This is an array of length equal to the number of atoms in the parent
         lattice. Every element in the array is an array with species numbers,
         representing the species which can occupy the crystal
         sites (see examples below). This is overriden by ``substitutions``
         if set.
+    ``pbc``: three bool
+        Periodic boundary conditions flags. Examples:
+        (1, 1, 0), (True, False, False). Default value: (1,1,1)
 
     **Examples:**
 
@@ -103,6 +106,8 @@ class ParentLattice(Atoms):
         was ever called, it sets a self.distances attribute which is used for get_distance
         and get_distances, saving computation time. Care should be paid in cases where
         positions are updated either by relaxation or deformation of the lattice.
+
+    **Methods:**
     """
 
     def __init__(self, atoms, substitutions=None, sites=None, pbc=(1,1,1)):
@@ -111,15 +116,27 @@ class ParentLattice(Atoms):
         self._fname = None
         self._fmt = None
 
-        self._set_atoms(atoms)
+        if atoms is not None:
+            self._atoms = atoms.copy()
+            self._atoms.set_pbc(pbc)
+        else:
+            self._atoms = None
+
         self._natoms = len(self._atoms)
 
         if sites is not None and substitutions is None:
-            unique_sites = np.unique(sites)
+            try:
+                unique_sites = np.unique(sites,axis=0)
+            except AttributeError:
+                try:
+                    unique_sites = np.unique(sites)
+                except AttributeError:
+                    raise AttributeError("sites array has problems, look at the documentation.")
+
             tags = np.zeros(self._natoms).astype(int)
             for ius, us in enumerate(unique_sites):
                 for idx in range(self._natoms):
-                    if sites[idx] == us:
+                    if (sites[idx] == us).all():
                         tags[idx] = int(ius)
 
             numbers = np.zeros(self._natoms).astype(int)
@@ -148,20 +165,13 @@ class ParentLattice(Atoms):
 
     def copy(self):
         """Return a copy."""
-        pl = self.__class__(atoms=self._atoms, substitutions=self._subs)
+        pl = self.__class__(atoms=self._atoms, substitutions=self._subs, pbc=self.get_pbc())
 
         pl.arrays = {}
         for name, a in self.arrays.items():
             pl.arrays[name] = a.copy()
         pl.constraints = copy.deepcopy(self.constraints)
         return pl
-
-    def _set_atoms(self, atoms=None):
-        """Set the Atoms object representing the pristine parent lattice."""
-        if atoms is not None:
-            self._atoms = atoms
-        else:
-            self._atoms = None
 
     def get_atoms(self):
         """Get the Atoms object representing the pristine parent lattice."""
@@ -295,40 +305,37 @@ class ParentLattice(Atoms):
         """
         return self._fmt
 
-    def serialize(self, fmt="db", tmp=False, fname=None):
+    def serialize(self, fmt="json", fname="parlat.json"):
+        """
+        Serialize a ParentLattice (or derived) object
+
+        Writes a file on the current working directory containing the structural
+        information of the parent lattice. For formats other than ``ATAT``, it
+        uses ``io`` module of ASE
+        (`ASE documentation <https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write>`_).
+
+        **Parameters:**
+
+        ``fmt``: string (default ``json``)
+            Output file format, can be "ATAT", "atat" or any of the formats listed
+            in `ASE documentation <https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write>`_
+
+        ``fname``: string (default ``parlat.json``)
+            Output file name.
+
+        """
         import os
         from ase.data import chemical_symbols as cs
 
         self._fmt=fmt
 
-        # get basic info
         cell = self._atoms.get_cell()
         positions = self._atoms.get_scaled_positions()
         sites = self.get_sites()
-        #symbols = self._atoms.get_chemical_symbols()
-
-        # set file name
-        prefix = "parlat"
-        if fmt=="traj":
-            suffix=".traj"
-        elif fmt=="xyz":
-            suffix=".xyz"
-        elif fmt=="json":
-            suffix=".json"
-        elif fmt=="db":
-            suffix=".db"
-        elif fmt=="cif":
-            suffix=".cif"
-        elif fmt=="ATAT" or fmt=="atat":
-            suffix=".in"
 
 
-        # serialize
         if fmt == "ATAT" or fmt == "atat":
-            if tmp is True:
-                f = tempfile.NamedTemporaryFile(mode='w', bufsize=-1, suffix=suffix, prefix=prefix, dir=".")
-            else:
-                f = open(prefix+suffix,'w')
+            f = open(fname,'w')
 
             for cellv in cell:
                 f.write(u"%2.12f\t%2.12f\t%2.12f\n"%(cellv[0],cellv[1],cellv[2]))
@@ -337,9 +344,7 @@ class ParentLattice(Atoms):
             f.write(u"0.000000000000\t1.000000000000\t0.000000000000\n")
             f.write(u"0.000000000000\t0.000000000000\t1.000000000000\n")
 
-            i=0
-            #for pos, s in zip(positions, symbols):
-            for pos in positions:
+            for i,pos in enumerate(positions):
                 stri = u"%2.12f\t%2.12f\t%2.12f\t"%(pos[0],pos[1],pos[2])
                 if len(self.sites[i])>1:
                     for z in self.sites[i][:-1]:
@@ -347,23 +352,15 @@ class ParentLattice(Atoms):
                 stri = stri + "%s\n"%cs[self.sites[i][-1]]
 
                 f.write(stri)
-                i = i+1
 
-            if tmp is True:
-                return f
-            else:
-                self._fname = f.name
-        elif fmt in  ["xyz", "cif", "traj","json","db"]:
+        else:
             from ase.io import write
-
-            if fname is None:
-                fname = prefix+suffix
 
             images = []
             images.append(self.get_pristine())
             for sub in self.get_substitutions():
                 images.append(sub)
 
-            write(fname,images=images,format=fmt)
+            write(fname,images,format=fmt)
 
-            self._fname = fname
+        self._fname = fname

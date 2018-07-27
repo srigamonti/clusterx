@@ -6,9 +6,9 @@ from clusterx.utils import dict_compare
 
 def test_parent_lattice_creation():
     """Test creation of a parent lattice for a fictitious quaternary zincblende crystal and for a Ternary clathrate.
-    
+
     After successful execution of the test, the generated parent lattices may be visualized with the command::
-        
+
         ase gui test_parent_lattice_creation#.json
     """
     # Quaternary zincblende crystal
@@ -68,7 +68,7 @@ def check_result(parent_lattice, case):
             1,
             0
         ]
-        
+
     if case == 1:
         positions = np.array(
             [[ 0.   ,  0.304,  0.116],
@@ -182,7 +182,7 @@ def check_result(parent_lattice, case):
             52: np.array([56]),
             53: np.array([56])
         }
-        
+
         idx_subs = {
             0: np.array([14, 13,  0]),
             1: np.array([56, 38]),
@@ -245,13 +245,13 @@ def check_result(parent_lattice, case):
             2,
             2]
 
-    
+
     if not np.allclose(parent_lattice.get_scaled_positions(), positions, atol=atol):
         return False
 
     if not dict_compare(sites, parent_lattice.get_sites()):
         return False
-    
+
     if not dict_compare(idx_subs, parent_lattice.get_idx_subs()):
         return False
 
@@ -262,7 +262,5 @@ def check_result(parent_lattice, case):
         for v1,v2 in zip(tags,pltags):
             if v1 != v2:
                 return False
-    
+
     return isok
-
-

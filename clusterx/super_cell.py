@@ -23,17 +23,18 @@ class SuperCell(ParentLattice):
     p: 3x3 integer array
         Transformation matrix :math:`P`. The cartesian coordinates of the
         latttice vectors defining the created SuperCell object, are the rows of
-        the matrix :math:`S` defined by:
-
-        .. math::
-
-            S = PV
-
-        where the rows of :math:`V` are the cartesian coordinates of the lattice
+        the matrix :math:`S` defined by :math:`S = PV` where the rows of
+        :math:`V` are the cartesian coordinates of the lattice
         vectors of the ParentLattice object. That is, the value of
-        `parent_lattice.get_cell()`.
+        `parent_lattice.get_cell()`. The given matrix ``p`` must be compatible
+        with the periodic boundary conditions of the parent lattice, i.e. the
+        resulting super cell must not contain translations along the
+        non-periodic directions.
 
-
+    .. todo::
+        Take into account pbc when building the super cell. Either ignore
+        translation in ``p`` along non-periodic directions or warn in some way
+        if ``p`` is not compatible with pbc.
     """
 
     def __init__(self, parent_lattice, p):
@@ -71,7 +72,6 @@ class SuperCell(ParentLattice):
         Plot the pristine supercell object.
         """
         view(self)
-
 
     def gen_random(self,nsubs):
         """

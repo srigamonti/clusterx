@@ -67,7 +67,7 @@ def sub_folders(root):
     #return os.walk(root).next()[1] #python 2.7
     return next(os.walk(root))[1]
 
-def is_integer(s):
+def _is_integrable(s):
     """Determine whether argument is integer or can be converted to integer
 
     Parameters:
@@ -116,14 +116,14 @@ def list_integer_named_folders(root=".",prepend='',containing_files=[],not_conta
 
     Parameters:
 
-    root: string
+    ``root``: string
         path of the root folder in which to scan for integer named folders.
-    prepend: string
+    ``prepend``: string
         scan for folders whose name starts with the string ``prepend`` and
         ends with an integer number.
-    containing_files: array of strings
+    ``containing_files``: array of strings
         a list of file names that should be contained in the returned folders.
-    not_containing_files: array of strings
+    ``not_containing_files``: array of strings
         a list of file names that should not be contained in the returned folders.
 
     Returns:
@@ -153,10 +153,10 @@ def list_integer_named_folders(root=".",prepend='',containing_files=[],not_conta
         if prepend != '':
             if folder.startswith(prepend):
                 d = folder[len(prepend):]
-                if is_integer(d):
+                if _is_integrable(d):
                     flist.append(int(d))
         else:
-            if is_integer(folder):
+            if _is_integrable(folder):
                 flist.append(int(folder))
 
     flist.sort()
@@ -325,3 +325,220 @@ def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_latti
 
         struc = Structure(scell,decoration=new_nrs)
         return struc
+
+def get_unique_supercells(n,parent_lattice):
+    """Find full list of unique supercells of index n.
+
+    Following Ref.[1], the complete set of symmetrically inequivalent HNFs of
+    index ``n``, for a given ``parent_lattice``, is determined and returned.
+
+    [1] Gus L. W. Hart and Rodney W. Forcade *Phys. Rev. B*
+    **80**, 014120 (2009).
+
+    **Parameters:**
+
+    ``n``: integer
+        index of the supercells, i.e., the number of atoms in the supercells is
+        ``n*parent_lattice.get_natoms()``.
+    ``parent_lattice``: ParentLattice object
+        The parent lattice
+
+    **Returns:** two arrays containing 3x3 matrices. The matrices ``S`` of the
+    first array contain the cartesian coordinates of the supercell vectors (row
+    wise), while the matrices ``H`` in the second array are the (integer)
+    transormation matrices with respect to the parent lattice ``U``. That is,
+    :math:`S=HU`
+
+    **Example:**
+    In the following example, all the supercells of index 4 for the FCC lattice
+    are found. The supercells are stored in the file
+    ``unique_supercells-fcc.json`` for visualization with the command
+    ``$>ase gui unique_supercells-fcc.json`` ::
+
+        from clusterx import utils
+        from clusterx.parent_lattice import ParentLattice
+        from clusterx.structures_set import StructuresSet
+        from clusterx.super_cell import SuperCell
+        from clusterx.structure import Structure
+        from ase.data import atomic_numbers as an
+        from ase import Atoms
+        import numpy as np
+
+        a=3
+        cell = np.array([[0.5,0.5,0.0],[0.5,0.0,0.5],[0.0,0.5,0.5]])
+        positions = np.array([[0,0,0]])
+        sites = [[an["Cu"],an["Au"]]]
+        pris_fcc = Atoms(cell=cell*a,positions=positions*a)
+
+        pl = ParentLattice(pris_fcc,sites=sites)
+
+        unique_scs, unique_trafos = utils.get_unique_supercells(4,pl)
+
+        sset = StructuresSet(pl,filename="unique_supercells-fcc.json")
+        for t in unique_trafos:
+            scell = SuperCell(pl,t)
+            sset.add_structure(Structure(scell,scell.get_atomic_numbers()),write_to_db = True)
+
+    The generated structures are the same as those found in Fig. 2 and Table IV
+    of Phys. Rev. B 77, 224115 2008.
+
+    The next example, shows a case of reduced dimensionality, that of a 2D
+    square lattice::
+
+        a=3.1
+        cell = np.array([[1,0,0],[0,1,0],[0,0,1]])
+        positions = np.array([[0,0,0]])
+        sites = [[12,13]]
+        pris = Atoms(cell=cell*a, positions=positions*a)
+
+        pl = ParentLattice(pris, sites=sites, pbc=(1,1,0))
+
+        unique_scs, unique_trafos = utils.get_unique_supercells(4,pl)
+
+        sset = StructuresSet(pl,filename="test_get_unique_supercells-square_lattice.json")
+        for t in unique_trafos:
+            scell = SuperCell(pl,t)
+            sset.add_structure(Structure(scell,scell.get_atomic_numbers()),write_to_db = True)
+
+        #isok0 = len(unique_scs) == 4 and
+        print("n: ",len(unique_scs))
+        print("SCS: ", unique_scs)
+        print("TRA: ", unique_trafos)
+
+    The resulting supercells in this example correspond to Fig. 1 of
+    Computational Materials Science 59 (2012) 101–107
+
+    """
+    from clusterx.symmetry import get_spacegroup
+    pl_cell = parent_lattice.get_cell()
+
+    hnfs = get_all_HNF(n,pbc=parent_lattice.get_pbc())
+
+    all_scs = []
+    for hnf in hnfs:
+        all_scs.append(np.dot(hnf,pl_cell))
+
+    n_scs = len(all_scs)
+    unique_scs = []
+    unique_trafos = []
+    sc_sg, sc_sym = get_spacegroup(parent_lattice) # Scaled to parent_lattice
+    nexts = np.asarray(np.arange(n_scs))
+    unique_scs.append(all_scs[0])
+    unique_trafos.append(hnfs[0])
+
+    while len(nexts) > 1:
+        i = nexts[0]
+        the_list = nexts[1:]
+        nexts=[]
+        bi = all_scs[i]
+        for j in the_list:
+            bj = all_scs[j]
+            j_is_next = True
+            for r in sc_sym['rotations']:
+                rr = np.dot(pl_cell,np.dot(r,np.linalg.inv(pl_cell))) # Rotations are in lattice coordinates, so we have to transorm them to cartesian.
+                m = np.around(np.dot(np.linalg.inv(bi.T),np.dot(rr,bj.T)),5)
+                if _is_integer_matrix(m):
+                    j_is_next = False
+                    break
+
+            if j_is_next:
+                nexts.append(j)
+
+        if len(nexts) > 0:
+            unique_scs.append(all_scs[nexts[0]])
+            unique_trafos.append(hnfs[nexts[0]])
+
+    return unique_scs, unique_trafos
+
+def _is_integer_matrix(m):
+    rnd = 5
+    mi = np.around(m,rnd)
+    for k in range(3):
+        for l in range(3):
+            #if not round(m[k,l],rnd).is_integer():
+            if not mi[k,l].is_integer():
+                return False
+    return True
+
+def get_all_HNF(n,pbc=(1,1,1)):
+    """Return complete set of Hermite normal form (HNF) :math:`3x3` matrices
+    of index ``n``.
+
+    The algorithm here is based on Equation 1 of Gus L. W. Hart and Rodney W.
+    Forcade, *Phys. Rev. B* **77**, 224115 (2008).
+
+    **Parameters:**
+
+    ``n``: integer
+        index of the HNF matrices.
+    ``pbc``: three bool
+        Periodic boundary conditions flags. Examples:
+        (1, 1, 0), (True, False, False). Default value: (1,1,1)
+    """
+
+    _hnfs = []
+    for a in _divisors(n):
+        for c in _divisors(int(n/a)):
+            f = int(n/(a*c))
+            for b in range(c):
+                for d in range(f):
+                    for e in range(f):
+                        hnf = []
+                        hnf.append([a,0,0])
+                        hnf.append([b,c,0])
+                        hnf.append([d,e,f])
+                        _hnfs.append(np.array(hnf).T)
+
+    hnfs = []
+    for hnf in _hnfs:
+        include = True
+        for i, bc in enumerate(pbc):
+            if not bc and (hnf[i] != np.identity(3,dtype="int")[i]).any():
+                include = False
+                break
+        if include:
+            hnfs.append(hnf)
+
+    return(hnfs)
+
+def _divisors(n):
+    # get factors and their counts
+    # Mainly taken from https://stackoverflow.com/a/37058745
+    factors = {}
+    nn = n
+    i = 2
+    while i*i <= nn:
+        while nn % i == 0:
+            if not i in factors:
+                factors[i] = 0
+            factors[i] += 1
+            nn //= i
+        i += 1
+    if nn > 1:
+        factors[nn] = 1
+
+    primes = list(factors.keys())
+
+    # generates factors from primes[k:] subset
+    def generate(k):
+        if k == len(primes):
+            yield 1
+        else:
+            rest = generate(k+1)
+            prime = primes[k]
+            for factor in rest:
+                prime_to_i = 1
+                # prime_to_i iterates prime**i values, i being all possible exponents
+                for _ in range(factors[prime] + 1):
+                    yield factor * prime_to_i
+                    prime_to_i *= prime
+
+    # in python3, `yield from generate(0)` would also work
+    #for factor in generate(0):
+    #    yield factor
+
+    r = []
+    for factor in generate(0):
+        r.append(factor)
+
+    return sorted(r)
