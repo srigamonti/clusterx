@@ -35,11 +35,14 @@ class SuperCell(ParentLattice):
         Take into account pbc when building the super cell. Either ignore
         translation in ``p`` along non-periodic directions or warn in some way
         if ``p`` is not compatible with pbc.
+
+    **Methods:**
     """
 
     def __init__(self, parent_lattice, p):
         self._plat = parent_lattice
         self._p = p
+        self.index = int(round(np.linalg.det(p)))
         prist = make_supercell(parent_lattice.get_atoms(),p)
         subs = [make_supercell(atoms,p) for atoms in parent_lattice.get_substitutions()]
         #ParentLattice.__init__(self, atoms = prist, substitutions = subs )
@@ -53,6 +56,14 @@ class SuperCell(ParentLattice):
         sc = self.__class__(self._plat, self._p)
 
         return sc
+
+    def get_index(self):
+        """Return index of the SuperCell
+
+        The index of the supercell is an integer number, equal to the super cell
+        volume in units of the parent cell volume.
+        """
+        return self.index
 
     def get_parent_lattice(self):
         """

@@ -56,6 +56,7 @@ class CorrelationsCalculator():
         return np.around(correlations,decimals=12)
 
     def get_cluster_correlations(self, structure, mc = False):
+        from clusterx.utils import get_cl_idx_sc
         cluster_orbits = None
         if mc and self._cluster_orbits_set != []:
             cluster_orbits = self._cluster_orbits_set[0]
@@ -75,13 +76,9 @@ class CorrelationsCalculator():
                 positions = cluster.get_positions()
                 cl_spos = get_scaled_positions(positions, scell.get_cell(), pbc=scell.get_pbc(), wrap=True)
                 sc_spos = structure.get_scaled_positions(wrap=True)
-                cl_idxs = []
-                for clp in cl_spos:
-                    for idx, scp in enumerate(sc_spos):
-                        if np.allclose(clp,scp,atol=1e-3):
-                            cl_idxs.append(idx)
+                cl_idxs = get_cl_idx_sc(cl_spos,sc_spos,method=1)
 
-                cluster_orbit = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs())
+                cluster_orbit, mult = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs())
                 cluster_orbits.append(cluster_orbit)
 
             self._scells.append(scell) # Add supercell to calculator
