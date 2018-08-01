@@ -134,6 +134,7 @@ class ParentLattice(Atoms):
                 except AttributeError:
                     raise AttributeError("sites array has problems, look at the documentation.")
 
+
             """
             unique_sites = deepcopy(_unique_sites)
             for i,us in enumerate(_unique_sites):
@@ -147,6 +148,7 @@ class ParentLattice(Atoms):
             for ius, us in enumerate(unique_sites):
                 for idx in range(self._natoms):
                     if (np.array(sites[idx]) == us).all():
+
                         tags[idx] = int(ius)
 
             numbers = np.zeros(self._natoms).astype(int)
