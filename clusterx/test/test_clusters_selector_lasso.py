@@ -14,10 +14,11 @@ from clusterx.utils import isclose
 from clusterx.clusters_selector import ClustersSelector
 
 from clusterx.visualization import plot_optimization_vs_number_of_clusters
+from clusterx.visualization import plot_optimization_vs_sparsity
 
 
 
-def test_clusters_selector():
+def test_clusters_selector_lasso():
     """Test model optimization
 
     After successful execution of the test, the generated structures and
@@ -42,7 +43,7 @@ def test_clusters_selector():
     su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
 
     plat = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
-    cpool = ClustersPool(plat, npoints=[0,1,2,3,4], radii=[0,2.3,2.3,2.3,1.42])
+    cpool = ClustersPool(plat, npoints=[0,1,2,3,4], radii=[0,2.3,2.3,2.3,2.3])
     #cpool = ClustersPool(plat, npoints=[1,2,3,4], radii=[0,2.3,1.42,1.42])
     cpool.write_clusters_db(cpool.get_cpool(),cpool.get_cpool_scell(),"cpool.json")
     corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
@@ -78,45 +79,41 @@ def test_clusters_selector():
     strset.set_calculator(EMT2())
     energies = strset.calculate_property()
 
-    #fitter_model = Fitter(method = "skl_LinearRegression")
-
-
-    clsel = ClustersSelector('linreg', cpool, clusters_sets = "size", alpha0 = 2.3)
-    #clsel = ClustersSelector('linreg', cpool, clusters_sets = "combinations", nclmax=2)
-    #clsel = ClustersSelector('linreg', cpool, clusters_sets = "size+combinations", nclmax = 2, set0 = [2,1])
+    clsel = ClustersSelector('lasso', cpool, sparsity_max=0.1, sparsity_min=0.01)
+    #clsel = ClustersSelector('combinations', cpool, fitter_size = "linreg", nclmax=2)
+    #clsel = ClustersSelector('size+combinations', cpool, fitter_size = "linreg", nclmax = 2, set0 = [2,1])
     clsel.select_clusters(comat,energies)
 
     #clsets.get_subpool(clsel.get_optimal_clusters())
 
     cp2 = clsel.optimal_clusters._cpool
-    clset=[]
     npoints=[]
     radius=[]
     for i,c in enumerate(cp2):
-        clset.append(i)
         npoints.append(c.npoints)
         radius.append(c.radius)
 
     #plot_optimization_vs_number_of_clusters(clsel)
+    #plot_optimization_vs_sparsity(clsel)
         
-    #print(clsel)
-    print(clset)
     print(npoints)
     print(radius)
     print(clsel.rmse)
     print(clsel.cvs)
+    print(clsel.lasso_sparsities)
     print(clsel.ecis)
     print(clsel.opt_rmse)
     print(clsel.opt_mean_cv)
 
-    rclset=np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21])
-    rnpoints=np.array([0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
-    rradius=np.array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.4142135623730951, 1.4142135623730951, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979])
-    rrmse=np.array([153.2841213331535, 16.901897707237335, 6.700789709328075, 3.9993762570864653, 3.999376257086457, 3.9993762570864604, 4.332708758890144e-13, 2.3963837243895845e-13, 2.5095842348474555e-13, 1.5137228741553587e-13, 2.0922437301566996e-13, 2.3512953151993736e-13])
-    rcvs=np.array([161.35170666647736, 21.25070484696078, 21.192827866028615, 18.253021305083323, 18.253021305083177, 18.253021305083085, 26.826078769571474, 101.35271637863913, 107.52614106050373, 46.94157574864736, 107.7467725586574, 122.45989146285723])
-    recis=np.array([217.50240347215268, -9.318121555820007, 170.0683386767669, -329.52690266246697, -15.744168851529114, 24.772705003474496, -4.329642636893923, -11.671744819665836, -5.984567915150468, 28.909090631366023, -10.002053026806427, 17.14173277787906, -4.329642636893866, -11.67174481966575, -5.984567915150468, 28.909090631366052, -15.744168851529029, 24.772705003474496, -10.00205302680642, 17.141732777879074, -10.00205302680642, 17.141732777879074])
-    ropt_rmse=3.9993762570864604
-    ropt_mean_cv=18.253021305083085
-        
-    isok = isclose(rclset,clset) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(recis, clsel.ecis) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
+    rnpoints = np.array([0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4])
+    rradius = np.array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 1.4142135623730951, 2.0, 2.0, 2.0, 2.0, 2.0, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.0, 2.0, 2.0, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979])
+    rrmse = np.array([1.0362039383487336, 0.9344465657331334, 0.8325591301898301, 0.730958066121657, 0.6297819874397272, 0.5292746707497706, 0.4282700680600906, 0.32120255311475965, 0.2141350357080133, 0.10706751830169857])
+    rcvs = np.array([20.90974525188963, 20.680683374055917, 20.489908755488713, 20.29064319974821, 20.09380404992501, 19.939031976312478, 19.826338620327313, 19.75313945265403, 19.72277055047523, 19.742075745376187])
+    rsparsities=np.array([0.1, 0.09000000000000001, 0.08000000000000002, 0.07000000000000002, 0.06000000000000002, 0.05000000000000002, 0.040000000000000015, 0.030000000000000013, 0.02000000000000001, 0.01000000000000001])
+    recis = np.array([212.64680242224546, -14.748596089593418, 174.25793826725473, -327.8290056313618, 5.030466117063875, -2.600317890766761, -14.154347622437898, 18.438344976756053, -2.600317890766704, -14.15434762243787, 18.43834497675618, 5.030466117064102, -9.304991072216614, -2.285927878877856, 2.6892727749404854, -6.755621889068123, -6.755621889068109, 0.1754865986121055, -2.285927878877856, 2.6892727749404854, -9.304991072216628, -9.304991072216628, 1.1177216021907932, -5.779299067667393, 7.655791799498951, 1.1177216021907932, -5.779299067667393, 7.655791799498951, 7.655791799498951, 1.1177216021908074, -5.779299067667393])
+    ropt_rmse = 1.6281354602834095e-13
+    ropt_mean_cv = 34.459748414541146
+            
+    isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(recis, clsel.ecis) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
+
     assert(isok)
