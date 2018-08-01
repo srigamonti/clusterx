@@ -2,19 +2,19 @@ import numpy as np
 import os
 
 def isclose(r1,r2,rtol=1e-4):
-    """Determine if to vectors are similar
+    """Determine whether two vectors are similar
 
     **Parameters:**
 
-    r1,r2: 1D arrays of integer or float
+    ``r1,r2``: 1D arrays of integer or float
         Vectors to be compared
-    rtol: float
-        Tolerance
+    ``rtol``: float
+        Tolerance.
 
     **Returns:**
 
-    Boolean: if the euclidean distance between r1 and r2 is smaller than rtol,
-    it returns ``True``, otherwise returns ``False``.
+    Boolean: if the euclidean distance between ``r1`` and ``r2`` is smaller than
+    ``rtol``, ``True`` is returned, otherwise ``False`` is returned.
     """
     return np.linalg.norm(np.subtract(r1,r2)) < rtol
 
@@ -542,3 +542,36 @@ def _divisors(n):
         r.append(factor)
 
     return sorted(r)
+
+def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
+    """Return atom indexes of cluster points in SuperCell
+
+    **Parameters:**
+
+    ``cl``: npoints x 3 matrix
+        matrix of cartesian or scaled coordinates of cluster points. Cluster
+        positions are expected to be wrapped inside supercell ``sc``
+    ``sc``: natoms x 3 matrix
+        matrix of cartesian or scaled coordinates of supercell atomic positions.
+    ``method``: integer
+        Method to use. 0: (slow) nested for loop using numpy allclose. 1: (fast)
+        calculates all distances from points in ``cl`` to atoms in ``sc``, and
+        return indices for which distances are zero.
+    ``tol``: real positive number
+        tolerance to determine whether cluster and atom positions are the same.
+    """
+    from scipy.spatial.distance import cdist
+
+    if method == 0:
+        idxs = np.zeros(len(cl),dtype="int")
+        for icl,clp in enumerate(cl):
+            for isc, scp in enumerate(sc):
+                if np.allclose(clp,scp,atol=tol):
+                    idxs[icl] = isc
+                    break
+
+    if method == 1:
+        sdistances = cdist(cl, sc, metric='euclidean') # Evaluate all (scaled) distances between cluster points to scell sites
+        idxs = np.argwhere(np.abs(sdistances) < tol)[:,1] # Atom indexes of the transformed cluster
+
+    return idxs
