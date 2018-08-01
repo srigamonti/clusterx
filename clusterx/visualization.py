@@ -50,3 +50,123 @@ def _makeview(images):
     hboxes = [ipywidgets.HBox(views[i*3:i*3+3]) for i in range(int(math.ceil(len(views)/3.0)))]
     vbox = ipywidgets.VBox(hboxes)
     return vbox
+
+
+def plot_optimization_vs_number_of_clusters(clsel):
+    import matplotlib.pyplot as plt
+    from matplotlib import rc
+    from matplotlib import rc,rcParams
+    import math
+                    
+    set_sizes=sorted(clsel.set_sizes)
+    indizes=[i[0] for i in sorted(enumerate(clsel.set_sizes), key=lambda x:x[1])]
+
+    rmse=[clsel.rmse[ind] for ind in indizes]
+    cvs=[clsel.cvs[ind] for ind in indizes]
+     
+    nclmax=max(set_sizes)
+    nclmin=min(set_sizes)
+    ncl_range=nclmax-nclmin
+    
+    e_min=min([min(rmse),min(cvs)])
+    e_max=max([max(rmse),max(cvs)])
+    e_range=e_max - e_min
+    
+    ncl_opt=set_sizes[clsel.cvs.index(min(cvs))]
+    
+    width=15.0
+    fs=int(width*1.8)
+    ticksize = fs
+    golden_ratio = (math.sqrt(5) - 1.0) / 2.0
+    labelsize = fs
+    height = float(width * golden_ratio)
+    
+    plt.figure(figsize=(width,height))
+    
+    rc('axes', linewidth=3)
+    
+    plt.ylim(e_min-e_range/8,e_max+e_range/10)
+    plt.xlim(nclmin-ncl_range/10,nclmax+ncl_range/10)
+    
+    plt.xticks(fontsize=ticksize)
+    plt.yticks(fontsize=ticksize)
+    ax = plt.gca()
+    ax.tick_params(width=3,size=10,pad=10)
+    
+    plt.plot([ncl_opt],[min(cvs)], 'o', markersize=25, markeredgewidth=4,markeredgecolor='r', markerfacecolor='None' )
+    #scatter([ncl_opt],[min(cv)], s=400,facecolors='none', edgecolors='r',)
+
+    plt.plot(set_sizes, rmse, markersize=25, marker='.', color='blue', zorder=1,  linestyle='-',label='training-RMSE', linewidth=4)
+    plt.plot(set_sizes, cvs, markersize=25, marker='.', color='black', zorder=1, linestyle='-',label='cv-RMSE',linewidth=4)
+
+    plt.ylabel("Energy [arb. units]",fontsize=fs)
+    plt.xlabel('Number of clusters',fontsize=fs)
+    plt.legend()
+    leg=ax.legend(loc='upper left',borderaxespad=2,borderpad=2,labelspacing=1,handlelength=3, handletextpad=2)
+    leg.get_frame().set_linewidth(3)
+        
+    for l in leg.get_texts():
+        l.set_fontsize(25)
+
+    #plt.savefig("plot_optimization.png") 
+    plt.show()
+
+
+def plot_optimization_vs_sparsity(clsel):
+    import matplotlib.pyplot as plt
+    from matplotlib import rc
+    from matplotlib import rc,rcParams
+    import math
+                    
+    set_sparsity=clsel.lasso_sparsities
+
+    rmse=clsel.rmse
+    cvs=clsel.cvs
+     
+    nclmax=max(set_sparsity)
+    nclmin=min(set_sparsity)
+    ncl_range=nclmax-nclmin
+    
+    e_min=min([min(rmse),min(cvs)])
+    e_max=max([max(rmse),max(cvs)])
+    e_range=e_max - e_min
+
+    opt=set_sparsity[clsel.cvs.index(min(cvs))]
+    
+    width=15.0
+    fs=int(width*1.8)
+    ticksize = fs
+    golden_ratio = (math.sqrt(5) - 1.0) / 2.0
+    labelsize = fs
+    height = float(width * golden_ratio)
+    
+    plt.figure(figsize=(width,height))
+    
+    rc('axes', linewidth=3)
+    
+    plt.ylim(e_min-e_range/8,e_max+e_range/10)
+    plt.xlim(nclmin-ncl_range/10,nclmax+ncl_range/10)
+    
+    plt.xticks(fontsize=ticksize)
+    plt.yticks(fontsize=ticksize)
+    ax = plt.gca()
+    ax.tick_params(width=3,size=10,pad=10)
+    
+    plt.semilogx([opt],[min(cvs)], 'o', markersize=25, markeredgewidth=4,markeredgecolor='r', markerfacecolor='None' )
+    #scatter([ncl_opt],[min(cv)], s=400,facecolors='none', edgecolors='r',)
+
+    plt.semilogx(set_sparsity, rmse, markersize=25, marker='.', color='blue', zorder=1,  linestyle='-',label='training-RMSE', linewidth=4)
+    plt.semilogx(set_sparsity, cvs, markersize=25, marker='.', color='black', zorder=1, linestyle='-',label='cv-RMSE',linewidth=4)
+
+    plt.ylabel("Energy [arb. units]",fontsize=fs)
+    plt.xlabel('Number of clusters',fontsize=fs)
+    plt.legend()
+    leg=ax.legend(loc='upper left',borderaxespad=2,borderpad=2,labelspacing=1,handlelength=3, handletextpad=2)
+    leg.get_frame().set_linewidth(3)
+        
+    for l in leg.get_texts():
+        l.set_fontsize(25)
+
+    #plt.savefig("plot_optimization.png") 
+    plt.show()
+
