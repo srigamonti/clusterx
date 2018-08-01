@@ -125,19 +125,28 @@ class ParentLattice(Atoms):
         self._natoms = len(self._atoms)
 
         if sites is not None and substitutions is None:
-            #try:
-            #    unique_sites = np.unique(sites,axis=0)
-            #except AttributeError:
+            #from ase.data import atomic_numbers
             try:
-                unique_sites = np.unique(sites)
-            except AttributeError:
-                raise AttributeError("sites array has problems, look at the documentation.")
+                unique_sites = np.unique(sites,axis=0)
+            except:
+                try:
+                    unique_sites = np.unique(sites)
+                except AttributeError:
+                    raise AttributeError("sites array has problems, look at the documentation.")
 
+            """
+            unique_sites = deepcopy(_unique_sites)
+            for i,us in enumerate(_unique_sites):
+                for j, jus in us:
+                    if isinstance(jus,str):
+                        unique_sites[i] = int(atomic_numbers(jus))
+                    else:
+                        unique_sites[i] = us
+            """
             tags = np.zeros(self._natoms).astype(int)
             for ius, us in enumerate(unique_sites):
                 for idx in range(self._natoms):
-                    #if (sites[idx] == us).all():
-                    if bool(sites[idx] == us):
+                    if (np.array(sites[idx]) == us).all():
                         tags[idx] = int(ius)
 
             numbers = np.zeros(self._natoms).astype(int)
@@ -242,6 +251,8 @@ class ParentLattice(Atoms):
 
 
     def get_substitutional_sites(self):
+        """Return atom indexes which may be substituted
+        """
         st = self.get_substitutional_tags()
         ss = []
         for i,tag in enumerate(self.get_tags()):
@@ -255,6 +266,8 @@ class ParentLattice(Atoms):
         return len(self.get_substitutional_tags())
 
     def get_spectator_sites(self):
+        """Return atom indexes which may not be substituted
+        """
         st = self.get_spectator_tags()
         ss = []
         for i,tag in enumerate(self.get_tags()):
@@ -263,6 +276,8 @@ class ParentLattice(Atoms):
         return ss
 
     def get_substitutional_tags(self):
+        """Return site types for substitutional sites
+        """
         st = []
         for tag in self.get_tags():
             if len(self.idx_subs[tag]) > 1:
@@ -270,20 +285,39 @@ class ParentLattice(Atoms):
         return st
 
     def get_spectator_tags(self):
+        """Return site types for non substitutional sites
+        """
         st = []
         for tag in self.get_tags():
             if len(self.idx_subs[tag]) == 1:
                 st.append(tag)
         return st
 
-    def get_substitutions(self):
-        return self._subs
-
     def get_sites(self):
+        """Return dictionary of sites
+        """
         return self.sites
 
+    def get_substitutions(self):
+        """Return array of Atoms objects corresponding to fully substituted configurations.
+        """
+        return self._subs
+
     def get_pristine(self):
+        """Return Atoms object of pristine configuration
+        """
         return self._atoms
+
+    def get_all_atoms(self):
+        """Return list of Atoms objects of pristine and fully substituted configurations.
+
+        Returned Atoms objects are copies of members ``self._atoms`` and ``self._subs``.
+        """
+        a = []
+        a.append(self._atoms.copy())
+        for sub in self._subs:
+            a.append(sub.copy())
+        return a
 
     def get_idx_subs(self):
         """Return dictionary of site type indexes and substitutional species

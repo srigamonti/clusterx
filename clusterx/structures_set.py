@@ -71,20 +71,70 @@ class StructuresSet():
         self.json_db.write(structure,key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
 
     def add_structure(self,structure, key_value_pairs={}, write_to_db = False, **kwargs):
+        """Add a structure to the StructuresSet
+
+        **Parameters:**
+
+        ``structure``: Structure object
+            Structure object for the structure to be added.
+        ``key_value_pairs``: dictionary
+            if ``write_to_db`` is ``True`` (see below), then this argument is passed
+            to ASE's ``json_db.write`` method.
+        ``write_to_db``: boolean (default: False)
+            Whether to add the structure to the json database (see ``filename``
+            parameter for StructuresSet initialization)
+        ``kwargs``: dictionary
+            passed to ASE's ``json_db.write`` method if ``write_to_db`` is ``True``
+        """
         self._structures.append(structure)
         self._nstructures += 1
         if write_to_db:
             self.json_db.write(structure,key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
 
     def get_structure(self,sid):
+        """Get one structure of the set
+
+        **Parameters:**
+
+        ``sid``: integer
+            index of structure in the structure set.
+
+        **Returns:**
+
+        Structure object.
+        """
         return self._structures[sid]
+
+    def get_structures(self):
+        """Get all structures of the set
+
+        **Return:**
+
+        list of Structure objects.
+        """
+        return self._structures
 
     def get_structure_atoms(self, sid):
         """
         Return Atoms object for db row sid.
         """
-        return self.get_atoms(id=sid)
+        return self._structures[sid].get_atoms()
 
+    def iterimages(self):
+        # Allows trajectory to convert NEB into several images
+        return iter(self._structures)
+
+    def __getitem__(self, i=-1):
+        return self._structures[i]
+
+    def get_images(self):
+        """
+        Return array of Atoms objects from structures set.
+        """
+        images = []
+        for i in range(len(self)):
+            images.append(self._structures[i].get_atoms())
+        return images
 
     def get_json_string(self, super_cell):
         fn = self.filename
