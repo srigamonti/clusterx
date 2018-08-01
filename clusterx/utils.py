@@ -547,6 +547,7 @@ def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
     """Return atom indexes of cluster points in SuperCell
 
     **Parameters:**
+
     ``cl``: npoints x 3 matrix
         matrix of cartesian or scaled coordinates of cluster points. Cluster
         positions are expected to be wrapped inside supercell ``sc``
@@ -556,6 +557,8 @@ def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
         Method to use. 0: (slow) nested for loop using numpy allclose. 1: (fast)
         calculates all distances from points in ``cl`` to atoms in ``sc``, and
         return indices for which distances are zero.
+    ``tol``: real positive number
+        tolerance to determine whether cluster and atom positions are the same.
     """
     from scipy.spatial.distance import cdist
 

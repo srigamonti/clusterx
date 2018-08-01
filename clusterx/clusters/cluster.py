@@ -205,7 +205,8 @@ class Cluster():
             coordinates of the cell vectors.
 
         **Example:**
-        ::
+        Getting the multiplicities of clusters in a clusters pool::
+        
             from clusterx.symmetry import get_spacegroup
             sc_sg, sc_sym = get_spacegroup(parent_lattice) # Scaled to parent_lattice
             m = []
