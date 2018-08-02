@@ -18,18 +18,10 @@ class ClustersSelector():
 
         self.cpool = clusters_pool
         self.fit_intercept=False
-<<<<<<< Updated upstream
         #for c in self.cpool._cpool:
         #    if c.npoints == 0:
         #        self.fit_intercept=True
         #        break
-=======
-        for c in self.cpool._cpool:
-            if c.npoints == 0:
-                #self.fit_intercept=True
-                self.fit_intercept=False
-                break
->>>>>>> Stashed changes
 
         self.ecis = []
         self.optimal_clusters = None
@@ -124,7 +116,6 @@ class ClustersSelector():
 
         for iset, clset in enumerate(clsets):
             _comat = x[np.ix_(rows,clset)]
-<<<<<<< Updated upstream
 
             #if self.fit_intercept:
             #    if int(_comat.shape[1]) > 1:
@@ -149,31 +140,7 @@ class ClustersSelector():
 
             #        continue
 
-=======
-            if self.fit_intercept:
-                if int(_comat.shape[1]) > 1:
-                    _comat = np.delete(_comat, (0), axis=1)
-                else:
-                    fitter_cv2 = linear_model.LinearRegression(fit_intercept=False, normalize=False)
 
-                    _cvs = cross_val_score(fitter_cv2, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
-                    mean_cv = np.sqrt(-np.mean(_cvs))
-                    self.cvs.append(mean_cv)
-                    fitter_cv2.fit(_comat,p)
-                    self.rmse.append(np.sqrt(mean_squared_error(fitter_cv2.predict(_comat),p)))
-                    self.set_sizes.append(len(clset))
-
-                    if opt_cv <= 0:
-                        opt_cv=mean_cv
-                        opt_clset=clset
-                    else:
-                        if opt_cv > mean_cv:
-                            opt_cv = mean_cv
-                            opt_clset=clset
-
-                    continue
-
->>>>>>> Stashed changes
             _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
             mean_cv=np.sqrt(-np.mean(_cvs))
             self.cvs.append(mean_cv)
