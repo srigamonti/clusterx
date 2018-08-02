@@ -83,7 +83,7 @@ def test_clusters_selector():
 
     clsel = ClustersSelector('linreg', cpool, clusters_sets = "size")
     #clsel = ClustersSelector('linreg', cpool, clusters_sets = "combinations", nclmax=2)
-    #clsel = ClustersSelector('linreg', cpool, clusters_sets = "size+combinations", nclmax = 2, set0 = [2,1])
+    #clsel = ClustersSelector('linreg', cpool, clusters_sets = "size+combinations", nclmax = 2, set0 = [2,2])
     clsel.select_clusters(comat,energies)
 
     #clsets.get_subpool(clsel.get_optimal_clusters())

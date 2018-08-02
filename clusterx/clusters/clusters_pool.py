@@ -255,9 +255,9 @@ class ClustersPool():
             else:
                 ncl=len(_clset1)
 
-            print(_clset0)
+            #print(_clset0)
 
-            print(_clset1)
+            #print(_clset1)
             for icl1 in range(0,ncl+1):
                 for x in itertools.combinations(_clset1,icl1):
                     clset=_clset0+[el for el in x]
