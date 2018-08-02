@@ -14,6 +14,7 @@ from clusterx.utils import isclose
 from clusterx.clusters_selector import ClustersSelector
 
 from clusterx.visualization import plot_optimization_vs_number_of_clusters
+from clusterx.visualization import plot_predictions
 
 
 
@@ -98,6 +99,9 @@ def test_clusters_selector():
         radius.append(c.radius)
 
     #plot_optimization_vs_number_of_clusters(clsel)
+    #plot_predictions(clsel, energies)
+
+    print(clsel.predictions)
 
     #print(clsel)
     print(clset)
