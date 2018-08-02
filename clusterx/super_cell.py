@@ -98,14 +98,14 @@ class SuperCell(ParentLattice):
         """
         import clusterx.structure
 
-        idx_subs = self.get_idx_subs()
-        tags = self.get_tags()
+        #idx_subs = self.get_idx_subs()
+        #tags = self.get_tags()
 
-        rndstr = SuperCell(self._plat,self._p)
+        scell = SuperCell(self._plat,self._p)
         decoration, sigmas = self.gen_random_decoration(nsubs)
 
         #return clusterx.structure.Structure(rndstr,decoration)
-        return clusterx.structure.Structure(rndstr,sigmas=sigmas)
+        return clusterx.structure.Structure(scell,sigmas=sigmas)
 
     def gen_random_decoration(self,nsubs):
         """Generate a random decoration of the super cell with given number of substitutions.

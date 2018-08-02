@@ -5,6 +5,7 @@ import sys
 import io
 import tempfile
 import copy
+from clusterx.utils import _is_integrable
 
 def unique_non_sorted(a):
     _, idx = np.unique(a, return_index=True)
@@ -110,7 +111,9 @@ class ParentLattice(Atoms):
     **Methods:**
     """
 
-    def __init__(self, atoms, substitutions=None, sites=None, pbc=(1,1,1)):
+    def __init__(self, atoms, substitutions=None, sites=None, site_symbols=None, pbc=None):
+        if pbc is None:
+            pbc = atoms.get_pbc()
         super(ParentLattice,self).__init__(symbols=atoms,pbc=pbc)
         #self._atoms = atoms.copy()
         self._fname = None
@@ -124,26 +127,24 @@ class ParentLattice(Atoms):
 
         self._natoms = len(self._atoms)
 
-        if sites is not None and substitutions is None:
-            #from ase.data import atomic_numbers
-            try:
-                unique_sites = np.unique(sites,axis=0)
-            except:
+        if sites is not None or site_symbols is not None and substitutions is None:
+
+            if site_symbols is not None:
+                from ase.data import atomic_numbers as an
+                sites = copy.deepcopy(site_symbols)
+                for i, syms in enumerate(site_symbols):
+                    for j, sym in enumerate(syms):
+                        sites[i][j] = an[sym]
+
+            if sites is not None:
                 try:
-                    unique_sites = np.unique(sites)
-                except AttributeError:
-                    raise AttributeError("sites array has problems, look at the documentation.")
+                    unique_sites = np.unique(sites,axis=0)
+                except:
+                    try:
+                        unique_sites = np.unique(sites)
+                    except AttributeError:
+                        raise AttributeError("sites array has problems, look at the documentation.")
 
-
-            """
-            unique_sites = deepcopy(_unique_sites)
-            for i,us in enumerate(_unique_sites):
-                for j, jus in us:
-                    if isinstance(jus,str):
-                        unique_sites[i] = int(atomic_numbers(jus))
-                    else:
-                        unique_sites[i] = us
-            """
             tags = np.zeros(self._natoms).astype(int)
             for ius, us in enumerate(unique_sites):
                 for idx in range(self._natoms):
