@@ -49,7 +49,7 @@ def _makeview(images):
     hboxes = [ipywidgets.HBox(views[i*3:i*3+3]) for i in range(int(math.ceil(len(views)/3.0)))]
     vbox = ipywidgets.VBox(hboxes)
     return vbox
-    
+
 def _juview_applystyle(view):
     view.parameters = dict(backgroundColor='white',clipDist=-100,color_scheme="element")
     view.add_unitcell()
@@ -65,6 +65,11 @@ def plot_optimization_vs_number_of_clusters(clsel):
 
     The plot shows the prediction and fitting errors as a function of the clusters
     pool size.
+
+    **Parameters:**
+
+    ``clsel``: ClustersSelector object
+        The ClustersSelector oject which was used for the optimization to be plotted.
     """
     import matplotlib.pyplot as plt
     from matplotlib import rc
