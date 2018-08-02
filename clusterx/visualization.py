@@ -115,7 +115,7 @@ def plot_optimization_vs_number_of_clusters(clsel):
     plt.ylabel("Energy [arb. units]",fontsize=fs)
     plt.xlabel('Number of clusters',fontsize=fs)
     plt.legend()
-    leg=ax.legend(loc='upper left',borderaxespad=2,borderpad=2,labelspacing=1,handlelength=3, handletextpad=2)
+    leg=ax.legend(loc='best',borderaxespad=2,borderpad=2,labelspacing=1,handlelength=3, handletextpad=2)
     leg.get_frame().set_linewidth(3)
 
     for l in leg.get_texts():
@@ -164,7 +164,7 @@ def plot_optimization_vs_sparsity(clsel):
     rc('axes', linewidth=3)
 
     plt.ylim(e_min-e_range/8,e_max+e_range/10)
-    plt.xlim(nclmin-ncl_range/10,nclmax+ncl_range/10)
+    plt.xlim(nclmin-0.1*nclmin,nclmax+0.1*nclmax)
 
     plt.xticks(fontsize=ticksize)
     plt.yticks(fontsize=ticksize)
@@ -180,7 +180,7 @@ def plot_optimization_vs_sparsity(clsel):
     plt.ylabel("Energy [arb. units]",fontsize=fs)
     plt.xlabel('Number of clusters',fontsize=fs)
     plt.legend()
-    leg=ax.legend(loc='upper left',borderaxespad=2,borderpad=2,labelspacing=1,handlelength=3, handletextpad=2)
+    leg=ax.legend(loc='best',borderaxespad=2,borderpad=2,labelspacing=1,handlelength=3, handletextpad=2)
     leg.get_frame().set_linewidth(3)
 
     for l in leg.get_texts():
