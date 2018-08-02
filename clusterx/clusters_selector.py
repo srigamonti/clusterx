@@ -23,6 +23,7 @@ class ClustersSelector():
         #        self.fit_intercept=True
         #        break
 
+        self.predictions = []
         self.ecis = []
         self.optimal_clusters = None
         self.opt_rmse = None
@@ -177,6 +178,7 @@ class ClustersSelector():
             _comat = x
 
         self.fitter_cv.fit(_comat,p)
+        self.predictions = [el for el in self.fitter_cv.predict(_comat)]
 
         self.opt_rmse=np.sqrt(mean_squared_error(self.fitter_cv.predict(_comat),p))
 
