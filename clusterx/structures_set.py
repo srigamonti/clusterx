@@ -127,13 +127,36 @@ class StructuresSet():
     def __getitem__(self, i=-1):
         return self._structures[i]
 
-    def get_images(self):
+    def get_images(self,remove_vacancies=True):
         """
         Return array of Atoms objects from structures set.
+
+        **Parameters:**
+
+        ``remove_vacancies``: Boolean
+            whether the returned Atoms objects contain vacancies, i.e. atoms with
+            species number 0 or chemical symbol X. If true, vacancy sites are eliminated
+            in the returned Atoms objects
         """
         images = []
-        for i in range(len(self)):
-            images.append(self._structures[i].get_atoms())
+        if not remove_vacancies:
+            for i in range(len(self)):
+                images.append(self._structures[i].get_atoms())
+                #images.append(self._structures[i])
+        else:
+            for i in range(len(self)):
+                atoms0 = self._structures[i].get_atoms()
+                positions = []
+                numbers = []
+                indices = []
+                for i,atom in enumerate(atoms0):
+                    nr = atom.get('number')
+                    if nr != 0:
+                        indices.append(i)
+                        positions.append(atom.get('position'))
+                        numbers.append(nr)
+                images.append(Atoms(cell=atoms0.get_cell(), pbc=atoms0.get_pbc(),numbers=numbers,positions=positions))
+
         return images
 
     def get_json_string(self, super_cell):

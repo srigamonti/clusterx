@@ -51,7 +51,7 @@ def test_get_unique_supercells():
             cell = np.array([[0.5,0.5,0.0],[0.5,0.0,0.5],[0.0,0.5,0.5]])
             positions = np.array([[0,0,0]])
             sites = [[an["Cu"],an["Au"]]]
-            pris_fcc = Atoms(cell=cell*a,positions=positions*a)
+            pris_fcc = Atoms(cell=cell*a,positions=positions*a,pbc=(1,1,1))
 
             pl = ParentLattice(pris_fcc,sites=sites)
 

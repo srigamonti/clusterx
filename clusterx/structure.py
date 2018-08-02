@@ -10,16 +10,22 @@ class Structure(SuperCell):
     a super cell with a unique decoration on the sublattices that can be
     substituted.
 
-    Parameters:
+    **Parameters:**
 
-    super_cell: SuperCell object
+    ``super_cell``: SuperCell object
         Super cell.
-    decoration: list of int
-        Atomic numbers of the structure.
-    sigmas: list of int
-        
+    ``decoration``: list of int
+        Atomic numbers of the structure. Overriden by ``sigma``.
+    ``sigmas``: list of int
+        Every site in a supercell is represented by an array of the species that
+        can occupy the site. Thus, *taking as reference these arrays*, a possible
+        representation of a decoration is by indicating the ordinal number of the
+        corresponding species. For instance, if the "sites" representation of the SuperCell
+        is ``[[10,11],[25],[12,25]]``, then same decoration can be represented
+        with the ``decoration`` parameter as ``[10,25,25]`` and with the ``sigmas``
+        parameter as ``[0,0,1]``. If not ``None``, ``sigmas`` overrides ``decoration``
 
-        Since a structure is represented by a decorated supercell,
+    **Methods:**
     """
     def __init__(self, super_cell, decoration = None, sigmas = None):
         self.scell = super_cell
@@ -41,9 +47,11 @@ class Structure(SuperCell):
 
         super(Structure,self).__init__(super_cell.get_parent_lattice(),super_cell.get_transformation())
         self.atoms = Atoms(numbers = self.decor, positions = super_cell.get_positions(), tags = super_cell.get_tags(), cell = super_cell.get_cell(),pbc = super_cell.get_pbc())
-        self.set_atomic_numbers(self.decor)
+        #self.set_atomic_numbers(self.decor)
 
     def get_supercell(self):
+        """Return SuperCell member of the Structure
+        """
         return self.scell
 
     def get_atoms(self):
@@ -74,7 +82,7 @@ class Structure(SuperCell):
         tags=self.get_tags()
         sigma1=self.sigmas[ridx1]
         sigma2=self.sigmas[ridx2]
-         
+
         self.sigmas[ridx1] = sigma2
         self.sigmas[ridx2] = sigma1
         self.decor[ridx1] = self.sites[ridx1][sigma2]

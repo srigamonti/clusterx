@@ -111,7 +111,9 @@ class ParentLattice(Atoms):
     **Methods:**
     """
 
-    def __init__(self, atoms, substitutions=None, sites=None, site_symbols=None, pbc=(1,1,1)):
+    def __init__(self, atoms, substitutions=None, sites=None, site_symbols=None, pbc=None):
+        if pbc is None:
+            pbc = atoms.get_pbc()
         super(ParentLattice,self).__init__(symbols=atoms,pbc=pbc)
         #self._atoms = atoms.copy()
         self._fname = None
@@ -132,8 +134,6 @@ class ParentLattice(Atoms):
                 sites = copy.deepcopy(site_symbols)
                 for i, syms in enumerate(site_symbols):
                     for j, sym in enumerate(syms):
-                        print(sym)
-                        print(an[sym])
                         sites[i][j] = an[sym]
 
             if sites is not None:
