@@ -371,7 +371,8 @@ class ClustersPool():
     def write_clusters_db(self, orbit=None, super_cell=None, db_name="cpool.json"):
         """Write cluster orbit to Atoms database
         """
-        import clusterx
+        #import clusterx
+        from clusterx.structure import Structure
         if orbit is None:
             orbit = self.get_cpool()
         if super_cell is None:
@@ -400,7 +401,8 @@ class ClustersPool():
             atoms.set_atomic_numbers(ans)
             ##self._cpool_atoms.append(atoms)
             #self._cpool_atoms.append(clusterx.structure.Structure(atoms,decoration=ans).get_atoms())
-            atoms0 = clusterx.structure.Structure(atoms,decoration=ans).get_atoms()
+            #atoms0 = clusterx.structure.Structure(atoms,decoration=ans).get_atoms()
+            atoms0 = Structure(atoms,decoration=ans).get_atoms()
             positions = []
             numbers = []
             indices = []
