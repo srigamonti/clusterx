@@ -79,7 +79,7 @@ def test_clusters_selector_lasso():
     strset.set_calculator(EMT2())
     energies = strset.calculate_property()
 
-    clsel = ClustersSelector('lasso', cpool, sparsity_max=0.1, sparsity_min=0.01)
+    clsel = ClustersSelector('lasso', cpool, sparsity_max=0.10, sparsity_min=0.01)
     #clsel = ClustersSelector('combinations', cpool, fitter_size = "linreg", nclmax=2)
     #clsel = ClustersSelector('size+combinations', cpool, fitter_size = "linreg", nclmax = 2, set0 = [2,1])
     clsel.select_clusters(comat,energies)
@@ -93,9 +93,10 @@ def test_clusters_selector_lasso():
         npoints.append(c.npoints)
         radius.append(c.radius)
 
+
     #plot_optimization_vs_number_of_clusters(clsel)
     #plot_optimization_vs_sparsity(clsel)
-        
+
     print(npoints)
     print(radius)
     print(clsel.rmse)
@@ -106,21 +107,26 @@ def test_clusters_selector_lasso():
     print(clsel.opt_mean_cv)
 
 
-    rnpoints = np.array([0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4])
-    rradius = np.array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 1.4142135623730951, 2.0, 2.0, 2.0, 2.0, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.0, 2.0, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979])
+    #rnpoints = np.array([0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4])
+    #rradius = np.array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 1.4142135623730951, 2.0, 2.0, 2.0, 2.0, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.0, 2.0, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979])
     rrmse = np.array([1.1238069575021878, 1.0239049953712067, 0.9254221370244412, 0.8288643762290191, 0.7226927293756511, 0.6022439411604689, 0.48179515294641406, 0.3613463647261995, 0.24091799698549654, 0.12313893026982561])
     rcvs = np.array([24.520162666223413, 24.47588256858358, 24.42919121561706, 24.40470667935038, 24.300311045176606, 24.1644250876413, 24.058706181807352, 23.961767942955234, 23.870034993318413, 23.804108166835555])
     rsparsities = np.array([0.1, 0.09000000000000001, 0.08000000000000002, 0.07000000000000002, 0.06000000000000002, 0.05000000000000002, 0.040000000000000015, 0.030000000000000013, 0.02000000000000001, 0.01000000000000001])
-    recis = np.array([206.92731536838295, -18.54425141178249, 170.72499878521265, -341.6385700209728, 3.6945184426263276, -0.9255507872094945, -16.909793298762356, 9.438786909564618, -0.9255507872093524, -16.90979329876261, 9.438786909564675, -0.4407888360176852, -11.651139238655997, 2.8139332773482777, 3.908658511183328, -13.805594369619236, -13.805594369619236, 3.9086585111832286, -11.651139238656082, -11.651139238656082, 3.9086585111832286, 1.1571456191802043, 8.941504905599736, 8.941504905599736, 1.1571456191802043, 1.15714561918019, 8.941504905599707])
+    #recis = np.array([206.92731536838295, -18.54425141178249, 170.72499878521265, -341.6385700209728, 3.6945184426263276, -0.9255507872094945, -16.909793298762356, 9.438786909564618, -0.9255507872093524, -16.90979329876261, 9.438786909564675, -0.4407888360176852, -11.651139238655997, 2.8139332773482777, 3.908658511183328, -13.805594369619236, -13.805594369619236, 3.9086585111832286, -11.651139238656082, -11.651139238656082, 3.9086585111832286, 1.1571456191802043, 8.941504905599736, 8.941504905599736, 1.1571456191802043, 1.15714561918019, 8.941504905599707])
     ropt_rmse = 0.029503125864994085
     ropt_mean_cv = 30.842354678471292
-     
 
+    """
     print("CV-----------------------")
     for i,(r,rr) in enumerate(zip(clsel.cvs,rcvs)):
         print("line:  ",i,r,rr,r-rr)
 
-            
+    print("sparsities-----------------------")
+    for i,(r,rr) in enumerate(zip(clsel.ecis,recis)):
+        print("line:  ",i,r,rr,r-rr)
+
     isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(recis, clsel.ecis) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
+    """
+    isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
 
     assert(isok)
