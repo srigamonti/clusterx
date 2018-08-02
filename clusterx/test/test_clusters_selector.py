@@ -98,7 +98,7 @@ def test_clusters_selector():
         radius.append(c.radius)
 
     #plot_optimization_vs_number_of_clusters(clsel)
-        
+
     #print(clsel)
     print(clset)
     print(npoints)
@@ -117,6 +117,24 @@ def test_clusters_selector():
     recis=np.array([217.50240347215268, -9.318121555820007, 170.0683386767669, -329.52690266246697, -15.744168851529114, 24.772705003474496, -4.329642636893923, -11.671744819665836, -5.984567915150468, 28.909090631366023, -10.002053026806427, 17.14173277787906, -4.329642636893866, -11.67174481966575, -5.984567915150468, 28.909090631366052, -15.744168851529029, 24.772705003474496, -10.00205302680642, 17.141732777879074, -10.00205302680642, 17.141732777879074])
     ropt_rmse=3.9993762570864604
     ropt_mean_cv=18.253021305083085
-        
+
+    print("CV-----------------------")
+    for i,(r,rr) in enumerate(zip(clsel.cvs,rcvs)):
+        print("line:  ",i,r,rr,r-rr)
+
+    """
+    print("ECI-----------------------")
+    for r,rr in zip(clsel.ecis,recis):
+        print("line:  ",r,rr,r-rr)
+
+    print("RMSE-----------------------")
+    print(clsel.opt_rmse,ropt_rmse)
+
+    print("CV-----------------------")
+    print(clsel.opt_mean_cv,ropt_mean_cv)
+
+    print(isclose(rcvs, clsel.cvs))
+    """
+    
     isok = isclose(rclset,clset) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(recis, clsel.ecis) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
     assert(isok)
