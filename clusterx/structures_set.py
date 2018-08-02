@@ -127,7 +127,7 @@ class StructuresSet():
     def __getitem__(self, i=-1):
         return self._structures[i]
 
-    def get_images(self,remove_vacancies=True):
+    def get_images(self,remove_vacancies=True,n=None):
         """
         Return array of Atoms objects from structures set.
 
@@ -137,14 +137,21 @@ class StructuresSet():
             whether the returned Atoms objects contain vacancies, i.e. atoms with
             species number 0 or chemical symbol X. If true, vacancy sites are eliminated
             in the returned Atoms objects
+        ``n``: integer
+            return the first ``n`` structures. If ``None``, return all structures.
         """
         images = []
+        if n is None:
+            nmax = len(self)
+        else:
+            nmax = n
+            
         if not remove_vacancies:
-            for i in range(len(self)):
+            for i in range(nmax):
                 images.append(self._structures[i].get_atoms())
                 #images.append(self._structures[i])
         else:
-            for i in range(len(self)):
+            for i in range(nmax):
                 atoms0 = self._structures[i].get_atoms()
                 positions = []
                 numbers = []

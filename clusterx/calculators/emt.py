@@ -1,5 +1,5 @@
-from ase.calculators.emt import EMT 
-#from ase.calculators.calculator import names 
+from ase.calculators.emt import EMT
+#from ase.calculators.calculator import names
 import ase.calculators.emt
 
 """From https://wiki.fysik.dtu.dk/ase/_modules/ase/calculators/emt.html#EMT
@@ -28,13 +28,12 @@ ase.calculators.emt.parameters.update( {
     'Si': (-3.51, 2.67, 2.476, 1.652, 2.740, 1.906, 0.00910),#same as Cu
     'Ge': (-2.96, 3.01, 2.132, 1.652, 2.790, 1.892, 0.00547),#same as Ag
     'Ba': (-3.80, 3.00, 2.321, 1.674, 2.873, 2.182, 0.00703),#same as Au
-    'He': (-4.44, 2.60, 3.673, 1.669, 2.757, 1.948, 0.01030) #same as Ni
+    'He': (-4.44, 2.60, 3.673, 1.669, 2.757, 1.948, 0.01030), #same as Ni
+    'Na': (-5.10, 1.88, 0.132, 1.652, 2.790, 1.892, 0.01222), #same as N
+    'X': (-3.50, 1.81, 0.332, 1.652, 2.790, 1.892, 0.01322) #same as C
 })
 
 
 class EMT2(EMT):
     def __init__(self, **kwargs):
         EMT.__init__(self, **kwargs)
-
-
-

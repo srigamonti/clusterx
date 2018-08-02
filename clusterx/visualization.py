@@ -1,12 +1,14 @@
 import numpy as np
 
-def juview(plat):
+def juview(plat,n=None):
     """Visualize structure object in Jupyter notebook
 
     **Parameters:**
 
     ``plat``: any of Atoms(ASE), ParentLattice, Supercell, Structure, StructureSet
         structure object to be plotted
+    ``n``: integer
+        plot the first ``n`` structures. If ``None``, return all structures.
 
     **Return:**
 
@@ -20,7 +22,13 @@ def juview(plat):
         return _makeview(plat.get_all_atoms())
 
     if isinstance(plat,StructuresSet):
-        return _makeview(plat.get_images())
+        return _makeview(plat.get_images(n=n))
+
+    if isinstance(plat,list):
+        if n is not None:
+            return _makeview(plat[0:n])
+        else:
+            return _makeview(plat)
 
     if not isinstance(plat,list):
         view = nglview.show_ase(plat)
@@ -75,7 +83,7 @@ def plot_optimization_vs_number_of_clusters(clsel):
     from matplotlib import rc
     from matplotlib import rc,rcParams
     import math
-    
+
 
     set_sizes=sorted(clsel.set_sizes)
     indizes=[i[0] for i in sorted(enumerate(clsel.set_sizes), key=lambda x:x[1])]
@@ -110,8 +118,8 @@ def plot_optimization_vs_number_of_clusters(clsel):
     plt.xticks(fontsize=ticksize)
     plt.yticks(fontsize=ticksize)
     ax = plt.gca()
-    ax.tick_params(width=3,size=10,pad=10)    
-    
+    ax.tick_params(width=3,size=10,pad=10)
+
     #ax.tick_params(axis="x",which="minor",width=3,size=10,pad=10)
 
     plt.plot([ncl_opt],[min(cvs)], 'o', markersize=25, markeredgewidth=4,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE' )
@@ -211,10 +219,10 @@ def plot_predictions(clsel, p):
     from matplotlib import rc,rcParams
     import math
 
-    energies=p 
+    energies=p
 
     predictions=clsel.predictions
-    
+
     e_min=min([min(energies),min(predictions)])
     e_max=max([max(energies),max(predictions)])
     e_range=e_max - e_min

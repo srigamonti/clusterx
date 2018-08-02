@@ -184,8 +184,8 @@ class ClustersPool():
             The maximum clusters-set size when strategy="combinations" is used.
 
         set0: [points, radius]
-            The clusters-set, which is defined by the two parameters - maximum number of points (points) 
-            and the maximum radius, [points, radius] -, is included in all combinations, 
+            The clusters-set, which is defined by the two parameters - maximum number of points (points)
+            and the maximum radius, [points, radius] -, is included in all combinations,
             when strategy="size+combinations" is used.
 
         """
@@ -229,11 +229,11 @@ class ClustersPool():
                 ncl=nclmax
             else:
                 ncl=len(cl_list)
-            
+
             for icl in range(1,ncl+1):
                 for x in itertools.combinations(cl_list,icl):
                     clsets.append([el for el in x])
-            
+
         if grouping_strategy == "size+combinations":
             import itertools
 
@@ -249,7 +249,7 @@ class ClustersPool():
                     _clset0.append(icl)
                 else:
                     _clset1.append(icl)
-            
+
             if nclmax<len(_clset1):
                 ncl=nclmax
             else:
@@ -263,7 +263,7 @@ class ClustersPool():
                     clset=_clset0+[el for el in x]
                     clset.sort()
                     clsets.append(clset)
-                
+
         return clsets
 
 
@@ -371,6 +371,7 @@ class ClustersPool():
     def write_clusters_db(self, orbit=None, super_cell=None, db_name="cpool.json"):
         """Write cluster orbit to Atoms database
         """
+        import clusterx
         if orbit is None:
             orbit = self.get_cpool()
         if super_cell is None:
@@ -397,7 +398,20 @@ class ClustersPool():
             for i,atom_idx in enumerate(cl.get_idxs()):
                 ans[atom_idx] = orbit_nrs[icl][i]
             atoms.set_atomic_numbers(ans)
-            self._cpool_atoms.append(atoms)
+            ##self._cpool_atoms.append(atoms)
+            #self._cpool_atoms.append(clusterx.structure.Structure(atoms,decoration=ans).get_atoms())
+            atoms0 = clusterx.structure.Structure(atoms,decoration=ans).get_atoms()
+            positions = []
+            numbers = []
+            indices = []
+            for i,atom in enumerate(atoms0):
+                nr = atom.get('number')
+                if nr != 0:
+                    indices.append(i)
+                    positions.append(atom.get('position'))
+                    numbers.append(nr)
+            self._cpool_atoms.append(Atoms(cell=atoms0.get_cell(), pbc=atoms0.get_pbc(),numbers=numbers,positions=positions))
+
             atoms_db.write(atoms)
 
     def get_cpool_atoms(self):
