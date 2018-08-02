@@ -18,10 +18,18 @@ class ClustersSelector():
 
         self.cpool = clusters_pool
         self.fit_intercept=False
+<<<<<<< Updated upstream
         #for c in self.cpool._cpool:
         #    if c.npoints == 0:
         #        self.fit_intercept=True
         #        break
+=======
+        for c in self.cpool._cpool:
+            if c.npoints == 0:
+                #self.fit_intercept=True
+                self.fit_intercept=False
+                break
+>>>>>>> Stashed changes
 
         self.ecis = []
         self.optimal_clusters = None
@@ -33,7 +41,7 @@ class ClustersSelector():
         self.rmse = []
         self.cvs = []
         self.set_sizes = []
-        
+
 
         self.fitter_cv = None
 
@@ -69,14 +77,14 @@ class ClustersSelector():
         #if np.shape(p)[0] != np.shape(x)[0]:
         #    print "Error(cross_validation.cv): Number of property values differs from number of rows in correlation matrix."
         #    sys.exit(0)
-        
+
         if self.method == "lasso":
             opt = self._select_clusters_lasso(x, p)
 
             if self.fit_intercept == True:
                 if 0 not in opt:
                     self.fit_intercept = False
-            
+
         else:
             if self.clusters_sets == "size":
                 clsets = self.cpool.get_clusters_sets(grouping_strategy = "size")
@@ -84,9 +92,9 @@ class ClustersSelector():
                 clsets = self.cpool.get_clusters_sets(grouping_strategy = "combinations",  nclmax=self.nclmax)
             if self.clusters_sets == "size+combinations":
                 clsets = self.cpool.get_clusters_sets(grouping_strategy = "size+combinations", nclmax=self.nclmax , set0=self.set0)
-                
+
             opt = self._linear_regression(x, p, clsets)
-                
+
         self.optimal_clusters = self.cpool.get_subpool(opt)
 
         rows = np.arange(len(p))
@@ -99,8 +107,8 @@ class ClustersSelector():
         from sklearn.model_selection import LeaveOneOut
         from sklearn.model_selection import cross_val_score
         from sklearn import linear_model
-        from sklearn.metrics import make_scorer, r2_score, mean_squared_error    
-        
+        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
+
         if self.method == "linreg":
             self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept, normalize=False)
 
@@ -113,12 +121,13 @@ class ClustersSelector():
         opt_clset=[]
 
         el=True
-                    
+
         for iset, clset in enumerate(clsets):
             _comat = x[np.ix_(rows,clset)]
-            
+<<<<<<< Updated upstream
+
             #if self.fit_intercept:
-            #    if int(_comat.shape[1]) > 1: 
+            #    if int(_comat.shape[1]) > 1:
             #        _comat = np.delete(_comat, (0), axis=1)
             #    else:
             #        fitter_cv2 = linear_model.LinearRegression(fit_intercept=False, normalize=False)
@@ -139,7 +148,32 @@ class ClustersSelector():
             #                opt_clset=clset
 
             #        continue
-                
+
+=======
+            if self.fit_intercept:
+                if int(_comat.shape[1]) > 1:
+                    _comat = np.delete(_comat, (0), axis=1)
+                else:
+                    fitter_cv2 = linear_model.LinearRegression(fit_intercept=False, normalize=False)
+
+                    _cvs = cross_val_score(fitter_cv2, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
+                    mean_cv = np.sqrt(-np.mean(_cvs))
+                    self.cvs.append(mean_cv)
+                    fitter_cv2.fit(_comat,p)
+                    self.rmse.append(np.sqrt(mean_squared_error(fitter_cv2.predict(_comat),p)))
+                    self.set_sizes.append(len(clset))
+
+                    if opt_cv <= 0:
+                        opt_cv=mean_cv
+                        opt_clset=clset
+                    else:
+                        if opt_cv > mean_cv:
+                            opt_cv = mean_cv
+                            opt_clset=clset
+
+                    continue
+
+>>>>>>> Stashed changes
             _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
             mean_cv=np.sqrt(-np.mean(_cvs))
             self.cvs.append(mean_cv)
@@ -154,34 +188,34 @@ class ClustersSelector():
                 if opt_cv > mean_cv:
                     opt_cv = mean_cv
                     opt_clset = clset
-            
+
         return opt_clset
 
     def optimal_ecis(self, x, p):
         from sklearn.model_selection import LeaveOneOut
         from sklearn.model_selection import cross_val_score
         from sklearn import linear_model
-        from sklearn.metrics import make_scorer, r2_score, mean_squared_error    
+        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
 
         #if self.method == "linreg":
         self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept, normalize=False)
 
         if self.fit_intercept:
-            if int(x.shape[1]) > 1: 
+            if int(x.shape[1]) > 1:
                 _comat = np.delete(x, (0), axis=1)
             else:
                 self.fitter_cv = linear_model.LinearRegression(fit_intercept=False, normalize=False)
                 _comat = x
         else:
             _comat = x
-            
+
         self.fitter_cv.fit(_comat,p)
-        
+
         self.opt_rmse=np.sqrt(mean_squared_error(self.fitter_cv.predict(_comat),p))
 
         _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
         self.opt_mean_cv=np.sqrt(-np.mean(_cvs))
-        
+
         ecimult = []
         if self.fit_intercept:
             ecimult.append(self.fitter_cv.intercept_)
@@ -195,7 +229,7 @@ class ClustersSelector():
         from sklearn.model_selection import LeaveOneOut
         from sklearn.model_selection import cross_val_score
         from sklearn import linear_model
-        from sklearn.metrics import make_scorer, r2_score, mean_squared_error    
+        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
 
         sparsity = self.sparsity_max
 
@@ -225,19 +259,19 @@ class ClustersSelector():
             ecimult = []
             if self.fit_intercept:
                 ecimult.append(fitter_cv.intercept_)
-                
+
             for coef in fitter_cv.coef_:
                 ecimult.append(coef)
 
             _cvs = cross_val_score(fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
             mean_cv=np.sqrt(-np.mean(_cvs))
-                        
+
             self.cvs.append(mean_cv)
             self.rmse.append(np.sqrt(mean_squared_error(fitter_cv.predict(_comat),p)))
-                              
+
             self.set_sizes.append(np.count_nonzero(ecimult))
             self.lasso_sparsities.append(sparsity)
-            
+
             if opt_cv <= 0:
                 opt_cv=mean_cv
                 opt_clset=[i for i, e in enumerate(ecimult) if e != 0]
@@ -246,8 +280,8 @@ class ClustersSelector():
                 if opt_cv > mean_cv:
                     opt_cv = mean_cv
                     opt_clset=[i for i, e in enumerate(ecimult) if e != 0]
-                    self.opt_sparsity=sparsity            
-                        
+                    self.opt_sparsity=sparsity
+
             if self.sparsity_step == 0.0:
                 if idx==10:
                     idx=2

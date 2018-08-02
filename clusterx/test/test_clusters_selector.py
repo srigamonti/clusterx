@@ -117,7 +117,7 @@ def test_clusters_selector():
     recis=np.array([217.50240347215293, -9.31812155582009, 170.06833867676676, -329.5269026624669, -15.744168851528736, 24.772705003474446, -4.329642636893942, -11.671744819665708, -5.984567915150287, 28.909090631366357, -10.002053026806305, 17.14173277787912, -4.32964263689407, -11.671744819665765, -5.984567915150287, 28.909090631366315, -15.74416885152874, 24.772705003474446, -10.002053026806333, 17.141732777879128, -10.002053026806319, 17.141732777879128])
     ropt_rmse=3.999376257086461
     ropt_mean_cv=18.253021305083017
-    
+
     print("CV-----------------------")
     for i,(r,rr) in enumerate(zip(clsel.cvs,rcvs)):
         print("line:  ",i,r,rr,r-rr)
@@ -135,6 +135,6 @@ def test_clusters_selector():
 
     print(isclose(rcvs, clsel.cvs))
     """
-    
+
     isok = isclose(rclset,clset) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(recis, clsel.ecis) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
     assert(isok)

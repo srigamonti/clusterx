@@ -49,9 +49,23 @@ def _makeview(images):
     hboxes = [ipywidgets.HBox(views[i*3:i*3+3]) for i in range(int(math.ceil(len(views)/3.0)))]
     vbox = ipywidgets.VBox(hboxes)
     return vbox
+    
+def _juview_applystyle(view):
+    view.parameters = dict(backgroundColor='white',clipDist=-100,color_scheme="element")
+    view.add_unitcell()
+    view.camera = 'orthographic'
+    #view.center()
+    view.control.rotate([0,1,0,0])
+    view.add_ball_and_stick()
+    view.add_spacefill(radius_type='vdw',scale=0.3)
 
 
 def plot_optimization_vs_number_of_clusters(clsel):
+    """Plot cluster optimization with matplotlib
+
+    The plot shows the prediction and fitting errors as a function of the clusters
+    pool size.
+    """
     import matplotlib.pyplot as plt
     from matplotlib import rc
     from matplotlib import rc,rcParams
@@ -112,6 +126,12 @@ def plot_optimization_vs_number_of_clusters(clsel):
 
 
 def plot_optimization_vs_sparsity(clsel):
+    """Plot cluster optimization with matplotlib
+
+    The plot shows the prediction and fitting errors as a function of the
+    sparsity parameter when the LASSO method is used.
+    """
+
     import matplotlib.pyplot as plt
     from matplotlib import rc
     from matplotlib import rc,rcParams
@@ -168,12 +188,3 @@ def plot_optimization_vs_sparsity(clsel):
 
     #plt.savefig("plot_optimization.png")
     plt.show()
-
-def _juview_applystyle(view):
-    view.parameters = dict(backgroundColor='white',clipDist=-100,color_scheme="element")
-    view.add_unitcell()
-    view.camera = 'orthographic'
-    #view.center()
-    view.control.rotate([0,1,0,0])
-    view.add_ball_and_stick()
-    view.add_spacefill(radius_type='vdw',scale=0.3)
