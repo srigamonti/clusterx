@@ -14,7 +14,7 @@ class ClustersSelector():
         # additional arguments for linear regression
         self.clusters_sets = kwargs.pop("clusters_sets","size")
         self.nclmax = kwargs.pop("nclmax", 0)
-        self.set0 = kwargs.pop("size0",[0, 0])
+        self.set0 = kwargs.pop("set0",[0, 0])
 
         self.cpool = clusters_pool
         self.fit_intercept=False
