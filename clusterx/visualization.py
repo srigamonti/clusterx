@@ -122,11 +122,49 @@ def plot_optimization_vs_number_of_clusters(clsel):
 
     #ax.tick_params(axis="x",which="minor",width=3,size=10,pad=10)
 
-    plt.plot([ncl_opt],[min(cvs)], 'o', markersize=25, markeredgewidth=4,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE' )
-    #scatter([ncl_opt],[min(cv)], s=400,facecolors='none', edgecolors='r',)
 
-    plt.plot(set_sizes, rmse, markersize=25, marker='.', color='blue', zorder=1,  linestyle='-',label='training-RMSE', linewidth=4)
-    plt.plot(set_sizes, cvs, markersize=25, marker='.', color='black', zorder=1, linestyle='-',label='cv-RMSE',linewidth=4)
+    print((clsel.clusters_sets=="combinations") or (clsel.clusters_sets=="size+combinations"))
+
+    plt.plot([ncl_opt],[min(cvs)], 'o', markersize=25, markeredgewidth=4,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE' )
+
+
+    if (clsel.clusters_sets=="combinations") or (clsel.clusters_sets=="size+combinations"):
+
+        opt_r=[]
+        opt_cv=[]
+        opt_s=[]
+        x=set_sizes[0]
+        ormse=rmse[0]
+        ocvs=cvs[0]
+        for i,s in enumerate(set_sizes):
+            if s == x:
+                if cvs[i] < ocvs:
+                    ocvs=cvs[i]
+                    ormse=rmse[i]
+            elif s > x:
+                opt_s.append(x)
+                opt_r.append(ormse)
+                opt_cv.append(ocvs)
+                x=s
+                ormse=rmse[i]
+                ocvs=cvs[i]
+
+        opt_s.append(x)
+        opt_r.append(ormse)
+        opt_cv.append(ocvs)
+        
+        plt.plot(set_sizes, rmse, markersize=25, marker='.', color='blue', zorder=1,  linestyle='',label='training-RMSE')
+        plt.plot(set_sizes, cvs, markersize=25, marker='.', color='black', zorder=1, linestyle='',label='cv-RMSE')
+        plt.plot(opt_s, opt_r, markersize=25, marker='.', color='blue', zorder=1,  linestyle='-', linewidth=4)
+        plt.plot(opt_s, opt_cv, markersize=25, marker='.',  color='black', zorder=1, linestyle='-', linewidth=4)
+
+    else:
+
+        #plt.plot([ncl_opt],[min(cvs)], 'o', markersize=25, markeredgewidth=4,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE' )
+        #scatter([ncl_opt],[min(cv)], s=400,facecolors='none', edgecolors='r',)
+
+        plt.plot(set_sizes, rmse, markersize=25, marker='.', color='blue', zorder=1,  linestyle='-',label='training-RMSE', linewidth=4)
+        plt.plot(set_sizes, cvs, markersize=25, marker='.', color='black', zorder=1, linestyle='-',label='cv-RMSE',linewidth=4)
 
     plt.ylabel("Energy [arb. units]",fontsize=fs)
     plt.xlabel('Number of clusters',fontsize=fs)
@@ -190,7 +228,7 @@ def plot_optimization_vs_sparsity(clsel):
 
     plt.semilogx([opt],[min(cvs)], 'o', markersize=25, markeredgewidth=4,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE')
     #scatter([ncl_opt],[min(cv)], s=400,facecolors='none', edgecolors='r',)
-
+    
     plt.semilogx(set_sparsity, rmse, markersize=25, marker='.', color='blue', zorder=1,  linestyle='-',label='training-RMSE', linewidth=4)
     plt.semilogx(set_sparsity, cvs, markersize=25, marker='.', color='black', zorder=1, linestyle='-',label='cv-RMSE',linewidth=4)
 
