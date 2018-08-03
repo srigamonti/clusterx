@@ -6,6 +6,15 @@ from clusterx.symmetry import get_scaled_positions
 class CorrelationsCalculator():
     """
     Correlations calculator object.
+
+    **Parameters:**
+
+    ``basis``: string
+        cluster basis to be used. Possible values are: ``binary-linear`` and ``trigonometric``
+    ``parent_lattice``: ParentLattice object
+        the parent lattice of the cluster expansion.
+    ``clusters_pool``: ClustersPool object
+        The clusters pool to be used in the calculator
     """
     def __init__(self, basis, parent_lattice, clusters_pool):
         self.basis = basis
@@ -55,7 +64,21 @@ class CorrelationsCalculator():
 
         return np.around(correlations,decimals=12)
 
-    def get_cluster_correlations(self, structure, mc = False):
+    def get_cluster_correlations(self, structure, mc = False, multiplicities=None):
+        """Get cluster correlations for a structure
+
+        **Parameters:**
+
+        ``structure``: Structure object
+            structure for which to calculate the correlations.
+        ``mc``: Boolean
+            Set to ``True`` when performing Monte-Carlo simulations, to use an
+            optimized version of the method.
+        ``multiplicities``: array of integers
+            if None, the accumulated correlation functions are devided by the size
+            of the cluster orbits, otherwise they are devided by the given
+            multiplicities.
+        """
         from clusterx.utils import get_cl_idx_sc
         cluster_orbits = None
         if mc and self._cluster_orbits_set != []:
@@ -90,12 +113,22 @@ class CorrelationsCalculator():
             for cluster in cluster_orbit:
                 cf = self.cluster_function(cluster, structure.sigmas, structure.ems)
                 correlations[icl] += cf
-            correlations[icl] /= len(cluster_orbit)
+
+            if multiplicities is None:
+                correlations[icl] /= len(cluster_orbit)
+            else:
+                correlations[icl] /= multiplicities[icl]
 
         return np.around(correlations,decimals=12)
 
 
     def get_correlation_matrix(self, structrues_set):
+        """Return correlation matrix for a structures set.
+
+        **Parameters:**
+
+        ``structures_set``: StructuresSet object
+        """
         corrs = np.empty((len(structrues_set),len(self._cpool)))
         for i,st in enumerate(structrues_set):
             corrs[i] = self.get_cluster_correlations(st)

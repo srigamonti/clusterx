@@ -55,6 +55,8 @@ class Structure(SuperCell):
         return self.scell
 
     def get_atoms(self):
+        """Get Atoms object corresponding to the Structure object
+        """
         return self.atoms
 
     def serialize(self, fmt="json", tmp=False, fname=None):

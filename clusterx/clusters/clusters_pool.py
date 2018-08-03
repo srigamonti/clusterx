@@ -333,6 +333,8 @@ class ClustersPool():
         return self._cpool
 
     def get_cpool_arrays(self):
+        """Get arrays of atom indices and atom numbers of the clusters in the pool
+        """
         atom_idxs = []
         atom_nrs = []
 
@@ -419,7 +421,7 @@ class ClustersPool():
     def get_cpool_atoms(self):
         return self._cpool_atoms
 
-    def get_cluster_orbit(self, super_cell, cluster_sites, cluster_species, tol = 1e-3, tight=False, distances=None, no_trans = False):
+    def get_cluster_orbit(self, super_cell=None, cluster_sites=None, cluster_species=None, tol = 1e-3, tight=False, distances=None, no_trans = False, cluster_index=None):
         """
         Get cluster orbit inside a supercell.
         cluster_sites: array of atom indices of the cluster, referred to the supercell.
@@ -429,6 +431,12 @@ class ClustersPool():
         from clusterx.utils import get_cl_idx_sc
         import sys
         from collections import Counter
+
+        if cluster_index is not None:
+            super_cell = self.get_cpool_scell()
+            atom_idxs, atom_nrs = self.get_cpool_arrays()
+            cluster_sites = atom_idxs[cluster_index]
+            cluster_species = atom_nrs[cluster_index]
 
         # empty cluster
         if len(cluster_sites) == 0:
