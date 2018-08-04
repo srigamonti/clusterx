@@ -3,6 +3,49 @@ import numpy as np
 import sys
 
 class ClustersSelector():
+    """Clusters selector class
+
+    Objects of this class are used to select optimal cluster expansion models, i.e.
+    the optimal set of clusters, for given training data and clusters pool.
+
+    **Parameters:**
+
+    ``method``: string
+        can be "lasso" or "linreg". In both cases a cross-validation optimization
+        is performed. In the case of "lasso", the optimal sparsity parameter is
+        searched through cross validation, while in "linreg", cross validation
+        is directly used as model selector.
+    ``clusters_pool``:ClustersPool object
+        the clusters pool from which the optimal model is selected.
+    ``**kwargs``: keyword arguments
+        if ``method`` is set to "lasso", the keyword arguments are:
+            ``sparsity_max``: positive real, maximal sparsity parameter
+            ``sparsity_min``: positive real, minimal sparsity parameter
+            ``sparsity_step``: positive real, optional, if set to 0.0, a logarithmic
+            grid from sparsity_max to sparsity_min is automatically created.
+        if ``method`` is set to "linreg", the keyword arguments are:
+            ``clusters_sets``: one of "size", "combinations", and "size+combinations".
+            In the first case, clusters sub_pools of increasing size are extracted from
+            the initial pool, and cross validation selects the optimal sub-pool.
+            In the second case, all possible combinations of clusters from the pool
+            are considered, this can be very computanionally demanding.
+            In the third case, a fixed pool of clusters up to certain size (see ``set0``
+            parameter below) is always kept and the combinations are searched only
+            for subsets of ``nclmax`` (see below) clusters.
+
+            ``set0``: array with to elements ``[int,float]``
+                if ``clusters_sets`` is set to "size+combinations", this indicates
+                the size of the fixed pool of clusters, above which a combinatorial
+                search is performed. The first element of the array indicates the
+                maximum number of cluster points and the second element the maximum radius,
+                for the fixed subpool.
+
+            ``nclmax``: integer
+                if ``clusters_sets`` is set to "size+combinations", this indicates
+                the maximum number of clusters in the combinatorial subsets of clusters
+                to be searched for (on top of the fixed subpool, see above).
+
+    """
     def __init__(self, method, clusters_pool, **kwargs):
         self.method = method
 
@@ -53,7 +96,8 @@ class ClustersSelector():
         Selects best model for the cluster expansion. The input parameters
         :math:`x` and :math:`p` relate to each other as in:
 
-        ..math::
+        .. math::
+        
             xJ = p^T
 
         where J are the effective cluster interactions.
