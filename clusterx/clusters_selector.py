@@ -97,7 +97,7 @@ class ClustersSelector():
         :math:`x` and :math:`p` relate to each other as in:
 
         .. math::
-        
+
             xJ = p^T
 
         where J are the effective cluster interactions.
@@ -138,6 +138,16 @@ class ClustersSelector():
         comat_opt =  x[np.ix_(rows,opt)]
 
         self.optimal_ecis(comat_opt,p)
+
+    def get_optimal_cpool(self):
+        """Return optimal ClustersPoll object
+        """
+        return self.optimal_clusters
+
+    def get_optimal_cpool_array(self):
+        """Return optimal array of clusters
+        """
+        return self.optimal_clusters._cpool
 
 
     def _linear_regression(self,x,p,clsets):
@@ -307,3 +317,14 @@ class ClustersSelector():
                 sparsity = sparsity - step
 
         return opt_clset
+
+
+    def display_info(self):
+        """Display in screen information about the optimal model
+        """
+        print("{0:<40s}:{1:>10.4f}".format("CV score (LOO) for optimal model",self.opt_mean_cv))
+        print("{0:<40s}:{1:>10.4f}".format("RMSE of the fit for optimal model",self.opt_rmse))
+        print("{0:<40s}:{1:>10d}".format("Size of optimal clusters pool",len(self.optimal_clusters)))
+        #print("CV score (LOO) for optimal model: "+str(self.opt_mean_cv))
+        #print("RMSE of the fit for optimal model: "+str(self.opt_rmse))
+        #print("Size of optimal clusters pool: "+str(len(self.optimal_clusters)))

@@ -601,3 +601,10 @@ class ClustersPool():
 
             atoms = Atoms(symbols=chem,positions=scell.get_positions(),cell=scell.get_cell(),pbc=scell.get_pbc())
             atoms_db.write(atoms)
+
+    def display_info(self):
+        """Display in screen information about the clusters pools
+        """
+        print("{0:<19s}|{1:<19s}|{2:<19s}".format("Index","Nr. of points","Radius"))
+        for i, cl in enumerate(self._cpool):
+            print("{0:<19d}|{1:<19d}|{2:<19.3f}".format(i,cl.npoints,cl.radius))
