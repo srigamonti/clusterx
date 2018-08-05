@@ -68,7 +68,7 @@ def _juview_applystyle(view):
     view.add_spacefill(radius_type='vdw',scale=0.3)
 
 
-def plot_optimization_vs_number_of_clusters(clsel):
+def plot_optimization_vs_number_of_clusters(clsel,nclmin=0):
     """Plot cluster optimization with matplotlib
 
     The plot shows the prediction and fitting errors as a function of the clusters
@@ -123,7 +123,7 @@ def plot_optimization_vs_number_of_clusters(clsel):
     #ax.tick_params(axis="x",which="minor",width=3,size=10,pad=10)
 
 
-    print((clsel.clusters_sets=="combinations") or (clsel.clusters_sets=="size+combinations"))
+    #print((clsel.clusters_sets=="combinations") or (clsel.clusters_sets=="size+combinations"))
 
     plt.plot([ncl_opt],[min(cvs)], 'o', markersize=25, markeredgewidth=4,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE' )
 
@@ -152,7 +152,7 @@ def plot_optimization_vs_number_of_clusters(clsel):
         opt_s.append(x)
         opt_r.append(ormse)
         opt_cv.append(ocvs)
-        
+
         plt.plot(set_sizes, rmse, markersize=25, marker='.', color='blue', zorder=1,  linestyle='',label='training-RMSE')
         plt.plot(set_sizes, cvs, markersize=25, marker='.', color='black', zorder=1, linestyle='',label='cv-RMSE')
         plt.plot(opt_s, opt_r, markersize=25, marker='.', color='blue', zorder=1,  linestyle='-', linewidth=4)
@@ -183,7 +183,12 @@ def plot_optimization_vs_sparsity(clsel):
     """Plot cluster optimization with matplotlib
 
     The plot shows the prediction and fitting errors as a function of the
-    sparsity parameter when the LASSO method is used.
+
+    **Parameters:**
+
+    ``clsel``: ClustersSelector object
+        The ClustersSelector oject which was used for the optimization to be plotted.
+        sparsity parameter when the LASSO method is used.
     """
 
     import matplotlib.pyplot as plt
@@ -228,7 +233,7 @@ def plot_optimization_vs_sparsity(clsel):
 
     plt.semilogx([opt],[min(cvs)], 'o', markersize=25, markeredgewidth=4,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE')
     #scatter([ncl_opt],[min(cv)], s=400,facecolors='none', edgecolors='r',)
-    
+
     plt.semilogx(set_sparsity, rmse, markersize=25, marker='.', color='blue', zorder=1,  linestyle='-',label='training-RMSE', linewidth=4)
     plt.semilogx(set_sparsity, cvs, markersize=25, marker='.', color='black', zorder=1, linestyle='-',label='cv-RMSE',linewidth=4)
 
@@ -246,10 +251,16 @@ def plot_optimization_vs_sparsity(clsel):
 
 
 def plot_predictions(clsel, p):
-    """Plot cluster optimization with matplotlib
+    """Plot predictions versus target with matplotlib
 
-    The plot shows the prediction and fitting errors as a function of the
-    sparsity parameter when the LASSO method is used.
+    The plot shows the prediction versus the target
+
+    **Parameters:**
+
+    ``clsel``: ClustersSelector object
+        The ClustersSelector oject which was used for the optimization.
+    ``p``: array of float
+        the target property values
     """
 
     import matplotlib.pyplot as plt

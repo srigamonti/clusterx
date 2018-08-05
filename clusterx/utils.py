@@ -575,3 +575,12 @@ def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
         idxs = np.argwhere(np.abs(sdistances) < tol)[:,1] # Atom indexes of the transformed cluster
 
     return idxs
+
+def add_noise(v,noise_level):
+    import random
+    energies = []
+    for e in v:
+        energies.append(e+random.uniform(-1,1)*noise_level)
+    return energies
+
+    
