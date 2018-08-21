@@ -15,7 +15,7 @@ from clusterx.utils import isclose
 
 import numpy as np
 
-def test_split_bregman():
+def test_cluster_selector_split_bregman():
 
     cell = [[3,0,0],
             [0,1,0],
@@ -99,4 +99,5 @@ def test_split_bregman():
 
 
 if __name__ == "__main__":
-    test_split_bregman()
+    test_cluster_selector_split_bregman()
+

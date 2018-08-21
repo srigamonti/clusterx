@@ -43,7 +43,7 @@ from clusterx.clusters.cluster import Cluster
 
 from clusterx.utils import isclose
 
-def main():
+def test_nested_sampling():
 
     plat, sc_lat, energy_dict, corcE = build_lattice_and_get_corr()
 
@@ -276,13 +276,10 @@ def build_lattice_and_get_corr():
     energy_dict["mult"] = deepcopy(multE)
     energy_dict["ecis"] = deepcopy(ecisE)
 
-    print(multE)
-    print(energy_dict["mult"])
-
     return plat, scellE, energy_dict, corcE
 
 if __name__ == '__main__':
-    main()
+    test_nested_sampling()
 
 
 
