@@ -61,8 +61,6 @@ def nested_sampling(argv):
     ns_settings["walkers"] = nw
     ns_settings["iters"] = niter
     ns_settings["steps"] = nsteps
-    # Generate output
-    print ("\n\n========Nested Sampling Test========")
     print("\nNow running single component nested_sampling with these settings:")
     print("Number of substitutional atoms: %s" % nsub1)
     print("Number of walkers: %s" % nw)
@@ -75,7 +73,7 @@ def nested_sampling(argv):
     found_lowest = False
     lowest_e = 10.0
     # now run the code
-    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk = sc_nested_sampling(ns_settings, energy_dict, corcE, Nprocs, Nsub1=Nonsub1ne , Nsub2=nsub2, lat=sc_lat, alwaysclone=True, diagnostics=False):
+    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk = sc_nested_sampling(ns_settings, energy_dict, corcE, Nprocs, Nsub1=Nonsub1ne , Nsub2=nsub2, lat=sc_lat, alwaysclone=True, diagnostics=False)
 
     min_index, lowest_E = min(enumerate(total_ewalk), key=itemgetter(1)) # find new lowest-energy sample
     
@@ -85,8 +83,7 @@ def nested_sampling(argv):
     print("Nested sampling finished!")
     print("Energies walked", len(total_ewalk))
     print("number of iterations", len(outer_e))
-    print("\nNested sampling finished and found this energy to be the lowest:")
-    print("Total:", lowest_E)
+    print("\nNested sampling finished and found this energy to be the lowest:", lowest_E)
 
     if write_log == True:
          write_summary(logfile, nsub1, nsub2, total_ewalk, outer_e, xhistory, lowest_E)
