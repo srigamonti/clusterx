@@ -118,14 +118,7 @@ class ClustersSelector():
         #if np.shape(p)[0] != np.shape(x)[0]:
         #    print "Error(cross_validation.cv): Number of property values differs from number of rows in correlation matrix."
         #    sys.exit(0)
-        print(self.method)
-        if self.method == "lasso":
-            opt = self._select_clusters_lasso(x, p)
-            if self.fit_intercept == True:
-                if 0 not in opt:
-                    self.fit_intercept = False
-        
-        elif self.method == "split_bregman":
+        if self.method == "split_bregman":
             #try:
             #    assert (mult is None)
             #except AssertionError:
@@ -135,22 +128,32 @@ class ClustersSelector():
                 print("Error: Missing argument: array mult for split Bregman")
             else:      
                 opt = self._select_clusters_split_bregman(x, p, mult)
+                
+            self.optimal_clusters = self.cpool.get_subpool(opt)
+
         else:
-            if self.clusters_sets == "size":
-                clsets = self.cpool.get_clusters_sets(grouping_strategy = "size")
-            if self.clusters_sets == "combinations":
-                clsets = self.cpool.get_clusters_sets(grouping_strategy = "combinations",  nclmax=self.nclmax)
-            if self.clusters_sets == "size+combinations":
-                clsets = self.cpool.get_clusters_sets(grouping_strategy = "size+combinations", nclmax=self.nclmax , set0=self.set0)
+            if self.method == "lasso":
+                opt = self._select_clusters_lasso(x, p)
+                if self.fit_intercept == True:
+                    if 0 not in opt:
+                        self.fit_intercept = False
 
-            opt = self._linear_regression(x, p, clsets)
+            else:
+                if self.clusters_sets == "size":
+                    clsets = self.cpool.get_clusters_sets(grouping_strategy = "size")
+                if self.clusters_sets == "combinations":
+                    clsets = self.cpool.get_clusters_sets(grouping_strategy = "combinations",  nclmax=self.nclmax)
+                if self.clusters_sets == "size+combinations":
+                    clsets = self.cpool.get_clusters_sets(grouping_strategy = "size+combinations", nclmax=self.nclmax , set0=self.set0)
 
-        self.optimal_clusters = self.cpool.get_subpool(opt)
+                opt = self._linear_regression(x, p, clsets)
 
-        rows = np.arange(len(p))
-        comat_opt =  x[np.ix_(rows,opt)]
+            self.optimal_clusters = self.cpool.get_subpool(opt)
 
-        self.optimal_ecis(comat_opt,p)
+            rows = np.arange(len(p))
+            comat_opt =  x[np.ix_(rows,opt)]
+
+            self.optimal_ecis(comat_opt,p)
 
     def get_optimal_cpool(self):
         """Return optimal ClustersPoll object
@@ -231,6 +234,7 @@ class ClustersSelector():
         from sklearn.model_selection import cross_val_score
         from sklearn import linear_model
         from sklearn.metrics import make_scorer, r2_score, mean_squared_error
+
 
         #if self.method == "linreg":
         self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept, normalize=False)

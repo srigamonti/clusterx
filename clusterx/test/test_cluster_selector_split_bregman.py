@@ -91,13 +91,12 @@ def test_split_bregman():
     print(radius)
     opt_rmse = 3.4941078965519193e-09
 
-    # print ("========Asserts========")
-    # isok = isclose(float(opt_rmse)*1.0e10, float(clsel.opt_rmse)*1.0e10)
-    # assert(isok)
-    # print("\n Test of split_bregman in CELL was successful.\n\n")
-    # print("done")
+    print ("========Asserts========")
+    isok = isclose(float(opt_rmse)*1.0e10, float(clsel.opt_rmse)*1.0e10)
+    assert(isok)
+    print("\n Test of split_bregman in CELL was successful.\n\n")
+    print("done")
 
 
 if __name__ == "__main__":
     test_split_bregman()
-
