@@ -33,6 +33,13 @@ class ParentLattice(Atoms):
         representing the species which can occupy the crystal
         sites (see examples below). This is overriden by ``substitutions``
         if set.
+    ``site_symbols``: list of strings
+        This is an array of length equal to the number of atoms in the parent
+        lattice. Every element in the array is an array with species symbols
+        (e.g. ``[["Cu","Au"]]``),
+        representing the species which can occupy the crystal
+        sites (see examples below). This is overriden by ``substitutions``
+        if set.
     ``pbc``: three bool
         Periodic boundary conditions flags. Examples:
         (1, 1, 0), (True, False, False). Default value: (1,1,1)

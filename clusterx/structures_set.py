@@ -26,15 +26,21 @@ class StructuresSet():
         lattice given here.
 
     ``filename``: String
-        The structures in the data set are added to a json database
-        (specifically an ASE's JSONDatabase object), which can be serialized
-        to a json file with the path given here.
+        The structures in the data set can be added to a database
+        (specifically an ASE's JSONDatabase object), contained in a json file
+        with the path given by ``filename``.
 
     **Examples:**
 
+    .. todo::
+
+        * Write function write_files (already drafted).
+        * So far, the class allows to have only a subset of the structures written to the member json database. This may be dengerous in certain contexts, analyze whether changing this.
+
+
     **Methods:**
     """
-    def __init__(self,parent_lattice, filename="structures_set.json", serial=False, calculator = None):
+    def __init__(self, parent_lattice, filename="structures_set.json", calculator = None):
 
         self._iter = 0
         self._nstructures = 0
@@ -42,7 +48,8 @@ class StructuresSet():
         self._metadata = {}
         self._structures = []
         self._parent_lattice = parent_lattice
-        self._props = None
+        self._props = {}
+        #self._props = None
         #self.write(parent_lattice, parent_lattice=True)
         #self.json_db = JSONDatabase.__init__(filename=self._filename)
         self.json_db = JSONDatabase(filename=self._filename)
@@ -65,6 +72,8 @@ class StructuresSet():
         return self._nstructures
 
     def get_nstr(self):
+        """Return number of structures in the structures set.
+        """
         return self._nstructures
 
     def write(self, structure, key_value_pairs={}, data={}, **kwargs):
@@ -89,7 +98,7 @@ class StructuresSet():
         self._structures.append(structure)
         self._nstructures += 1
         if write_to_db:
-            self.json_db.write(structure,key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
+            self.json_db.write(structure.get_atoms(),key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
 
     def get_structure(self,sid):
         """Get one structure of the set
@@ -145,7 +154,7 @@ class StructuresSet():
             nmax = len(self)
         else:
             nmax = n
-            
+
         if not remove_vacancies:
             for i in range(nmax):
                 images.append(self._structures[i].get_atoms())
@@ -245,3 +254,117 @@ class StructuresSet():
                 self.update(row.id,energy2=e)
 
         """
+
+    def get_paths(self, prefix = None, suffix = None):
+        """Get the
+        """
+        pass
+
+    def write_files(self, root = ".", prefix = None, suffix = None, fnames = [], formats = [], overwrite = True):
+        """Create folders containing structure files for ab-initio calculations.
+
+        Structure files are written to files with path::
+
+            [[root] /] [prefix] id [suffix] / [filename]
+
+        Where ``root``, ``prefix``, ``suffix``, and ``filename`` are explained
+        below, and ``id``+1 is the structure id in a created JSON database with
+        path::
+
+            [[root] /] [prefix]id0-idN[suffix] . json
+
+        where ``id0`` and ``idN`` are the smallest and largest ``id`` indices.
+
+        Parameters:
+
+        ``fmt``: String
+            the format for the created structure files
+
+        ``root``: String
+            path to the root folder containing the set of created folders
+
+        ``prefix``: String
+            prefix for folder name
+
+        ``suffix``: String
+            suffix for folder name
+
+        ``fnames``: array of Strings
+            File names for files contaning the structure.
+
+        ``formats``: array of Strings
+            File formats corresponding to the file names in ``fnames``. Possible
+            formats are listed in `ase.io.write <https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write>`_.
+            If an element of the array is ``None``, the format is guessed from
+            the corresponding file name.
+
+        """
+        import os
+        from ase.io import write
+
+        path = os.path.join(root,prefix+"0"+"-"+str(self.get_nstr()-1)+suffix+".json")
+        db = connect(path, type = "json", append = not overwrite)
+
+        for i in range(self.get_nstr()):
+            path = os.path.join(root,prefix+str(i)+suffix)
+            if not os.path.exists(path):
+                os.makedirs(path)
+
+            atoms = self.get_structure(i).get_atoms()
+
+            for fname, format in zip(fnames,formats):
+                path = os.path.join(root,prefix+str(i)+suffix,fname)
+                if overwrite:
+                    write(path, atoms, format)
+                elif not os.path.isfile(path):
+                    write(path, atoms, format)
+
+            if overwrite:
+                db.write(atoms)
+            elif not os.path.isfile(path):
+                db.write(atoms)
+
+
+    def read_property_values(self, property_name, read_property, *args, root = ".", prefix = '', suffix = ''):
+        """Read calculated property values from ab-inito output files
+
+        Read property values from ab-initio code output files. These files are
+        contained in paths::
+
+            [[root] /] [prefix] id [suffix] /
+
+        Parameters:
+
+        ``read_property``: function
+            Function to extract property value from ab-initio files. Return value
+            must be scalar and signature is::
+
+                read_property(folder_path, args[0], args[1], ...)
+
+            where ``folder_path`` is ``[[root] /] [prefix] id [suffix] /``.
+        ``*args``: non-keyworded variable length argument list
+            You may call this method as::
+
+                sset_instance.read_property_values(read_property, arg1, arg2, ... argN, root="./my_runs/", ...)
+
+            where ``arg1`` to  ``argN`` are the arguments to the ``read_property(arg1,...,argN)`` function.
+
+        ``root``: String
+            path to the root folder containing the set of created folders
+
+        ``prefix``: String
+            prefix for folder name
+
+        ``suffix``: String
+            suffix for folder name
+        """
+        # Note for developers: placing *args before keyworded arguments as in here,
+        # is only possible in python 3
+        import os
+        from clusterx.utils import list_integer_named_folders
+
+        folders = list_integer_named_folders(root, prefix, suffix)
+
+        self._props[property_name] = []
+        for folder in folders:
+            self._props[property_name].append(read_property(folder,*args))
