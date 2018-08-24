@@ -100,6 +100,7 @@ class StructuresSet():
         if write_to_db:
             self.json_db.write(structure.get_atoms(),key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
 
+
     def get_structure(self,sid):
         """Get one structure of the set
 

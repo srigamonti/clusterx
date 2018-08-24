@@ -7,6 +7,7 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.clusters.cluster import Cluster
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.model import Model
+from clusterx.monte_carlo import MonteCarlo
 from ase.data import atomic_numbers as cn
 from ase import Atoms
 
@@ -29,9 +30,12 @@ def test_metropolis():
     pri = crystal(['Si','Si','Si','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
     sub = crystal(['Al','Al','Al','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
     plat = ParentLattice(atoms=pri,substitutions=[sub],pbc=(1,1,1))
+    #sg, sym = get_spacegroup(plat)
 
     # Build clusters pool
+    #cpool = ClustersPool(plat,r=)
     cpool = ClustersPool(plat)
+    cp = cpool._cpool
     cpsc = cpool.get_cpool_scell()
     s = cn["Al"]
     cpool.add_cluster(Cluster([],[],cpsc))
@@ -66,24 +70,28 @@ def test_metropolis():
         0.000413664306204
     ]
 
-    mult=cpoolE.get_multiplicities()
-    print(mult)
-    multE = [1,24,16,6,12,8,48,24,24,24]
-    print(multE)
+    #mult=cpool.get_multiplicities()
+    #m=[]
+    #for cl in cpoolE.get_cpool():
+    #    m.append(cl.get_multiplicity(sc_sym["rotations"],sc_sym["translations"]))    
+    #print(mult)
+    #multE=cpoolE.get_multiplicities()
+    #print(multE)
+    
+    multT = [1,24,16,6,12,8,48,24,24,24]
+    print(multT)
     corcE = CorrelationsCalculator("binary-linear",plat,cpoolE)
     scellS= [(1,0,0),(0,1,0),(0,0,1)]
     scellE = SuperCell(plat,scellS)
 
-    cemodel=Model(corcE, ecisE)
+    cemodelE=Model(corcE, ecisE, multT)
 
-    struc = scellE.gen_random({0:[16]})
+    #struc = scellE.gen_random({0:[16]})
+    mc = MonteCarlo(cemodelE,scellE, {0:[16]})
 
-    nmc = 100
+    temp=1000
+    nmc=50
 
-    for i in range(nmc):
-        ind1,ind2 = struc.swap_random_binary(0)
-        energy = cemodel.predict_prop(struc,multE)
-
-        print(i,energy)
+    mc.metropolis(temp,nmc)
 
     cpool.write_clusters_db(cpool.get_cpool(),cpool.get_cpool_scell(),"test_clathrate_mc-cpool.json")

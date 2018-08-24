@@ -2,20 +2,25 @@
 
 class Model():
     """Description
+
+    ``mult``: array of integers
+        Will be removed in the future
+
     """
-    def __init__(self, correlations_calculator, ecis):
+    def __init__(self, correlations_calculator, ecis, mult):
         self.ecis = ecis
         self._corcal = correlations_calculator
+        self._mult = mult
 
-    def predict_prop(self, structure, mult):
+    def predict_prop(self, structure):
         # Calculate correlations X for structure
         # Calculate property X*ecis
         # return the result
         corrs=self._corcal.get_cluster_correlations(structure, mc=True)
-        mult=self._corcal._cpool.get_multiplicities()
+        #mult=self._corcal._cpool.get_multiplicities()
         prop=0
         for j in range(len(self.ecis)):
-            prop += mult[j] * self.ecis[j] * corrs[j]
+            prop += self._mult[j] * self.ecis[j] * corrs[j]
                         
         return prop
     
