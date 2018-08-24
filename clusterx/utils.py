@@ -82,7 +82,7 @@ def _is_integrable(s):
     except ValueError:
         return False
 
-def list_integer_named_folders(root=".",prepend='',containing_files=[],not_containing_files=[]):
+def list_integer_named_folders(root=".", prefix='', suffix='', containing_files=[], not_containing_files=[]):
     """Return array of integer named folders.
 
     Scans folders in ``root`` and detects those which are named
@@ -108,7 +108,7 @@ def list_integer_named_folders(root=".",prepend='',containing_files=[],not_conta
 
         [1,2,5,7,8].
 
-    If ``prepend`` is set to some string, then it returns a (sorted)
+    If ``prefix`` is set to some string, then it returns a (sorted)
     list of strings. For example, if prepend is set to ``"run_"``, then this
     will return the array::
 
@@ -118,9 +118,12 @@ def list_integer_named_folders(root=".",prepend='',containing_files=[],not_conta
 
     ``root``: string
         path of the root folder in which to scan for integer named folders.
-    ``prepend``: string
-        scan for folders whose name starts with the string ``prepend`` and
-        ends with an integer number.
+    ``prefix``: string
+        scan for folders whose name starts with the string ``prefix`` followed
+        by and integer number (and possibly the string ``suffix``).
+    ``suffix``: string
+        scan for folders whose name ends with the string ``suffix`` and
+        is preceded by an integer number (and possibly the string ``prefix``).
     ``containing_files``: array of strings
         a list of file names that should be contained in the returned folders.
     ``not_containing_files``: array of strings
@@ -150,21 +153,20 @@ def list_integer_named_folders(root=".",prepend='',containing_files=[],not_conta
         if not include:
             continue
 
-        if prepend != '':
-            if folder.startswith(prepend):
-                d = folder[len(prepend):]
-                if _is_integrable(d):
-                    flist.append(int(d))
+        if prefix != '' or suffix != '':
+            d = folder[len(prefix):][:-len(suffix)]
+            if _is_integrable(d):
+                flist.append(int(d))
         else:
             if _is_integrable(folder):
                 flist.append(int(folder))
 
     flist.sort()
 
-    if prepend != '':
+    if prefix != '' or suffix != '':
         slist = []
         for f in flist:
-            slist.append(prepend + str(f))
+            slist.append(prefix + str(f) + suffix)
 
         return slist
 
@@ -582,5 +584,3 @@ def add_noise(v,noise_level):
     for e in v:
         energies.append(e+random.uniform(-1,1)*noise_level)
     return energies
-
-    
