@@ -6,10 +6,11 @@ from clusterx.super_cell import SuperCell
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.clusters.cluster import Cluster
 from clusterx.correlations import CorrelationsCalculator
+from clusterx.model import Model
 from ase.data import atomic_numbers as cn
 from ase import Atoms
 
-def test_clathrate_mc():
+def test_metropolis():
 
     subprocess.call(["rm","-f","test_clathrate_mc-cluster_orbit.json"])
     subprocess.call(["rm","-f","test_clathrate_mc-cpool.json"])
@@ -70,21 +71,19 @@ def test_clathrate_mc():
     multE = [1,24,16,6,12,8,48,24,24,24]
     print(multE)
     corcE = CorrelationsCalculator("binary-linear",plat,cpoolE)
-    scellE = SuperCell(plat,[(1,0,0),(0,1,0),(0,0,1)])
+    scellS= [(1,0,0),(0,1,0),(0,0,1)]
+    scellE = SuperCell(plat,scellS)
+
+    cemodel=Model(corcE, ecisE)
 
     struc = scellE.gen_random({0:[16]})
 
-    nmc = 10
+    nmc = 100
 
     for i in range(nmc):
-        struc = scellE.gen_random({0:[16]})
-        #struc = struc.swap_random_binary(0)
-        corrs = corcE.get_cluster_correlations(struc,mc=True)
-        print(corrs)
-        erg = 0
-        for j in range(len(ecisE)):
-            erg += multE[j] * ecisE[j] * corrs[j]
+        ind1,ind2 = struc.swap_random_binary(0)
+        energy = cemodel.predict_prop(struc,multE)
 
-        print(i,erg)
+        print(i,energy)
 
     cpool.write_clusters_db(cpool.get_cpool(),cpool.get_cpool_scell(),"test_clathrate_mc-cpool.json")
