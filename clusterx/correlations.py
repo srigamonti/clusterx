@@ -10,7 +10,7 @@ class CorrelationsCalculator():
     **Parameters:**
 
     ``basis``: string
-        cluster basis to be used. Possible values are: ``binary-linear`` and ``trigonometric``
+        cluster basis to be used. Possible values are: ``binary-linear`` and ``trigonometric``.
     ``parent_lattice``: ParentLattice object
         the parent lattice of the cluster expansion.
     ``clusters_pool``: ClustersPool object
@@ -30,6 +30,18 @@ class CorrelationsCalculator():
     def site_basis_function(self, alpha, sigma, m):
         """
         Calculates the site basis function.
+        
+        Evaluation of the single site basis functions using different basis sets.
+
+        **Parameters:**
+
+        ``alpha``: integer
+            integer number between 0 and ``m`` - 1; represents the index of the basis function
+        ``sigma``: integer
+            integer number between 0 and ``m`` - 1; represents the occupation variable
+        ``m``: integer
+            number of components of the sublattice
+        
         """
         if self.basis == "trigonometric":
             # Axel van de Walle, CALPHAD 33, 266 (2009)
@@ -43,8 +55,12 @@ class CorrelationsCalculator():
                 return -np.sin(self._2pi*np.ceil(alpha/2.0)*sigma/m)
 
         if self.basis == "binary-linear":
-            # Only for binary alloys. Allows for simple interpretation of cluster interactions
+            # Only for binary alloys. Allows for simple interpretation of cluster interactions. 
             return sigma
+
+        if self.basis == "chebychev":
+            # coming soon
+            pass
 
 
     def cluster_function(self, cluster, structure_sigmas,ems):
