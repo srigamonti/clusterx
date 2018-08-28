@@ -10,7 +10,7 @@ class CorrelationsCalculator():
     **Parameters:**
 
     ``basis``: string
-        cluster basis to be used. Possible values are: ``binary-linear`` and ``trigonometric``.
+        cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric`` and ``chebychev``.
     ``parent_lattice``: ParentLattice object
         the parent lattice of the cluster expansion.
     ``clusters_pool``: ClustersPool object
@@ -59,8 +59,23 @@ class CorrelationsCalculator():
             return sigma
 
         if self.basis == "chebychev":
-            # coming soon
-            pass
+            # Only for ternary alloys. Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984). 
+            # Same results as for "trigonometric" in case of a binary.
+            # WARNING: Forces that sigma = +-m, +-(m-1), ..., +- 1, (0), i.e. explicitly sigma = -1,0,1
+            # WARNING: Only to be used with a fixed number of species for each lattice point.
+            sigma = sigma - 1
+
+            if alpha == 0:
+                return 1
+            
+            elif alpha == 1:
+                return np.sqrt(3/2) * sigma
+
+            elif alpha == 2:
+                return np.sqrt(2) + (-3/np.sqrt(2)) * sigma**2
+
+            else:
+                sys.exit("ERROR! Exceeding possible number of components. This basis functions are intended for ternary compounds only.")
 
 
     def cluster_function(self, cluster, structure_sigmas,ems):

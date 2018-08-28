@@ -44,6 +44,26 @@ def test_cluster_correlations():
     structure2 = Structure(scell2,[1,1,1,6,7,1,1,2,1,1,1,1,6,7,1,1,2,1])
     corrs2 = corrcal.get_cluster_correlations(structure2)
 
+    # Testing for Chebychev polinomials as single site basis functions.
+    # Testing does not (yet) include multi - sublattices. 
+    
+    su21 = Atoms(['C','C','C'], positions=positions, cell=cell, pbc=pbc)
+    su22 = Atoms(['N','N','N'], positions=positions, cell=cell, pbc=pbc)
+
+    plat2 = ParentLattice(pri,substitutions=[su21,su22],pbc=pbc)
+    cpool2 = ClustersPool(plat2, npoints=[1,2], radii=[0,1.2])
+    corrcal2 =  CorrelationsCalculator("chebychev", plat2, cpool2)
+
+    scell21 = SuperCell(plat2,np.array([(1,0,0),(0,3,0),(0,0,1)]))
+    structure21 = Structure(scell21,[1,1,1,6,7,1,6,7,1])
+    corrs21 = corrcal2.get_cluster_correlations(structure21)
+
+    # Doubling of structure21. Correlations should not change.
+    scell22 = SuperCell(plat2,np.array([(1,0,0),(0,6,0),(0,0,1)]))
+    structure22 = Structure(scell22,[1,1,1,6,7,1,6,7,1,1,1,1,6,7,1,6,7,1])
+    corrs22 = corrcal2.get_cluster_correlations(structure22)
+
+    
     # Generate output
     print ("\n\n========Test writes========")
     print (test_cluster_correlations.__doc__)
@@ -54,6 +74,15 @@ def test_cluster_correlations():
     structure2.serialize(fmt="json",fname="test_cluster_correlations_structure_2.json")
     #print("Correlations 1: ",corrs1)
     #print("Correlations 2: ",corrs2)
+    print ("=========Chebychev=========\n")
+
+    scell = cpool2.get_cpool_scell()
+    cpool2.write_clusters_db(cpool2.get_cpool(),scell,"test_cluster_correlations_chebychev_cpool.json")
+    structure21.serialize(fmt="json",fname="test_cluster_correlations_structure_1_chebychev.json")
+    structure22.serialize(fmt="json",fname="test_cluster_correlations_structure_2_chebychev.json")
+    print("Correlations 21: ",corrs21)
+    print("Correlations 22: ",corrs22)    
+
     print ("===========================\n")
 
     print ("========Asserts========")
