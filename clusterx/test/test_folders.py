@@ -1,6 +1,8 @@
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.structures_set import StructuresSet
+from clusterx.calculators.emt import EMT2
+#from ase.calculators.emt import EMT
 import numpy as np
 from ase import Atoms
 
@@ -17,6 +19,33 @@ def test_folders():
 
     nst = 15
     for i in range(nst):
-        sset.add_structure(scell.gen_random(nsubs={0:[4]}), write_to_db = True)
+        sset.add_structure(scell.gen_random(nsubs={0:[4]}))
 
-    sset.write_files(root = ".", prefix = "test_folders-", suffix = "_tmp", fnames=["struc.json","geometry.xml","geometry.in"], formats = ["json","exciting","aims"])
+    isok1 = True
+    isok2 = True
+    isok3 = True
+
+    sset.write_files(prefix = "random_strs-")
+    sset.calculate_energies(EMT2())
+    sset.read_property_values()
+
+    """
+    try:
+        sset.write_files(prefix = "random_strs-")
+    except:
+        isok1 = False
+
+    try:
+        sset.calculate_energies(EMT2())
+    except:
+        isok2 = False
+
+    try:
+        sset.read_property_values()
+    except:
+        isok3 = False
+    """
+    
+    assert isok1
+    assert isok2
+    assert isok3

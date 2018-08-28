@@ -10,6 +10,10 @@ from clusterx.parent_lattice import ParentLattice
 from ase.db.core import connect
 from ase.db.core import Database
 import inspect
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 
 class StructuresSet():
     """
@@ -49,9 +53,9 @@ class StructuresSet():
         self._structures = []
         self._parent_lattice = parent_lattice
         self._props = {}
-        #self._props = None
-        #self.write(parent_lattice, parent_lattice=True)
-        #self.json_db = JSONDatabase.__init__(filename=self._filename)
+        self._folders = []
+        self._folders_db = None
+        self._folders_db_fname = None
         self.json_db = JSONDatabase(filename=self._filename)
         if isinstance(calculator,Calculator):
             self.set_calculator(calculator)
@@ -255,12 +259,29 @@ class StructuresSet():
 
         """
 
-    def get_paths(self, prefix = None, suffix = None):
-        """Get the
+    def calculate_energies(self, calculator, structure_fname="geometry.json"):
         """
-        pass
+        Perform ab-initio calculation of energies contained in folders.
+        """
+        import os
+        from ase.io import read
+        from ase.calculators.emt import EMT
 
-    def write_files(self, root = ".", prefix = None, suffix = None, fnames = [], formats = [], overwrite = True):
+        cwd = os.getcwd()
+
+        for folder in self._folders:
+            os.chdir(folder)
+            atoms = read(structure_fname)
+            atoms.set_calculator(calculator)
+            #atoms.set_calculator(EMT)
+            erg = atoms.get_potential_energy()
+            f = open(os.path.join("energy.dat"),"w+")
+            f.write(str(erg))
+            f.close()
+            os.chdir(cwd)
+
+
+    def write_files(self, root = ".", prefix = '', suffix = '', fnames = None, formats = [], overwrite = True):
         """Create folders containing structure files for ab-initio calculations.
 
         Structure files are written to files with path::
@@ -274,6 +295,15 @@ class StructuresSet():
             [[root] /] [prefix]id0-idN[suffix] . json
 
         where ``id0`` and ``idN`` are the smallest and largest ``id`` indices.
+        The path of the created folders are stored in the json-database created
+        by ``StructuresSet.write_files()``, under, for instance::
+
+            {
+            ...
+            "key_value_pairs": {"folder": "./random_strs-14"},
+            ...
+            }
+
 
         Parameters:
 
@@ -284,31 +314,50 @@ class StructuresSet():
             path to the root folder containing the set of created folders
 
         ``prefix``: String
-            prefix for folder name
+            prefix for name of folder containing the files
 
         ``suffix``: String
-            suffix for folder name
+            suffix for name of folder containing the files
 
         ``fnames``: array of Strings
-            File names for files contaning the structure.
+            File names for files contaning the structure. If not set defaults
+            to ``geometry.json``.
 
-        ``formats``: array of Strings
+        ``formats``: array of Strings, optional
             File formats corresponding to the file names in ``fnames``. Possible
             formats are listed in `ase.io.write <https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write>`_.
-            If an element of the array is ``None``, the format is guessed from
-            the corresponding file name.
+            If ommited, or if an element of the array is ``None``, the format is
+            guessed from the corresponding file name.
 
         """
         import os
         from ase.io import write
 
         path = os.path.join(root,prefix+"0"+"-"+str(self.get_nstr()-1)+suffix+".json")
+        self._folders_db_fname = path
         db = connect(path, type = "json", append = not overwrite)
+
+        if overwrite:
+            self._folders = []
+
+        if fnames is None:
+            fnames = ["geometry.json"]
+        elif isinstance(fnames,str):
+            fnames = [fnames]
+
+        if len(formats) == 0:
+            for i in range(len(fnames)):
+                formats.append(None)
 
         for i in range(self.get_nstr()):
             path = os.path.join(root,prefix+str(i)+suffix)
             if not os.path.exists(path):
                 os.makedirs(path)
+
+            if i < len(self._folders):
+                self._folders[i] = path
+            else:
+                self._folders.append(path)
 
             atoms = self.get_structure(i).get_atoms()
 
@@ -320,12 +369,41 @@ class StructuresSet():
                     write(path, atoms, format)
 
             if overwrite:
-                db.write(atoms)
+                db.write(atoms, folder=self._folders[i])
             elif not os.path.isfile(path):
-                db.write(atoms)
+                db.write(atoms, folder=self._folders[i])
+
+        self._folders_db = db
+        db.metadata = {'db_path':path}
 
 
-    def read_property_values(self, property_name, read_property, *args, root = ".", prefix = '', suffix = ''):
+    def get_folders(self):
+        """Get list folders containing structure files for ab-initio calculations
+        as created by ``StructureSet.write_files()``
+        """
+        return self._folders
+
+    def get_folders_db(self):
+        """Get json database object corresponding to the list folders
+        containing structure files for ab-initio calculations
+        as created by ``StructureSet.writ_files()``
+        """
+        return self._folders_db
+
+    def get_folders_db_fname(self):
+        """Get file name of json database corresponding to the list folders
+        containing structure files for ab-initio calculations
+        as created by ``StructureSet.writ_files()``
+        """
+        return self._folders_db_fname
+
+    def read_energy(folder,**kwargs):
+        import os
+        f = open(os.path.join(folder,"energy.dat"),"r")
+        erg = float(f.readlines()[0])
+        return erg
+
+    def read_property_values(self, property_name = "total_energy", read_property = read_energy, **kwargs):
         """Read calculated property values from ab-inito output files
 
         Read property values from ab-initio code output files. These files are
@@ -333,7 +411,20 @@ class StructuresSet():
 
             [[root] /] [prefix] id [suffix] /
 
+        as created by ``StructureSet.write_files()``. The folders to be searched
+        for energy values are those returned by ``StructureSet.get_folders()``.
+
+        The read property value is stored in the folders json-database created
+        by ``StructuresSet.write_files()``, under, for instance::
+
+            "key_value_pairs": {"folder": "./random_strs-14", [property_name]: 9.266617521975935},
+
+        where [property_name] is the string value of the parameter ``property_name``.
+
         Parameters:
+
+        ``property_name``: string
+            key for the ``self._props`` dictionary of property values
 
         ``read_property``: function
             Function to extract property value from ab-initio files. Return value
@@ -341,30 +432,31 @@ class StructuresSet():
 
                 read_property(folder_path, args[0], args[1], ...)
 
-            where ``folder_path`` is ``[[root] /] [prefix] id [suffix] /``.
-        ``*args``: non-keyworded variable length argument list
+            where ``folder_path`` is the path of the folder containing the relevant
+            property files.
+
+        ``**kwargs``: keyworded variable length argument list
             You may call this method as::
 
-                sset_instance.read_property_values(read_property, arg1, arg2, ... argN, root="./my_runs/", ...)
+                sset_instance.read_property_values(read_property, arg1=arg1, arg2=arg2, ... argN=argN)
 
-            where ``arg1`` to  ``argN`` are the arguments to the ``read_property(arg1,...,argN)`` function.
-
-        ``root``: String
-            path to the root folder containing the set of created folders
-
-        ``prefix``: String
-            prefix for folder name
-
-        ``suffix``: String
-            suffix for folder name
+            where ``arg1`` to  ``argN`` are the keyworded arguments to the ``read_property(folder_path,**kwargs)`` function.
         """
-        # Note for developers: placing *args before keyworded arguments as in here,
-        # is only possible in python 3
         import os
+        import glob
         from clusterx.utils import list_integer_named_folders
 
-        folders = list_integer_named_folders(root, prefix, suffix)
+        db = self.get_folders_db()
 
         self._props[property_name] = []
-        for folder in folders:
-            self._props[property_name].append(read_property(folder,*args))
+        for i,folder in enumerate(self._folders):
+            pval = read_property(folder,**kwargs)
+            self._props[property_name].append(pval)
+            db.update([i+1], **{property_name:pval})
+            # Note: db.update([i+1], property_name=pval) sets the key to "property_name" and not the value of property_name.
+
+
+    def set_property_values(self, property_name = "total_energy", pvals = []):
+        db = self.get_folders_db()
+        for pval in pvals:
+            self._props[property_name].append(pval)
