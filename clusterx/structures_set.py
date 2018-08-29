@@ -228,9 +228,6 @@ class StructuresSet():
     def get_metadata(self, dct):
         return self.metadata
 
-    def get_property(self):
-        return self._props
-
     def calculate_property(self, prop="energy"):
         """
         Return calculated property for all structures in the structures set.
@@ -414,12 +411,12 @@ class StructuresSet():
         as created by ``StructureSet.write_files()``. The folders to be searched
         for energy values are those returned by ``StructureSet.get_folders()``.
 
-        The read property value is stored in the folders json-database created
-        by ``StructuresSet.write_files()``, under, for instance::
+        The read property value is stored in the folders' json-database created
+        by ``StructuresSet.write_files()``, under the "key_value_pairs" key. For instance::
 
             "key_value_pairs": {"folder": "./random_strs-14", [property_name]: 9.266617521975935},
 
-        where [property_name] is the string value of the parameter ``property_name``.
+        where [property_name] represents here the string value of the parameter ``property_name``.
 
         Parameters:
 
@@ -456,7 +453,42 @@ class StructuresSet():
             # Note: db.update([i+1], property_name=pval) sets the key to "property_name" and not the value of property_name.
 
 
-    def set_property_values(self, property_name = "total_energy", pvals = []):
+    def get_property_names(self):
+        """Return list of stored property names.
+        """
+        return list(self._props.keys())
+
+    def get_property_values(self, property_name):
+        """Return list of property values.
+
+        **Parameters:**
+
+        ``property_name``: String
+            Name of the property. If not sure, a list of property names can be
+            obtained ``StructuresSet.get_property_names()``.
+        """
+        return self._props[property_name]
+
+    def set_property_values(self, property_name = "total_energy", property_vals = []):
+        """Set property values
+
+        Set the property values.
+
+        If a folders' json-database (as created by ``StructuresSet.write_files()``)
+        exists, it is updated.
+
+        **Parameters:**
+
+        ``property_name``: string
+            Name of the property
+
+        ``property_vals``: array
+            Array of property values
+
+        """
         db = self.get_folders_db()
-        for pval in pvals:
-            self._props[property_name].append(pval)
+        self._props[property_name] = property_vals
+
+        if db is not None:
+            for i,p in enumerate(property_vals):
+                db.update([i+1], **{property_name:p})
