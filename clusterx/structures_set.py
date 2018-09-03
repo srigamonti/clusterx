@@ -7,6 +7,8 @@ from ase.calculators.calculator import Calculator
 from ase.db.jsondb import JSONDatabase
 from clusterx.super_cell import SuperCell
 from clusterx.parent_lattice import ParentLattice
+from clusterx.structure import Structure
+from clusterx.utils import calculate_trafo_matrix
 from ase.db.core import connect
 from ase.db.core import Database
 import inspect
@@ -80,11 +82,11 @@ class StructuresSet():
         """
         return self._nstructures
 
-    def write(self, structure, key_value_pairs={}, data={}, **kwargs):
-        self.json_db.write(structure,key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
+    def write(self, structure, key_value_pairs={}, **kwargs):
+        self.json_db.write(structure.get_atoms(),key_value_pairs, data={"pcell":structure.get_parent_lattice().get_cell(),"tmat":structure.get_transformation(), "tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
 
     def add_structure(self,structure, key_value_pairs={}, write_to_db = False, **kwargs):
-        """Add a structure to the StructuresSet
+        """Add a structure to the StructuresSet object
 
         **Parameters:**
 
@@ -102,7 +104,34 @@ class StructuresSet():
         self._structures.append(structure)
         self._nstructures += 1
         if write_to_db:
-            self.json_db.write(structure.get_atoms(),key_value_pairs, data={"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
+            self.write(structure, key_value_pairs, **kwargs)
+            #self.json_db.write(structure.get_atoms(),key_value_pairs, data={"tmat":structure.get_transformation(),"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
+
+    def add_structures(self, structures = None, json_db_filepath = None):
+        """Add structures to the StructureSet object
+
+        **Parameters:**
+
+        ``structures``: list of Structure objects
+            Structures to be added
+
+        ``json_db_filepath``: path to JSON file
+            Json database file. The database must contain a data dict with keys
+            tags and idx_subs
+        """
+        if structures is not None:
+            for structure in structures:
+                self.add_structure(structure)
+
+        elif json_db_filepath is not None:
+            db = connect(json_db_filepath)
+            for row in db.select():
+                atoms = row.toatoms()
+                tmat = row.get("data",{}).get("tmat")
+                if tmat is None:
+                    tmat = calculate_trafo_matrix(self._parent_lattice.get_cell(),atoms.get_cell())
+                scell = SuperCell(self._parent_lattice,tmat)
+                self.add_structure(Structure(scell, decoration=atoms.get_atomic_numbers()))
 
     def get_structure(self,sid):
         """Get one structure of the set
@@ -270,7 +299,6 @@ class StructuresSet():
             os.chdir(folder)
             atoms = read(structure_fname)
             atoms.set_calculator(calculator)
-            #atoms.set_calculator(EMT)
             erg = atoms.get_potential_energy()
             f = open(os.path.join("energy.dat"),"w+")
             f.write(str(erg))
@@ -395,6 +423,21 @@ class StructuresSet():
         return self._folders_db_fname
 
     def read_energy(folder,**kwargs):
+        """Read value stored in ``energy.dat`` file.
+
+        This is to be used as the ``read_property`` keyword argument of
+        ``StructureSet.read_property_values()`` method. Can be used as a
+        template for reading different properties to passed to ``StructureSet.read_property_values()``.
+
+        **Parameters:**
+
+        ``folder``: string
+            absolute or relative path of the folder containing the file/s to be read.
+
+        ``**kwargs``: keyword arguments
+            Extra arguments needed for the property reading. See documentation of
+            ``StructureSet.read_property_values()``.
+        """
         import os
         f = open(os.path.join(folder,"energy.dat"),"r")
         erg = float(f.readlines()[0])

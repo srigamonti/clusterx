@@ -452,8 +452,7 @@ def get_unique_supercells(n,parent_lattice):
 
     return unique_scs, unique_trafos
 
-def _is_integer_matrix(m):
-    rnd = 5
+def _is_integer_matrix(m,rnd=5):
     mi = np.around(m,rnd)
     for k in range(3):
         for l in range(3):
@@ -579,8 +578,47 @@ def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
     return idxs
 
 def add_noise(v,noise_level):
+    """Add randomly distributed noise to vector coordinates
+
+    To each coordinate of the input vector ``v``, random noise uniformly
+    distributed between -``noise_level`` and ``noise_level`` is added. The input
+    vector ``v`` is left unchanged. The modified vector is returned.
+
+    **Parameters:**
+
+    ``v``: list of floats
+        The input vector
+
+    ``noise_level``: float
+        Width of the uniform distribution used to add noise.
+    """
     import random
     energies = []
     for e in v:
         energies.append(e+random.uniform(-1,1)*noise_level)
     return energies
+
+def calculate_trafo_matrix(pcell,scell,rnd=5):
+    """Calculate integer transformation matrix given a primitive cell and a super-cell
+
+    If :math:`S` and :math:`V` are, respectively, a matrix whose rows are the cartesian coordinates
+    of the parent lattice vectors and a matrix whose rows are the cartesian coordinates
+    of the super-cell lattice vectors; then, this function returns the matrix :math:`P=SV^{-1}`.
+    If the resulting matrix is not integer (see ``rnd`` parameter), then ``None`` is returned.
+
+    **Parameters:**
+
+    ``pcell``: 3x3 array of float
+        The rows of this matrix correspond to the cartesian coordinates of a parent lattice
+
+    ``scell``: 3x3 array of float
+        The rows of this matrix correspond to the cartesian coordinates of a supercell
+
+    ``rnd``: integer (optional)
+         The matrix :math:`P=SV^{-1}` is rounded to ``rnd`` decimal places and checked for integrity.
+    """
+    tmat = np.dot(scell,np.linalg.inv(pcell))
+    if _is_integer_matrix(tmat,rnd):
+        return np.asarray(np.rint(tmat).astype(int))
+    else:
+        return None
