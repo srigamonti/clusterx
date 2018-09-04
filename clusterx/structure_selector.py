@@ -12,23 +12,20 @@ from ase import Atoms
 
 class StructureSelector():
     """Structure selector class
-
     **Parameters**
-    
     Compulsory:
     ``cluster_pool``: ClustersPool() object
-       The optimal set of clusters for the training data.
+    The optimal set of clusters for the training data.
     ``training_set``: StructuresSet() object
-       Contains the current training set
+    Contains the current training set
     Optional:
     ``candidate_set``: StructuresSet() object
-       Pool of new structures, that might be selected to enter the training set.
-       If it remains 'None', the class can only assess the training set.
+    Pool of new structures, that might be selected to enter the training set.
+    If it remains 'None', the class can only assess the training set.
     ``correlations_calculator``: CorrelationsCalculator object
-       Used to calculate the correlations of structures and clusters.
-       IF THIS IS LEFT EMPTY (or set to None) the correlations are calculated with 
-       a trigonometric basis.      
-
+    Used to calculate the correlations of structures and clusters.
+    IF THIS IS LEFT EMPTY (or set to None) the correlations are calculated with 
+    a trigonometric basis.
     """
 
     def __init__(self, cluster_pool = None, training_set = None, candidate_set = None, correlations_calculator = None):
