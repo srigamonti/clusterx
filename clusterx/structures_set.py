@@ -314,7 +314,7 @@ class StructuresSet():
             [[root] /] [prefix] id [suffix] / [filename]
 
         Where ``root``, ``prefix``, ``suffix``, and ``filename`` are explained
-        below, and ``id``+1 is the structure id in a created JSON database with
+        below, and ``id`` + 1 is the structure id in a created JSON database with
         path::
 
             [[root] /] [prefix]id0-idN[suffix] . json
@@ -332,9 +332,6 @@ class StructuresSet():
 
         Parameters:
 
-        ``fmt``: String
-            the format for the created structure files
-
         ``root``: String
             path to the root folder containing the set of created folders
 
@@ -345,15 +342,17 @@ class StructuresSet():
             suffix for name of folder containing the files
 
         ``fnames``: array of Strings
-            File names for files contaning the structure. If not set defaults
+            Array of file names for files contaning the structure. If not set defaults
             to ``geometry.json``.
 
         ``formats``: array of Strings, optional
-            File formats corresponding to the file names in ``fnames``. Possible
+            Array of file formats corresponding to the file names in ``fnames``. Possible
             formats are listed in `ase.io.write <https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write>`_.
-            If ommited, or if an element of the array is ``None``, the format is
+            If entirely ommited, or if an element of the array is ``None``, the format is
             guessed from the corresponding file name.
 
+        ``overwrite``: boolean
+            Whether to overrite content of existing folders.
         """
         import os
         from ase.io import write
