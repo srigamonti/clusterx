@@ -38,6 +38,9 @@ def test_parent_lattice_creation():
     parent_lattice1 = ParentLattice(atoms=pri,substitutions=[sub1,sub2,sub3])
     parent_lattice1.serialize(fmt="json",fname="test_parent_lattice_creation_1.json")
 
+    parent_lattice2 = ParentLattice(json_db_filepath="test_parent_lattice_creation_1.json")
+
+
     print ("\n\n========Test writes========")
     print (test_parent_lattice_creation.__doc__)
     print ("===========================\n")
@@ -45,6 +48,8 @@ def test_parent_lattice_creation():
     print ("========Asserts========")
     assert check_result(parent_lattice0,0)
     assert check_result(parent_lattice1,1)
+    assert parent_lattice2 == parent_lattice1
+    assert parent_lattice2 != parent_lattice0
 
 def check_result(parent_lattice, case):
     atol = 1e-8

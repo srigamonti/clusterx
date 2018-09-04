@@ -6,6 +6,7 @@ import io
 import tempfile
 import copy
 from clusterx.utils import _is_integrable
+from ase.db.core import connect
 
 def unique_non_sorted(a):
     _, idx = np.unique(a, return_index=True)
@@ -33,6 +34,15 @@ class ParentLattice(Atoms):
         representing the species which can occupy the crystal
         sites (see examples below). This is overriden by ``substitutions``
         if set.
+    ``site_symbols``: list of strings
+        This is an array of length equal to the number of atoms in the parent
+        lattice. Every element in the array is an array with species symbols
+        (e.g. ``[["Cu","Au"]]``),
+        representing the species which can occupy the crystal
+        sites (see examples below). This is overriden by ``substitutions``
+        if set.
+    ``json_db_filepath``: string
+        Json database file. Overrides all the above.
     ``pbc``: three bool
         Periodic boundary conditions flags. Examples:
         (1, 1, 0), (True, False, False). Default value: (1,1,1)
@@ -111,7 +121,17 @@ class ParentLattice(Atoms):
     **Methods:**
     """
 
-    def __init__(self, atoms, substitutions=None, sites=None, site_symbols=None, pbc=None):
+    def __init__(self, atoms=None, substitutions=None, sites=None, site_symbols=None, json_db_filepath=None, pbc=None):
+
+        if json_db_filepath is not None:
+            db = connect(json_db_filepath)
+            substitutions = []
+            for i,row in enumerate(db.select()):
+                if i == 0:
+                    atoms = row.toatoms()
+                else:
+                    substitutions.append(row.toatoms())
+
         if pbc is None:
             pbc = atoms.get_pbc()
         super(ParentLattice,self).__init__(symbols=atoms,pbc=pbc)
@@ -174,6 +194,23 @@ class ParentLattice(Atoms):
             substitutions = []
         self._subs = []
         self._set_substitutions(substitutions)
+
+    def __eq__(self, other):
+        """Check identity of two ParentLattice objects
+        """
+
+        a1 = self.get_atoms()
+        a2 = other.get_atoms()
+        s1 = self.get_substitutions()
+        s2 = other.get_substitutions()
+
+        areeq = True
+        if a1 != a2: return False
+
+        for ss1,ss2 in zip(s1,s2):
+            if ss1 != ss2: return False
+
+        return True 
 
 
     def copy(self):
