@@ -46,7 +46,7 @@ class StructuresSet():
 
     **Methods:**
     """
-    def __init__(self, parent_lattice, filename="structures_set.json", calculator = None):
+    def __init__(self, parent_lattice, filename="structures_set.json", folders_db_fname=None, calculator = None):
 
         self._iter = 0
         self._nstructures = 0
@@ -293,11 +293,17 @@ class StructuresSet():
 
     def calculate_energies(self, calculator, structure_fname="geometry.json"):
         """
-        Perform ab-initio calculation of energies contained in folders.
+        Perform ab-initio calculation of energies using an ASE calculator.
+
+        The folders list as returned by ``StructuresSet.get_folders()`` is
+        iterated. The current working directory (``cwd``) is set to the
+        actual folder in the loop. The structure in the file ``structure_fname``
+        is converted to an ``Atoms`` object, whose calculator is set to
+        ``calulator``. The ``Atoms.get_potential_energy()`` method is called
+        and the resulting total energy is stored in the file ``cwd/energy.dat``.
         """
         import os
         from ase.io import read
-        from ase.calculators.emt import EMT
 
         cwd = os.getcwd()
 
@@ -365,7 +371,10 @@ class StructuresSet():
 
         path = os.path.join(root,prefix+"0"+"-"+str(self.get_nstr()-1)+suffix+".json")
         self._folders_db_fname = path
-        db = connect(path, type = "json", append = not overwrite)
+        try:
+            self._folders_db = connect(path, type = "json", append = not overwrite)
+        except:
+            self._folders_db = connect(path, type = "json", append = False)
 
         if overwrite:
             self._folders = []
@@ -399,12 +408,25 @@ class StructuresSet():
                     write(path, atoms, format)
 
             if overwrite:
-                db.write(atoms, folder=self._folders[i])
+                self._folders_db.write(atoms, folder=self._folders[i])
             elif not os.path.isfile(path):
-                db.write(atoms, folder=self._folders[i])
+                self._folders_db.write(atoms, folder=self._folders[i])
 
-        self._folders_db = db
-        db.metadata = {'db_path':path}
+        if self.get_nstr() != 0:
+            self._folders_db.metadata.update({'db_path':path})
+            self._folders_db.metadata = {
+                "folders" : self._folders,
+                "folders_db_fname" : self._folders_db_fname,
+                "nstr" : self.get_nstr(),
+                "parent_lattice_pbc" : self._parent_lattice.get_pbc(),
+                "parent_lattice_pristine_unit_cell" : self._parent_lattice.get_cell(),
+                "parent_lattice_pristine_positions" : self._parent_lattice.get_positions(),
+                "parent_lattice_pristine_numbers" : self._parent_lattice.get_atomic_numbers(),
+                "parent_lattice_tags" : self._parent_lattice.get_tags(),
+                "parent_lattice_idx_subs" : self._parent_lattice.get_idx_subs()
+            }
+
+            #db.metadata = {'db_path':"tesTX metadata"}
 
 
     def get_folders(self):
