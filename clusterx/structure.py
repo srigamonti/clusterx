@@ -59,13 +59,18 @@ class Structure(SuperCell):
         """
         return self.atoms
 
+    def get_atomic_numbers(self):
+        """Get decoration array
+        """
+        return self.atoms.get_atomic_numbers()
+
     def serialize(self, fmt="json", tmp=False, fname=None):
         from ase.io import write
 
         if fname is None:
             fname = "structure.json"
 
-        write(fname,images=self,format=fmt)
+        write(fname,images=self.atoms,format=fmt) # WARNING! Changed from images = self to images = self.atoms
 
         self._fname = fname
 
