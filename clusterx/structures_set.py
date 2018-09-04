@@ -218,6 +218,9 @@ class StructuresSet():
     def get_property(self):
         return self._props
 
+    def get_parent_lattice(self):
+        return self._parent_lattice
+
     def calculate_property(self, prop="energy"):
         """
         Return calculated property for all structures in the structures set.
