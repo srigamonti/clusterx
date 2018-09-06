@@ -8,13 +8,22 @@ from clusterx.clusters.cluster import Cluster
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.model import Model
 from clusterx.monte_carlo import MonteCarlo
+from clusterx.monte_carlo import MonteCarloTrajectory
+from clusterx.utils import isclose
+from clusterx.utils import dict_compare
+
 from ase.data import atomic_numbers as cn
 from ase import Atoms
+import numpy as np
+
 
 def test_metropolis():
 
     subprocess.call(["rm","-f","test_clathrate_mc-cluster_orbit.json"])
     subprocess.call(["rm","-f","test_clathrate_mc-cpool.json"])
+
+    np.random.seed(10) #setting a seed for the random package for comparible random structures 
+
 
     a = 10.5148
     x = 0.185; y = 0.304; z = 0.116
@@ -86,12 +95,32 @@ def test_metropolis():
 
     cemodelE=Model(corcE, ecisE, multT)
 
+
     #struc = scellE.gen_random({0:[16]})
     mc = MonteCarlo(cemodelE,scellE, {0:[16]})
 
     temp=1000
     nmc=50
 
-    mc.metropolis(temp,nmc)
+    traj = mc.metropolis(temp, nmc)
 
-    cpool.write_clusters_db(cpool.get_cpool(),cpool.get_cpool_scell(),"test_clathrate_mc-cpool.json")
+    steps = traj.get_sampling_step_nos()
+    energies = traj.get_ce_energies()
+    last_id = traj.get_id_sampling_step(steps[-1])
+    #print(last_id,len(traj._trajectory))
+    decoration = traj.get_decoration(last_id)
+    #last_decoration = dict([('sampling_step_no',decoration['sampling_step_no']),('ce_energy',decoration['ce_energy']),('key_value_pairs',decoration['key_value_pairs'])])
+    print(decoration)
+
+    rsteps = [0, 1, 2, 3, 4, 6, 10, 11, 16, 17, 18, 26, 27, 34, 37, 38, 44, 45, 47, 48, 50]
+    renergies = [-77652.59664207128, -77652.61184305252, -77652.62022569243, -77652.61912760629, -77652.62737663009, -77652.63009501049, -77652.63158443688, -77652.64240196907, -77652.64240196907, -77652.64348105107, -77652.64714764676, -77652.64959679516, -77652.64959679516, -77652.65458138083, -77652.66173231734, -77652.65458138083, -77652.65946542152, -77652.6702829537, -77652.66812810961, -77652.67298251796, -77652.66622624162]
+    #rlast_decoration = {'sampling_step_no': 50,
+    #                    'ce_energy': -77652.66622624162,
+    #                    'key_value_pairs': {}}
+    
+
+    isok = (isclose(rsteps,steps) and isclose(renergies, energies)).all()
+    #dict_compare(last_decoration,rlast_decoration)
+
+    assert(isok)
+

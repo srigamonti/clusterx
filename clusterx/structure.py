@@ -1,7 +1,6 @@
 from clusterx.super_cell import SuperCell
 from ase import Atoms
 import numpy as np
-import random
 
 class Structure(SuperCell):
     """Structure class
@@ -78,8 +77,8 @@ class Structure(SuperCell):
         tags=self.get_tags()
         idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == 0 and tags[index] == site_type]
         idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == 1 and tags[index] == site_type]
-        ridx1 = random.choice(idx1)
-        ridx2 = random.choice(idx2)
+        ridx1 = np.random.choice(idx1)
+        ridx2 = np.random.choice(idx2)
 
         self.swap(site_type,ridx1,ridx2)
 
