@@ -56,7 +56,7 @@ class ClustersPool():
         # Determine which supercell will be used to build the clusters pool
         if (self._npoints < 2).all():
             self._cpool_scell = SuperCell(parent_lattice,np.diag([1,1,1]))
-        elif isinstance(super_cell, SuperCell):
+        elif isinstance(super_cell, SuperCell) or isinstance(super_cell, ParentLattice):
             self._cpool_scell = super_cell
         elif super_cell is None and len(radii) != 0:
             self._cpool_scell = self.get_containing_supercell()
@@ -268,7 +268,7 @@ class ClustersPool():
         return clsets
 
 
-    def gen_clusters(self, tight=False):
+    def gen_clusters(self):
         from clusterx.super_cell import SuperCell
         from itertools import product, combinations
         npoints = self._npoints
@@ -311,11 +311,11 @@ class ClustersPool():
                         if _cl not in clrs_full:
                             clrs_full.append(_cl)
                             #cl = Cluster(idxs, ss, scell, distances=distances)
-                            orbit, mult = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),tight=tight,distances=distances)
+                            orbit, mult = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),distances=distances)
 
                             for __cl in orbit:
                                 __cl.set_radius(distances)
-                            orbit.sort() # with tight=False, this avoids adding to the returned pool non-compact translations of the cluster.
+                            orbit.sort() # this avoids adding to the returned pool non-compact translations of the cluster.
                             #self._cpool.append(orbit[0])
                             #self._cpool.append(Cluster(orbit[0].get_idxs(),orbit[0].get_nrs(),scell,distances))
                             self._cpool.append(orbit[0])
@@ -422,9 +422,31 @@ class ClustersPool():
     def get_cpool_atoms(self):
         return self._cpool_atoms
 
-    def get_cluster_orbit(self, super_cell=None, cluster_sites=None, cluster_species=None, tol = 1e-3, tight=False, distances=None, no_trans = False, cluster_index=None):
+    def get_cluster_orbit(self, super_cell=None, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans = False, cluster_index=None):
         """
         Get cluster orbit inside a supercell.
+
+        ``super_cell``: SuperCell object
+            The super cell in which the orbit is calculated.
+        ``cluster_sites``: Array of integer
+            the atom indices of the cluster as referred to the SuperCell object
+            given in ``super_cell``
+        ``cluster_species``: array of integer
+            Decoration (with species numbers) of the cluster for which the orbit is calculated. The species
+            numbers serve as index for the site cluster basis functions. Thus, for  instance
+            if in a given site, say, ``i=12``, the possible species to put are ``14``,
+            ``15`` and ``16`` (``14`` for the pristine), then ``15`` represents the site
+            basis function with label ``1`` and ``16`` the basis function with label ``2``.
+        ``tol``: float
+            tolerance to determine whether cluster and atom positions are the same.
+        ``distances``: 2D array of floats
+             distances of all of the atoms with all of the atoms. Can be used to achieve larger efficiency.
+        ``no_trans``: Boolean
+            set to True to ignore translations of the parent_lattice inside the SuperCell. Thus
+            a reduced orbit is obtained which only contains the symmetry operations of the parent lattice.
+        ``cluster_index``: integer
+            Index of a cluster in the pool. Overrides ``super_cell``, and the
+            orbit is calculated on the supercell of the ``ClustersPool`` object.
         cluster_sites: array of atom indices of the cluster, referred to the supercell.
         """
         from scipy.spatial.distance import cdist
@@ -448,12 +470,6 @@ class ClustersPool():
             if _icl not in substitutional_sites:
                 return None
 
-        radius = None
-        if tight:
-            #radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_species,super_cell))
-            radius = Cluster(cluster_sites,cluster_species,super_cell).radius
-
-        #shash = None
         cluster_species = np.array(cluster_species)
         # Get symmetry operations of the parent lattice
         if no_trans:
