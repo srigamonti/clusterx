@@ -27,12 +27,20 @@ def test_folders():
 
     sset1.write_files(prefix = "random_strs-") # tests folder creation and writing of structure files
     sset1.calculate_energies(EMT2()) # test iterating over folders and calculating energies and writing energy files
-    sset1.read_property_values() # test
+    sset1.read_property_values(property_name = "my_total_energy",) # test
+    e1 = sset1.get_property_values("my_total_energy")
 
     sset2 = StructuresSet(plat)
     sset2.add_structures(json_db_filepath=sset1.get_folders_db_fname()) # Test adding structures from json database file
     for s1,s2 in zip(sset1,sset2):
         print((s1.get_atomic_numbers()==s2.get_atomic_numbers()).all())
+
+    sset3 = StructuresSet(plat, folders_db_fname=sset1.get_folders_db_fname()) # Test init structures set from folders database
+    e3 = sset3.get_property_values("my_total_energy")
+
+    print((e1==e3).all())
+
+    
 
     """
     for s1,s2 in zip(sset1,sset2):
