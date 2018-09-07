@@ -1,7 +1,6 @@
 from sklearn.base import BaseEstimator, RegressorMixin
 import numpy as np
 from copy import deepcopy
-
 # from sklearn.utils.estimator_checks import check_estimator
 # check_estimator(SplitBregmanEstimator( mult=clmults, mu=1.0, lamb=0.9, tol=1.0e-10))
 
@@ -27,18 +26,6 @@ class SplitBregmanEstimator(BaseEstimator, RegressorMixin):
         # self.X_ = []
         # self.Y_ = []
         
-    # def get_params(self, deep=True):
-    #     return {"tol": self.tol, 
-    #             "mu": self.mu, 
-    #             "lamb": self.lamb,
-    #             "mult": self.mult,
-    #             "estimator_type": self._estimator_type}
-
-    # def set_params(self, **parameters):
-    #     for parameter, value in parameters.items():
-    #         setattr(self, parameter, value)
-    #     return self
-
     def fit(self, corr, evals):
         """Train the model on data
         Parameters
