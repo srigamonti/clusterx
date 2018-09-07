@@ -11,13 +11,21 @@ class ClustersSelector():
     **Parameters:**
 
     ``method``: string
-        can be "lasso" or "linreg". In both cases a cross-validation optimization
-        is performed. In the case of "lasso", the optimal sparsity parameter is
-        searched through cross validation, while in "linreg", cross validation
-        is directly used as model selector.
+        can be "split bregman" or "lasso" or "linreg". 
+        The split-bregman routine is implemented as a estimator within scikit learn
+        Cross-validation optimization is performed using sklearn.
+        In the case of "split-bregman" and "lasso", the optimal sparsity parameter is
+        searched through cross validation. 
+        For "linreg", cross validation is directly used as model selector.
     ``clusters_pool``:ClustersPool object
         the clusters pool from which the optimal model is selected.
     ``**kwargs``: keyword arguments
+        if ``method`` is set to "split bregman", the keyword arguments are:
+            ``sparsity_max``: positive real, maximal sparsity parameter
+            ``sparsity_min``: positive real, minimal sparsity parameter
+            ``sparsity_step``: positive real, optional, if set to 0.0, a logarithmic
+            grid from sparsity_max to sparsity_min is automatically created.
+            ``lamb``: positive real, optional
         if ``method`` is set to "lasso", the keyword arguments are:
             ``sparsity_max``: positive real, maximal sparsity parameter
             ``sparsity_min``: positive real, minimal sparsity parameter
@@ -44,7 +52,6 @@ class ClustersSelector():
                 if ``clusters_sets`` is set to "size+combinations", this indicates
                 the maximum number of clusters in the combinatorial subsets of clusters
                 to be searched for (on top of the fixed subpool, see above).
-
     """
     def __init__(self, method, clusters_pool, **kwargs):
         self.method = method
@@ -326,6 +333,7 @@ class ClustersSelector():
 
     
     def _byhand_loo_cv_split_bregman_lasso_compaprison(self, corr, evals, clmults):
+        #todo: implement a more robust comparison 
         import collections
         from collections import defaultdict
         from math import sqrt
@@ -436,9 +444,8 @@ class ClustersSelector():
             print("CV MSE score",mean_cv)
             self.cvs.append(mean_cv)
             self.rmse.append(np.sqrt(mse))
-            # #self.set_sizes.append(np.count_nonzero(ecimult))
+            #self.set_sizes.append(np.count_nonzero(ecimult))
             self.splitbregman_sparsity.append(mu)
-            #print(self.fitter_cv.coef_)
             eci_dict[idx]["ecis"] = deepcopy(self.fitter_cv.coef_)
             eci_dict[idx]["mse"] = mse
             eci_dict[idx]["rmse"] = np.sqrt(mse)

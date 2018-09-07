@@ -24,23 +24,29 @@ import clusterx as c
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 import clusterx.clusters
+import clusterx.clusters.clusters_pool
 from clusterx.clusters.clusters_pool import ClustersPool
+import clusterx.clusters.cluster
 from clusterx.clusters.cluster import Cluster
 from clusterx.correlations import CorrelationsCalculator
-
 from clusterx.structures_set import StructuresSet
 import clusterx.parent_lattice
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.correlations import CorrelationsCalculator
-
-import clusterx.clusters.clusters_pool
-import clusterx.clusters.cluster
-from clusterx.clusters.clusters_pool import ClustersPool
-from clusterx.clusters.cluster import Cluster
 
 def nested_sampling(argv):
-    
+    """**Parameters:**
+
+    Parameters for nested sampling are number of substitutions (nsub1), number of walkers or active points (nw) 
+    number of iterations (niter), and number of steps (nsteps)
+
+    ``nsub1``: number of substitutional atoms for species 1 for which the compositional space is examined
+    ``nsub2``: number of substitutional atoms for species 2 (for the binary phase, this is assumed to be zero) for which the compositional space is examined
+    ``nw``: number of walkers for sampling configuration space 
+    ``niter``: number of iterations, where the outer energy is evaluated at each iteration 
+    ``nsteps``: number of stochastic steps or walk length
+    """
+
     if len(argv) < 1:
         print("No settings defined, will instead use the default settings used in test/test_nested_sampling.py")
     plat, sc_lat, energy_dict, corcE = build_lattice_and_get_corr()
@@ -90,11 +96,11 @@ def nested_sampling(argv):
 
 def sc_nested_sampling(ns_settings, energy_dict, corcE, Nprocs, Nsub1=None , Nsub2=None, lat=None, alwaysclone=True, diagnostics=False):
 
-    Nsubs = 16
+    # todo: determine total number of subsititonal sites from the structure 
+    Nsubs = 16 
     Nw = ns_settings["walkers"]
     Niter = ns_settings["iters"]
     Nsteps = ns_settings["steps"]
-
     pool = Pool(processes=Nprocs)
     # zero out most variables
     E_xs = np.zeros(Nw, dtype=float)                            # dynamically updated list of total energies of walksers 
@@ -244,7 +250,6 @@ def eval_energy(energy_dict, corcE, x):
         erg += multE[j] * ecisE[j] * corrs[j]
     
     return erg
-
 
 def write_summary(logfile, nsub1, nsub2, total_ewalk, Ehistory, xhistory, lowest_E):
 

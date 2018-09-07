@@ -5,16 +5,22 @@ from copy import deepcopy
 # check_estimator(SplitBregmanEstimator( mult=clmults, mu=1.0, lamb=0.9, tol=1.0e-10))
 
 class SplitBregmanEstimator(BaseEstimator, RegressorMixin):
-    """Split Bregmann Iteration"""
+    """**Split Bregmann Iteration class**
+ 
+    the split bregman iteration selects a sparse solution of ECIs in the cluster expansion construction 
+    given the ab initio energy (evals) and correlation matrix (corr)
+    
+    **Parameters:**
 
+    Parameters for split bregman include lambda and mu_min, mu_max, and mu_step
+
+    ``mu``: sparsity hyperparameter, integer 
+    ``lamb``: coupling parameter, integer
+    ``tol``: optional tolerance level for convergance of the algorithm
+    ``mult``: list of cluster multiplicities 
+
+    """
     def __init__(self, mult=None, lamb=0.9, mu=1.0, estimator_type="regressor",tol=1.0e-10):
-        """Split Bregmann Iteration
-        ----------
-        *kwargs
-            Parameters for split bregman include lambda and mu_min, mu_max, and mu_step
-        tol : float
-            optional tolerance level for convergance of the algorithm
-        """
         self.mu = mu
         self.lamb = lamb
         self.tol = tol
@@ -27,10 +33,7 @@ class SplitBregmanEstimator(BaseEstimator, RegressorMixin):
         # self.Y_ = []
         
     def fit(self, corr, evals):
-        """Train the model on data
-        Parameters
-        ----------       
-        """
+        """Train the model on data"""
         self.X_ = deepcopy(corr)
         self.Y_ = deepcopy(evals) 
         Ncl = np.shape(self.mult)[0]
@@ -58,12 +61,7 @@ class SplitBregmanEstimator(BaseEstimator, RegressorMixin):
         return self
        
     def predict(self, corr):
-        """predict the model on data
-        Parameters
-        ---------- 
-        """
-        
-        #corr = deepcopy(self.X_)
+        """predict the model on data"""
         ecis = deepcopy(self.ecis)
         mults = deepcopy(self.mult)
         ncl = len(mults)
@@ -80,8 +78,6 @@ class SplitBregmanEstimator(BaseEstimator, RegressorMixin):
         return self.ergs
        
     def _split_bregman_rms_opt(self, corr, evals, b, d, shrink_threshold = None):
-        # E or pvals is the ab initio energy
-        # corr is the correlation matrix 
         N = np.shape(evals)
         Ncl = np.shape(self.mult)[0]
         corr_trans = corr.T 
