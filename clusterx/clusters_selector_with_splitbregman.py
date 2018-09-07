@@ -62,8 +62,7 @@ class ClustersSelector():
 
         # additional arguments for split bregmann
         self.l = kwargs.pop("l", 0.9)  # lambda
-        self.loo_idx = kwargs.pop("LOO_idx", None)  # Leave-one-out index
-
+        
         self.cpool = clusters_pool
         self.fit_intercept=False
         #for c in self.cpool._cpool:
@@ -78,11 +77,11 @@ class ClustersSelector():
         self.opt_mean_cv = None
         self.opt_sparsity = None
         self.lasso_sparsities = []
+        self.splitbregman_sparsity = []
 
         self.rmse = []
         self.cvs = []
         self.set_sizes = []
-
 
         self.fitter_cv = None
 
@@ -114,46 +113,36 @@ class ClustersSelector():
             Property values for the training structures set.
         """
         from sklearn.model_selection import LeaveOneOut
-
         #if np.shape(p)[0] != np.shape(x)[0]:
         #    print "Error(cross_validation.cv): Number of property values differs from number of rows in correlation matrix."
         #    sys.exit(0)
         if self.method == "split_bregman":
-            #try:
-            #    assert (mult is None)
-            #except AssertionError:
-            #    print("Error: Missing argument: array mult for split Bregman")
-            #else:
             if (mult is None):    
                 print("Error: Missing argument: array mult for split Bregman")
             else:      
+                #opt = self._byhand_loo_cv_split_bregman_lasso_compaprison(x, p, mult)
                 opt = self._select_clusters_split_bregman(x, p, mult)
-                
             self.optimal_clusters = self.cpool.get_subpool(opt)
 
+        elif  self.method == "lasso":
+            opt = self._select_clusters_lasso(x, p)
+            if self.fit_intercept == True:
+                if 0 not in opt:
+                    self.fit_intercept = False
         else:
-            if self.method == "lasso":
-                opt = self._select_clusters_lasso(x, p)
-                if self.fit_intercept == True:
-                    if 0 not in opt:
-                        self.fit_intercept = False
+            if self.clusters_sets == "size":
+                clsets = self.cpool.get_clusters_sets(grouping_strategy = "size")
+            if self.clusters_sets == "combinations":
+                clsets = self.cpool.get_clusters_sets(grouping_strategy = "combinations",  nclmax=self.nclmax)
+            if self.clusters_sets == "size+combinations":
+                clsets = self.cpool.get_clusters_sets(grouping_strategy = "size+combinations", nclmax=self.nclmax , set0=self.set0)
 
-            else:
-                if self.clusters_sets == "size":
-                    clsets = self.cpool.get_clusters_sets(grouping_strategy = "size")
-                if self.clusters_sets == "combinations":
-                    clsets = self.cpool.get_clusters_sets(grouping_strategy = "combinations",  nclmax=self.nclmax)
-                if self.clusters_sets == "size+combinations":
-                    clsets = self.cpool.get_clusters_sets(grouping_strategy = "size+combinations", nclmax=self.nclmax , set0=self.set0)
+            opt = self._linear_regression(x, p, clsets)
 
-                opt = self._linear_regression(x, p, clsets)
-
-            self.optimal_clusters = self.cpool.get_subpool(opt)
-
-            rows = np.arange(len(p))
-            comat_opt =  x[np.ix_(rows,opt)]
-
-            self.optimal_ecis(comat_opt,p)
+        self.optimal_clusters = self.cpool.get_subpool(opt)
+        rows = np.arange(len(p))
+        comat_opt =  x[np.ix_(rows,opt)]
+        self.optimal_ecis(comat_opt,p)
 
     def get_optimal_cpool(self):
         """Return optimal ClustersPoll object
@@ -335,13 +324,22 @@ class ClustersSelector():
 
         return opt_clset
 
-    def _select_clusters_split_bregman(self, corr, evals, clmults, LOO_idx = None):
+    
+    def _byhand_loo_cv_split_bregman_lasso_compaprison(self, corr, evals, clmults):
         import collections
         from collections import defaultdict
+        from math import sqrt
+        #
         from copy import deepcopy
         from operator import itemgetter
+        #
         from sklearn.metrics import mean_squared_error
-        from math import sqrt
+        from sklearn.model_selection import LeaveOneOut
+        from sklearn.model_selection import cross_val_score
+        from sklearn import linear_model
+        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
+        import clusterx
+        from clusterx.split_bregman import SplitBregmanEstimator
 
         lamb = self.l
         mu_min = self.sparsity_min
@@ -350,123 +348,114 @@ class ClustersSelector():
             mu_step=float(sparsity/(1.0*10))
         else:
             mu_step=self.sparsity_step
-        LOO_idx = self.loo_idx
+                
+        eci_dict = defaultdict(list)
+        
+        print("\nRunning split bregman iteration for solving for ECIs\n")
+        
+        LOO_corr = np.zeros((1, corr.shape[1]))
+        nstruc = corr.shape[0]
+        cv_list = []
+        lasso_cv_list = []
+        values = reversed(np.arange(mu_min,mu_max,mu_step))
+        values= [0.01, 0.001, 0.0001]
+        for idx, mu in enumerate(values):
+            print(mu, lamb)
+            self.fitter_cv = SplitBregmanEstimator(mult=clmults, mu=mu, lamb=lamb, tol=1.0e-10)
+            lasso_fitter = linear_model.Lasso(alpha=mu, fit_intercept=False, normalize=False, max_iter = 1000000000, tol = 1e-12)
+            self.fitter_cv.fit(corr, evals)
+            print("INITIAL FIT")
+            for i,j in zip(self.fitter_cv.predict(corr), evals):
+                print(i,j)
+            print("MSE OF IN INITIAL FIT", np.mean(self.fitter_cv.predict(corr)-evals))
+            for LOO_idx in range(nstruc):
+                print(LOO_idx)
+                LOO_corr[0,:] = deepcopy(corr[LOO_idx,:])
+                LOO_evals = evals[LOO_idx]
+                t_corr = np.delete(corr, (LOO_idx), axis=0)
+                t_evals = np.delete(evals, (LOO_idx))
+                self.fitter_cv.fit(t_corr, t_evals)
+                lasso_fitter.fit(t_corr,t_evals)
+                print("FIT")
+                for i,j, k in zip(self.fitter_cv.predict(t_corr), lasso_fitter.predict(t_corr), t_evals):
+                    print(i,j,k)
+                mse=mean_squared_error(self.fitter_cv.predict(t_corr),t_evals)
+                lasso_mse=mean_squared_error(lasso_fitter.predict(t_corr),t_evals)
+                LOO_predE = self.fitter_cv.predict(LOO_corr)
+                lasso_LOO_predE =lasso_fitter.predict(LOO_corr)
+                print("SPLIT_BREGMAN", LOO_predE, "LASSO", lasso_LOO_predE, "TRUE", LOO_evals)
+                cv = sqrt(mean_squared_error([LOO_predE], [LOO_evals]))
+                lasso_cv = sqrt(mean_squared_error([lasso_LOO_predE], [LOO_evals]))
+                print("training fit MSE", mse, "RMSE LOO SPLIT_BREGMAN CV",cv, "RMSE LOO LASSO CV", lasso_cv)
+                cv_list.append(cv)
+                lasso_cv_list.append(lasso_cv)
+                print("A COMPARISON OF ECIS FROM SPLIT_BREGMAN AND LASSO")
+                for i,j in zip(self.fitter_cv.coef_, lasso_fitter.coef_):
+                    print(i,j)
+            print("AVERAGE CV SCORE", np.mean(cv_list), np.mean(lasso_cv_list))
+
+        sys.exit()
+
+    def _select_clusters_split_bregman(self, corr, evals, clmults, LOO_idx = None):
+        import collections
+        from collections import defaultdict
+        from math import sqrt
+        #
+        from copy import deepcopy
+        from operator import itemgetter
+        #
+        from sklearn.metrics import mean_squared_error
+        from sklearn.model_selection import LeaveOneOut
+        from sklearn.model_selection import cross_val_score, cross_val_predict
+        from sklearn import linear_model
+        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
+        import clusterx
+        from clusterx.split_bregman import SplitBregmanEstimator
+        
+        lamb = self.l
+        mu_min = self.sparsity_min
+        mu_max = self.sparsity_max
+        if self.sparsity_step == 0.0:
+            mu_step=float(sparsity/(1.0*10))
+        else:
+            mu_step=self.sparsity_step
         eci_dict = defaultdict(list)
         values = reversed(np.arange(mu_min,mu_max,mu_step))
-        LOO_corr = corr[LOO_idx]
-        LOO_evals= evals[LOO_idx]
-        t_corr = np.delete(corr, (LOO_idx), axis=0)
-        t_evals = np.delete(evals, (LOO_idx))
         print("\nRunning split bregman iteration for solving for ECIs\n")
+        
         for idx, mu in enumerate(values):
-            eci_dict[idx] = defaultdict(list)
-            #eci = self._split_bregman_iteration(evals, corr, clmults, mu, lamb, tol=1.0e-10)
-            eci = self._split_bregman_iteration(t_evals, t_corr, clmults, mu, lamb, tol=1.0e-10)
-            #mse = self._split_bregman_meansqr(eci, evals, clmults, corr)
-            pred_e, mse = self._split_bregman_meansqr(eci, t_evals, clmults, t_corr)
-            rmse = sqrt(mean_squared_error(pred_e, t_evals))
-            LOO_predE = self._split_bregman_eval_energy(eci, clmults, LOO_corr)
-            cv = sqrt(mean_squared_error([LOO_predE], [LOO_evals]))
-            print("training MSE", mse, "RMSE", rmse, "LOO RMSE",cv)
-            eci_dict[idx]["ecis"] = deepcopy(eci)
+            print(mu, lamb)
+            eci_dict[idx] = defaultdict(list)    
+            self.fitter_cv = SplitBregmanEstimator(mult=clmults, mu=mu, lamb=lamb, tol=1.0e-10)
+            self.fitter_cv.fit(corr, evals)
+            mse = mean_squared_error(self.fitter_cv.predict(corr),evals)
+            pred_cvs = cross_val_predict(self.fitter_cv, corr, evals, cv=LeaveOneOut())
+            for i, j in zip(evals, pred_cvs):
+                print(float(i), float(j))
+            mean_cv = np.sqrt(np.average(abs(pred_cvs-evals)))
+            print("CV MSE score",mean_cv)
+            self.cvs.append(mean_cv)
+            self.rmse.append(np.sqrt(mse))
+            # #self.set_sizes.append(np.count_nonzero(ecimult))
+            self.splitbregman_sparsity.append(mu)
+            print(self.fitter_cv.coef_)
+            eci_dict[idx]["ecis"] = deepcopy(self.fitter_cv.coef_)
             eci_dict[idx]["mse"] = mse
-            eci_dict[idx]["rmse"] = rmse
-            eci_dict[idx]["cv"] =  cv
+            eci_dict[idx]["rmse"] = np.sqrt(mse)
+            eci_dict[idx]["cv"] =  mean_cv
 
         tmp_cv_list = [ eci_dict[i]["cv"] for i in eci_dict.keys() ]
         min_idx, min_cv = min(enumerate(tmp_cv_list), key=itemgetter(1))
         print("\nMin. CV", min_cv, "min rmse", eci_dict[min_idx]["rmse"] ) 
-        self.ecis = eci_dict[min_cv]
+        #self.ecis = eci_dict[min_cv]
         self.opt_rmse = float(eci_dict[min_idx]["rmse"])
-        print(float(eci_dict[min_idx]["rmse"])*1.0e10)
+        print(eci_dict[min_idx]["ecis"])
+        #print(self.ecis)
         opt_clset=[i for i, e in enumerate(eci_dict[idx]["ecis"]) if e != 0.0]
         
+        print(self.opt_rmse)
+
         return opt_clset
-
-    def _split_bregman_iteration(self, evals, corr, mult, mu, lamb, tol=1.0e-10):
-        Ncl = np.shape(mult)[0]
-        lastd = np.zeros((Ncl))
-        nextd = np.zeros((Ncl))
-        lastb = np.ones((Ncl))
-        nextb = np.zeros((Ncl))
-        last_eci = np.zeros((Ncl))
-        diff = 1
-        while diff > float(tol):
-            next_eci = self._split_bregman_rms_opt(evals, corr, mult, mu, lamb, nextb, lastd, shrink_threshold = 1.0e-3)
-            next_eci_mu_prod = np.dot(next_eci, mu)
-            nextd = self._split_bregman_shrink(next_eci_mu_prod, nextb, lamb)
-            tmp = np.subtract(next_eci_mu_prod, nextd)
-            lastb = nextb
-            nextb = np.add(lastb, tmp)
-            lastd = nextd
-            diff = float(sum(np.subtract(last_eci, next_eci)))
-            last_eci = next_eci
-
-        return next_eci
-
-    def _split_bregman_rms_opt(self, evals, corr, mult, mu, lamb, b, d, shrink_threshold = None):
-        # E or pvals is the ab initio energy
-        # corr is the correlation matrix 
-        N = np.shape(evals)
-        Ncl = np.shape(mult)[0]
-        corr_trans = corr.T 
-        corr_prod = np.dot(corr_trans, corr)
-        lambmu2_matrix = np.zeros((Ncl, Ncl))
-        np.fill_diagonal(lambmu2_matrix, float(mu**2*lamb))
-        sum_XtX_lambmu2 = np.add(corr_prod, lambmu2_matrix)
-        lambmu_matrix = np.zeros((Ncl, Ncl))
-        np.fill_diagonal(lambmu_matrix, float(mu*lamb))
-        sub_b_d = np.subtract(d,b)
-        lambmu_identy_sub_b_d = np.dot(lambmu_matrix,sub_b_d)
-        XtE = np.dot(corr_trans, evals)
-        first_term = np.linalg.solve(sum_XtX_lambmu2,XtE)
-        second_term = np.linalg.solve(sum_XtX_lambmu2,lambmu_identy_sub_b_d)
-        ecimult = first_term + second_term
-        eci = []
-        for i in range(np.shape(ecimult)[0]):
-            eci.append(ecimult[i] / (1.0*float(mult[i])))
-            if shrink_threshold is not None:
-                if abs(eci[i]) < shrink_threshold:
-                    eci[i] = 0.0
-
-        return np.array(eci) 
-
-    def _split_bregman_shrink(self, eci, b, lamb):
-        
-        nextd = np.add(eci, b)
-        for i, x in enumerate(nextd):
-            if abs(float(x)) <= float(1/float(lamb)):
-                nextd[i] = 0.0
-            else:
-                if float(x) > float(1/float(lamb)):
-                    nextd[i] = float(x - 1/float(lamb))
-                elif float(x) < float(-1/float(lamb)):
-                    nextd[i] = float(x + 1/float(lamb))
-                
-        return np.array(nextd)
-
-    def _split_bregman_meansqr(self, ecis, propvals, clmult, comat):
-        ncl = len(clmult)
-        nstr = len(propvals)
-        e_list = []
-        s2 = 0
-        for i in range(nstr):
-                ece = 0
-                for j in range(ncl):
-                        ece = ece + clmult[j] * ecis[j] * comat[i,j]
-                s2 = s2 + (ece - propvals[i]) * (ece - propvals[i])
-                e_list.append(ece)
-        mse = np.sqrt(s2/nstr)
-
-        return e_list, mse
-
-    def _split_bregman_eval_energy(self, ecisE, multE, corr):
-
-        erg = 0
-        for j in range(len(ecisE)):
-            erg += multE[j] * ecisE[j] * corr[j]
-        
-        return erg
 
     def display_info(self):
         """Display in screen information about the optimal model

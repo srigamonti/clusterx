@@ -1,7 +1,8 @@
 import sys
 import clusterx
-import clusterx.clusters_selector_with_splitbregman
-from clusterx.clusters_selector_with_splitbregman import ClustersSelector
+import clusterx.clusters_selector_with_splitbregman_newest
+
+from clusterx.clusters_selector_with_splitbregman_newest import ClustersSelector
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.clusters.cluster import Cluster
 from clusterx.calculators.emt import EMT2
@@ -63,19 +64,18 @@ def test_cluster_selector_split_bregman():
     strset.add_structure(Structure(scell,[6,2,1,6,1,1,6,7,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,7,1,1,1,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,1,7,1,1,1,1]),write_to_db=True)
-    
+
     # Get the DATA(comat) + TARGET(energies)
     comat = corrcal.get_correlation_matrix(strset)
 
     strset.set_calculator(EMT2())
     energies = strset.calculate_property()
     clmults = cpool.get_multiplicities()
-    lamb = 0.9    
+    lamb = 0.9
     mu_min = 0.00001
     mu_max = 0.10
-    mu_step = 0.01
-    #LOO_idx = np.random.randint(0,comat.shape[0])
-        
+    mu_step = 0.001
+    
     ####### Class ClusterSelector ##########
     clsel = ClustersSelector('split_bregman', cpool, sparsity_max=mu_max, sparsity_min=mu_min, sparsity_step=mu_step, l=lamb, LOO_idx=18)
     clsel.select_clusters(comat, energies, mult = clmults)
@@ -87,16 +87,15 @@ def test_cluster_selector_split_bregman():
         npoints.append(c.npoints)
         radius.append(c.radius)
 
-    print(npoints)
-    print(radius)
-    opt_rmse = 3.4941078965519193e-09
+    precomp_npoints = [0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4]
+    precomp_radius = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.4142135623730951, 1.4142135623730951, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 1.4142135623730951, 1.4142135623730951, 1.4142135623730951, 1.4142135623730951, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979, 1.4142135623730951, 1.4142135623730951]
 
     print ("========Asserts========")
-    isok = isclose(float(opt_rmse)*1.0e10, float(clsel.opt_rmse)*1.0e10)
-    assert(isok)
+    isok1 = isclose(npoints, precomp_npoints)
+    isok2 = isclose(radius, precomp_radius)
+    assert(isok1)
+    assert(isok2)
     print("\n Test of split_bregman in CELL was successful.\n\n")
-    print("done")
-
 
 if __name__ == "__main__":
     test_cluster_selector_split_bregman()

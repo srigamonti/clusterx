@@ -44,13 +44,16 @@ from clusterx.clusters.cluster import Cluster
 from clusterx.utils import isclose
 
 def test_nested_sampling():
-
+    
     plat, sc_lat, energy_dict, corcE = build_lattice_and_get_corr()
 
     diagnostics=True
     write_files=False
     write_log=True
 
+    np.random.seed( 3 )
+    random.seed( 3 )
+    
     nsub1=16
     nsub2=0.0
     nw=1
@@ -70,6 +73,7 @@ def test_nested_sampling():
     print("Number of nested sampling iterations: %s" % niter)
     print("Number of Monte Carlo steps: %s" % nsteps)
 
+    #test_logfile = ("test_NS_Nw-%s_Niter-%s_Nsteps-%s.log" %(nw, niter, nsteps))
     logfile = ("NS_Nw-%s_Niter-%s_Nsteps-%s.log" %(nw, niter, nsteps))
     outfile = ("NS_thermo_summary_Nw-%s_Niter-%s_Nsteps-%s.log" %(nw, niter, nsteps))
 
@@ -93,11 +97,14 @@ def test_nested_sampling():
 
     ncount_new, lowest_new, outer_new = get_info_from_file( logfile )
 
+    dir1 = os.path.join(os.path.dirname(__file__),("test_NS_Nw-%s_Niter-%s_Nsteps-%s.log" %(nw, niter, nsteps)))
+    print("Comparing to", dir1)
+    test_logfile = os.path.join(dir1)
+    ncount_test, lowest_test, outer_test = get_info_from_file( test_logfile )  #  os.path.join(dir1,test_logfile)
     print ("========Asserts========")
     assert isclose(float(ncount_new), float(nsteps)*float(nsub1)*float(niter))
     assert isclose(len(outer_new), float(niter))
-    assert isclose(len(lowest_new), 1)
-
+    
     if ( float(ncount_new) - float(nsteps)*float(nsub1)*float(niter)) != 0.0:
         print("Should be Nsteps*Nsubs*Niters random energies walked")
         print("Error with the number of random energies walked")
@@ -106,6 +113,10 @@ def test_nested_sampling():
         print("error with the number of Niter (outer) energies")
     elif float(len(lowest_new)) != 1.0:
         print("Should be one lowest energy found")
+    elif np.sum(np.array(outer_new) - np.array(outer_test)) != 0.0:
+        print("List of outer array energies changed")
+    elif np.sum(np.array(lowest_new) - np.array(lowest_test)) != 0.0:
+        print("Final outer energy changed")
     else:
         print("\n Test of Nested-Sampling method in CELL was successful.\n\n")
 
@@ -120,9 +131,9 @@ def get_info_from_file(logfile):
         if "walked_random_structure" in line:
             ncount += 1
         elif "outer" in line:
-            outer.append( line.strip().split()[2])
+            outer.append( float(line.strip().split()[3]) )
         elif "lowest" in line:
-            lowest.append( line.strip().split()[2])
+            lowest.append( float(line.strip().split()[3]) )
 
     return ncount, lowest, outer
 
