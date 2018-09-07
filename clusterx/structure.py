@@ -93,3 +93,13 @@ class Structure(SuperCell):
         self.sigmas[ridx2] = sigma1
         self.decor[ridx1] = self.sites[ridx1][sigma2]
         self.decor[ridx2] = self.sites[ridx2][sigma1]
+
+    def update_decoration(self, decoration):
+        """Not tested
+        """
+        self.decor = decoration
+        self.sigmas = np.zeros(len(decoration),dtype=np.int8)
+        for idx, species in enumerate(decoration):
+            self.sigmas[idx] = np.argwhere(self.sites[idx] == species)
+        
+        self.atoms.set_atomic_numbers(self.decor)

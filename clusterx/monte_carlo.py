@@ -8,6 +8,8 @@ from ase.db.jsondb import JSONDatabase
 import json
 import numpy as np
 
+from copy import deepcopy
+
 class MonteCarlo():
     """MonteCarlo class
     
@@ -33,6 +35,9 @@ class MonteCarlo():
         Defines the number of substituted atoms in each sublattice 
         Supercell in which the sampling is performed.
 
+    ``models``: Model object
+        
+
     ``ensemble``: String
         "canonical" allows only for swapping of atoms inside scell
         "grandcanonical"  allows for replacing atoms within the given scell 
@@ -41,22 +46,27 @@ class MonteCarlo():
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
 
+        Optional parameter for calculating properties with other ce_models during the sampling or after.
+        For the moment, it is calculated after the sampling.
+
+
     """
     
-    def __init__(self, energy_model, scell, nsubs, models = [], ensemble = "canonical", no_of_swaps = 1):
+    def __init__(self, energy_model, scell, nsubs, models = [], filename = "trajectory.json", ensemble = "canonical", no_of_swaps = 1):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
         self._models = models
+        self._filename = filename
         self._ensemble = ensemble
         self._no_of_swaps = no_of_swaps
 
-    def metropolis(self, temp, nmc, initial_structure = None):
+    def metropolis(self, temp, nmc, initial_structure = None, write_to_db = False):
         """Perform metropolis simulation
         
-        Description: Perfom Metropolis sampling for nmc sampling steps at temperature temp.
+        **Description**: Perfom Metropolis sampling for nmc sampling steps at temperature temp in the super cell scell.
         
-        Parameters:
+        **Parameters**:
 
         ``nmc``: integer
             Number of sampling steps
@@ -67,6 +77,12 @@ class MonteCarlo():
         ``initial_structure``: Structure object
             Sampling starts with the structure defined by this Structure object. 
             If initial_structure = None: Sampling starts with a structure randomly generated.
+
+        ``write_to_db``: boolean (default: False)                                                                                                                                                                                                                             
+            Whether to add the structure to the json database (see ``filename`` parameter for MonteCarloTrajectory initialization)
+
+        **Returns**: MonteCarloTrajectory object
+            Trajecotoy containing all decorations visited during the sampling
            
         """
         import math
@@ -78,7 +94,8 @@ class MonteCarlo():
         
         e = self._em.predict_prop(struc)
 
-        traj=MonteCarloTrajectory(self._scell)
+        traj = MonteCarloTrajectory(self._scell, filename=self._filename, models=self._models)
+        
         traj.add_decoration(struc, 0, e)
                 
         for i in range(1,nmc+1):
@@ -93,7 +110,7 @@ class MonteCarlo():
 
             if e >= e1:
                 accept_swap = True
-                boltzmann_factor=0
+                boltzmann_factor = 0
             else:
                 boltzmann_factor = math.exp((e-e1)/(kb*temp))
                 if np.random.uniform(0,1) <= boltzmann_factor:
@@ -108,47 +125,70 @@ class MonteCarlo():
             else:
                 for j in range(self._no_of_swaps):
                     m=int(self._no_of_swaps-j)
-                    ind1=ind1_list[j]
-                    ind2=ind2_list[j]
+                    ind1 = ind1_list[j]
+                    ind2 = ind2_list[j]
                     struc.swap(0,ind1,ind2)
-            
-        traj.write_to_file()
-        return traj
-                                        
 
+        if len(self._models) > 0 :
+            traj.calculate_model_properties(self._models)
+                    
+        if write_to_db:
+            traj.write_to_file()
+
+        return traj                                        
 
 class MonteCarloTrajectory():
     """MonteCarloTrajectory class
     
-    Description:
-        Stores the trajectory of decorations visited by the sampling
+    **Description**:
+        Trajectory of decorations visited during the sampling performed in the supercell scell. 
+        For each visited decoration, the sampling step no (sampling_step_no), the decoration (decor), the total energy predicted 
+        the cluster expansion model (ce_energy), and additional properties stored as element in dictionary key_value_pairs is stored.
 
-    Parameters:
+    **Parameters**:
+
+    ``scell``: SuperCell object
+        Super cell in which the sampling is performed.
+
+    ``filename``: string
+        The trajectoy can be stored in a json file with the path given by ``filename``.
+
+    ``**kwargs``: keyword arguments
+
+        ``save_nsteps``: integer
+            Trajectory is saved after save_nsteps.      
+
+        ``models``: List of Model objects           
 
     
     """
     
     def __init__(self, scell, filename="trajectory.json", **kwargs):
-
         self._trajectory = []
         
         self._scell = scell
         self._save_nsteps = kwargs.pop("save_nsteps",1000000)
+        
+        self._save_nsteps = kwargs.pop("models",[])
 
         self._filename = filename
         self.json_db = JSONDatabase(filename=self._filename)
         
-    def calculate_ce_property(self,model):
+    def calculate_model_properties(self, models):
         """
         Calculate the property for all decoration in the trajectory
         """
-        pass
+        for tr in self._trajectory:
+            struc = Structure(self._scell, decoration = tr['decoration'])
+            for mo in models:
+                tr['key_value_pairs'].update({mo._prop: mo.predict_prop(struc)})
+        
 
     def add_decoration(self, struc, step, energy, key_value_pairs={}):
         """
         Add a decoration to the trajectory
         """
-        _sampled_decor = dict([('sampling_step_no',step), ('decoration',struc.decor), ('ce_energy',energy), ('key_value_pairs', key_value_pairs)])
+        _sampled_decor = dict([('sampling_step_no',int(step)), ('decoration',struc.decor), ('model_total_energy',energy), ('key_value_pairs', key_value_pairs)])
 
         self._trajectory.append(_sampled_decor)
 
@@ -195,7 +235,7 @@ class MonteCarloTrajectory():
         return steps
 
     def get_sampling_step_no(self, nid):
-        """Get sampling step number of structure with index nid
+        """Get sampling step number trajectory element with index nid
         """
         return self._trajectory[nid]['sampling_step_no']
 
@@ -219,19 +259,34 @@ class MonteCarloTrajectory():
         return nid
 
 
-    def get_ce_energies(self):
+    def get_model_total_energies(self):
         """Get cluster expansion energies of the full trajectory
         """
-        energies=[]
+        energies = []
         for tr in self._trajectory:
-            energies.append(tr['ce_energy'])
+            energies.append(tr['model_total_energy'])
  
         return energies
 
-    def get_ce_energy(self, nid):
+    def get_model_total_energy(self,nid):
         """Get cluster expansion energy of decoration with index nid
+        """
+        return self._trajectory[nid]['model_total_energy']
+
+    def get_model_properties(self, prop):
+        """Get property predicted by a cluster expansion model of the full trajectory
+        """
+        props = []
+        for tr in self._trajectory:
+            props.append(tr['key_value_pairs'][prop])
+ 
+        return props
+    
+    def get_model_property(self, prop):
+        """Get property predicted by a cluster expansion model of decoration with index nid
         """        
-        return self._trajectory[nid]['ce_energy']
+        return self._trajectory[nid]['key_value_pairs'][prop]
+
     
     def get_id(self, prop, value):
         """Get indizes of decorations from the trajectory which contain the key-value pair trajectory
@@ -248,7 +303,7 @@ class MonteCarloTrajectory():
             array of decoration IDs for which the value of the property prop matches
                                                                                                                                                                                                                                                      
         """
-        arrayid=[]
+        arrayid = []
 
         for i,tr in enumerate(self._trajectory):
             if tr[prop] == value:
@@ -256,9 +311,13 @@ class MonteCarloTrajectory():
 
         return arrayid
 
-    def write_to_file(self):
+    def write_to_file(self, filename = None):
         """Write trajectory to file
         """
+        if filename is not None:
+            self._filename = filename
+            self.json_db = JSONDatabase(filename=self._filename)
+            
         for j,dec in enumerate(self._trajectory):
             self.write(dec)
             

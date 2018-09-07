@@ -24,7 +24,6 @@ def test_metropolis():
 
     np.random.seed(10) #setting a seed for the random package for comparible random structures 
 
-
     a = 10.5148
     x = 0.185; y = 0.304; z = 0.116
     wyckoff = [
@@ -78,7 +77,7 @@ def test_metropolis():
         0.00121744613474,
         0.000413664306204
     ]
-
+    
     #mult=cpool.get_multiplicities()
     #m=[]
     #for cl in cpoolE.get_cpool():
@@ -95,32 +94,59 @@ def test_metropolis():
 
     cemodelE=Model(corcE, ecisE, multT)
 
-
     #struc = scellE.gen_random({0:[16]})
-    mc = MonteCarlo(cemodelE,scellE, {0:[16]})
+    mc = MonteCarlo(cemodelE, scellE, {0:[16]})
 
     temp=1000
     nmc=50
-
-    traj = mc.metropolis(temp, nmc)
+    
+    traj = mc.metropolis(temp, nmc, write_to_db = True)
 
     steps = traj.get_sampling_step_nos()
-    energies = traj.get_ce_energies()
+    energies = traj.get_model_total_energies()
     last_id = traj.get_id_sampling_step(steps[-1])
-    #print(last_id,len(traj._trajectory))
-    decoration = traj.get_decoration(last_id)
-    #last_decoration = dict([('sampling_step_no',decoration['sampling_step_no']),('ce_energy',decoration['ce_energy']),('key_value_pairs',decoration['key_value_pairs'])])
-    print(decoration)
+    print(last_id)
+    last_decoration = traj.get_decoration(last_id)
+    #print(decoration)
 
     rsteps = [0, 1, 2, 3, 4, 6, 10, 11, 16, 17, 18, 26, 27, 34, 37, 38, 44, 45, 47, 48, 50]
     renergies = [-77652.59664207128, -77652.61184305252, -77652.62022569243, -77652.61912760629, -77652.62737663009, -77652.63009501049, -77652.63158443688, -77652.64240196907, -77652.64240196907, -77652.64348105107, -77652.64714764676, -77652.64959679516, -77652.64959679516, -77652.65458138083, -77652.66173231734, -77652.65458138083, -77652.65946542152, -77652.6702829537, -77652.66812810961, -77652.67298251796, -77652.66622624162]
-    #rlast_decoration = {'sampling_step_no': 50,
-    #                    'ce_energy': -77652.66622624162,
-    #                    'key_value_pairs': {}}
+    rlast_decoration = {'sampling_step_no': 50,
+                        'model_total_energy': -77652.66622624162,
+                        'decoration': np.int8([14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]),
+                        'key_value_pairs': {}}
+
+    isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and dict_compare(last_decoration,rlast_decoration)
+    assert(isok1)
+
+
+    ecisBkk= [
+        2.45499482287556,
+        0.008755635590555,
+        -0.00369049905517,
+        -0.00514045920119
+    ]
+
+    ecisBii= [
+        2.3096951176787144,
+        0.0020040504912059,
+        0.0114729488335313,
+        0.004843235304331
+    ]
+            
+    cpoolBonds = ClustersPool(plat, npoints=[0,1], radii=[0,0])
+    corcBonds = CorrelationsCalculator("binary-linear",plat,cpoolBonds)
+
+    multB=[1,24,16,6]
+    cemodelBkk=Model(corcBonds, ecisBkk, multB, prop = 'bond_kk')
+    cemodelBii=Model(corcBonds, ecisBii, multB, prop = 'bond_ii')
+
+    traj.calculate_model_properties([cemodelBkk,cemodelBii])
+    traj.write_to_file(filename = 'trajectory-bonds.json')
+
+    bondskk = traj.get_model_properties('bond_kk')
+    bondsii = traj.get_model_properties('bond_ii')
     
-
-    isok = (isclose(rsteps,steps) and isclose(renergies, energies)).all()
-    #dict_compare(last_decoration,rlast_decoration)
-
-    assert(isok)
-
+    print(bondskk)
+    print(bondsii)
+        
