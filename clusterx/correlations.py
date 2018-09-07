@@ -10,7 +10,7 @@ class CorrelationsCalculator():
     **Parameters:**
 
     ``basis``: string
-        cluster basis to be used. Possible values are: ``binary-linear`` and ``trigonometric``
+        cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric`` and ``chebychev``.
     ``parent_lattice``: ParentLattice object
         the parent lattice of the cluster expansion.
     ``clusters_pool``: ClustersPool object
@@ -30,6 +30,18 @@ class CorrelationsCalculator():
     def site_basis_function(self, alpha, sigma, m):
         """
         Calculates the site basis function.
+
+        Evaluation of the single site basis functions using different basis sets.
+
+        **Parameters:**
+
+        ``alpha``: integer
+            integer number between 0 and ``m`` - 1; represents the index of the basis function
+        ``sigma``: integer
+            integer number between 0 and ``m`` - 1; represents the occupation variable
+        ``m``: integer
+            number of components of the sublattice
+
         """
         if self.basis == "trigonometric":
             # Axel van de Walle, CALPHAD 33, 266 (2009)
@@ -43,8 +55,27 @@ class CorrelationsCalculator():
                 return -np.sin(self._2pi*np.ceil(alpha/2.0)*sigma/m)
 
         if self.basis == "binary-linear":
-            # Only for binary alloys. Allows for simple interpretation of cluster interactions
+            # Only for binary alloys. Allows for simple interpretation of cluster interactions.
             return sigma
+
+        if self.basis == "chebychev":
+            # Only for ternary alloys. Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984).
+            # Same results as for "trigonometric" in case of a binary.
+            # WARNING: Forces that sigma = +-m, +-(m-1), ..., +- 1, (0), i.e. explicitly sigma = -1,0,1
+            # WARNING: Only to be used with a fixed number of species for each lattice point.
+            sigma = sigma - 1
+
+            if alpha == 0:
+                return 1
+
+            elif alpha == 1:
+                return np.sqrt(3/2) * sigma
+
+            elif alpha == 2:
+                return np.sqrt(2) + (-3/np.sqrt(2)) * sigma**2
+
+            else:
+                sys.exit("ERROR! Exceeding possible number of components. This basis functions are intended for ternary compounds only.")
 
 
     def cluster_function(self, cluster, structure_sigmas,ems):
@@ -121,16 +152,25 @@ class CorrelationsCalculator():
 
         return np.around(correlations,decimals=12)
 
-
-    def get_correlation_matrix(self, structrues_set):
+    def get_correlation_matrix(self, structures_set, outfile = None):
         """Return correlation matrix for a structures set.
 
         **Parameters:**
 
         ``structures_set``: StructuresSet object
+            a 2D numpy matrix is returned. every row in the matrix corresponds to
+            a structure in the ``StructuresSet`` object.
         """
-        corrs = np.empty((len(structrues_set),len(self._cpool)))
-        for i,st in enumerate(structrues_set):
+        corrs = np.empty((len(structures_set),len(self._cpool)))
+        for i,st in enumerate(structures_set):
             corrs[i] = self.get_cluster_correlations(st)
+
+        if outfile is not None:
+            f  = open(outfile,"w+")
+            for covec in corrs:
+                for co in covec:
+                    f.write("%2.12f\t"%(co))
+                f.write("\n")
+            f.close()
 
         return corrs

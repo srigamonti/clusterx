@@ -82,7 +82,7 @@ def _is_integrable(s):
     except ValueError:
         return False
 
-def list_integer_named_folders(root=".",prepend='',containing_files=[],not_containing_files=[]):
+def list_integer_named_folders(root=".", prefix='', suffix='', containing_files=[], not_containing_files=[]):
     """Return array of integer named folders.
 
     Scans folders in ``root`` and detects those which are named
@@ -108,7 +108,7 @@ def list_integer_named_folders(root=".",prepend='',containing_files=[],not_conta
 
         [1,2,5,7,8].
 
-    If ``prepend`` is set to some string, then it returns a (sorted)
+    If ``prefix`` is set to some string, then it returns a (sorted)
     list of strings. For example, if prepend is set to ``"run_"``, then this
     will return the array::
 
@@ -118,9 +118,12 @@ def list_integer_named_folders(root=".",prepend='',containing_files=[],not_conta
 
     ``root``: string
         path of the root folder in which to scan for integer named folders.
-    ``prepend``: string
-        scan for folders whose name starts with the string ``prepend`` and
-        ends with an integer number.
+    ``prefix``: string
+        scan for folders whose name starts with the string ``prefix`` followed
+        by and integer number (and possibly the string ``suffix``).
+    ``suffix``: string
+        scan for folders whose name ends with the string ``suffix`` and
+        is preceded by an integer number (and possibly the string ``prefix``).
     ``containing_files``: array of strings
         a list of file names that should be contained in the returned folders.
     ``not_containing_files``: array of strings
@@ -150,21 +153,20 @@ def list_integer_named_folders(root=".",prepend='',containing_files=[],not_conta
         if not include:
             continue
 
-        if prepend != '':
-            if folder.startswith(prepend):
-                d = folder[len(prepend):]
-                if _is_integrable(d):
-                    flist.append(int(d))
+        if prefix != '' or suffix != '':
+            d = folder[len(prefix):][:-len(suffix)]
+            if _is_integrable(d):
+                flist.append(int(d))
         else:
             if _is_integrable(folder):
                 flist.append(int(folder))
 
     flist.sort()
 
-    if prepend != '':
+    if prefix != '' or suffix != '':
         slist = []
         for f in flist:
-            slist.append(prepend + str(f))
+            slist.append(prefix + str(f) + suffix)
 
         return slist
 
@@ -450,8 +452,7 @@ def get_unique_supercells(n,parent_lattice):
 
     return unique_scs, unique_trafos
 
-def _is_integer_matrix(m):
-    rnd = 5
+def _is_integer_matrix(m,rnd=5):
     mi = np.around(m,rnd)
     for k in range(3):
         for l in range(3):
@@ -577,10 +578,82 @@ def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
     return idxs
 
 def add_noise(v,noise_level):
+    """Add randomly distributed noise to vector coordinates
+
+    To each coordinate of the input vector ``v``, random noise uniformly
+    distributed between -``noise_level`` and ``noise_level`` is added. The input
+    vector ``v`` is left unchanged. The modified vector is returned.
+
+    **Parameters:**
+
+    ``v``: list of floats
+        The input vector
+
+    ``noise_level``: float
+        Width of the uniform distribution used to add noise.
+    """
     import random
     energies = []
     for e in v:
         energies.append(e+random.uniform(-1,1)*noise_level)
     return energies
 
-    
+def calculate_trafo_matrix(pcell,scell,rnd=5):
+    """Calculate integer transformation matrix given a primitive cell and a super-cell
+
+    If :math:`S` and :math:`V` are, respectively, a matrix whose rows are the cartesian coordinates
+    of the parent lattice vectors and a matrix whose rows are the cartesian coordinates
+    of the super-cell lattice vectors; then, this function returns the matrix :math:`P=SV^{-1}`.
+    If the resulting matrix is not integer (see ``rnd`` parameter), then ``None`` is returned.
+
+    **Parameters:**
+
+    ``pcell``: 3x3 array of float
+        The rows of this matrix correspond to the cartesian coordinates of a parent lattice
+
+    ``scell``: 3x3 array of float
+        The rows of this matrix correspond to the cartesian coordinates of a supercell
+
+    ``rnd``: integer (optional)
+         The matrix :math:`P=SV^{-1}` is rounded to ``rnd`` decimal places and checked for integrity.
+    """
+    tmat = np.dot(scell,np.linalg.inv(pcell))
+    if _is_integer_matrix(tmat,rnd):
+        return np.asarray(np.rint(tmat).astype(int))
+    else:
+        return None
+
+def _str_grep(input_str, search_str, prepend=''):
+    out_str = ''
+    for l in input_str.split('\n'):
+        if search_str in l:
+            out_str = out_str + prepend + l.strip() + '\n'
+
+    return out_str.rstrip()
+
+def mgrep(fpath, search_array, prepend='',root='.'):
+    """
+    Grep strings in file and return matching lines.
+
+    **Parameters:**
+    ``fpath``: string
+        File path to grep
+    ``search_array``: array of strings
+        Each element of the array is an string to grep in ``fpath``.
+    ``prepend``: string
+        prepend string ``prepend`` to each matching line.
+    ``root``: string
+        File to grep should be in ``root/fpath``.
+    """
+    abs_path = os.path.join(root,fpath)
+    out_str = ''
+    if os.path.isfile(abs_path):
+        fstr = open(abs_path).read()
+
+        for attr in search_array:
+            ostr = _str_grep(fstr,attr,prepend=prepend)
+
+            if ostr != '':
+                out_str = out_str + prepend + ostr.strip() + '\n'
+
+    return out_str.rstrip()
