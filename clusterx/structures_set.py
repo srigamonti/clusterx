@@ -160,6 +160,7 @@ class StructuresSet():
                 scell = SuperCell(self._parent_lattice,tmat)
                 self.add_structure(Structure(scell, decoration=atoms.get_atomic_numbers()))
 
+
     def get_structure(self,sid):
         """Get one structure of the set
 
