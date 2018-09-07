@@ -1,8 +1,7 @@
 import sys
 import clusterx
-import clusterx.clusters_selector_with_splitbregman_newest
-
-from clusterx.clusters_selector_with_splitbregman_newest import ClustersSelector
+import clusterx.clusters_selector_with_splitbregman
+from clusterx.clusters_selector_with_splitbregman import ClustersSelector
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.clusters.cluster import Cluster
 from clusterx.calculators.emt import EMT2
