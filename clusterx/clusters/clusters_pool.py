@@ -40,7 +40,7 @@ class ClustersPool():
     .. todo:
         Fix multiplicities when ``super_cell`` is used
         Add calculation of the multiplicity in add_cluster and get_subpool
-    
+
     **Methods:**
     """
     def __init__(self, parent_lattice, npoints=[], radii=[], super_cell=None):
@@ -115,7 +115,7 @@ class ClustersPool():
         return self._npoints
 
     def get_all_npoints(self):
-        """Return array containing the numper of points of each cluster in the pool
+        """Return array containing the number of points of each cluster in the pool
         """
         npoints = []
         for cl in self._cpool:
@@ -355,34 +355,21 @@ class ClustersPool():
     def dump_cpool_dict(self):
         print(json.dumps(self._cpool_dict,indent=4))
 
-    def get_clusters_array(self):
-        cld = self.get_cpool_dict()
-        cla = []
-        for key,item in cld.items():
-            cla.append([])
-            cla[key].append(item["multiplicity"])
-            cla[key].append(item["radius"])
-            cla[key].append(item["npoints"])
-            if item["npoints"] > 0:
-                cla[key].append(item["positions_lat"])
-                cla[key].append(item["site_basis"])
-        return cla
-
     def get_cluster(self, cln):
         return self._cpool_dict[cln]
 
     def write_clusters_db(self, orbit=None, super_cell=None, db_name="cpool.json"):
         """Write cluster orbit to Atoms database
         """
-        #import clusterx
         from clusterx.structure import Structure
+        from ase.db.jsondb import JSONDatabase
+        from subprocess import call
+
         if orbit is None:
             orbit = self.get_cpool()
         if super_cell is None:
             super_cell = self.get_cpool_scell()
 
-        from ase.db.jsondb import JSONDatabase
-        from subprocess import call
         orbit_nrs = []
         orbit_idxs = []
         for cluster in orbit:
@@ -402,9 +389,6 @@ class ClustersPool():
             for i,atom_idx in enumerate(cl.get_idxs()):
                 ans[atom_idx] = orbit_nrs[icl][i]
             atoms.set_atomic_numbers(ans)
-            ##self._cpool_atoms.append(atoms)
-            #self._cpool_atoms.append(clusterx.structure.Structure(atoms,decoration=ans).get_atoms())
-            #atoms0 = clusterx.structure.Structure(atoms,decoration=ans).get_atoms()
             atoms0 = Structure(atoms,decoration=ans).get_atoms()
             positions = []
             numbers = []
@@ -419,6 +403,18 @@ class ClustersPool():
 
             atoms_db.write(atoms)
 
+        all_atom_indexes = []
+        all_alphas = []
+        all_numbers = []
+        all_positions = []
+
+        atoms_db.metadata = {
+            "multiplicities" : self._multiplicities,
+            "npoints" : self.get_all_npoints(),
+            "radii" : self.get_all_radii(),
+
+        }
+
     def get_cpool_atoms(self):
         return self._cpool_atoms
 
@@ -430,7 +426,8 @@ class ClustersPool():
             The super cell in which the orbit is calculated.
         ``cluster_sites``: Array of integer
             the atom indices of the cluster as referred to the SuperCell object
-            given in ``super_cell``
+            given in ``super_cell``, or the ``ClustersPool.get_cpool_scell()`` superCell
+            object (see ``cluster_index``).
         ``cluster_species``: array of integer
             Decoration (with species numbers) of the cluster for which the orbit is calculated. The species
             numbers serve as index for the site cluster basis functions. Thus, for  instance
@@ -446,8 +443,7 @@ class ClustersPool():
             a reduced orbit is obtained which only contains the symmetry operations of the parent lattice.
         ``cluster_index``: integer
             Index of a cluster in the pool. Overrides ``super_cell``, and the
-            orbit is calculated on the supercell of the ``ClustersPool`` object.
-        cluster_sites: array of atom indices of the cluster, referred to the supercell.
+            orbit is calculated on the supercell of the ``ClustersPool.get_cpool_scell()`` object.
         """
         from scipy.spatial.distance import cdist
         from sympy.utilities.iterables import multiset_permutations
