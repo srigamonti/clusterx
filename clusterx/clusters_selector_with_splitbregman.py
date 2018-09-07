@@ -430,15 +430,15 @@ class ClustersSelector():
             self.fitter_cv.fit(corr, evals)
             mse = mean_squared_error(self.fitter_cv.predict(corr),evals)
             pred_cvs = cross_val_predict(self.fitter_cv, corr, evals, cv=LeaveOneOut())
-            for i, j in zip(evals, pred_cvs):
-                print(float(i), float(j))
+            # for i, j in zip(evals, pred_cvs):
+            #     print(float(i), float(j))
             mean_cv = np.sqrt(np.average(abs(pred_cvs-evals)))
             print("CV MSE score",mean_cv)
             self.cvs.append(mean_cv)
             self.rmse.append(np.sqrt(mse))
             # #self.set_sizes.append(np.count_nonzero(ecimult))
             self.splitbregman_sparsity.append(mu)
-            print(self.fitter_cv.coef_)
+            #print(self.fitter_cv.coef_)
             eci_dict[idx]["ecis"] = deepcopy(self.fitter_cv.coef_)
             eci_dict[idx]["mse"] = mse
             eci_dict[idx]["rmse"] = np.sqrt(mse)
@@ -447,13 +447,8 @@ class ClustersSelector():
         tmp_cv_list = [ eci_dict[i]["cv"] for i in eci_dict.keys() ]
         min_idx, min_cv = min(enumerate(tmp_cv_list), key=itemgetter(1))
         print("\nMin. CV", min_cv, "min rmse", eci_dict[min_idx]["rmse"] ) 
-        #self.ecis = eci_dict[min_cv]
         self.opt_rmse = float(eci_dict[min_idx]["rmse"])
-        print(eci_dict[min_idx]["ecis"])
-        #print(self.ecis)
-        opt_clset=[i for i, e in enumerate(eci_dict[idx]["ecis"]) if e != 0.0]
-        
-        print(self.opt_rmse)
+        opt_clset=[i for i, e in enumerate(eci_dict[idx]["ecis"]) if e != 0.0] 
 
         return opt_clset
 
