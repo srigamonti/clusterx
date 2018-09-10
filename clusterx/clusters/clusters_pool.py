@@ -39,7 +39,8 @@ class ClustersPool():
 
     .. todo:
         Fix multiplicities when ``super_cell`` is used
-
+        Add calculation of the multiplicity in add_cluster and get_subpool
+    
     **Methods:**
     """
     def __init__(self, parent_lattice, npoints=[], radii=[], super_cell=None):
