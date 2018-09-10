@@ -103,3 +103,4 @@ class Structure(SuperCell):
             self.sigmas[idx] = np.argwhere(self.sites[idx] == species)
         
         self.atoms.set_atomic_numbers(self.decor)
+        

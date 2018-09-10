@@ -115,7 +115,19 @@ def test_metropolis():
                         'model_total_energy': -77652.66622624162,
                         'decoration': np.int8([14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]),
                         'key_value_pairs': {}}
+#                            [14, 14, 13, 13, 14, 14, 13, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 14, 13, 13, 14, 14, 13, 13, 14, 14, 14, 14, 13, 13, 14, 13, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]
+#                            [14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]
 
+    print(last_decoration)
+    print(rlast_decoration)
+
+    print(steps)
+    print(rsteps)
+
+    print(energies)
+    print(renergies)
+
+    
     isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and dict_compare(last_decoration,rlast_decoration)
     assert(isok1)
 
@@ -141,12 +153,15 @@ def test_metropolis():
     cemodelBkk=Model(corcBonds, ecisBkk, multB, prop = 'bond_kk')
     cemodelBii=Model(corcBonds, ecisBii, multB, prop = 'bond_ii')
 
-    traj.calculate_model_properties([cemodelBkk,cemodelBii])
+    traj.calculate_model_properties([cemodelBkk,cemodelBii,cemodelE])
     traj.write_to_file(filename = 'trajectory-bonds.json')
 
     bondskk = traj.get_model_properties('bond_kk')
     bondsii = traj.get_model_properties('bond_ii')
+
+    eng = traj.get_model_properties('model_total_energy')
     
     print(bondskk)
     print(bondsii)
+    print(eng)
         

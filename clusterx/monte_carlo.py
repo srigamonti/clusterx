@@ -7,7 +7,6 @@ from ase.db.jsondb import JSONDatabase
 #from ase.db.core import Database
 import json
 import numpy as np
-
 from copy import deepcopy
 
 class MonteCarlo():
@@ -25,18 +24,17 @@ class MonteCarlo():
         Super cell in which the sampling is performed.
 
     ``nsub``: dictionary
-        The format of the dictionary is as follows::                                                                                                                                                                                                                       
-                                                                                                                                                                                                                                                                             
-               {site_type1:[n11,n12,...], site_type2:[n21,n22,...], ...}                                                                                                                                                                                                      
-                                                                                                                                                                                                                                                                            
-        It indicates how many substitutional atoms of every kind (n#1, n#2, ...)                                                                                                                                                                                           
+        The format of the dictionary is as follows::
+
+            {site_type1:[n11,n12,...], site_type2:[n21,n22,...], ...}
+    
+        It indicates how many substitutional atoms of every kind (n#1, n#2, ...)                                                                               
         may replace the pristine species for sites of site_type#.
 
         Defines the number of substituted atoms in each sublattice 
         Supercell in which the sampling is performed.
 
     ``models``: Model object
-        
 
     ``ensemble``: String
         "canonical" allows only for swapping of atoms inside scell
@@ -178,23 +176,26 @@ class MonteCarloTrajectory():
         """
         Calculate the property for all decoration in the trajectory
         """
+        sx=Structure(self._scell, decoration = self._trajectory[0]['decoration'])
+                     
         for tr in self._trajectory:
-            struc = Structure(self._scell, decoration = tr['decoration'])
+            sx.update_decoration(decoration = tr['decoration'])
             for mo in models:
-                tr['key_value_pairs'].update({mo._prop: mo.predict_prop(struc)})
+                tr['key_value_pairs'].update({mo._prop: mo.predict_prop(sx)})
         
 
     def add_decoration(self, struc, step, energy, key_value_pairs={}):
         """
         Add a decoration to the trajectory
         """
-        _sampled_decor = dict([('sampling_step_no',int(step)), ('decoration',struc.decor), ('model_total_energy',energy), ('key_value_pairs', key_value_pairs)])
+        # print([14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56])
+        _sampled_decor = dict([('sampling_step_no',int(step)), ('decoration', deepcopy(struc.decor) ), ('model_total_energy',energy), ('key_value_pairs', key_value_pairs)])
 
         self._trajectory.append(_sampled_decor)
 
     def get_decoration_at_step(self, nstep):
-        """Get the decoration at the n-th sampling step in the trajectory
-                                                                                                                                                                                                                             
+        """Get the decoration at the n-th sampling step in the trajectory.
+            
         **Parameters:**
 
         ``nstep``: integer
@@ -202,7 +203,7 @@ class MonteCarloTrajectory():
 
         **Returns:**
             Decoration at the n-th sampling step.
-                                                                                                                                                                                                                                                     
+                                                                                                                                 
         """
         nid = get_id_sampling_step(nstep)
         

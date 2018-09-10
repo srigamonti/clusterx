@@ -19,6 +19,7 @@ class Model():
         # Calculate correlations X for structure
         # Calculate property X*ecis
         # return the result
+        
         corrs=self._corcal.get_cluster_correlations(structure, mc=True)
         #mult=self._corcal._cpool.get_multiplicities()
         prop=0
