@@ -59,7 +59,7 @@ class MonteCarlo():
         self._ensemble = ensemble
         self._no_of_swaps = no_of_swaps
 
-    def metropolis(self, temp, nmc, initial_structure = None, write_to_db = False):
+    def metropolis(self, scale_factors, nmc, initial_structure = None, write_to_db = False):
         """Perform metropolis simulation
         
         **Description**: Perfom Metropolis sampling for nmc sampling steps at temperature temp in the super cell scell.
@@ -84,8 +84,10 @@ class MonteCarlo():
            
         """
         import math
-        
-        kb=3.16681009610757e-6
+
+        scale_factor_product = 1
+        for el in scale_factors:
+            scale_factor_product *= float(el)
         
         if initial_structure == None:
             struc = self._scell.gen_random(self._nsubs)
@@ -110,7 +112,7 @@ class MonteCarlo():
                 accept_swap = True
                 boltzmann_factor = 0
             else:
-                boltzmann_factor = math.exp((e-e1)/(kb*temp))
+                boltzmann_factor = math.exp((e-e1)/(scale_factor_product))
                 if np.random.uniform(0,1) <= boltzmann_factor:
                     accept_swap = True
                 else:
@@ -158,7 +160,9 @@ class MonteCarloTrajectory():
 
         ``models``: List of Model objects           
 
-    
+    .. todo::
+       Saving the trajectory after ``save_steps`` is not yet implemented.
+        
     """
     
     def __init__(self, scell, filename="trajectory.json", **kwargs):
@@ -178,20 +182,31 @@ class MonteCarloTrajectory():
         """
         sx=Structure(self._scell, decoration = self._trajectory[0]['decoration'])
                      
-        for tr in self._trajectory:
+        for t,tr in enumerate(self._trajectory):
             sx.update_decoration(decoration = tr['decoration'])
-            for mo in models:
-                tr['key_value_pairs'].update({mo._prop: mo.predict_prop(sx)})
-        
+            sdict={}
+            for m,mo in enumerate(models):
+                sdict.update({mo._prop: mo.predict_prop(sx)})
 
+            self._trajectory[t]['key_value_pairs'] = sdict
+                
     def add_decoration(self, struc, step, energy, key_value_pairs={}):
         """
         Add a decoration to the trajectory
         """
-        # print([14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56])
-        _sampled_decor = dict([('sampling_step_no',int(step)), ('decoration', deepcopy(struc.decor) ), ('model_total_energy',energy), ('key_value_pairs', key_value_pairs)])
+        self._trajectory.append(dict([('sampling_step_no',int(step)), ('decoration', deepcopy(struc.decor) ), ('model_total_energy',energy), ('key_value_pairs', key_value_pairs)]))
 
-        self._trajectory.append(_sampled_decor)
+    def get_sampling_step_entries_at_step(self, nstep):
+        """Get the dictionary at the n-th sampling step in the trajectory
+        """
+        return self.get_sampling_step_entries(self.get_id_sampling_step(nstep))
+
+    def get_sampling_step_entries(self, nid):
+        """Get the dictionary with index nid in the trajectory
+        """
+
+        return self._trajectory[nid]
+        
 
     def get_decoration_at_step(self, nstep):
         """Get the decoration at the n-th sampling step in the trajectory.
@@ -204,10 +219,8 @@ class MonteCarloTrajectory():
         **Returns:**
             Decoration at the n-th sampling step.
                                                                                                                                  
-        """
-        nid = get_id_sampling_step(nstep)
-        
-        return get_decoration(nid)
+        """        
+        return self.get_decoration(self.get_id_sampling_step(nstep))
 
 
     def get_decoration(self, nid):
@@ -222,7 +235,7 @@ class MonteCarloTrajectory():
             Decoration at index nid.
                                                                                                                                                                                                                                                      
         """
-        return self._trajectory[nid]
+        return self._trajectory[nid]['decoration']
         
         #return Structure(self._scell, decoration = struc_parameters['decoration'])
 
@@ -241,7 +254,7 @@ class MonteCarloTrajectory():
         return self._trajectory[nid]['sampling_step_no']
 
 
-    def get_id_sampling_step(self,nstep):
+    def get_id_sampling_step(self, nstep):
         """Get decoration index at the n-th sampling step.
         """
         steps = self.get_sampling_step_nos()
@@ -269,7 +282,7 @@ class MonteCarloTrajectory():
  
         return energies
 
-    def get_model_total_energy(self,nid):
+    def get_model_total_energy(self, nid):
         """Get cluster expansion energy of decoration with index nid
         """
         return self._trajectory[nid]['model_total_energy']
@@ -317,11 +330,12 @@ class MonteCarloTrajectory():
         """
         if filename is not None:
             self._filename = filename
-            self.json_db = JSONDatabase(filename=self._filename)
+            self.json_db = JSONDatabase(filename = self._filename)
             
         for j,dec in enumerate(self._trajectory):
             self.write(dec)
             
     def write(self, decor):
+        
         self.json_db.write(decor)
 

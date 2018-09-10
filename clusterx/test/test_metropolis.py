@@ -87,7 +87,6 @@ def test_metropolis():
     #print(multE)
     
     multT = [1,24,16,6,12,8,48,24,24,24]
-    print(multT)
     corcE = CorrelationsCalculator("binary-linear",plat,cpoolE)
     scellS= [(1,0,0),(0,1,0),(0,0,1)]
     scellE = SuperCell(plat,scellS)
@@ -97,16 +96,24 @@ def test_metropolis():
     #struc = scellE.gen_random({0:[16]})
     mc = MonteCarlo(cemodelE, scellE, {0:[16]})
 
-    temp=1000
     nmc=50
+
+    # Boltzmann constant in Ha/K
+    kb = float(3.16681009610757e-6)
+    # temperature in K
+    temp = 1000
+
+    print("Samplings steps",nmc)
+    print("Temperature",temp)
     
-    traj = mc.metropolis(temp, nmc, write_to_db = True)
+    traj = mc.metropolis([kb,temp], nmc)
 
     steps = traj.get_sampling_step_nos()
     energies = traj.get_model_total_energies()
-    last_id = traj.get_id_sampling_step(steps[-1])
-    print(last_id)
-    last_decoration = traj.get_decoration(last_id)
+    print(traj.get_decoration_at_step(steps[1]))
+    
+    print(steps[-1])
+    last_decoration = traj.get_sampling_step_entries_at_step(steps[-1])
     #print(decoration)
 
     rsteps = [0, 1, 2, 3, 4, 6, 10, 11, 16, 17, 18, 26, 27, 34, 37, 38, 44, 45, 47, 48, 50]
@@ -117,15 +124,6 @@ def test_metropolis():
                         'key_value_pairs': {}}
 #                            [14, 14, 13, 13, 14, 14, 13, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 14, 13, 13, 14, 14, 13, 13, 14, 14, 14, 14, 13, 13, 14, 13, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]
 #                            [14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]
-
-    print(last_decoration)
-    print(rlast_decoration)
-
-    print(steps)
-    print(rsteps)
-
-    print(energies)
-    print(renergies)
 
     
     isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and dict_compare(last_decoration,rlast_decoration)
@@ -147,21 +145,22 @@ def test_metropolis():
     ]
             
     cpoolBonds = ClustersPool(plat, npoints=[0,1], radii=[0,0])
-    corcBonds = CorrelationsCalculator("binary-linear",plat,cpoolBonds)
+    corcBonds = CorrelationsCalculator("binary-linear", plat, cpoolBonds)
 
     multB=[1,24,16,6]
     cemodelBkk=Model(corcBonds, ecisBkk, multB, prop = 'bond_kk')
     cemodelBii=Model(corcBonds, ecisBii, multB, prop = 'bond_ii')
 
     traj.calculate_model_properties([cemodelBkk,cemodelBii,cemodelE])
-    traj.write_to_file(filename = 'trajectory-bonds.json')
+
+    traj.write_to_file() #filename = 'trajectory-bonds.json'
 
     bondskk = traj.get_model_properties('bond_kk')
     bondsii = traj.get_model_properties('bond_ii')
 
-    eng = traj.get_model_properties('model_total_energy')
+    rbondskk = [2.4772699399288944, 2.4772699399288944, 2.4772699399288944, 2.4787199000749247, 2.4648238052830997, 2.4648238052830997, 2.4787199000749247, 2.4787199000749247, 2.4787199000749247, 2.4787199000749247, 2.49116603472051, 2.5036121693663045, 2.5036121693663045, 2.49116603472051, 2.4787199000749247, 2.49116603472051, 2.5036121693663045, 2.5036121693663045, 2.4897160745744795, 2.4772699399288944, 2.49116603472051]
+    rbondsii = [2.400461156502162, 2.400461156502162, 2.400461156502162, 2.4070908700313525, 2.4099300548444713, 2.4099300548444713, 2.4070908700313525, 2.4070908700313525, 2.4070908700313525, 2.4070908700313525, 2.397621971688995, 2.3881530733466856, 2.3881530733466856, 2.397621971688995, 2.4070908700313525, 2.397621971688995, 2.3881530733466856, 2.3881530733466856, 2.3909922581598044, 2.400461156502162, 2.397621971688995]
+
+    isok2 = isclose(rbondskk,bondskk) and isclose(rbondsii,bondsii)
     
-    print(bondskk)
-    print(bondsii)
-    print(eng)
-        
+    assert(isok2)    

@@ -112,7 +112,7 @@ class StructuresSet():
     def write(self, structure, key_value_pairs={}, **kwargs):
         self.json_db.write(structure.get_atoms(),key_value_pairs, data={"pcell":structure.get_parent_lattice().get_cell(),"tmat":structure.get_transformation(), "tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
 
-    def add_structure(self,structure, key_value_pairs={}, write_to_db = False, **kwargs):
+    def add_structure(self, structure, key_value_pairs={}, write_to_db = False, **kwargs):
         """Add a structure to the StructuresSet object
 
         **Parameters:**
@@ -471,7 +471,7 @@ class StructuresSet():
     def get_folders_db_fname(self):
         """Get file name of json database corresponding to the list folders
         containing structure files for ab-initio calculations
-        as created by ``StructureSet.writ_files()``
+        as created by ``StructureSet.write_files()``
         """
         return self._folders_db_fname
 
