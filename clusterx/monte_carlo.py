@@ -159,6 +159,9 @@ class MonteCarloTrajectory():
             Trajectory is saved after save_nsteps.      
 
         ``models``: List of Model objects           
+
+    .. todo::
+       Saving the trajectory after ``save_steps`` is not yet implemented.
         
     """
     
