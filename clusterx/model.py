@@ -7,15 +7,19 @@ class Model():
         Will be removed in the future
 
     """
-    def __init__(self, correlations_calculator, ecis, mult):
+    def __init__(self, correlations_calculator, ecis, mult, prop = "model_total_energy",):
         self.ecis = ecis
         self._corcal = correlations_calculator
         self._mult = mult
+
+        self._prop = prop
+
 
     def predict_prop(self, structure):
         # Calculate correlations X for structure
         # Calculate property X*ecis
         # return the result
+        
         corrs=self._corcal.get_cluster_correlations(structure, mc=True)
         #mult=self._corcal._cpool.get_multiplicities()
         prop=0
