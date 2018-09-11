@@ -10,13 +10,13 @@ commands = ['test']
     testslist=('Print available tests', 'flag','l'),
     name=("Make one test","option","n")
 )
-def test(testslist=False, name=None):
+def test(testslist=False, name=""):
     "Test CELL"
     if testslist:
         print(tlist)
         return()
     else:
-        if name is not None:
+        if name is not "":
             path = os.path.join(os.path.dirname(tm.__file__),name+".py")
             print(path)
         else:
