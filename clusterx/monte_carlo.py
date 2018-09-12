@@ -328,43 +328,36 @@ class MonteCarloTrajectory():
         return arrayid
 
     def write_to_file(self, filename = None):
-        """Write trajectory to file
+        """Write trajectory to file (default filename trajectory.json)
         """
         if filename is not None:
             self._filename = filename
-                
+
+        trajdic={}
         for j,dec in enumerate(self._trajectory):
-            
-            self.write( dec, j)
-            
-    def write(self, decor, n):
-    
-        decor['decoration']=decor['decoration'].tolist()
-
-        with open(self._filename, 'a+') as outfile:
-
-            json.dump({str(n):decor}, outfile, sort_keys=True, indent=1)
+            dec['decoration'] = dec['decoration'].tolist()
+            trajdic.update({str(j):dec})
         
-        #decor_keys = set(decor.keys())
+        with open(self._filename, 'w') as outfile:
+            json.dump(trajdic,outfile,sort_keys = True, indent=1, separators=(',',':'))
+
+    def read(self, filename = None , append = False):
+        """Read trajectory from file (default filename trajectory.json)
+        """
+        if filename is not None:
+            trajfile = open(filename,'r')
+        else:
+            trajfile = open(self._filename,'r')
+
+        data = json.load(trajfile)
+
+        if not append:
+            self._trajectory = []            
+
+        data_keys = sorted([int(el) for el in set(data.keys())])
+
+        for key in data_keys:
+            tr = data[str(key)]
+            tr['decoration'] = np.asarray(tr['decoration'],dtype=np.int8)
+            self._trajectory.append(tr)
         
-        #self.json_db.write(decor)
-
-    def read(self):
-        from pprint import pprint
-        from decimal import Decimal
-
-        self._trajectory=[]
-        data=[]
-
-        with open(self._filename) as trajfile:
-            #tr  = trajfile.read():
-            #print(tr)
-            #    print(tr.split())
-            data = json.loads(trajfile.read())
-                #data = json.loads(trajfile.read())
-            #for tr in trajfile:
-            #    print(tr)
-            #    self._trajectory.append(json.loads(tr))
-
-        pprint(data)
-        #print(self._trajectory)
