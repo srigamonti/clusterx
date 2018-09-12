@@ -15,7 +15,7 @@ from clusterx.utils import dict_compare
 from ase.data import atomic_numbers as cn
 from ase import Atoms
 import numpy as np
-
+import os
 
 def test_metropolis():
 
@@ -114,7 +114,6 @@ def test_metropolis():
     
     print(steps[-1])
     last_decoration = traj.get_sampling_step_entries_at_step(steps[-1])
-    #print(decoration)
 
     rsteps = [0, 1, 2, 3, 4, 6, 10, 11, 16, 17, 18, 26, 27, 34, 37, 38, 44, 45, 47, 48, 50]
     renergies = [-77652.59664207128, -77652.61184305252, -77652.62022569243, -77652.61912760629, -77652.62737663009, -77652.63009501049, -77652.63158443688, -77652.64240196907, -77652.64240196907, -77652.64348105107, -77652.64714764676, -77652.64959679516, -77652.64959679516, -77652.65458138083, -77652.66173231734, -77652.65458138083, -77652.65946542152, -77652.6702829537, -77652.66812810961, -77652.67298251796, -77652.66622624162]
@@ -151,9 +150,11 @@ def test_metropolis():
     cemodelBkk=Model(corcBonds, ecisBkk, multB, prop = 'bond_kk')
     cemodelBii=Model(corcBonds, ecisBii, multB, prop = 'bond_ii')
 
-    traj.calculate_model_properties([cemodelBkk,cemodelBii,cemodelE])
+    traj.calculate_model_properties([cemodelBkk,cemodelBii])
 
-    traj.write_to_file() #filename = 'trajectory-bonds.json'
+    print([mo._prop for mo in traj._models])
+
+    traj.write_to_file()
 
     bondskk = traj.get_model_properties('bond_kk')
     bondsii = traj.get_model_properties('bond_ii')
@@ -162,5 +163,8 @@ def test_metropolis():
     rbondsii = [2.400461156502162, 2.400461156502162, 2.400461156502162, 2.4070908700313525, 2.4099300548444713, 2.4099300548444713, 2.4070908700313525, 2.4070908700313525, 2.4070908700313525, 2.4070908700313525, 2.397621971688995, 2.3881530733466856, 2.3881530733466856, 2.397621971688995, 2.4070908700313525, 2.397621971688995, 2.3881530733466856, 2.3881530733466856, 2.3909922581598044, 2.400461156502162, 2.397621971688995]
 
     isok2 = isclose(rbondskk,bondskk) and isclose(rbondsii,bondsii)
+
+    if os.path.isfile("trajectory.json"):
+        traj.read()
     
     assert(isok2)    
