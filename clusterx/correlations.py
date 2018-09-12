@@ -10,7 +10,8 @@ class CorrelationsCalculator():
     **Parameters:**
 
     ``basis``: string
-        cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric`` and ``chebychev``.
+        cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric`` and ``ternary-chebychev``.
+        ``binary-linear``: 
     ``parent_lattice``: ParentLattice object
         the parent lattice of the cluster expansion.
     ``clusters_pool``: ClustersPool object
@@ -58,7 +59,7 @@ class CorrelationsCalculator():
             # Only for binary alloys. Allows for simple interpretation of cluster interactions. 
             return sigma
 
-        if self.basis == "chebychev":
+        if self.basis == "ternary-chebychev":
             # Only for ternary alloys. Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984). 
             # Same results as for "trigonometric" in case of a binary.
             # WARNING: Forces that sigma = +-m, +-(m-1), ..., +- 1, (0), i.e. explicitly sigma = -1,0,1
