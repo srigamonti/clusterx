@@ -95,7 +95,7 @@ class Structure(SuperCell):
         self.decor[ridx2] = self.sites[ridx2][sigma1]
 
     def update_decoration(self, decoration):
-        """Not tested
+        """Update decoration of the structure object
         """
         self.decor = decoration
         self.sigmas = np.zeros(len(decoration),dtype=np.int8)

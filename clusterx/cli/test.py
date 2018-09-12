@@ -22,7 +22,7 @@ def test(testslist=False, name=""):
         else:
             path = os.path.dirname(tm.__file__)
             
-        pytest.main([path,"-v","--cache-clear","--capture=no","--junit-xml=testlog.xml"])
+        pytest.main([path,"-v","--cache-clear","--capture=no","--disable-warnings","--junit-xml=testlog.xml"])
         return ()
 
 

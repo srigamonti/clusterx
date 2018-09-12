@@ -3,11 +3,10 @@ import random
 from clusterx.structures_set import StructuresSet
 from clusterx.structure import Structure
 ## packages needed for MonteCarloTrajectory
-from ase.db.jsondb import JSONDatabase
-#from ase.db.core import Database
 import json
 import numpy as np
 from copy import deepcopy
+
 
 class MonteCarlo():
     """MonteCarlo class
@@ -171,15 +170,18 @@ class MonteCarloTrajectory():
         self._scell = scell
         self._save_nsteps = kwargs.pop("save_nsteps",1000000)
         
-        self._save_nsteps = kwargs.pop("models",[])
+        self._models = kwargs.pop("models",[])
 
         self._filename = filename
-        self.json_db = JSONDatabase(filename=self._filename)
         
     def calculate_model_properties(self, models):
         """
         Calculate the property for all decoration in the trajectory
         """
+        for mo in models:
+            if mo not in self._models:
+                self._models.append(mo)
+                
         sx=Structure(self._scell, decoration = self._trajectory[0]['decoration'])
                      
         for t,tr in enumerate(self._trajectory):
@@ -330,12 +332,39 @@ class MonteCarloTrajectory():
         """
         if filename is not None:
             self._filename = filename
-            self.json_db = JSONDatabase(filename = self._filename)
-            
+                
         for j,dec in enumerate(self._trajectory):
-            self.write(dec)
             
-    def write(self, decor):
-        
-        self.json_db.write(decor)
+            self.write( dec, j)
+            
+    def write(self, decor, n):
+    
+        decor['decoration']=decor['decoration'].tolist()
 
+        with open(self._filename, 'a+') as outfile:
+
+            json.dump({str(n):decor}, outfile, sort_keys=True, indent=1)
+        
+        #decor_keys = set(decor.keys())
+        
+        #self.json_db.write(decor)
+
+    def read(self):
+        from pprint import pprint
+        from decimal import Decimal
+
+        self._trajectory=[]
+        data=[]
+
+        with open(self._filename) as trajfile:
+            #tr  = trajfile.read():
+            #print(tr)
+            #    print(tr.split())
+            data = json.loads(trajfile.read())
+                #data = json.loads(trajfile.read())
+            #for tr in trajfile:
+            #    print(tr)
+            #    self._trajectory.append(json.loads(tr))
+
+        pprint(data)
+        #print(self._trajectory)
