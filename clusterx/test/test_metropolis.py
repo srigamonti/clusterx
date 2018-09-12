@@ -154,7 +154,7 @@ def test_metropolis():
 
     print([mo._prop for mo in traj._models])
 
-    traj.write_to_file()
+    #traj.write_to_file()
 
     bondskk = traj.get_model_properties('bond_kk')
     bondsii = traj.get_model_properties('bond_ii')
@@ -164,7 +164,7 @@ def test_metropolis():
 
     isok2 = isclose(rbondskk,bondskk) and isclose(rbondsii,bondsii)
 
-    if os.path.isfile("trajectory.json"):
-        traj.read()
+    #if os.path.isfile("trajectory.json"):
+    #    traj.read()
     
     assert(isok2)    
