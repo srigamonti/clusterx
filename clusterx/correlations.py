@@ -31,7 +31,7 @@ class CorrelationsCalculator():
     def site_basis_function(self, alpha, sigma, m):
         """
         Calculates the site basis function.
-        
+
         Evaluation of the single site basis functions using different basis sets.
 
         **Parameters:**
@@ -42,7 +42,7 @@ class CorrelationsCalculator():
             integer number between 0 and ``m`` - 1; represents the occupation variable
         ``m``: integer
             number of components of the sublattice
-        
+
         """
         if self.basis == "trigonometric":
             # Axel van de Walle, CALPHAD 33, 266 (2009)
@@ -56,7 +56,7 @@ class CorrelationsCalculator():
                 return -np.sin(self._2pi*np.ceil(alpha/2.0)*sigma/m)
 
         if self.basis == "binary-linear":
-            # Only for binary alloys. Allows for simple interpretation of cluster interactions. 
+            # Only for binary alloys. Allows for simple interpretation of cluster interactions.
             return sigma
 
         if self.basis == "ternary-chebychev":
@@ -68,7 +68,7 @@ class CorrelationsCalculator():
 
             if alpha == 0:
                 return 1
-            
+
             elif alpha == 1:
                 return np.sqrt(3/2) * sigma
 
@@ -153,16 +153,25 @@ class CorrelationsCalculator():
 
         return np.around(correlations,decimals=12)
 
-
-    def get_correlation_matrix(self, structrues_set):
+    def get_correlation_matrix(self, structures_set, outfile = None):
         """Return correlation matrix for a structures set.
 
         **Parameters:**
 
         ``structures_set``: StructuresSet object
+            a 2D numpy matrix is returned. every row in the matrix corresponds to
+            a structure in the ``StructuresSet`` object.
         """
-        corrs = np.empty((len(structrues_set),len(self._cpool)))
-        for i,st in enumerate(structrues_set):
+        corrs = np.empty((len(structures_set),len(self._cpool)))
+        for i,st in enumerate(structures_set):
             corrs[i] = self.get_cluster_correlations(st)
+
+        if outfile is not None:
+            f  = open(outfile,"w+")
+            for covec in corrs:
+                for co in covec:
+                    f.write("%2.12f\t"%(co))
+                f.write("\n")
+            f.close()
 
         return corrs
