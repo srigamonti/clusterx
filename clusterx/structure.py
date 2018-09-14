@@ -69,7 +69,7 @@ class Structure(SuperCell):
         if fname is None:
             fname = "structure.json"
 
-        write(fname,images=self.atoms,format=fmt) # WARNING! Changed from images = self to images = self.atoms
+        write(fname,images=self.atoms,format=fmt) 
 
         self._fname = fname
 
