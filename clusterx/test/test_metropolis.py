@@ -15,7 +15,7 @@ from clusterx.utils import dict_compare
 from ase.data import atomic_numbers as cn
 from ase import Atoms
 import numpy as np
-
+import os
 
 def test_metropolis():
 
@@ -91,10 +91,18 @@ def test_metropolis():
     scellS= [(1,0,0),(0,1,0),(0,0,1)]
     scellE = SuperCell(plat,scellS)
 
+    sub_lattices = scellE.get_idx_subs()
+    print(sub_lattices)
+    tags = scellE.get_tags() 
+    print(tags)
+
+    nsubs={0:[16]}
+
+    
     cemodelE=Model(corcE, ecisE, multT)
 
     #struc = scellE.gen_random({0:[16]})
-    mc = MonteCarlo(cemodelE, scellE, {0:[16]})
+    mc = MonteCarlo(cemodelE, scellE, nsubs)
 
     nmc=50
 
@@ -110,11 +118,10 @@ def test_metropolis():
 
     steps = traj.get_sampling_step_nos()
     energies = traj.get_model_total_energies()
-    print(traj.get_decoration_at_step(steps[1]))
+    decoration1 = traj.get_decoration_at_step(steps[1])
     
-    print(steps[-1])
+    print(steps)
     last_decoration = traj.get_sampling_step_entries_at_step(steps[-1])
-    #print(decoration)
 
     rsteps = [0, 1, 2, 3, 4, 6, 10, 11, 16, 17, 18, 26, 27, 34, 37, 38, 44, 45, 47, 48, 50]
     renergies = [-77652.59664207128, -77652.61184305252, -77652.62022569243, -77652.61912760629, -77652.62737663009, -77652.63009501049, -77652.63158443688, -77652.64240196907, -77652.64240196907, -77652.64348105107, -77652.64714764676, -77652.64959679516, -77652.64959679516, -77652.65458138083, -77652.66173231734, -77652.65458138083, -77652.65946542152, -77652.6702829537, -77652.66812810961, -77652.67298251796, -77652.66622624162]
@@ -124,8 +131,6 @@ def test_metropolis():
                         'key_value_pairs': {}}
 #                            [14, 14, 13, 13, 14, 14, 13, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 14, 13, 13, 14, 14, 13, 13, 14, 14, 14, 14, 13, 13, 14, 13, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]
 #                            [14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]
-
-    
     isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and dict_compare(last_decoration,rlast_decoration)
     assert(isok1)
 
@@ -151,9 +156,11 @@ def test_metropolis():
     cemodelBkk=Model(corcBonds, ecisBkk, multB, prop = 'bond_kk')
     cemodelBii=Model(corcBonds, ecisBii, multB, prop = 'bond_ii')
 
-    traj.calculate_model_properties([cemodelBkk,cemodelBii,cemodelE])
+    traj.calculate_model_properties([cemodelBkk,cemodelBii])
 
-    traj.write_to_file() #filename = 'trajectory-bonds.json'
+    print([mo._prop for mo in traj._models])
+
+    traj.write_to_file()
 
     bondskk = traj.get_model_properties('bond_kk')
     bondsii = traj.get_model_properties('bond_ii')
@@ -162,5 +169,23 @@ def test_metropolis():
     rbondsii = [2.400461156502162, 2.400461156502162, 2.400461156502162, 2.4070908700313525, 2.4099300548444713, 2.4099300548444713, 2.4070908700313525, 2.4070908700313525, 2.4070908700313525, 2.4070908700313525, 2.397621971688995, 2.3881530733466856, 2.3881530733466856, 2.397621971688995, 2.4070908700313525, 2.397621971688995, 2.3881530733466856, 2.3881530733466856, 2.3909922581598044, 2.400461156502162, 2.397621971688995]
 
     isok2 = isclose(rbondskk,bondskk) and isclose(rbondsii,bondsii)
-    
+        
     assert(isok2)    
+
+    if os.path.isfile("trajectory.json"):
+        traj.read()
+
+        energies2 = traj.get_model_total_energies()
+        steps2 = traj.get_sampling_step_nos()
+
+        decoration2 = traj.get_decoration(steps2[1])
+        last_decoration2 = traj.get_sampling_step_entries_at_step(steps2[-1])
+        last_decoration2['key_value_pairs']={}
+
+        isok3 = isclose(renergies, energies2) and dict_compare(rlast_decoration,last_decoration2) and isclose(decoration2,decoration1) and isclose(steps2,rsteps)
+
+    else:
+        isok3 = False
+        
+    assert(isok3)
+        

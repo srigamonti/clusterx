@@ -3,11 +3,10 @@ import random
 from clusterx.structures_set import StructuresSet
 from clusterx.structure import Structure
 ## packages needed for MonteCarloTrajectory
-from ase.db.jsondb import JSONDatabase
-#from ase.db.core import Database
 import json
 import numpy as np
 from copy import deepcopy
+
 
 class MonteCarlo():
     """MonteCarlo class
@@ -91,7 +90,11 @@ class MonteCarlo():
         
         if initial_structure == None:
             struc = self._scell.gen_random(self._nsubs)
-        
+        else:
+            struc = initial_structure
+
+        a = [k for k in self._nsubs.keys()][0]
+
         e = self._em.predict_prop(struc)
 
         traj = MonteCarloTrajectory(self._scell, filename=self._filename, models=self._models)
@@ -102,7 +105,7 @@ class MonteCarlo():
             ind1_list = []
             ind2_list = []
             for j in range(self._no_of_swaps):
-                ind1,ind2 = struc.swap_random_binary(0)
+                ind1,ind2 = struc.swap_random_binary(a)
                 ind1_list.append(ind1)
                 ind2_list.append(ind2)
                 
@@ -127,7 +130,7 @@ class MonteCarlo():
                     m=int(self._no_of_swaps-j)
                     ind1 = ind1_list[j]
                     ind2 = ind2_list[j]
-                    struc.swap(0,ind1,ind2)
+                    struc.swap(a,ind1,ind2)
 
         if len(self._models) > 0 :
             traj.calculate_model_properties(self._models)
@@ -171,15 +174,18 @@ class MonteCarloTrajectory():
         self._scell = scell
         self._save_nsteps = kwargs.pop("save_nsteps",1000000)
         
-        self._save_nsteps = kwargs.pop("models",[])
+        self._models = kwargs.pop("models",[])
 
         self._filename = filename
-        self.json_db = JSONDatabase(filename=self._filename)
         
     def calculate_model_properties(self, models):
         """
         Calculate the property for all decoration in the trajectory
         """
+        for mo in models:
+            if mo not in self._models:
+                self._models.append(mo)
+                
         sx=Structure(self._scell, decoration = self._trajectory[0]['decoration'])
                      
         for t,tr in enumerate(self._trajectory):
@@ -326,16 +332,36 @@ class MonteCarloTrajectory():
         return arrayid
 
     def write_to_file(self, filename = None):
-        """Write trajectory to file
+        """Write trajectory to file (default filename trajectory.json)
         """
         if filename is not None:
             self._filename = filename
-            self.json_db = JSONDatabase(filename = self._filename)
-            
-        for j,dec in enumerate(self._trajectory):
-            self.write(dec)
-            
-    def write(self, decor):
-        
-        self.json_db.write(decor)
 
+        trajdic={}
+        for j,dec in enumerate(self._trajectory):
+            dec['decoration'] = dec['decoration'].tolist()
+            trajdic.update({str(j):dec})
+        
+        with open(self._filename, 'w') as outfile:
+            json.dump(trajdic,outfile,sort_keys = True, indent=1, separators=(',',':'))
+
+    def read(self, filename = None , append = False):
+        """Read trajectory from file (default filename trajectory.json)
+        """
+        if filename is not None:
+            trajfile = open(filename,'r')
+        else:
+            trajfile = open(self._filename,'r')
+
+        data = json.load(trajfile)
+
+        if not append:
+            self._trajectory = []            
+
+        data_keys = sorted([int(el) for el in set(data.keys())])
+
+        for key in data_keys:
+            tr = data[str(key)]
+            tr['decoration'] = np.asarray(tr['decoration'],dtype=np.int8)
+            self._trajectory.append(tr)
+        

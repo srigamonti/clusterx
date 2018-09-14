@@ -69,7 +69,7 @@ class Structure(SuperCell):
         if fname is None:
             fname = "structure.json"
 
-        write(fname,images=self.atoms,format=fmt) # WARNING! Changed from images = self to images = self.atoms
+        write(fname,images=self.atoms,format=fmt) 
 
         self._fname = fname
 
@@ -95,7 +95,7 @@ class Structure(SuperCell):
         self.decor[ridx2] = self.sites[ridx2][sigma1]
 
     def update_decoration(self, decoration):
-        """Not tested
+        """Update decoration of the structure object
         """
         self.decor = decoration
         self.sigmas = np.zeros(len(decoration),dtype=np.int8)
