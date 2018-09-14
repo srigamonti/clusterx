@@ -90,7 +90,11 @@ class MonteCarlo():
         
         if initial_structure == None:
             struc = self._scell.gen_random(self._nsubs)
-        
+        else:
+            struc = initial_structure
+
+        a = [k for k in self._nsubs.keys()][0]
+
         e = self._em.predict_prop(struc)
 
         traj = MonteCarloTrajectory(self._scell, filename=self._filename, models=self._models)
@@ -101,7 +105,7 @@ class MonteCarlo():
             ind1_list = []
             ind2_list = []
             for j in range(self._no_of_swaps):
-                ind1,ind2 = struc.swap_random_binary(0)
+                ind1,ind2 = struc.swap_random_binary(a)
                 ind1_list.append(ind1)
                 ind2_list.append(ind2)
                 
@@ -126,7 +130,7 @@ class MonteCarlo():
                     m=int(self._no_of_swaps-j)
                     ind1 = ind1_list[j]
                     ind2 = ind2_list[j]
-                    struc.swap(0,ind1,ind2)
+                    struc.swap(a,ind1,ind2)
 
         if len(self._models) > 0 :
             traj.calculate_model_properties(self._models)
