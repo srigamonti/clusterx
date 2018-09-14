@@ -60,11 +60,22 @@ class CorrelationsCalculator():
             return sigma
 
         if self.basis == "ternary-chebychev":
-            # Only for ternary alloys. Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984). 
+            # Only for m <= 3. Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984). 
             # Same results as for "trigonometric" in case of a binary.
             # WARNING: Forces that sigma = +-m, +-(m-1), ..., +- 1, (0), i.e. explicitly sigma = -1,0,1
-            # WARNING: Only to be used with a fixed number of species for each lattice point.
-            sigma = sigma - 1
+
+            def _map_sigma(sigma, m):
+                # Maps sigma = 0, 1, 2, ..., M-1 to -M/2 <= sigma <= M/2.
+                shifted_sigma = int(sigma - int(m / 2))
+                if (m % 2) == 0:
+                    if shifted_sigma >= 0:
+                        shifted_sigma += 1
+                return shifted_sigma
+                
+            sigma = _map_sigma(sigma, m)
+
+            if m == 2:
+                return sigma
 
             if alpha == 0:
                 return 1
