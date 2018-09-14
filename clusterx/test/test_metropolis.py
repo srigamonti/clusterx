@@ -110,9 +110,9 @@ def test_metropolis():
 
     steps = traj.get_sampling_step_nos()
     energies = traj.get_model_total_energies()
-    print(traj.get_decoration_at_step(steps[1]))
+    decoration1 = traj.get_decoration_at_step(steps[1])
     
-    print(steps[-1])
+    print(steps)
     last_decoration = traj.get_sampling_step_entries_at_step(steps[-1])
 
     rsteps = [0, 1, 2, 3, 4, 6, 10, 11, 16, 17, 18, 26, 27, 34, 37, 38, 44, 45, 47, 48, 50]
@@ -123,8 +123,6 @@ def test_metropolis():
                         'key_value_pairs': {}}
 #                            [14, 14, 13, 13, 14, 14, 13, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 14, 13, 13, 14, 14, 13, 13, 14, 14, 14, 14, 13, 13, 14, 13, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]
 #                            [14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]
-
-    
     isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and dict_compare(last_decoration,rlast_decoration)
     assert(isok1)
 
@@ -154,7 +152,7 @@ def test_metropolis():
 
     print([mo._prop for mo in traj._models])
 
-    #traj.write_to_file()
+    traj.write_to_file()
 
     bondskk = traj.get_model_properties('bond_kk')
     bondsii = traj.get_model_properties('bond_ii')
@@ -163,8 +161,23 @@ def test_metropolis():
     rbondsii = [2.400461156502162, 2.400461156502162, 2.400461156502162, 2.4070908700313525, 2.4099300548444713, 2.4099300548444713, 2.4070908700313525, 2.4070908700313525, 2.4070908700313525, 2.4070908700313525, 2.397621971688995, 2.3881530733466856, 2.3881530733466856, 2.397621971688995, 2.4070908700313525, 2.397621971688995, 2.3881530733466856, 2.3881530733466856, 2.3909922581598044, 2.400461156502162, 2.397621971688995]
 
     isok2 = isclose(rbondskk,bondskk) and isclose(rbondsii,bondsii)
-
-    #if os.path.isfile("trajectory.json"):
-    #    traj.read()
-    
+        
     assert(isok2)    
+
+    if os.path.isfile("trajectory.json"):
+        traj.read()
+
+        energies2 = traj.get_model_total_energies()
+        steps2 = traj.get_sampling_step_nos()
+
+        decoration2 = traj.get_decoration(steps2[1])
+        last_decoration2 = traj.get_sampling_step_entries_at_step(steps2[-1])
+        last_decoration2['key_value_pairs']={}
+
+        isok3 = isclose(renergies, energies2) and dict_compare(rlast_decoration,last_decoration2) and isclose(decoration2,decoration1) and isclose(steps2,rsteps)
+
+    else:
+        isok3 = False
+        
+    assert(isok3)
+        
