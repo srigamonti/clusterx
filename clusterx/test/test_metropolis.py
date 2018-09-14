@@ -91,10 +91,18 @@ def test_metropolis():
     scellS= [(1,0,0),(0,1,0),(0,0,1)]
     scellE = SuperCell(plat,scellS)
 
+    sub_lattices = scellE.get_idx_subs()
+    print(sub_lattices)
+    tags = scellE.get_tags() 
+    print(tags)
+
+    nsubs={0:[16]}
+
+    
     cemodelE=Model(corcE, ecisE, multT)
 
     #struc = scellE.gen_random({0:[16]})
-    mc = MonteCarlo(cemodelE, scellE, {0:[16]})
+    mc = MonteCarlo(cemodelE, scellE, nsubs)
 
     nmc=50
 
