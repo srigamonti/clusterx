@@ -134,7 +134,7 @@ class StructuresSet():
             self.write(structure, key_value_pairs, **kwargs)
             #self.json_db.write(structure.get_atoms(),key_value_pairs, data={"tmat":structure.get_transformation(),"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
 
-    def add_structures(self, structures = None, json_db_filepath = None):
+    def add_structures(self, structures = None, json_db_filepath = None, write_to_db = False):
         """Add structures to the StructureSet object
 
         **Parameters:**
@@ -148,7 +148,7 @@ class StructuresSet():
         """
         if structures is not None:
             for structure in structures:
-                self.add_structure(structure)
+                self.add_structure(structure, write_to_db = write_to_db)
 
         elif json_db_filepath is not None:
             db = connect(json_db_filepath)
