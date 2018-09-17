@@ -59,7 +59,6 @@ def test_nested_sampling():
     nw=1
     niter=5
     nsteps=2
-    nprocs=1
 
     ns_settings = {}
     ns_settings["walkers"] = nw
@@ -80,7 +79,7 @@ def test_nested_sampling():
     found_lowest = False
     lowest_e = 10.0
     # now run the code
-    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk =  ns.sc_nested_sampling(ns_settings, energy_dict, corcE, nprocs, Nsub1=nsub1, Nsub2=nsub2, lat=sc_lat, alwaysclone=True, diagnostics=diagnostics)
+    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk =  ns.sc_nested_sampling(ns_settings, energy_dict,  Nsub1=nsub1, Nsub2=nsub2, lat=sc_lat, nprocs=1, alwaysclone=True, diagnostics=diagnostics)
     min_index, lowest_E = min(enumerate(total_ewalk), key=itemgetter(1)) # find new lowest-energy sample
     
     #plot energy history vs. iterations
