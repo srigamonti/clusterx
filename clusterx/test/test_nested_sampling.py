@@ -280,8 +280,6 @@ def build_lattice_and_get_corr():
     ]
     multE = [1,24,16,6,12,8,48,24,24,24]
     
-    #corcE = CorrelationsCalculator("binary-linear",plat,cpoolE)
-
     energy_dict = {}
     energy_dict["mult"] = deepcopy(multE)
     energy_dict["ecis"] = deepcopy(ecisE)
