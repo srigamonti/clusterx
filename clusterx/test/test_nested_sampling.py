@@ -45,7 +45,7 @@ from clusterx.utils import isclose
 
 def test_nested_sampling():
     
-    plat, sc_lat, energy_dict, corcE = build_lattice_and_get_corr()
+    plat, sc_lat, energy_dict = build_lattice_and_get_corr()
 
     diagnostics=True
     write_files=False
@@ -79,7 +79,7 @@ def test_nested_sampling():
     found_lowest = False
     lowest_e = 10.0
     # now run the code
-    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk =  ns.sc_nested_sampling(ns_settings, energy_dict,  Nsub1=nsub1, Nsub2=nsub2, lat=sc_lat, nprocs=1, alwaysclone=True, diagnostics=diagnostics)
+    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk =  ns.sc_nested_sampling(ns_settings, energy_dict,  Nsub1=nsub1, Nsub2=nsub2, lat=sc_lat, Nprocs=1, alwaysclone=True, diagnostics=diagnostics)
     min_index, lowest_E = min(enumerate(total_ewalk), key=itemgetter(1)) # find new lowest-energy sample
     
     #plot energy history vs. iterations
@@ -280,13 +280,12 @@ def build_lattice_and_get_corr():
     ]
     multE = [1,24,16,6,12,8,48,24,24,24]
     
-    corcE = CorrelationsCalculator("binary-linear",plat,cpoolE)
-
     energy_dict = {}
     energy_dict["mult"] = deepcopy(multE)
     energy_dict["ecis"] = deepcopy(ecisE)
+    energy_dict["corcE"] = CorrelationsCalculator("binary-linear",plat,cpoolE)
 
-    return plat, scellE, energy_dict, corcE
+    return plat, scellE, energy_dict
 
 if __name__ == '__main__':
     test_nested_sampling()
