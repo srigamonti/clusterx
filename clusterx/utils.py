@@ -48,8 +48,15 @@ def dict_compare(d1, d2):
         return False
 
     for k in d1_keys:
-        for v1,v2 in zip(d1[k],d2[k]):
-            if v1 != v2:
+        try:
+            for v1,v2 in zip(d1[k],d2[k]):
+                if v1 != v2:
+                    return False
+        except TypeError:
+            if _is_integrable(d1[k]):
+                if d1[k]!=d2[k]:
+                    return False
+            else:
                 return False
 
     return areeq

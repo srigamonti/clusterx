@@ -10,19 +10,19 @@ commands = ['test']
     testslist=('Print available tests', 'flag','l'),
     name=("Make one test","option","n")
 )
-def test(testslist=False, name=None):
+def test(testslist=False, name=""):
     "Test CELL"
     if testslist:
         print(tlist)
         return()
     else:
-        if name is not None:
+        if name is not "":
             path = os.path.join(os.path.dirname(tm.__file__),name+".py")
             print(path)
         else:
             path = os.path.dirname(tm.__file__)
             
-        pytest.main([path,"-v","--cache-clear","--capture=no","--junit-xml=testlog.xml"])
+        pytest.main([path,"-v","--cache-clear","--capture=no","--disable-warnings","--junit-xml=testlog.xml"])
         return ()
 
 

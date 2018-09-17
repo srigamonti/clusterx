@@ -1,7 +1,6 @@
 from clusterx.super_cell import SuperCell
 from ase import Atoms
 import numpy as np
-import random
 
 class Structure(SuperCell):
     """Structure class
@@ -70,7 +69,7 @@ class Structure(SuperCell):
         if fname is None:
             fname = "structure.json"
 
-        write(fname,images=self.atoms,format=fmt) # WARNING! Changed from images = self to images = self.atoms
+        write(fname,images=self.atoms,format=fmt) 
 
         self._fname = fname
 
@@ -78,8 +77,8 @@ class Structure(SuperCell):
         tags=self.get_tags()
         idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == 0 and tags[index] == site_type]
         idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == 1 and tags[index] == site_type]
-        ridx1 = random.choice(idx1)
-        ridx2 = random.choice(idx2)
+        ridx1 = np.random.choice(idx1)
+        ridx2 = np.random.choice(idx2)
 
         self.swap(site_type,ridx1,ridx2)
 
@@ -94,3 +93,14 @@ class Structure(SuperCell):
         self.sigmas[ridx2] = sigma1
         self.decor[ridx1] = self.sites[ridx1][sigma2]
         self.decor[ridx2] = self.sites[ridx2][sigma1]
+
+    def update_decoration(self, decoration):
+        """Update decoration of the structure object
+        """
+        self.decor = decoration
+        self.sigmas = np.zeros(len(decoration),dtype=np.int8)
+        for idx, species in enumerate(decoration):
+            self.sigmas[idx] = np.argwhere(self.sites[idx] == species)
+        
+        self.atoms.set_atomic_numbers(self.decor)
+        
