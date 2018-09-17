@@ -1,8 +1,6 @@
 from sklearn.base import BaseEstimator, RegressorMixin
 import numpy as np
 from copy import deepcopy
-# from sklearn.utils.estimator_checks import check_estimator
-# check_estimator(SplitBregmanEstimator( mult=clmults, mu=1.0, lamb=0.9, tol=1.0e-10))
 
 class SplitBregmanEstimator(BaseEstimator, RegressorMixin):
     """**Split Bregmann Iteration class**
