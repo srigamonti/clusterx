@@ -248,8 +248,9 @@ def sc_walk(x, lat, Elimit, steps, energy_dict):
 
 
 def eval_energy(energy_dict, x):
-
-    corrs = energy_dict["corcE"].get_cluster_correlations(x,mc=True)
+    #corcE = deepcopy(energy_dict["corcE"])
+    corcE = energy_dict["corcE"]
+    corrs = corcE.get_cluster_correlations(x,mc=True)
     #corrs = corcE.get_cluster_correlations(x,mc=True)
 
     multE = deepcopy(energy_dict["mult"])
