@@ -34,35 +34,54 @@ import clusterx.parent_lattice
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 
-def nested_sampling(argv):
-    """**Parameters:**
+def nested_sampling(nsub1=None, nsub2=None, nw=None,niter=None, nsteps=None, diagnostics=True, write_files=False, write_log=True, plot_outer_v_iter=False):
+    """
+    Description:
+        Perform nested sampling
 
-    Parameters for nested sampling are number of substitutions (nsub1), number of walkers or active points (nw) 
+    Parameters:
+
+    Parameters for nested sampling are number of substitutions for atom type 1 (nsub1),  atom type 2 (nsub2), number of walkers or active points (nw) 
     number of iterations (niter), and number of steps (nsteps)
 
-    ``nsub1``: number of substitutional atoms for species 1 for which the compositional space is examined
-    ``nsub2``: number of substitutional atoms for species 2 (for the binary phase, this is assumed to be zero) for which the compositional space is examined
-    ``nw``: number of walkers for sampling configuration space 
-    ``niter``: number of iterations, where the outer energy is evaluated at each iteration 
-    ``nsteps``: number of stochastic steps or walk length
+    energy model needed for acceptance and rejection. This occurs in the the function ``eval_energy``.
+    ``eval_energy`` function takes the energy dictonary and configuration and outputs the energy
+     "corcE", "mult", and "ecisE" are all contained in the energy_dict
+
+    ``sc_lat``: SuperCell object
+        Supercell in which the sampling is performed.
+
+    ``nsub1``: integer
+        number of substitutional atoms for species 1 for which the compositional space is examined
+    ``nsub2``: integer
+        number of substitutional atoms for species 2 (for the binary phase, this is assumed to be zero) for which the compositional space is examined
+    ``ns_settings``: dictonary
+        The ns_settings dictonary contains three settings:
+        ``nw``: integer
+            number of walkers for sampling configuration space 
+        ``niter``: integer
+            number of iterations, where the outer energy is evaluated at each iteration 
+        ``nsteps``: integer
+            number of stochastic steps or walk length
+    
+    to-do: 
+        make parallel, for now nprocs will be hard coded
     """
 
-    if len(argv) < 1:
-        print("No settings defined, will instead use the default settings used in test/test_nested_sampling.py")
-    plat, sc_lat, energy_dict, corcE = build_lattice_and_get_corr()
+    # if len(argv) < 1:
+    #     print("No settings defined, will instead use the default settings used in test/test_nested_sampling.py")
+    #     sys.exit()
+    # example of what is needed
+    #plat, sc_lat, energy_dict = build_lattice_and_get_corr()
 
-    #todo: parse argv using regular expression
-    diagnostics=True
-    write_files=False
-    write_log=True
 
-    nsub1=16
-    nsub2=0.0
-    nw=1
-    niter=5
-    nsteps=2
+    # nsub1=16
+    # nsub2=0.0
+    # nw=1
+    # niter=5
+    # nsteps=2
+
     nprocs=1
-
     ns_settings = {}
     ns_settings["walkers"] = nw
     ns_settings["iters"] = niter
@@ -79,12 +98,13 @@ def nested_sampling(argv):
     found_lowest = False
     lowest_e = 10.0
     # now run the code
-    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk = sc_nested_sampling(ns_settings, energy_dict, corcE, Nprocs, Nsub1=Nonsub1ne , Nsub2=nsub2, lat=sc_lat, alwaysclone=True, diagnostics=False)
+    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk = sc_nested_sampling(ns_settings, energy_dict, Nprocs, Nsub1=nsub1 , Nsub2=nsub2, lat=sc_lat, alwaysclone=True, diagnostics=False)
 
     min_index, lowest_E = min(enumerate(total_ewalk), key=itemgetter(1)) # find new lowest-energy sample
     
     #plot energy history vs. iterations
-    plot_sc_outer_vs_interation(outer_e, outfile_name="outer_vs_Iter.pdf")
+    if plot_outer_v_iter==True:
+        plot_sc_outer_vs_interation(outer_e, outfile_name="outer_vs_Iter.pdf")
    
     print("Nested sampling finished!")
     print("Energies walked", len(total_ewalk))
@@ -94,7 +114,7 @@ def nested_sampling(argv):
     if write_log == True:
          write_summary(logfile, nsub1, nsub2, total_ewalk, outer_e, xhistory, lowest_E)
 
-def sc_nested_sampling(ns_settings, energy_dict, corcE, Nprocs, Nsub1=None , Nsub2=None, lat=None, alwaysclone=True, diagnostics=False):
+def sc_nested_sampling(ns_settings, energy_dict, Nprocs, Nsub1=None , Nsub2=None, lat=None, alwaysclone=True, diagnostics=False):
 
     # todo: determine total number of subsititonal sites from the structure 
     Nsubs = 16 
@@ -120,9 +140,9 @@ def sc_nested_sampling(ns_settings, energy_dict, corcE, Nprocs, Nsub1=None , Nsu
     for i in range(Nw):
         struc2 = lat.gen_random({0:[Nsub1]})
         # check if energy less than limit, if so store configuration                
-        if  eval_energy(energy_dict, corcE, struc2) < Elim:
+        if  eval_energy(energy_dict, struc2) < Elim:
             xs.add_structure(struc2)
-    E_xs[:] = [ eval_energy(energy_dict, corcE, xs[i]) for i in range(0, Nw) ]
+    E_xs[:] = [ eval_energy(energy_dict, xs[i]) for i in range(0, Nw) ]
     
     # outer NS loop
     # this is the main NS loop which descends through decreasing energy levels and collects the density of states.
@@ -152,7 +172,7 @@ def sc_nested_sampling(ns_settings, energy_dict, corcE, Nprocs, Nsub1=None , Nsu
                 else:
                     new_xs.add_structure(xs[idx])
             xs = new_xs
-            E_xs[:] = [ eval_energy(energy_dict, corcE, xs[i]) for i in range(0, Nw) ]
+            E_xs[:] = [ eval_energy(energy_dict, xs[i]) for i in range(0, Nw) ]
             age[outer] = math.floor(age[source])+random.random() # the cloned sample copies the age of its source plus a random number (so that we can distinguish the two copies)
             clone[i] = True
         else:
@@ -185,9 +205,9 @@ def sc_nested_sampling(ns_settings, energy_dict, corcE, Nprocs, Nsub1=None , Nsu
         accept_ratio = []
         # now walk the outer most sample to randomize 
         for n in ws:
-            x, n_accepted, ewalk, xwalk = sc_walk(xs[n], lat, Elim, steps, energy_dict, corcE)
+            x, n_accepted, ewalk, xwalk = sc_walk(xs[n], lat, Elim, steps, energy_dict)
             accept_ratio.append( n_accepted )
-            E_xs[n] = eval_energy(energy_dict, corcE, x) 
+            E_xs[n] = eval_energy(energy_dict, x) 
             new_xs = StructuresSet(lat)
             for idx, strc in enumerate(xs):
                 if idx == n:
@@ -216,17 +236,17 @@ def sc_nested_sampling(ns_settings, energy_dict, corcE, Nprocs, Nsub1=None , Nsu
         
     return xhistory, Ehistory, xs, E_xs, np.array(total_ewalk), total_xwalk
 
-def sc_walk(x, lat, Elimit, steps, energy_dict, corcE):
+def sc_walk(x, lat, Elimit, steps, energy_dict):
     
     ewalk = np.zeros( (steps), dtype=float) 
     # initialise structure trajectory
     xwalk = StructuresSet(lat)
     xwalk.add_structure(x)
-    ewalk[0] = eval_energy(energy_dict, corcE, x) 
+    ewalk[0] = eval_energy(energy_dict, x) 
     naccepted = 0
     for i in range(1, steps):
         ind1,ind2=x.swap_random_binary(0)
-        Enew = eval_energy(energy_dict, corcE, x)
+        Enew = eval_energy(energy_dict, x)
         xwalk.add_structure(x)
         ewalk[i] = Enew
         if Elimit < Enew:
@@ -237,10 +257,10 @@ def sc_walk(x, lat, Elimit, steps, energy_dict, corcE):
     return x, naccepted/float(steps), ewalk, xwalk
 
 
-def eval_energy(energy_dict, corcE, x):
+def eval_energy(energy_dict, x):
 
-    #corrs = energy_dict["corcE"].get_cluster_correlations(x,mc=True)
-    corrs = corcE.get_cluster_correlations(x,mc=True)
+    corrs = energy_dict["corcE"].get_cluster_correlations(x,mc=True)
+    #corrs = corcE.get_cluster_correlations(x,mc=True)
 
     multE = deepcopy(energy_dict["mult"])
     ecisE = deepcopy(energy_dict["ecis"])
@@ -385,11 +405,9 @@ def build_lattice_and_get_corr():
     energy_dict = {}
     energy_dict["mult"] = deepcopy(multE)
     energy_dict["ecis"] = deepcopy(ecisE)
+    energy_dict["corcE"] = deepcopy(corcE)
 
-    print(multE)
-    print(energy_dict["mult"])
-
-    return plat, scellE, energy_dict, corcE
+    return plat, scellE, energy_dict
 
 
 if __name__ == '__main__':
