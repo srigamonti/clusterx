@@ -100,10 +100,7 @@ def get_structure_set():
 
     strset.set_calculator(EMT2())
     energies = strset.calculate_property()
-    print(energies)
-    import os, sys
-    sys.exit()
-
+   
     clmults = cpool.get_multiplicities()
 
     return strset, energies, comat, clmults 
