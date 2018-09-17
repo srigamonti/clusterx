@@ -17,7 +17,7 @@ import numpy as np
 
 def test_cluster_selector_split_bregman():
     
-    strset, energies, comat, clmults = get_structure_set()
+    strset, energies, comat, clmults, cpool = get_structure_set()
 
     lamb = 0.9
     mu_min = 0.00001
@@ -103,7 +103,7 @@ def get_structure_set():
    
     clmults = cpool.get_multiplicities()
 
-    return strset, energies, comat, clmults 
+    return strset, energies, comat, clmults, cpool
 
 def build_lattice_and_get_corr():
 
