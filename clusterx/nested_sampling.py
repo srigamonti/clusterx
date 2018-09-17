@@ -104,7 +104,7 @@ def nested_sampling(nsub1=None, nsub2=None, nw=None,niter=None, nsteps=None, dia
          write_summary(logfile, nsub1, nsub2, total_ewalk, outer_e, xhistory, lowest_E)
 
 
-def sc_nested_sampling(ns_settings, energy_dict, Nsub1=None , Nsub2=None, lat=None, nprocs, alwaysclone=True, diagnostics=False):
+def sc_nested_sampling(ns_settings, energy_dict, Nsub1=None , Nsub2=None, lat=None, nprocs=1, alwaysclone=True, diagnostics=False):
 
     # todo: determine total number of subsititonal sites from the structure 
     Nsubs = Nsub1 
