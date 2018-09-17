@@ -88,7 +88,7 @@ def nested_sampling(nsub1=None, nsub2=None, nw=None,niter=None, nsteps=None, dia
     found_lowest = False
     lowest_e = 10.0
     # now run the code
-    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk = sc_nested_sampling(ns_settings, energy_dict, Nsub1=nsub1, Nsub2=nsub2, lat=sc_lat, nprocs=1, alwaysclone=True, diagnostics=False)
+    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk = sc_nested_sampling(ns_settings, energy_dict, Nsub1=nsub1, Nsub2=nsub2, lat=sc_lat, Nprocs=1, alwaysclone=True, diagnostics=False)
     min_index, lowest_E = min(enumerate(total_ewalk), key=itemgetter(1)) # find new lowest-energy sample
     
     #plot energy history vs. iterations
@@ -104,7 +104,7 @@ def nested_sampling(nsub1=None, nsub2=None, nw=None,niter=None, nsteps=None, dia
          write_summary(logfile, nsub1, nsub2, total_ewalk, outer_e, xhistory, lowest_E)
 
 
-def sc_nested_sampling(ns_settings, energy_dict, Nsub1=None , Nsub2=None, lat=None, nprocs=1, alwaysclone=True, diagnostics=False):
+def sc_nested_sampling(ns_settings, energy_dict, Nsub1=None , Nsub2=None, lat=None, Nprocs=1, alwaysclone=True, diagnostics=False):
 
     # todo: determine total number of subsititonal sites from the structure 
     Nsubs = Nsub1 
