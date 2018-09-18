@@ -12,23 +12,27 @@ from ase import Atoms
 
 class StructureSelector():
     """Structure selector class
+    
+    Objects of this class are used to select optimal structures to enhance the predictive performance
+    of the current cluster expansion model.
+
     **Parameters**
-    Compulsory:
+
     ``cluster_pool``: ClustersPool() object
-    The optimal set of clusters for the training data.
+        The optimal set of clusters for the training data.
     ``training_set``: StructuresSet() object
-    Contains the current training set
-    Optional:
+        Contains the current training set
     ``candidate_set``: StructuresSet() object
-    Pool of new structures, that might be selected to enter the training set.
-    If it remains 'None', the class can only assess the training set.
+        Pool of new structures, that might be selected to enter the training set.
+        If it remains 'None', the class can only assess the training set.
     ``correlations_calculator``: CorrelationsCalculator object
-    Used to calculate the correlations of structures and clusters.
-    IF THIS IS LEFT EMPTY (or set to None) the correlations are calculated with 
-    a trigonometric basis.
+        Used to calculate the correlations of structures and clusters.
+        IF THIS IS LEFT EMPTY (or set to None) the correlations are calculated with 
+        a trigonometric basis.
+
     """
 
-    def __init__(self, cluster_pool = None, training_set = None, candidate_set = None, correlations_calculator = None):
+    def __init__(self, cluster_pool, training_set, candidate_set = None, correlations_calculator = None):
         'Barricade against bad input:'
         if not(isinstance(cluster_pool, ClustersPool)):
             print('No cluster pool handed to StructureSelector.__init__()')
@@ -57,31 +61,69 @@ class StructureSelector():
         self._covariance_matrix = np.linalg.inv(np.dot(correlation_matrix.T, correlation_matrix))
 
     def set_candidate_set(self, new_candidate_set):
+        '''Set the candidate set
+        
+        Changes the set of candidates to be selected for the training set.
+        The input parameter is, thus, a StructureSet object.
+        
+        Parameters:
+        
+        new_candidate_set: StructureSet object
+            The new set of candidate structures.
+        
+        '''
         if not(isinstance(new_candidate_set, StructuresSet)):
             print('No candidate set handed to set_candidate_set. StructureSelector()')
             print('StructureSelectorError')
             sys.exit()
         self._candidate_set = new_candidate_set
 
-    def calculate_variance_multiplier_expectation(self, domain_calculation_method = 'averagedConcentration', concentration = None):
+    def calculate_population_variance(self, domain_calculation_method = 'averagedConcentration', concentration = None):
+        '''Calculate the cluster expansions prediction variance of the structural property
+        averaged over all possible structures. 
         
-        '''
-        Computes 'goodness' of the training set
-
-        In the paper Mueller2010 PRB 82, 184107 the expectation of the multiplier to the variance
-        to the average prediction error is called #TAU#
-        This #TAU# is computed here.
+        The input parameter 'domain_calculation_method'
+        defines with which method the domain matrix is calculated (see Mueller2010 PRB 82, 184107).
+	
+        The options for this input parameter are 'averagedConcentration', 'infiniteCrystalFiniteClusters', 'byConcentration', 'vdWalleAndCeder'.
+        If 'byConcentration' is chosen, one needs to supply the routine with a second input parameter, the 'concentration'.
+	
+        'concentration' is limited to the range [0, 1] and means the concentration of one of the binaries in the alloy.
+        
+        Parameters:
+	
+        domain_calculation_method: string
+            Defines the method used to calculate the domain matrix.
+        concentration: float
+            Defines the concentration for which the domain matrix should be evaluated.
         '''
 
         domain_matrix = self._calculate_domain_matrix(method = domain_calculation_method, concentration = concentration)
         covariance_matrix = self._covariance_matrix
 
         'compute Hadamard product and sum'
-        variance_multiplier_expectation = np.sum(np.sum(np.multiply(domain_matrix, covariance_matrix)))
+        population_variance = np.sum(np.sum(np.multiply(domain_matrix, covariance_matrix)))
 
-        return variance_multiplier_expectation
+        return population_variance
         
-    def select_structure(self, method = None, concentration = None):      
+    def select_structure(self, method = None, concentration = None):
+        '''Select a structure to enter the training set
+	
+        This method needs a candidate set. If no candidate set was passed to the class object, set it with set_candidate_set().
+	
+        The routine takes each structure and adds it temporarily to the training set. With the enlarged training set
+        the population variance is computed. To compute the population variance, supply a 'method' parameter, and maybe a 
+        'concentration' (see calculate_population_variance). Afterwards the structure is removed from the training set,
+        and the next structure is taken. The routine selects the structure that minimizes the population variance.
+	
+        Parameters:
+	
+        method: string
+            Defines the method used to calculate the domain matrix. Options are
+            'global_averagedConcentration', 'global_infiniteCrystalFiniteClusters', 'global_byConcentration', 'global_vdWalleAndCeder'
+        concentration: float
+            Defines the concentration for which the domain matrix should be evaluated.
+        '''
         if(self._candidate_set is None):
             print('There are no candidate structures. select_structures()')
             sys.exit()
@@ -91,13 +133,6 @@ class StructureSelector():
             print('No method inserted to select_structures. select_structures()')
             sys.exit()
 
-        '''Choose a method for the selection of the new structure.
-           method can be "global_#OPTION#" or "greedy_#OPTION#"
-           For global, the options can be 
-           'averagedConcentration', 'infiniteCrystalFiniteClusters', 'byConcentration', 'vdWalleAndCeder'
-           'byConcentration' needs concentration in floats
-        '''
-        
         global_or_greedy = method[:6]
         covariance_matrix = self._covariance_matrix
 
@@ -116,9 +151,10 @@ class StructureSelector():
 
             for candidate_idx in range(number_candidates):
                 candidate_corr = candidate_correlations[candidate_idx,:]
-                left_dyad = np.dot(squared_covariance, candidate_corr)
-                left_matrix = np.outer(left_dyad, candidate_corr)
-                candidate_scores[candidate_idx] = 1/(1+np.dot(candidate_corr, np.dot(covariance_matrix, candidate_corr)))*np.sum(np.sum(np.multiply(left_matrix, domain_matrix)))
+                scaled_correlation = np.dot(covariance_matrix, candidate_corr)
+                denominator = 1+np.dot(candidate_corr, scaled_correlation)
+                numerator = np.dot(scaled_correlation, np.dot(domain_matrix, scaled_correlation))
+                candidate_scores[candidate_idx] = numerator/denominator
 
             return np.argmax(candidate_scores)
 

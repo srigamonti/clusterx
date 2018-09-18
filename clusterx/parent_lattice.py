@@ -244,6 +244,10 @@ class ParentLattice(Atoms):
         self._set_tags()
 
 
+    def is_binary(self):
+        pass
+        
+        
     def _set_tags(self):
         """Set the ``tags`` attribute of the Atoms object, and the ParentLattice
         attributes ``idx_subs`` and ``sites`` which define the substitutional
