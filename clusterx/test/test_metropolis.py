@@ -129,8 +129,6 @@ def test_metropolis():
                         'model_total_energy': -77652.66622624162,
                         'decoration': np.int8([14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]),
                         'key_value_pairs': {}}
-#                            [14, 14, 13, 13, 14, 14, 13, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 14, 13, 13, 14, 14, 13, 13, 14, 14, 14, 14, 13, 13, 14, 13, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]
-#                            [14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]
     isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and dict_compare(last_decoration,rlast_decoration)
     assert(isok1)
 
@@ -188,4 +186,77 @@ def test_metropolis():
         isok3 = False
         
     assert(isok3)
+
+    #Clathrate ternary `Si_{46-x-y} Al_x Vac_y Ba_{8-z} Sr_z`
+    print("Sampling in `Si_{46-x-y} Al_x Vac_y Ba_{8-z} Sr_z`")
+    sub2 = crystal(['X','X','X','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
+    sub3 = crystal(['Si','Si','Si','Sr','Sr'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
+
+    plat2 = ParentLattice(atoms=pri,substitutions=[sub,sub2,sub3])
+
+    scellS2= [(2,0,0),(0,2,0),(0,0,2)]
+    scellE2 = SuperCell(plat2,scellS2)
+
+    struc = scellE2.gen_random({0:[112,16], 1:[0]})
+
+    idx_subs = scellE2.get_idx_subs()
+    print(idx_subs)
+
+    cpoolE2 = ClustersPool(plat2, npoints=[0,1], radii=[0,0])
+    corcE2 = CorrelationsCalculator("trigonometric", plat, cpoolE2)
+
+    multT2=cpoolE2.get_multiplicities()
+    print("Cluster multiplicities",multT2)
+    print("Corresponding radii",cpoolE2.get_all_radii())
+    print("Corresponding points",cpoolE2.get_all_npoints())
+    
+    scellSize=np.prod(np.dot(scellS2,(1,1,1)))
+    print(scellSize)
+    smultT2=np.zeros(len(multT2))
+    for i in range(0,len(multT2)):
+        smultT2[i]=int(multT2[i]*scellSize)
+
+    ecisE2 = [
+        -78407.3247588,
+        23.16,
+        23.15,
+        23.14,
+        23.13,
+        23.12,
+        23.11,
+        23.10,
+        23.09
+    ]        
         
+    cemodelE2=Model(corcE2, ecisE2, smultT2)
+
+    #struc = scellE.gen_random({0:[16]})
+    mc2 = MonteCarlo(cemodelE2, scellE2, {0:[112,16],1:[0]}, filename = "trajectory-ternary.json") #, sub_lattice_index = 0)
+
+    nmc=30
+
+    # Boltzmann constant in Ha/K
+    kb = float(3.16681009610757e-6)
+    # temperature in K
+    temp = 600
+    print("Samplings steps",nmc)
+    print("Temperature",temp)
+    
+    traj2 = mc2.metropolis([kb,temp], nmc)
+
+    steps2 = traj2.get_sampling_step_nos()
+    energies2 = traj2.get_model_total_energies()
+    decoration1 = traj2.get_decoration_at_step(steps[1])
+    
+    print(steps2)
+    print(energies2)
+    print(decoration1)
+    last_decoration = traj2.get_sampling_step_entries_at_step(steps2[-1])
+    print(last_decoration)
+        
+    traj2.write_to_file()
+
+    mc3 = MonteCarlo(cemodelE2, scellE2, {0:[112,16],1:[8]}, filename = "trajectory-multi-lattice.json") #, sub_lattice_index = 0)
+    traj3 = mc3.metropolis([kb,temp], nmc)
+
+    traj3.write_to_file()
