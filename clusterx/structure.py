@@ -73,7 +73,7 @@ class Structure(SuperCell):
 
         self._fname = fname
 
-    def swap_random_binary(self, site_type, sigma_swap):
+    def swap_random_binary(self, site_type, sigma_swap = [0,1]):
         tags=self.get_tags()
         idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[0] and tags[index] == site_type]
         idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[1] and tags[index] == site_type]
@@ -97,7 +97,7 @@ class Structure(SuperCell):
         else:
             sigma_swap = np.arange(len_subs)
 
-        return self.swap_random_binary(site_type, sigma_swap)
+        return self.swap_random_binary(site_type, sigma_swap = sigma_swap)
     
     def swap(self, ridx1, ridx2):
         sigma1=self.sigmas[ridx1]

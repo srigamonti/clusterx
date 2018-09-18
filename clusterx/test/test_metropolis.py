@@ -217,7 +217,7 @@ def test_metropolis():
         smultT2[i]=int(multT2[i]*scellSize)
 
     ecisE2 = [
-        -78407.3247588,
+        -78407.325,
         23.16,
         23.15,
         23.14,

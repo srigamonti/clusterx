@@ -349,6 +349,7 @@ class MonteCarloTrajectory():
     def write_to_file(self, filename = None):
         """Write trajectory to file (default filename trajectory.json)
         """
+    
         if filename is not None:
             self._filename = filename
 
@@ -356,7 +357,7 @@ class MonteCarloTrajectory():
         for j,dec in enumerate(self._trajectory):
             dec['decoration'] = dec['decoration'].tolist()
             trajdic.update({str(j):dec})
-        
+
         with open(self._filename, 'w') as outfile:
             json.dump(trajdic,outfile,sort_keys = True, indent=1, separators=(',',':'))
 
