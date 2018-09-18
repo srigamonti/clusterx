@@ -55,10 +55,11 @@ def test_nested_sampling():
     random.seed( 3 )
     
     nsub1=16
-    nsub2=0.0
     nw=1
     niter=5
     nsteps=2
+
+    nsubs={0:[nsub1]}
 
     ns_settings = {}
     ns_settings["walkers"] = nw
@@ -79,7 +80,7 @@ def test_nested_sampling():
     found_lowest = False
     lowest_e = 10.0
     # now run the code
-    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk =  ns.sc_nested_sampling(ns_settings, energy_dict,  Nsub1=nsub1, Nsub2=nsub2, lat=sc_lat, Nprocs=1, alwaysclone=True, diagnostics=diagnostics)
+    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk = ns.sc_nested_sampling(ns_settings, energy_dict, nsubs=nsubs, lat=sc_lat, nprocs=1, alwaysclone=True, diagnostics=diagnostics)
     min_index, lowest_E = min(enumerate(total_ewalk), key=itemgetter(1)) # find new lowest-energy sample
     
     #plot energy history vs. iterations
@@ -92,7 +93,14 @@ def test_nested_sampling():
     print("Total:", lowest_E)
 
     if write_log == True:
-         ns.write_summary(logfile, nsub1, nsub2, total_ewalk, outer_e, xhistory, lowest_E)
+        if len(nsubs.keys()) == 1:
+            nsub1 = [ v[0] for v in nsubs.values()][0]
+            nsub2 = 0
+        elif len(nsubs.keys()) > 1:
+            k = nsubs.keys()
+            nsub1 = [ v[0] for v in nsubs[k[0]].values()][0]
+            nsub2 = [ v[0] for v in nsubs[k[1]].values()][0]
+        ns.write_summary(logfile, nsub1, nsub2, total_ewalk, outer_e, xhistory, lowest_E)
 
     ncount_new, lowest_new, outer_new = get_info_from_file( logfile )
 

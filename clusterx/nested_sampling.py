@@ -34,7 +34,7 @@ import clusterx.parent_lattice
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 
-def nested_sampling(nsub1=None, nsub2=None, nw=None,niter=None, nsteps=None, diagnostics=True, write_files=False, write_log=True, plot_outer_v_iter=False):
+def nested_sampling(nsubs, sc_lat=None, nw=None,niter=None, nsteps=None, diagnostics=True, write_files=False, write_log=True, plot_outer_v_iter=False):
     """
     Description:
         Perform nested sampling
@@ -72,6 +72,8 @@ def nested_sampling(nsub1=None, nsub2=None, nw=None,niter=None, nsteps=None, dia
     #     print("No settings defined, will instead use the default settings used in test/test_nested_sampling.py")
     #     sys.exit()
 
+    #nsubs={0:[16]}
+
     ns_settings = {}
     ns_settings["walkers"] = nw
     ns_settings["iters"] = niter
@@ -88,7 +90,7 @@ def nested_sampling(nsub1=None, nsub2=None, nw=None,niter=None, nsteps=None, dia
     found_lowest = False
     lowest_e = 10.0
     # now run the code
-    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk = sc_nested_sampling(ns_settings, energy_dict, Nsub1=nsub1, Nsub2=nsub2, lat=sc_lat, Nprocs=1, alwaysclone=True, diagnostics=False)
+    xhistory, outer_e, xs, E_xs, total_ewalk, total_xwalk = sc_nested_sampling(ns_settings, energy_dict, nsubs=nsubs, lat=sc_lat, nprocs=1, alwaysclone=True, diagnostics=False)
     min_index, lowest_E = min(enumerate(total_ewalk), key=itemgetter(1)) # find new lowest-energy sample
     
     #plot energy history vs. iterations
@@ -100,18 +102,17 @@ def nested_sampling(nsub1=None, nsub2=None, nw=None,niter=None, nsteps=None, dia
     print("number of iterations", len(outer_e))
     print("\nNested sampling finished and found this energy to be the lowest:", lowest_E)
 
-    if write_log == True:
-         write_summary(logfile, nsub1, nsub2, total_ewalk, outer_e, xhistory, lowest_E)
 
-
-def sc_nested_sampling(ns_settings, energy_dict, Nsub1=None , Nsub2=None, lat=None, Nprocs=1, alwaysclone=True, diagnostics=False):
-
+def sc_nested_sampling(ns_settings, energy_dict, nsubs=None, lat=None, nprocs=1, alwaysclone=True, diagnostics=False):
     # todo: determine total number of subsititonal sites from the structure 
-    Nsubs = Nsub1 
+    
+    Nsubs = [ v[0] for v in nsubs.values()][0]
+    sublattice_indizes = [k for k in nsubs.keys()]
+
     Nw = ns_settings["walkers"]
     Niter = ns_settings["iters"]
     Nsteps = ns_settings["steps"]
-    pool = Pool(processes=Nprocs)
+    pool = Pool(processes=nprocs)
     # zero out most variables
     E_xs = np.zeros(Nw, dtype=float)                            # dynamically updated list of total energies of walksers 
     Ehistory = np.zeros( (Niter, 1), dtype=float)               # history of "outermost" energies - this is the main output of NS with total energies 
@@ -120,7 +121,7 @@ def sc_nested_sampling(ns_settings, energy_dict, Nsub1=None , Nsub2=None, lat=No
     age = np.random.rand(Nw,1)                                  # the 'age' variable is a dynamically updated list that stores the number of iterations since a configuration was cloned
     clone = np.zeros((Niter), dtype=bool)                       # history of decisions whether a new configuration was cloned randomly or just continued from the outermost one
     emove = np.zeros((Niter), dtype=float)                      # 
-    Elim = float(Nsub1)*500.0                                   # set initial energy limit. needs to be high enough that everything is accessible, but too high a value leads to waste
+    Elim = float(Nsubs)*500.0                                   # set initial energy limit. needs to be high enough that everything is accessible, but too high a value leads to waste
     total_ewalk = [] 
     
     xs = StructuresSet(lat)                                                             # configurations walkers
@@ -128,7 +129,7 @@ def sc_nested_sampling(ns_settings, energy_dict, Nsub1=None , Nsub2=None, lat=No
     xhistory = StructuresSet(lat,filename="test_all_outer_NS_structures.json")          # history of "outermost" configurations 
     scell = SuperCell(lat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
     for i in range(Nw):
-        struc2 = lat.gen_random({0:[Nsub1]})
+        struc2 = lat.gen_random(nsubs)
         # check if energy less than limit, if so store configuration                
         if  eval_energy(energy_dict, struc2) < Elim:
             xs.add_structure(struc2)
@@ -170,16 +171,16 @@ def sc_nested_sampling(ns_settings, energy_dict, Nsub1=None , Nsub2=None, lat=No
         #
         # select samples to move and store them in the list called ws
         ws.append( outer ) # the outermost sample 
-        if( Nw >1) and (Nw > Nprocs):
-            while len(ws) < Nprocs:
+        if( Nw >1) and (Nw > nprocs):
+            while len(ws) < nprocs:
                 tmp = random.randrange(len(E_xs))
                 if tmp in ws: continue
                 ws.append( tmp )
         
         if diagnostics == True:
-            print("%s walkers (corresponding to the maximum number of procs) will be computed and the walk length will be divided by this number" %( Nprocs ))
-            print("That is, we will do a parallel walk of %s over %s procs" %(float(Nsteps*Nsubs), Nprocs))
-            print("So each walk will output %s energies" %(float(Nsteps*Nsubs)/float(Nprocs)))
+            print("%s walkers (corresponding to the maximum number of procs) will be computed and the walk length will be divided by this number" %( nprocs ))
+            print("That is, we will do a parallel walk of %s over %s procs" %(float(Nsteps*Nsubs), nprocs))
+            print("So each walk will output %s energies" %(float(Nsteps*Nsubs)/float(nprocs)))
             print("walk samples in walk-list %s" %(ws)) # walk samples in walk-list ws        
             print("Elist before walk:")
             for idx in range(len(E_xs)):
@@ -187,15 +188,15 @@ def sc_nested_sampling(ns_settings, energy_dict, Nsub1=None , Nsub2=None, lat=No
             print("")
             print("Looking for something lower than: %s" %( Elim ))
 
-        if (Nw > Nprocs):
-            steps = int(float(Nsteps*Nsubs)/float(Nprocs))
+        if (Nw > nprocs):
+            steps = int(float(Nsteps*Nsubs)/float(nprocs))
         else:
             steps = int(float(Nsteps*Nsubs))
 
         accept_ratio = []
         # now walk the outer most sample to randomize 
         for n in ws:
-            x, n_accepted, ewalk, xwalk = sc_walk(xs[n], lat, Elim, steps, energy_dict)
+            x, n_accepted, ewalk, xwalk = sc_walk(xs[n], lat, Elim, steps, energy_dict, sublattice_indizes)
             accept_ratio.append( n_accepted )
             E_xs[n] = eval_energy(energy_dict, x) 
             new_xs = StructuresSet(lat)
@@ -226,7 +227,7 @@ def sc_nested_sampling(ns_settings, energy_dict, Nsub1=None , Nsub2=None, lat=No
         
     return xhistory, Ehistory, xs, E_xs, np.array(total_ewalk), total_xwalk
 
-def sc_walk(x, lat, Elimit, steps, energy_dict):
+def sc_walk(x, lat, Elimit, steps, energy_dict, sublattice_indizes):
     
     ewalk = np.zeros( (steps), dtype=float) 
     # initialise structure trajectory
@@ -235,17 +236,17 @@ def sc_walk(x, lat, Elimit, steps, energy_dict):
     ewalk[0] = eval_energy(energy_dict, x) 
     naccepted = 0
     for i in range(1, steps):
-        ind1,ind2=x.swap_random_binary(0)
+        #ind1,ind2=x.swap_random_binary(0)
+        ind1,ind2=x.swap_random(sublattice_indizes)
         Enew = eval_energy(energy_dict, x)
         xwalk.add_structure(x)
         ewalk[i] = Enew
         if Elimit < Enew:
-            x.swap(0,ind1,ind2)
+            x.swap(ind1,ind2)
         else: 
             naccepted += 1
 
     return x, naccepted/float(steps), ewalk, xwalk
-
 
 def eval_energy(energy_dict, x):
     #corcE = deepcopy(energy_dict["corcE"])
