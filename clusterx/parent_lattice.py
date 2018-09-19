@@ -380,6 +380,18 @@ class ParentLattice(Atoms):
         """
         return self._fmt
 
+    def as_dict():
+        """Return dictionary with object definition
+        """
+        self._dict.update({"pbc" : self.get_pbc()})
+        self._dict.update({"numbers" : self.get_atomic_numbers()})
+        self._dict.update({"tags" : self.get_tags()})
+        self._dict.update({"idx_subs" : self.get_idx_subs()})
+        self._dict.update({"unit_cell" : self.get_cell()})
+        self._dict.update({"positions" : self.get_positions()})
+        
+
+
     def serialize(self, fmt="json", fname="parlat.json"):
         """
         Serialize a ParentLattice (or derived) object

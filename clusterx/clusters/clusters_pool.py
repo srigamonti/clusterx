@@ -350,6 +350,33 @@ class ClustersPool():
             self.gen_atoms_database(fname)
 
     def get_cpool_dict(self):
+        nrs = []
+        idxs = []
+        pos = []
+        alphas = []
+
+        for cl in self._cpool:
+            nrs.append(cl.get_nrs())
+            idxs.append(cl.get_idxs())
+            pos.append(cl.get_positions())
+            alphas.append(cl.get_alphas())
+
+        self._cpool_dict.update({"atom_numbers" : nrs})
+        self._cpool_dict.update({"atom_indexes" : idxs})
+        self._cpool_dict.update({"atom_positions" : pos})
+        self._cpool_dict.update({"multiplicities" : self.get_multiplicities()})
+        self._cpool_dict.update({"npoints" : self.get_all_npoints()})
+        self._cpool_dict.update({"radii" : self.get_all_radii()})
+        self._cpool_dict.update({"alphas" : alphas})
+        self._cpool_dict.update({"nclusters" : len(self)})
+        self._cpool_dict.update({"scell_tmat" : self._cpool_scell.get_transformation()})
+        self._cpool_dict.update({"parent_lattice_pbc" : self._plat.get_pbc()})
+        self._cpool_dict.update({"parent_lattice_pristine_unit_cell" : self._plat.get_cell()})
+        self._cpool_dict.update({"parent_lattice_pristine_positions" : self._plat.get_positions()})
+        self._cpool_dict.update({"parent_lattice_pristine_numbers" : self._plat.get_atomic_numbers()})
+        self._cpool_dict.update({"parent_lattice_tags" : self._plat.get_tags()})
+        self._cpool_dict.update({"parent_lattice_idx_subs" : self._plat.get_idx_subs()})
+
         return self._cpool_dict
 
     def dump_cpool_dict(self):
@@ -418,6 +445,8 @@ class ClustersPool():
             self._cpool_atoms.append(Atoms(cell=atoms0.get_cell(), pbc=atoms0.get_pbc(),numbers=numbers,positions=positions))
 
             atoms_db.write(atoms)
+
+        atoms_db.metadata = self.get_cpool_dict()
 
     def get_cpool_atoms(self):
         return self._cpool_atoms
