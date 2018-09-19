@@ -25,7 +25,10 @@ class ClustersPool():
         dimension as ``radii``.
     ``radii``: array of float
         The maximum radii of the clusters in the pool, for each corresponding
-        number of points in ``npoints``.
+        number of points in ``npoints``. If ``super_cell`` is given (see below),
+        any element of the ``radii`` array can be a negative number. In such a
+        case, all clusters fitting in the given ``super_cell`` (for the
+        corresponding number of points in npoints) are generated.
     ``super_cell``: SuperCell object
         If present, ``radii`` is overriden and the pool will consist of all
         possible simmetrically distinct clusters in the given super cell.
@@ -39,8 +42,36 @@ class ClustersPool():
 
     .. todo:
         Fix multiplicities when ``super_cell`` is used
+
         Add calculation of the multiplicity in add_cluster and get_subpool
-    
+
+        Modify get_containing_supercell for  the case when all radii are negative
+        and no SuperCell is given.
+
+    **Examples:**
+
+    The example below, will generate all possible clusters up to 2 points in the
+    super cell ``scell``, while more compact clusters up to a radius of 4.1 and
+    2.9 for 3 and 4 points, respectively, are generated::
+
+        from ase import Atoms
+        from clusterx.parent_lattice import ParentLattice
+        from clusterx.super_cell import SuperCell
+        from clusterx.clusters.clusters_pool import ClustersPool
+
+        plat = ParentLattice(
+            Atoms(cell=np.diag([2,2,5]),positions=[[0,0,0]]),
+            site_symbols=[["Cu","Al"]],
+            pbc=(1,1,0)
+            )
+
+        scell = SuperCell(plat,np.array([(6,0,0),(0,6,0),(0,0,1)]))
+        cp = ClustersPool(plat, npoints=[0,1,2,3,4], radii=[0,0,-1,4.1,2.9], super_cell=scell)
+
+        cp.write_clusters_db(db_name="cpool.json")
+
+    The example
+
     **Methods:**
     """
     def __init__(self, parent_lattice, npoints=[], radii=[], super_cell=None):
@@ -286,6 +317,13 @@ class ClustersPool():
         # Check if supercell is large enough
 
         dmax = np.amax(distances)
+        if len(radii) > 0:
+            for i in range(len(radii)):
+                if radii[i]<0:
+                    self._radii[i] = dmax
+
+        radii = self._radii
+
         if len(radii) > 0:
             if np.amax(radii) > dmax:
                 sys.exit("Containing supercell is too small to find clusters pool. Read documentation for ClustersPool class.")
