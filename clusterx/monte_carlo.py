@@ -73,16 +73,17 @@ class MonteCarlo():
         if not sublattice_indizes:
             try:
                 self._sublattice_indizes = [k for k in self._nsubs.keys()]
+
+                if ensemble == "canonical":
+                    for key in self._nsubs.keys():
+                        if all([ subs == 0 for subs in self._nsubs[key] ]):
+                            self._sublattice_indizes.remove(key)
+
                                  
             except AttributeError:
-                raise AttributeError("index of sublattice is not properly assigned, look at the documentation.")
+                raise AttributeError("Index of sublattice is not properly assigned, look at the documentation.")
         else:
             self._sublattice_indizes = sublattice_indizes
-
-        if ensemble == "canonical":
-            for key in self._nsubs.keys():
-                if all([ subs == 0 for subs in self._nsubs[key] ]):
-                    self._sublattice_indizes.remove(key)
 
         if not self._sublattice_indizes:
             import sys
@@ -131,7 +132,7 @@ class MonteCarlo():
         import math
 
         scale_factor_product = 1
-        for el in scale_factors:
+        for el in scale_factor:
             scale_factor_product *= float(el)
         
         if initial_structure == None:
