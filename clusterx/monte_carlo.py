@@ -49,10 +49,28 @@ class MonteCarlo():
 
     """
     
-    def __init__(self, energy_model, scell, nsubs, models = [], filename = "trajectory.json", ensemble = "canonical", no_of_swaps = 1):
+    def __init__(self, energy_model, scell, nsubs, sublattice_indizes = [], models = [], filename = "trajectory.json", ensemble = "canonical", no_of_swaps = 1):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
+
+        if not sublattice_indizes:
+            try:
+                self._sublattice_indizes = [k for k in self._nsubs.keys()]
+
+                for key in self._nsubs.keys():
+                    if all([ subs == 0 for subs in self._nsubs[key] ]):
+                        self._sublattice_indizes.remove(key)
+
+                if not self._sublattice_indizes:
+                    import sys
+                    sys.exit('Indizes of sublattice are not porperly assigned, look at the documatation.')
+                                 
+            except AttributeError:
+                raise AttributeError("index of sublattice is not properly assigned, look at the documentation.")
+        else:
+            self._sublattice_indizes = sublattice_indizes
+        
         self._models = models
         self._filename = filename
         self._ensemble = ensemble
@@ -93,8 +111,6 @@ class MonteCarlo():
         else:
             struc = initial_structure
 
-        a = [k for k in self._nsubs.keys()][0]
-
         e = self._em.predict_prop(struc)
 
         traj = MonteCarloTrajectory(self._scell, filename=self._filename, models=self._models)
@@ -102,12 +118,11 @@ class MonteCarlo():
         traj.add_decoration(struc, 0, e)
                 
         for i in range(1,nmc+1):
-            ind1_list = []
-            ind2_list = []
+            indizes_list = []
             for j in range(self._no_of_swaps):
-                ind1,ind2 = struc.swap_random_binary(a)
-                ind1_list.append(ind1)
-                ind2_list.append(ind2)
+                #ind1,ind2 = struc.swap_random_binary(self._sublattice_index)
+                ind1, ind2 = struc.swap_random(self._sublattice_indizes)
+                indizes_list.append([ind1, ind2])
                 
             e1 = self._em.predict_prop(struc)
 
@@ -128,9 +143,7 @@ class MonteCarlo():
             else:
                 for j in range(self._no_of_swaps):
                     m=int(self._no_of_swaps-j)
-                    ind1 = ind1_list[j]
-                    ind2 = ind2_list[j]
-                    struc.swap(a,ind1,ind2)
+                    struc.swap(indizes_list[j][0],indizes_list[j][1])
 
         if len(self._models) > 0 :
             traj.calculate_model_properties(self._models)
@@ -164,8 +177,10 @@ class MonteCarloTrajectory():
         ``models``: List of Model objects           
 
     .. todo::
-       Saving the trajectory after ``save_steps`` is not yet implemented.
+        Saving the trajectory after ``save_steps`` is not yet implemented.
         
+        Improve appearance of json file - decoration array in one line
+       
     """
     
     def __init__(self, scell, filename="trajectory.json", **kwargs):
@@ -334,6 +349,7 @@ class MonteCarloTrajectory():
     def write_to_file(self, filename = None):
         """Write trajectory to file (default filename trajectory.json)
         """
+    
         if filename is not None:
             self._filename = filename
 
@@ -341,7 +357,7 @@ class MonteCarloTrajectory():
         for j,dec in enumerate(self._trajectory):
             dec['decoration'] = dec['decoration'].tolist()
             trajdic.update({str(j):dec})
-        
+
         with open(self._filename, 'w') as outfile:
             json.dump(trajdic,outfile,sort_keys = True, indent=1, separators=(',',':'))
 
