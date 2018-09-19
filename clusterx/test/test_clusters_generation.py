@@ -6,6 +6,7 @@ from clusterx.super_cell import SuperCell
 from ase import Atoms
 import numpy as np
 import time
+from ase.build import bulk
 
 def test_clusters_generation():
     """Test generation of clusters pools.
@@ -80,7 +81,6 @@ def test_clusters_generation():
     #######################################################
     print("Part III")
 
-    from ase.build import bulk
     from ase.data import atomic_numbers as an
     a=4.1
     pris = bulk("Cu",crystalstructure="fcc", a=a)
@@ -207,6 +207,41 @@ def test_clusters_generation():
         if (mult != mult_ref).any() or not isclose(radii,radii_ref) or (npoints != npoints_ref).any():
             isok6 = False
 
+    #######################################################
+    # Part 7: Negative radii
+    #######################################################
+
+    print("Part VII")
+
+    plat = ParentLattice(
+        Atoms(cell=np.diag([2,2,5]),positions=[[0,0,0]]),
+        site_symbols=[["Cu","Al"]],
+        pbc=(1,1,0)
+        )
+
+    scell = SuperCell(plat,np.array([(6,0,0),(0,6,0),(0,0,1)]))
+    cp = ClustersPool(plat, npoints=[0,1,2,3,4], radii=[0,0,-1,4.1,2.9], super_cell=scell)
+
+    cp.write_clusters_db(db_name="test_clusters_generation_7.json")
+
+    mult = cp.get_multiplicities()
+    radii = cp.get_all_radii()
+    npoints = cp.get_all_npoints()
+
+    #print(repr(mult))
+    #print(repr(radii))
+    #print(repr(npoints))
+
+    mult_ref = np.array([1, 1, 2, 2, 2, 4, 2, 2, 2, 2, 1, 4, 2, 4, 1])
+    radii_ref = np.array([0.        , 0.        , 2.        , 2.82842712, 4.        ,
+       4.47213595, 5.65685425, 6.        , 6.32455532, 7.21110255,
+       8.48528137, 2.82842712, 4.        , 4.        , 2.82842712])
+    npoints_ref = np.array([0, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 4])
+
+    if tassert:
+        isok7 = True
+        if (mult != mult_ref).any() or not isclose(radii,radii_ref) or (npoints != npoints_ref).any():
+            isok7 = False
 
     print ("\n\n========Test writes========")
     print (test_clusters_generation.__doc__)
@@ -214,15 +249,17 @@ def test_clusters_generation():
 
     print ("========Asserts========")
     if tassert:
-        print("test part 1")
+        #print("test part 1")
         #assert isok1
         print("test part 2")
         assert isok2
         print("test part 3")
         assert isok3
-        print("test part 4")
+        #print("test part 4")
         #assert isok4
         print("test part 5")
         assert isok5
         print("test part 6")
         assert isok6
+        print("test part 7")
+        assert isok7
