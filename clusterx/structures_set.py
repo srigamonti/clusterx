@@ -528,6 +528,9 @@ class StructuresSet():
 
             where ``folder_path`` is the path of the folder containing the relevant
             property files.
+            
+        ``write_to_file``: Boolean
+            Whether to write property values to a file with name ``property_name.dat``.
 
         ``**kwargs``: keyworded variable length argument list
             You may call this method as::
