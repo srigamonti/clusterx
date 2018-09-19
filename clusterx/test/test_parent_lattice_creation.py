@@ -18,7 +18,7 @@ def test_parent_lattice_creation():
     cuc = bulk('CuC','zincblende',a=6.1)
 
     parent_lattice0 = ParentLattice(atoms=cual,substitutions=[agal,sral,cuc])
-    parent_lattice0.serialize(fmt="json",fname="test_parent_lattice_creation_0.json")
+    parent_lattice0.serialize(fname="test_parent_lattice_creation_0.json")
     # Clathrate
     a = 10.515
     x = 0.185; y = 0.304; z = 0.116
@@ -36,7 +36,7 @@ def test_parent_lattice_creation():
     sub3 = crystal(['Si','Si','Si','Sr','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
 
     parent_lattice1 = ParentLattice(atoms=pri,substitutions=[sub1,sub2,sub3])
-    parent_lattice1.serialize(fmt="json",fname="test_parent_lattice_creation_1.json")
+    parent_lattice1.serialize(fname="test_parent_lattice_creation_1.json")
 
     parent_lattice2 = ParentLattice(json_db_filepath="test_parent_lattice_creation_1.json")
 

@@ -664,3 +664,37 @@ def mgrep(fpath, search_array, prepend='',root='.'):
                 out_str = out_str + prepend + ostr.strip() + '\n'
 
     return out_str.rstrip()
+
+def parent_lattice_to_atat(plat, out_fname="lat.in"):
+    """Serializes ParentLattice object to ATAT input file
+
+    **Parameters:**
+
+    ``plat``: ParentLattice object
+        ParentLattice object to be serialized
+    ``out_fname``: string
+        Output file path
+    """
+    cell = plat.get_cell()
+    positions = plat.get_scaled_positions()
+    sites = plat.get_sites()
+
+    f = open(out_fname,'w+')
+
+    for cellv in cell:
+        f.write(u"%2.12f\t%2.12f\t%2.12f\n"%(cellv[0],cellv[1],cellv[2]))
+
+    f.write(u"1.000000000000\t0.000000000000\t0.000000000000\n")
+    f.write(u"0.000000000000\t1.000000000000\t0.000000000000\n")
+    f.write(u"0.000000000000\t0.000000000000\t1.000000000000\n")
+
+    for i,pos in enumerate(positions):
+        stri = u"%2.12f\t%2.12f\t%2.12f\t"%(pos[0],pos[1],pos[2])
+        if len(sites[i])>1:
+            for z in sites[i][:-1]:
+                stri = stri + "%s,\t"%cs[z]
+        stri = stri + "%s\n"%cs[sites[i][-1]]
+
+        f.write(stri)
+
+    f.close()
