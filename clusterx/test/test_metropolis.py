@@ -35,6 +35,7 @@ def test_metropolis():
     ]
 
     # Build the parent lattice
+    print("\nSampling in `Si_{46-x} Al_x Ba_{8}`")
     pri = crystal(['Si','Si','Si','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
     sub = crystal(['Al','Al','Al','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
     plat = ParentLattice(atoms=pri,substitutions=[sub],pbc=(1,1,1))
@@ -92,12 +93,11 @@ def test_metropolis():
     scellE = SuperCell(plat,scellS)
 
     sub_lattices = scellE.get_idx_subs()
-    print(sub_lattices)
+    print("Sublattices with corresponding atomic numbers: ", sub_lattices)
     tags = scellE.get_tags() 
-    print(tags)
+    print("Tags: ", tags)
 
     nsubs={0:[16]}
-
     
     cemodelE=Model(corcE, ecisE, multT)
 
@@ -120,7 +120,7 @@ def test_metropolis():
     energies = traj.get_model_total_energies()
     decoration1 = traj.get_decoration_at_step(steps[1])
     
-    print(steps)
+    print("Configurations accepted at steps: ",steps)
     last_decoration = traj.get_sampling_step_entries_at_step(steps[-1])
 
     rsteps = [0, 1, 2, 3, 4, 6, 10, 11, 16, 17, 18, 26, 27, 34, 37, 38, 44, 45, 47, 48, 50]
@@ -156,7 +156,7 @@ def test_metropolis():
 
     traj.calculate_model_properties([cemodelBkk,cemodelBii])
 
-    print([mo._prop for mo in traj._models])
+    print("Cluster expansion models for the properties: ",[mo._prop for mo in traj._models])
 
     traj.write_to_file()
 
@@ -186,9 +186,9 @@ def test_metropolis():
         isok3 = False
         
     assert(isok3)
-
+    
     #Clathrate ternary `Si_{46-x-y} Al_x Vac_y Ba_{8-z} Sr_z`
-    print("Sampling in `Si_{46-x-y} Al_x Vac_y Ba_{8-z} Sr_z`")
+    print("\nSampling in `Si_{46-x-y} Al_x Vac_y Ba_{8-z} Sr_z`")
     sub2 = crystal(['X','X','X','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
     sub3 = crystal(['Si','Si','Si','Sr','Sr'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
 
@@ -200,18 +200,18 @@ def test_metropolis():
     struc = scellE2.gen_random({0:[112,16], 1:[0]})
 
     idx_subs = scellE2.get_idx_subs()
-    print(idx_subs)
+    print("Sublattices with corresponding atomic numbers: ",idx_subs)
 
     cpoolE2 = ClustersPool(plat2, npoints=[0,1], radii=[0,0])
     corcE2 = CorrelationsCalculator("trigonometric", plat, cpoolE2)
 
     multT2=cpoolE2.get_multiplicities()
-    print("Cluster multiplicities",multT2)
-    print("Corresponding radii",cpoolE2.get_all_radii())
-    print("Corresponding points",cpoolE2.get_all_npoints())
+    print("Cluster multiplicities: ",multT2)
+    print("Corresponding radii: ",cpoolE2.get_all_radii())
+    print("Corresponding points: ",cpoolE2.get_all_npoints())
     
     scellSize=np.prod(np.dot(scellS2,(1,1,1)))
-    print(scellSize)
+    print("Multiplications of the parent cell: ", scellSize)
     smultT2=np.zeros(len(multT2))
     for i in range(0,len(multT2)):
         smultT2[i]=int(multT2[i]*scellSize)
@@ -230,33 +230,56 @@ def test_metropolis():
         
     cemodelE2=Model(corcE2, ecisE2, smultT2)
 
-    #struc = scellE.gen_random({0:[16]})
-    mc2 = MonteCarlo(cemodelE2, scellE2, {0:[112,16],1:[0]}, filename = "trajectory-ternary.json") #, sub_lattice_index = 0)
+    # Sampling in sublattice with index 0 - ternary sampling
+    print("Start sampling in sublattice with index 0:")
+    mc2 = MonteCarlo(cemodelE2, scellE2, {0:[112,16],1:[0]}, sublattice_indizes=[0], filename = "trajectory-ternary.json")
 
     nmc=30
-
-    # Boltzmann constant in Ha/K
-    kb = float(3.16681009610757e-6)
     # temperature in K
     temp = 600
-    print("Samplings steps",nmc)
-    print("Temperature",temp)
+    print("Samplings steps ",nmc)
+    print("Temperature ",temp)
     
     traj2 = mc2.metropolis([kb,temp], nmc)
 
     steps2 = traj2.get_sampling_step_nos()
-    energies2 = traj2.get_model_total_energies()
-    decoration1 = traj2.get_decoration_at_step(steps[1])
-    
-    print(steps2)
-    print(energies2)
-    print(decoration1)
-    last_decoration = traj2.get_sampling_step_entries_at_step(steps2[-1])
-    print(last_decoration)
+    energies2 = traj2.get_model_total_energies()    
+    last_decoration2 = traj2.get_sampling_step_entries_at_step(steps2[-1])
         
     traj2.write_to_file()
 
-    mc3 = MonteCarlo(cemodelE2, scellE2, {0:[112,16],1:[8]}, filename = "trajectory-multi-lattice.json") #, sub_lattice_index = 0)
+    rsteps2 = [0, 1, 3, 7, 8, 12, 14, 18, 21, 23, 24, 25, 26, 28, 29, 30]
+    renergies2 = [-634734.608306379, -634734.608306379, -634734.608306379, -634734.620985871, -634734.620985871, -634734.620985871, -634734.620985871, -634734.620985871, -634734.620985871, -634734.633665363, -634734.633665363, -634734.6683063792, -634734.6683063792, -634734.680985871, -634734.680985871, -634734.7156268872]
+    rlast_decoration2 = {'sampling_step_no': 30,
+                         'decoration': np.int8([14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 13,  0, 13, 14, 14, 14, 13, 14, 13, 13, 13, 14, 13, 13, 13, 14, 13, 13, 14, 14, 14, 14, 14, 14, 13, 14, 13, 56, 56, 56, 56, 56, 56, 56, 56,
+                                                13, 13, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 13, 14, 13, 13,  0, 13, 13, 14, 14, 13, 14, 13, 14, 13, 13, 14, 13, 14,  0, 14, 14, 14, 14, 13, 14, 13, 14, 14, 13, 13, 14, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
+                                                14, 13, 13, 14, 14, 13, 14,  0, 14, 14, 14, 13, 14,  0, 14, 14, 14, 14, 13, 14, 13, 14, 14,  0, 14, 14, 13, 13, 13, 13, 14, 13, 14, 14, 14, 13, 14, 14, 13, 14,  0, 14, 13, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
+                                                14, 13, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 13, 14, 14, 13, 14, 14, 14, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 14, 13, 14, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
+                                                14, 14, 14, 14, 13, 14, 14, 14, 13, 14, 14, 13, 14, 13, 14, 14, 14, 13, 13, 13, 14, 14, 14, 13, 14, 14, 14,  0, 14,  0,  0, 14, 13, 14, 13, 13, 13, 14, 13, 14, 14, 14, 14, 14, 14, 13, 56, 56, 56, 56, 56, 56, 56, 56,
+                                                13, 14, 13, 13, 13, 14, 14, 14, 14, 13, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 13, 14, 13, 14, 13, 13, 14,  0,  0, 14, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
+                                                14, 14, 13, 14, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14,  0, 13, 14, 14, 13, 13, 14, 13, 14, 13, 13, 13, 14, 13, 13, 13, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
+                                                14, 14, 14, 13, 14, 14, 13, 14, 14,  0, 14, 14, 13, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14,  0, 14, 14, 13, 14, 13,  0, 14, 13, 13, 14, 13, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56]),
+                         'model_total_energy': -634734.7156268872,
+                         'key_value_pairs': {}}
+    isok4 = isclose(rsteps2,steps2) and isclose(renergies2, energies2) and dict_compare(last_decoration2,rlast_decoration2)
+    assert(isok4)
+    
+    # Sampling in the sublattices with indizes 0 and 1 - ternary sampling in sublattice 0 and binary sampling in sublattice 1
+    print("\nStart sampling in the two sublattices with indizes 0 and 1:")
+    print("Samplings steps",nmc)
+    print("Temperature",temp)
+
+    mc3 = MonteCarlo(cemodelE2, scellE2, {0:[112,16],1:[8]}, filename = "trajectory-multi-lattice.json") 
     traj3 = mc3.metropolis([kb,temp], nmc)
 
+    steps3 = traj3.get_sampling_step_nos()
+    energies3 = traj3.get_model_total_energies()
+
     traj3.write_to_file()
+    
+    rsteps3 = [0, 1, 2, 4, 5, 7, 9, 10, 11, 12, 13, 14, 16, 17, 18, 20, 21, 22, 23, 24, 26, 27, 28]
+    renergies3 = [-634365.0390243438, -634365.0390243438, -634365.0590243443, -634365.0590243443, -634365.0590243443, -634365.0590243443, -634365.0590243443, -634365.1063448524, -634365.1063448524, -634365.1409858714, -634365.1536653634, -634365.1536653634, -634365.1536653634, -634365.1536653634, -634365.2229473958, -634365.2229473958, -634365.2483063795, -634365.2483063795, -634365.2483063795, -634365.2683063787, -634365.2883063791, -634365.2883063791, -634365.2883063791]
+
+    isok5 = isclose(rsteps3,steps3) and isclose(renergies3, energies3)
+    assert(isok5)
+    
