@@ -224,8 +224,7 @@ class MonteCarloTrajectory():
         self._filename = filename
         
     def calculate_model_properties(self, models):
-        """
-        Calculate the property for all decoration in the trajectory
+        """Calculate the property for all decoration in the trajectory
         """
         for mo in models:
             if mo not in self._models:
@@ -242,29 +241,35 @@ class MonteCarloTrajectory():
             self._trajectory[t]['key_value_pairs'] = sdict
                 
     def add_decoration(self, struc, step, energy, key_value_pairs={}):
-        """
-        Add a decoration to the trajectory
+        """Add decoration of Structure object to the trajectory
         """
         self._trajectory.append(dict([('sampling_step_no',int(step)), ('decoration', deepcopy(struc.decor) ), ('model_total_energy',energy), ('key_value_pairs', key_value_pairs)]))
 
-    def get_sampling_step_entries_at_step(self, nstep):
+    def get_sampling_step_entry_at_step(self, nstep):
         """Get the dictionary at the n-th sampling step in the trajectory
-        """
-        return self.get_sampling_step_entries(self.get_id_sampling_step(nstep))
-
-    def get_sampling_step_entries(self, nid):
-        """Get the dictionary with index nid in the trajectory
-        """
-
-        return self._trajectory[nid]
         
+        **Parameters:**
+
+        ``nstep``: int
+            sampling step
+
+        **Returns:**
+            Dictionary at the n-th sampling step.
+                                                                                                                                 
+        """        
+        return self.get_sampling_step_entry(self.get_id_sampling_step(nstep))
+
+    def get_sampling_step_entry(self, nid):
+        """Get the dictionary (entry) at index nid in the trajectory
+        """
+        return self._trajectory[nid]
 
     def get_decoration_at_step(self, nstep):
         """Get the decoration at the n-th sampling step in the trajectory.
             
         **Parameters:**
 
-        ``nstep``: integer
+        ``nstep``: int
             sampling step
 
         **Returns:**
@@ -273,9 +278,8 @@ class MonteCarloTrajectory():
         """        
         return self.get_decoration(self.get_id_sampling_step(nstep))
 
-
     def get_decoration(self, nid):
-        """Get the decoration with the index nid in the trajectory
+        """Get the decoration at index nid in the trajectory
                                                                                                                                                                                                                              
         **Parameters:**
 
@@ -287,32 +291,72 @@ class MonteCarloTrajectory():
                                                                                                                                                                                                                                                      
         """
         return self._trajectory[nid]['decoration']
+
+    
+    def get_structure_at_step(self, nstep):
+        """Get the structure from decoration at the n-th sampling step in the trajectory.
+            
+        **Parameters:**
+
+        ``nstep``: integer
+            sampling step
+
+        **Returns:**
+            Structure object at the n-th sampling step.
+                                                                                                                                 
+        """        
+        return self.get_structure(self.get_id_sampling_step(nstep))
         
-        #return Structure(self._scell, decoration = struc_parameters['decoration'])
+    def get_structure(self, nid):
+        """Get structure from entry at index nid in the trajectory
+                                                                                                                                                                                                                             
+        **Parameters:**
+
+        ``nid``: integer
+            index of structure in the trajectory.
+
+        **Returns:**
+            Structure object at index nid.
+                                                                                                                                                                                                                                                     
+        """
+        return Structure(self._scell, decoration = self._trajectory[nid]['decoration'])
+    
+    def get_lowest_non_degenerate_structure(self): 
+        """Get lowest-non-degenerate structure from trajectory
+                                                                                                                                                                                                                             
+        **Returns:**
+            Structure object.
+                                                                                                                                                                                                                                                     
+        """
+        _energies = self.get_model_total_energies()
+        _emin = np.min(_energies)
+        _nid = np.where(_energies == _emin)[0][0]
+        
+        return self.get_structure(_nid)        
 
     def get_sampling_step_nos(self):
-        """Get sampling step numbers from the trajectory where the sampling accepts a new structure
+        """Get sampling step numbers of all entries in trajectory 
         """
         steps=[]
         for tr in self._trajectory:
             steps.append(tr['sampling_step_no'])
             
-        return steps
+        return np.int8(steps)
 
     def get_sampling_step_no(self, nid):
-        """Get sampling step number trajectory element with index nid
+        """Get sampling step number of entry at index nid in trajectory
         """
         return self._trajectory[nid]['sampling_step_no']
 
 
     def get_id_sampling_step(self, nstep):
-        """Get decoration index at the n-th sampling step.
+        """Get entry index at the n-th sampling step.
         """
         steps = self.get_sampling_step_nos()
         
         nid=0
         try:
-            nid = steps.index(nstep)
+            nid = np.where(steps == nstep)[0][0]
         except ValueError:
             if nstep>steps[-1]:
                 nid=steps[-1]
@@ -320,64 +364,66 @@ class MonteCarloTrajectory():
                 for i,s in enumerate(steps):
                     if s>nstep:
                         nid=steps[i-1]
-                    
         return nid
 
-
     def get_model_total_energies(self):
-        """Get cluster expansion energies of the full trajectory
+        """Get total energies of all entries in trajectory.
         """
         energies = []
         for tr in self._trajectory:
             energies.append(tr['model_total_energy'])
  
-        return energies
+        return np.asarray(energies)
 
     def get_model_total_energy(self, nid):
-        """Get cluster expansion energy of decoration with index nid
+        """Get total energy of entry at index nid in trajectory.
         """
         return self._trajectory[nid]['model_total_energy']
 
     def get_model_properties(self, prop):
-        """Get property predicted by a cluster expansion model of the full trajectory
+        """Get property of all entries in the trajectory.
         """
         props = []
         for tr in self._trajectory:
             props.append(tr['key_value_pairs'][prop])
  
-        return props
+        return np.asarray(props)
     
-    def get_model_property(self, prop):
-        """Get property predicted by a cluster expansion model of decoration with index nid
+    def get_model_property(self, nid, prop):
+        """Get property of entry at index nid in trajectory.
         """        
         return self._trajectory[nid]['key_value_pairs'][prop]
-
     
     def get_id(self, prop, value):
-        """Get indizes of decorations from the trajectory which contain the key-value pair trajectory
+        """Get indizes of entries in trajectory which contain the key-value pair trajectory.
                                                                                                                                                                                                                              
         **Parameters:**
 
         ``prop``: string
             property of interest 
 
-        ``value``: 
-            value/values of the property
+        ``value``: float
+            value of the property
 
         **Returns:**
-            array of decoration IDs for which the value of the property prop matches
+            array of int.
                                                                                                                                                                                                                                                      
         """
         arrayid = []
 
-        for i,tr in enumerate(self._trajectory):
-            if tr[prop] == value:
-                arrayid.append(i)
+        if prop in ['sampling_step_no','decoration','model_total_energy']:
+            for i,tr in enumerate(self._trajectory):
+                if tr[prop] == value:
+                    arrayid.append(i)
+        else:
+            for i,tr in enumerate(self._trajectory):
+                if tr['key_value_pairs'][prop] == value:
+                    arrayid.append(i)
 
-        return arrayid
+        return np.asarray(arrayid)    
 
     def write_to_file(self, filename = None):
-        """Write trajectory to file (default filename trajectory.json)
+        """Write trajectory to file (default filename trajectory.json).
         """
     
         if filename is not None:

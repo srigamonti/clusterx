@@ -118,18 +118,33 @@ def test_metropolis():
 
     steps = traj.get_sampling_step_nos()
     energies = traj.get_model_total_energies()
-    decoration1 = traj.get_decoration_at_step(steps[1])
+    decoration2 = traj.get_decoration_at_step(steps[2])
+    stepx = traj.get_model_total_energy(2)
+    print(stepx)
+
+    decoration1 = traj.get_decoration_at_step(steps[2])
+    print("Decoration at sampling step", steps[2],": ",decoration1)
+    struc1 = traj.get_structure_at_step(steps[2])
+    print("Decoration at sampling step", steps[2], "read from atoms object: ", struc1.get_atomic_numbers())
+    struc1.serialize(fname="configuration2.json")
+
+    strucmin = traj.get_lowest_non_degenerate_structure()
+    print("Decoration with the lowest energy: ", strucmin.get_atomic_numbers())
+    print("Energy of this structure: ", min(energies))
+    strucmin.serialize(fname="lowest-non-generate-configuration.json")    
+    
     
     print("Configurations accepted at steps: ",steps)
-    last_decoration = traj.get_sampling_step_entries_at_step(steps[-1])
+    last_sampling_entry = traj.get_sampling_step_entry_at_step(steps[-1])
+    
 
     rsteps = [0, 1, 2, 3, 4, 6, 10, 11, 16, 17, 18, 26, 27, 34, 37, 38, 44, 45, 47, 48, 50]
     renergies = [-77652.59664207128, -77652.61184305252, -77652.62022569243, -77652.61912760629, -77652.62737663009, -77652.63009501049, -77652.63158443688, -77652.64240196907, -77652.64240196907, -77652.64348105107, -77652.64714764676, -77652.64959679516, -77652.64959679516, -77652.65458138083, -77652.66173231734, -77652.65458138083, -77652.65946542152, -77652.6702829537, -77652.66812810961, -77652.67298251796, -77652.66622624162]
-    rlast_decoration = {'sampling_step_no': 50,
+    rlast_sampling_entry = {'sampling_step_no': 50,
                         'model_total_energy': -77652.66622624162,
                         'decoration': np.int8([14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56]),
                         'key_value_pairs': {}}
-    isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and dict_compare(last_decoration,rlast_decoration)
+    isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and dict_compare(last_sampling_entry,rlast_sampling_entry)
     assert(isok1)
 
 
@@ -158,6 +173,16 @@ def test_metropolis():
 
     print("Cluster expansion models for the properties: ",[mo._prop for mo in traj._models])
 
+
+    #Tests of functions in MonteCarloTrajector
+    print("Tests of functions in MonteCarloTrajector:")
+    stepx = traj.get_model_property(2,'bond_kk')
+    print(stepx)
+    stepx = traj.get_id('bond_kk',2.4772699399288944)
+    print(stepx)
+    stepx = traj.get_id('model_total_energy',-77652.65458138083)
+    print(stepx)
+
     traj.write_to_file()
 
     bondskk = traj.get_model_properties('bond_kk')
@@ -176,11 +201,11 @@ def test_metropolis():
         energies2 = traj.get_model_total_energies()
         steps2 = traj.get_sampling_step_nos()
 
-        decoration2 = traj.get_decoration(steps2[1])
-        last_decoration2 = traj.get_sampling_step_entries_at_step(steps2[-1])
-        last_decoration2['key_value_pairs']={}
+        decoration2 = traj.get_decoration(steps2[2])
+        last_sampling_entry2 = traj.get_sampling_step_entry_at_step(steps2[-1])
+        last_sampling_entry2['key_value_pairs']={}
 
-        isok3 = isclose(renergies, energies2) and dict_compare(rlast_decoration,last_decoration2) and isclose(decoration2,decoration1) and isclose(steps2,rsteps)
+        isok3 = isclose(renergies, energies2) and dict_compare(rlast_sampling_entry,last_sampling_entry2) and isclose(decoration2,decoration1) and isclose(steps2,rsteps)
 
     else:
         isok3 = False
@@ -244,7 +269,7 @@ def test_metropolis():
 
     steps2 = traj2.get_sampling_step_nos()
     energies2 = traj2.get_model_total_energies()    
-    last_decoration2 = traj2.get_sampling_step_entries_at_step(steps2[-1])
+    last_decoration2 = traj2.get_sampling_step_entry_at_step(steps2[-1])
         
     traj2.write_to_file()
 
