@@ -57,12 +57,13 @@ class Cluster():
             self.ans = np.array(atom_numbers)
         self.npoints = len(atom_numbers)
         self.positions_cartesian = None
+        self.alphas = None
         #self.positions_scaled = None
         self.radius = None
         if super_cell is not None:
             # Set alphas, site_type, and positions
-            self.alphas = np.zeros(len(atom_indexes))
-            self.site_type = np.zeros(len(atom_indexes))
+            self.alphas = np.zeros(len(atom_indexes),dtype=int)
+            self.site_type = np.zeros(len(atom_indexes),dtype=int)
             sites = super_cell.get_sites()
             idx_subs = super_cell.get_idx_subs()
             tags = super_cell.get_tags()
@@ -95,6 +96,11 @@ class Cluster():
         else:
             return self.npoints < other.npoints
     """
+
+    def get_alphas(self):
+        """Return labels of point basis-functions of cluster
+        """
+        return self.alphas
 
     def set_radius(self,distances):
         r = 0.0
@@ -206,7 +212,7 @@ class Cluster():
 
         **Example:**
         Getting the multiplicities of clusters in a clusters pool::
-        
+
             from clusterx.symmetry import get_spacegroup
             sc_sg, sc_sym = get_spacegroup(parent_lattice) # Scaled to parent_lattice
             m = []
