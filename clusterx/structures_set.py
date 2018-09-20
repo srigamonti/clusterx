@@ -44,7 +44,8 @@ class StructuresSet():
 
     .. todo::
 
-        * Write function write_files (already drafted).
+        * Use plat.as_dict to serialize metadata part of structures_set database.
+        * Add idx_tags dict in metadata.
         * So far, the class allows to have only a subset of the structures written to the member json database. This may be dengerous in certain contexts, analyze whether changing this.
 
 
@@ -108,6 +109,23 @@ class StructuresSet():
         """Return number of structures in the structures set.
         """
         return self._nstructures
+
+    def get_scell_indices(self):
+        """Return array of supercell indices.
+
+        Every structure in a structure set, is a ("decorated") supercell.
+        The index of a supercell is an integer number, equal to the super cell
+        volume in units of the parent cell volume.
+
+        This method returns an array of supercell indices, corresponding to each
+        structure in the structures set.
+        """
+        nplat = len(self._parent_lattice)
+        indices = np.zeros(self.get_nstr(),dtype=int)
+        for i in range(self.get_nstr()):
+            ni = len(self.get_structure(i))
+            indices[i] = ni//nplat
+        return indices
 
     def write(self, structure, key_value_pairs={}, **kwargs):
         self.json_db.write(structure.get_atoms(),key_value_pairs, data={"pcell":structure.get_parent_lattice().get_cell(),"tmat":structure.get_transformation(), "tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
@@ -524,11 +542,11 @@ class StructuresSet():
             Function to extract property value from ab-initio files. Return value
             must be scalar and signature is::
 
-                read_property(folder_path, args[0], args[1], ...)
+                read_property(i,folder_path, args[0], args[1], ...)
 
-            where ``folder_path`` is the path of the folder containing the relevant
-            property files.
-            
+            where ``i`` is the structure index, and ``folder_path`` is the path
+            of the folder containing the relevant property files.
+
         ``write_to_file``: Boolean
             Whether to write property values to a file with name ``property_name.dat``.
 
@@ -547,7 +565,7 @@ class StructuresSet():
 
         self._props[property_name] = []
         for i,folder in enumerate(self._folders):
-            pval = read_property(folder,**kwargs)
+            pval = read_property(i,folder,**kwargs)
             self._props[property_name].append(pval)
             db.update([i+1], **{property_name:pval})
             if write_to_file:
