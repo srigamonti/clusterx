@@ -43,7 +43,8 @@ class SuperCell(ParentLattice):
         self._plat = parent_lattice
         self._p = p
         self.index = int(round(np.linalg.det(p)))
-        prist = make_supercell(parent_lattice.get_atoms(),p)
+        #prist = make_supercell(parent_lattice.get_atoms(),p)
+        prist = make_supercell(parent_lattice.get_pristine(),p)
         subs = [make_supercell(atoms,p) for atoms in parent_lattice.get_substitutions()]
         #ParentLattice.__init__(self, atoms = prist, substitutions = subs )
         super(SuperCell,self).__init__(atoms = prist, substitutions = subs )
@@ -56,6 +57,14 @@ class SuperCell(ParentLattice):
         sc = self.__class__(self._plat, self._p)
 
         return sc
+
+    def as_dict(self):
+        """Return dictionary with object definition
+        """
+        plat_dict = super(SuperCell, self._plat).as_dict()
+        self._dict = {"tmat":self._p,"parent_lattice":plat_dict}
+
+        return self._dict
 
     def get_index(self):
         """Return index of the SuperCell
@@ -99,7 +108,7 @@ class SuperCell(ParentLattice):
         import clusterx.structure
 
         decoration, sigmas = self.gen_random_decoration(nsubs)
-        
+
         return clusterx.structure.Structure(SuperCell(self._plat,self._p),sigmas=sigmas)
 
     def gen_random_decoration(self,nsubs):
