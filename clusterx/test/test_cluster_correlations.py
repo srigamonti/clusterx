@@ -52,7 +52,7 @@ def test_cluster_correlations():
 
     plat2 = ParentLattice(pri,substitutions=[su21,su22],pbc=pbc)
     cpool2 = ClustersPool(plat2, npoints=[1,2], radii=[0,1.2])
-    corrcal2 =  CorrelationsCalculator("chebychev", plat2, cpool2)
+    corrcal2 =  CorrelationsCalculator("ternary-chebychev", plat2, cpool2)
 
     scell21 = SuperCell(plat2,np.array([(1,0,0),(0,3,0),(0,0,1)]))
     structure21 = Structure(scell21,[1,1,1,6,7,1,6,7,1])
@@ -62,6 +62,16 @@ def test_cluster_correlations():
     scell22 = SuperCell(plat2,np.array([(1,0,0),(0,6,0),(0,0,1)]))
     structure22 = Structure(scell22,[1,1,1,6,7,1,6,7,1,1,1,1,6,7,1,6,7,1])
     corrs22 = corrcal2.get_cluster_correlations(structure22)
+
+    # Binary array for Chebychev-polinomials.
+    plat3 = ParentLattice(pri, substitutions = [su21], pbc = pbc)
+    cpool3 = ClustersPool(plat3,  npoints=[1,2], radii=[0,1.2])
+    corrcal3 =  CorrelationsCalculator("ternary-chebychev", plat3, cpool3)
+
+    scell3 = SuperCell(plat3,np.array([(1,0,0),(0,3,0),(0,0,1)]))
+    structure3 = Structure(scell3,[1,1,1,6,6,1,6,6,1])
+    corrs3 = corrcal3.get_cluster_correlations(structure3)
+    
 
     print ("\n\n========Test writes========")
     print (test_cluster_correlations.__doc__)
@@ -74,7 +84,7 @@ def test_cluster_correlations():
     cpool2.write_clusters_db(cpool2.get_cpool(),scell,"test_cluster_correlations_cpool_chebychev.json")
     structure21.serialize(fmt="json",fname="test_cluster_correlations_structure_1_chebychev.json")
     structure22.serialize(fmt="json",fname="test_cluster_correlations_structure_2_chebychev.json")
-
+    
     print ("===========================\n")
 
     print ("========Asserts========")
@@ -83,3 +93,4 @@ def test_cluster_correlations():
     assert np.allclose([-0.33333333,0.,-0.,0.33333333,0.57735027,-0.33333333,-0.25,-0.,-0.25],corrs2,atol=1e-5)
     assert np.allclose([-0.40824829,-0.23570226,0.16666667,0.28867513,-0.16666667,0.33333333,-0.,0.33333333],corrs21,atol=1e-5)
     assert np.allclose([-0.40824829,-0.23570226,0.16666667,0.28867513,-0.16666667,0.33333333,-0.,0.33333333],corrs22,atol=1e-5)
+    assert np.allclose([-0.11111111, 0.11111111, 0.11111111],corrs3,atol=1e-5)

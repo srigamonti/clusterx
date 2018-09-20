@@ -69,23 +69,37 @@ class Structure(SuperCell):
         if fname is None:
             fname = "structure.json"
 
-        write(fname,images=self.atoms,format=fmt) # WARNING! Changed from images = self to images = self.atoms
+        write(fname,images=self.atoms,format=fmt) 
 
         self._fname = fname
 
-    def swap_random_binary(self, site_type):
+    def swap_random_binary(self, site_type, sigma_swap = [0,1]):
         tags=self.get_tags()
-        idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == 0 and tags[index] == site_type]
-        idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == 1 and tags[index] == site_type]
+        idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[0] and tags[index] == site_type]
+        idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[1] and tags[index] == site_type]
         ridx1 = np.random.choice(idx1)
         ridx2 = np.random.choice(idx2)
 
-        self.swap(site_type,ridx1,ridx2)
+        self.swap(ridx1,ridx2)
 
         return ridx1,ridx2
 
-    def swap(self, site_type, ridx1, ridx2):
-        tags=self.get_tags()
+    def swap_random(self, site_types):
+
+        if len(site_types) == 1:
+            site_type = site_types[0]
+        else:
+            site_type = np.random.choice(site_types)
+            
+        len_subs = len(self.idx_subs[site_type])
+        if len_subs > 2:
+            sigma_swap = np.sort(np.random.choice(np.arange(len_subs), 2, replace=False))
+        else:
+            sigma_swap = np.arange(len_subs)
+
+        return self.swap_random_binary(site_type, sigma_swap = sigma_swap)
+    
+    def swap(self, ridx1, ridx2):
         sigma1=self.sigmas[ridx1]
         sigma2=self.sigmas[ridx2]
 
