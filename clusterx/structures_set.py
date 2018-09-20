@@ -494,7 +494,7 @@ class StructuresSet():
         """
         return self._folders_db_fname
 
-    def read_energy(folder,**kwargs):
+    def read_energy(i,folder,**kwargs):
         """Read value stored in ``energy.dat`` file.
 
         This is to be used as the ``read_property`` keyword argument of
