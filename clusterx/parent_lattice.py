@@ -114,7 +114,10 @@ class ParentLattice(Atoms):
     while site with atom index 3 (i.e. [13,11]) determines a different sublattice.
 
     .. todo::
-        override get_distance and get_distances from Atoms. Such that if get_all_distances
+
+        * Add in metadata the tags, and the idx_tags relation.
+
+        * override get_distance and get_distances from Atoms. Such that if get_all_distances
         was ever called, it sets a self.distances attribute which is used for get_distance
         and get_distances, saving computation time. Care should be paid in cases where
         positions are updated either by relaxation or deformation of the lattice.
