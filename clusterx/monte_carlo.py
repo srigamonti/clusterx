@@ -99,21 +99,24 @@ class MonteCarlo():
     def metropolis(self, scale_factor, nmc, initial_structure = None, write_to_db = False):
         """Perform metropolis simulation
         
-        **Description**: Perfom Metropolis sampling for nmc sampling steps at scale factor :math:`k_B T`::. 
-             The total energy :math:`E`:: for visited structures in the sampling is calculated from the Model ``energ_model`` 
-             of the total energy. During the sampling, a new structure is accepted with the probability given by:
+        **Description**: Perfom Metropolis sampling for nmc sampling
+             steps at scale factor :math:`k_B T`.  The total energy
+             :math:`E` for visited structures in the sampling is
+             calculated from the Model ``energ_model`` of the total
+             energy. During the sampling, a new structure is accepted
+             with the probability given by::
 
-                 :math:`\min \left( 1, \exp( - E / ( k_B T ) ) \right)
+                 :math:`min \big( 1, \exp( - E / ( k_B T ) ) \big)`
         
         **Parameters**: 
         
         ``scale_factors``: list of floats
-            From the product of the float in the list, the scale factor for the energy :math:`k_B T`:: is obtained.
+            From the product of the float in the list, the scale factor for the energy :math:`k_B T` is obtained.
 
-            E.g. [:math`k_B`::, :math`T`::], with :math:`k_B`:: as the Boltzmann constant and ::math`T`:: as the temperature for the Metropolis simulation. 
-            The product :math:`k_B T`:: defines the scale factor in the Boltzmann distribution.
+            E.g. [:math:`k_B`, :math:`T`] with :math:`k_B`:: as the Boltzmann constant and :math:`T` as the temperature for the Metropolis simulation. 
+            The product :math:`k_B T` defines the scale factor in the Boltzmann distribution.
 
-            Note: The unit of the product :math:`k_B T`:: and :math:`T`:: must be the same as for the total energy E.
+            Note: The unit of the product :math:`k_B T` and :math:`T` must be the same as for the total energy :math:`E`.
 
         ``nmc``: integer
             Number of sampling steps
@@ -127,7 +130,7 @@ class MonteCarlo():
 
         **Returns**: MonteCarloTrajectory object
             Trajecotoy containing all decorations visited during the sampling
-           
+
         """
         import math
 
