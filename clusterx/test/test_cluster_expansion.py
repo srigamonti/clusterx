@@ -6,7 +6,6 @@ from clusterx.structures_set import StructuresSet
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
 #from clusterx.model import ModelConstructor
-from clusterx.fitter import Fitter
 from ase import Atoms
 import numpy as np
 from clusterx.calculators.emt import EMT2
