@@ -11,11 +11,11 @@ class ClustersSelector():
     **Parameters:**
 
     ``method``: string
-        can be "split bregman" or "lasso" or "linreg". 
+        can be "split bregman" or "lasso" or "linreg".
         The split-bregman routine is implemented as a estimator within scikit learn
         Cross-validation optimization is performed using sklearn.
         In the case of "split-bregman" and "lasso", the optimal sparsity parameter is
-        searched through cross validation. 
+        searched through cross validation.
         For "linreg", cross validation is directly used as model selector.
     ``clusters_pool``:ClustersPool object
         the clusters pool from which the optimal model is selected.
@@ -69,7 +69,7 @@ class ClustersSelector():
 
         # additional arguments for split bregmann
         self.l = kwargs.pop("l", 0.9)  # lambda
-        
+
         self.cpool = clusters_pool
         self.fit_intercept=False
         #for c in self.cpool._cpool:
@@ -124,9 +124,9 @@ class ClustersSelector():
         #    print "Error(cross_validation.cv): Number of property values differs from number of rows in correlation matrix."
         #    sys.exit(0)
         if self.method == "split_bregman":
-            if (mult is None):    
+            if (mult is None):
                 print("Error: Missing argument: array mult for split Bregman")
-            else:      
+            else:
                 #opt = self._byhand_loo_cv_split_bregman_lasso_compaprison(x, p, mult)
                 opt = self._select_clusters_split_bregman(x, p, mult)
             self.optimal_clusters = self.cpool.get_subpool(opt)
@@ -331,9 +331,9 @@ class ClustersSelector():
 
         return opt_clset
 
-    
+
     def _byhand_loo_cv_split_bregman_lasso_compaprison(self, corr, evals, clmults):
-        #todo: implement a more robust comparison 
+        #todo: implement a more robust comparison
         import collections
         from collections import defaultdict
         from math import sqrt
@@ -347,7 +347,8 @@ class ClustersSelector():
         from sklearn import linear_model
         from sklearn.metrics import make_scorer, r2_score, mean_squared_error
         import clusterx
-        from clusterx.split_bregman import SplitBregmanEstimator
+        from clusterx.estimators import EstimatorFactory
+        #from clusterx.split_bregman import SplitBregmanEstimator
 
         lamb = self.l
         mu_min = self.sparsity_min
@@ -356,11 +357,11 @@ class ClustersSelector():
             mu_step=float(sparsity/(1.0*10))
         else:
             mu_step=self.sparsity_step
-                
+
         eci_dict = defaultdict(list)
-        
+
         print("\nRunning split bregman iteration for solving for ECIs\n")
-        
+
         LOO_corr = np.zeros((1, corr.shape[1]))
         nstruc = corr.shape[0]
         cv_list = []
@@ -369,8 +370,10 @@ class ClustersSelector():
         values= [0.01, 0.001, 0.0001]
         for idx, mu in enumerate(values):
             print(mu, lamb)
-            self.fitter_cv = SplitBregmanEstimator(mult=clmults, mu=mu, lamb=lamb, tol=1.0e-10)
-            lasso_fitter = linear_model.Lasso(alpha=mu, fit_intercept=False, normalize=False, max_iter = 1000000000, tol = 1e-12)
+            #self.fitter_cv = SplitBregmanEstimator(mult=clmults, mu=mu, lamb=lamb, tol=1.0e-10)
+            self.fitter_cv = EstimatorFactory.create("SplitBregman",mult=clmults, mu=mu, lamb=lamb, tol=1.0e-10)
+            #lasso_fitter = linear_model.Lasso(alpha=mu, fit_intercept=False, normalize=False, max_iter = 1000000000, tol = 1e-12)
+            lasso_fitter = EstimatorFactory.create("skl_Lasso",alpha=mu, fit_intercept=False, normalize=False, max_iter = 1000000000, tol = 1e-12)
             self.fitter_cv.fit(corr, evals)
             print("INITIAL FIT")
             for i,j in zip(self.fitter_cv.predict(corr), evals):
@@ -418,8 +421,9 @@ class ClustersSelector():
         from sklearn import linear_model
         from sklearn.metrics import make_scorer, r2_score, mean_squared_error
         import clusterx
-        from clusterx.split_bregman import SplitBregmanEstimator
-        
+        #from clusterx.split_bregman import SplitBregmanEstimator
+        from clusterx.estimators.estimator_factory import EstimatorFactory
+
         lamb = self.l
         mu_min = self.sparsity_min
         mu_max = self.sparsity_max
@@ -430,11 +434,12 @@ class ClustersSelector():
         eci_dict = defaultdict(list)
         values = reversed(np.arange(mu_min,mu_max,mu_step))
         print("\nRunning split bregman iteration for solving for ECIs\n")
-        
+
         for idx, mu in enumerate(values):
             print(mu, lamb)
-            eci_dict[idx] = defaultdict(list)    
-            self.fitter_cv = SplitBregmanEstimator(mult=clmults, mu=mu, lamb=lamb, tol=1.0e-10)
+            eci_dict[idx] = defaultdict(list)
+            #self.fitter_cv = SplitBregmanEstimator(mult=clmults, mu=mu, lamb=lamb, tol=1.0e-10)
+            self.fitter_cv = EstimatorFactory.create("SplitBregman",mult=clmults, mu=mu, lamb=lamb, tol=1.0e-10)
             self.fitter_cv.fit(corr, evals)
             mse = mean_squared_error(self.fitter_cv.predict(corr),evals)
             pred_cvs = cross_val_predict(self.fitter_cv, corr, evals, cv=LeaveOneOut())
@@ -453,9 +458,9 @@ class ClustersSelector():
 
         tmp_cv_list = [ eci_dict[i]["cv"] for i in eci_dict.keys() ]
         min_idx, min_cv = min(enumerate(tmp_cv_list), key=itemgetter(1))
-        print("\nMin. CV", min_cv, "min rmse", eci_dict[min_idx]["rmse"] ) 
+        print("\nMin. CV", min_cv, "min rmse", eci_dict[min_idx]["rmse"] )
         self.opt_rmse = float(eci_dict[min_idx]["rmse"])
-        opt_clset=[i for i, e in enumerate(eci_dict[idx]["ecis"]) if e != 0.0] 
+        opt_clset=[i for i, e in enumerate(eci_dict[idx]["ecis"]) if e != 0.0]
 
         return opt_clset
 
