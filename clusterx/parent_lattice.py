@@ -6,7 +6,8 @@ import io
 import tempfile
 import copy
 from clusterx.utils import _is_integrable
-from ase.db.core import connect
+#from ase.db.core import connect
+from ase.db import connect
 
 def unique_non_sorted(a):
     _, idx = np.unique(a, return_index=True)
@@ -64,7 +65,7 @@ class ParentLattice(Atoms):
         sub = bulk('Al', 'fcc', a=3.6)
 
         plat = ParentLattice(pri, substitutions=[sub], pbc=pri.get_pbc())
-        plat.serialize(fmt="json",fname="plat.json")
+        plat.serialize(fname="plat.json")
 
     In the next example, a parent lattice for a complex clathrate compound is
     defined. This definition corresponds to the chemical formula
@@ -89,7 +90,7 @@ class ParentLattice(Atoms):
         sub3 = crystal(['Si','Si','Si','Sr','Sr'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
 
         plat = ParentLattice(atoms=pri,substitutions=[sub1,sub2,sub3])
-        plat.serialize(fmt="json",fname="plat.json")
+        plat.serialize(fname="plat.json")
 
     This example uses the optional ``sites`` parameter instead of the ``substitutions``
     parameter::
@@ -103,7 +104,7 @@ class ParentLattice(Atoms):
         sites = [[11,13],[25,0,27],[11,13],[13,11],[5]]
 
         plat = ParentLattice(Atoms(scaled_positions=scaled_positions,cell=cell), sites=sites)
-        plat.serialize(fmt="json",fname="plat.json")
+        plat.serialize(fname="plat.json")
 
     Defined in this way, the crystal site located at [0,0,0] may be occupied by
     species numbers 11 and 13; the crystal site at [0.25,0.25,0.25] may be occupied
@@ -113,7 +114,10 @@ class ParentLattice(Atoms):
     while site with atom index 3 (i.e. [13,11]) determines a different sublattice.
 
     .. todo::
-        override get_distance and get_distances from Atoms. Such that if get_all_distances
+
+        * Add in metadata the tags, and the idx_tags relation.
+
+        * override get_distance and get_distances from Atoms. Such that if get_all_distances
         was ever called, it sets a self.distances attribute which is used for get_distance
         and get_distances, saving computation time. Care should be paid in cases where
         positions are updated either by relaxation or deformation of the lattice.
@@ -135,9 +139,6 @@ class ParentLattice(Atoms):
         if pbc is None:
             pbc = atoms.get_pbc()
         super(ParentLattice,self).__init__(symbols=atoms,pbc=pbc)
-        #self._atoms = atoms.copy()
-        self._fname = None
-        self._fmt = None
 
         if atoms is not None:
             self._atoms = atoms.copy()
@@ -199,8 +200,8 @@ class ParentLattice(Atoms):
         """Check identity of two ParentLattice objects
         """
 
-        a1 = self.get_atoms()
-        a2 = other.get_atoms()
+        a1 = self.get_pristine()
+        a2 = other.get_pristine()
         s1 = self.get_substitutions()
         s2 = other.get_substitutions()
 
@@ -223,9 +224,11 @@ class ParentLattice(Atoms):
         pl.constraints = copy.deepcopy(self.constraints)
         return pl
 
+    """
     def get_atoms(self):
-        """Get the Atoms object representing the pristine parent lattice."""
-        return self._atoms
+        "Get a copy of the Atoms object representing the pristine parent lattice."
+        return self._atoms.copy()
+    """
 
     def get_natoms(self):
         """Get the total number of atoms."""
@@ -349,12 +352,13 @@ class ParentLattice(Atoms):
         return self.sites
 
     def get_substitutions(self):
-        """Return array of Atoms objects corresponding to fully substituted configurations.
+        """Return array of (references to) Atoms objects corresponding to fully
+        substituted configurations.
         """
         return self._subs
 
     def get_pristine(self):
-        """Return Atoms object of pristine configuration
+        """Return (reference to) Atoms object of pristine configuration
         """
         return self._atoms
 
@@ -390,74 +394,39 @@ class ParentLattice(Atoms):
         """
         return self.idx_subs
 
-    def get_fname(self):
+    def as_dict(self):
+        """Return dictionary with object definition
         """
-        Get file path of serialized parent lattice
-        """
-        return self._fname
+        dict = {}
+        dict.update({"unit_cell" : self.get_cell()})
+        dict.update({"pbc" : self.get_pbc()})
+        dict.update({"positions" : self.get_positions()})
+        dict.update({"sites" : self.get_sites()})
 
-    def get_fmt(self):
-        """
-        Get file format of serialized parent lattice
-        """
-        return self._fmt
+        return dict
 
-    def serialize(self, fmt="json", fname="parlat.json"):
+    def serialize(self,fname="plat.json"):
         """
-        Serialize a ParentLattice (or derived) object
+        Serialize a ParentLattice object
 
-        Writes a file on the current working directory containing the structural
-        information of the parent lattice. For formats other than ``ATAT``, it
-        uses ``io`` module of ASE
-        (`ASE documentation <https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write>`_).
+        Writes a `ASE's json database <https://wiki.fysik.dtu.dk/ase/ase/db/db.html>`_
+        file containing a representation of the parent lattice.
+        An instance of the ParentLattice class can be initialized from the created file.
+        The created database can be visualized using
+        `ASE's gui <https://wiki.fysik.dtu.dk/ase/ase/gui/gui.html>`_, e.g.: ::
+
+            ase gui plat.json
 
         **Parameters:**
 
-        ``fmt``: string (default ``json``)
-            Output file format, can be "ATAT", "atat" or any of the formats listed
-            in `ASE documentation <https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write>`_
-
-        ``fname``: string (default ``parlat.json``)
+        ``fname``: string
             Output file name.
-
         """
-        import os
-        from ase.data import chemical_symbols as cs
+        db = connect(fname, type="json", append=False)
 
-        self._fmt=fmt
+        images = []
+        db.write(self.get_pristine())
+        for sub in self.get_substitutions():
+            db.write(sub)
 
-        cell = self._atoms.get_cell()
-        positions = self._atoms.get_scaled_positions()
-        sites = self.get_sites()
-
-
-        if fmt == "ATAT" or fmt == "atat":
-            f = open(fname,'w')
-
-            for cellv in cell:
-                f.write(u"%2.12f\t%2.12f\t%2.12f\n"%(cellv[0],cellv[1],cellv[2]))
-
-            f.write(u"1.000000000000\t0.000000000000\t0.000000000000\n")
-            f.write(u"0.000000000000\t1.000000000000\t0.000000000000\n")
-            f.write(u"0.000000000000\t0.000000000000\t1.000000000000\n")
-
-            for i,pos in enumerate(positions):
-                stri = u"%2.12f\t%2.12f\t%2.12f\t"%(pos[0],pos[1],pos[2])
-                if len(self.sites[i])>1:
-                    for z in self.sites[i][:-1]:
-                        stri = stri + "%s,\t"%cs[z]
-                stri = stri + "%s\n"%cs[self.sites[i][-1]]
-
-                f.write(stri)
-
-        else:
-            from ase.io import write
-
-            images = []
-            images.append(self.get_pristine())
-            for sub in self.get_substitutions():
-                images.append(sub)
-
-            write(fname,images,format=fmt)
-
-        self._fname = fname
+        db.metadata = self.as_dict()

@@ -25,7 +25,10 @@ class ClustersPool():
         dimension as ``radii``.
     ``radii``: array of float
         The maximum radii of the clusters in the pool, for each corresponding
-        number of points in ``npoints``.
+        number of points in ``npoints``. If ``super_cell`` is given (see below),
+        any element of the ``radii`` array can be a negative number. In such a
+        case, all clusters fitting in the given ``super_cell`` (for the
+        corresponding number of points in npoints) are generated.
     ``super_cell``: SuperCell object
         If present, ``radii`` is overriden and the pool will consist of all
         possible simmetrically distinct clusters in the given super cell.
@@ -39,7 +42,35 @@ class ClustersPool():
 
     .. todo:
         Fix multiplicities when ``super_cell`` is used
+
         Add calculation of the multiplicity in add_cluster and get_subpool
+
+        Modify get_containing_supercell for  the case when all radii are negative
+        and no SuperCell is given.
+
+    **Examples:**
+
+    The example below, will generate all possible clusters up to 2 points in the
+    super cell ``scell``, while more compact clusters up to a radius of 4.1 and
+    2.9 for 3 and 4 points, respectively, are generated::
+
+        from ase import Atoms
+        from clusterx.parent_lattice import ParentLattice
+        from clusterx.super_cell import SuperCell
+        from clusterx.clusters.clusters_pool import ClustersPool
+
+        plat = ParentLattice(
+            Atoms(cell=np.diag([2,2,5]),positions=[[0,0,0]]),
+            site_symbols=[["Cu","Al"]],
+            pbc=(1,1,0)
+            )
+
+        scell = SuperCell(plat,np.array([(6,0,0),(0,6,0),(0,0,1)]))
+        cp = ClustersPool(plat, npoints=[0,1,2,3,4], radii=[0,0,-1,4.1,2.9], super_cell=scell)
+
+        cp.write_clusters_db(db_name="cpool.json")
+
+    The example
 
     **Methods:**
     """
@@ -287,6 +318,13 @@ class ClustersPool():
 
         dmax = np.amax(distances)
         if len(radii) > 0:
+            for i in range(len(radii)):
+                if radii[i]<0:
+                    self._radii[i] = dmax
+
+        radii = self._radii
+
+        if len(radii) > 0:
             if np.amax(radii) > dmax:
                 sys.exit("Containing supercell is too small to find clusters pool. Read documentation for ClustersPool class.")
         else:
@@ -350,6 +388,33 @@ class ClustersPool():
             self.gen_atoms_database(fname)
 
     def get_cpool_dict(self):
+        nrs = []
+        idxs = []
+        pos = []
+        alphas = []
+
+        for cl in self._cpool:
+            nrs.append(cl.get_nrs())
+            idxs.append(cl.get_idxs())
+            pos.append(cl.get_positions())
+            alphas.append(cl.get_alphas())
+
+        self._cpool_dict.update({"atom_numbers" : nrs})
+        self._cpool_dict.update({"atom_indexes" : idxs})
+        self._cpool_dict.update({"atom_positions" : pos})
+        self._cpool_dict.update({"multiplicities" : self.get_multiplicities()})
+        self._cpool_dict.update({"npoints" : self.get_all_npoints()})
+        self._cpool_dict.update({"radii" : self.get_all_radii()})
+        self._cpool_dict.update({"alphas" : alphas})
+        self._cpool_dict.update({"nclusters" : len(self)})
+        self._cpool_dict.update({"scell_tmat" : self._cpool_scell.get_transformation()})
+        self._cpool_dict.update({"parent_lattice_pbc" : self._plat.get_pbc()})
+        self._cpool_dict.update({"parent_lattice_pristine_unit_cell" : self._plat.get_cell()})
+        self._cpool_dict.update({"parent_lattice_pristine_positions" : self._plat.get_positions()})
+        self._cpool_dict.update({"parent_lattice_pristine_numbers" : self._plat.get_atomic_numbers()})
+        self._cpool_dict.update({"parent_lattice_tags" : self._plat.get_tags()})
+        self._cpool_dict.update({"parent_lattice_idx_subs" : self._plat.get_idx_subs()})
+
         return self._cpool_dict
 
     def dump_cpool_dict(self):
@@ -403,17 +468,7 @@ class ClustersPool():
 
             atoms_db.write(atoms)
 
-        all_atom_indexes = []
-        all_alphas = []
-        all_numbers = []
-        all_positions = []
-
-        atoms_db.metadata = {
-            "multiplicities" : self._multiplicities,
-            "npoints" : self.get_all_npoints(),
-            "radii" : self.get_all_radii(),
-
-        }
+        atoms_db.metadata = self.get_cpool_dict()
 
     def get_cpool_atoms(self):
         return self._cpool_atoms
