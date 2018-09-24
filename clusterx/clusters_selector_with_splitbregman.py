@@ -342,7 +342,6 @@ class ClustersSelector():
         from sklearn import linear_model
         from sklearn.metrics import make_scorer, r2_score, mean_squared_error
         import clusterx
-        #from clusterx.split_bregman import SplitBregmanEstimator
         from clusterx.estimators.estimator_factory import EstimatorFactory
 
         lamb = self.l
@@ -356,9 +355,7 @@ class ClustersSelector():
         values = reversed(np.arange(mu_min,mu_max,mu_step))
 
         for idx, mu in enumerate(values):
-            print(mu, lamb)
             eci_dict[idx] = defaultdict(list)
-            #self.fitter_cv = SplitBregmanEstimator(mult=clmults, mu=mu, lamb=lamb, tol=1.0e-10)
             self.fitter_cv = EstimatorFactory.create("SplitBregman",mult=clmults, mu=mu, lamb=lamb, tol=1.0e-10)
             self.fitter_cv.fit(corr, evals)
             mse = mean_squared_error(self.fitter_cv.predict(corr),evals)
