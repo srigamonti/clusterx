@@ -47,7 +47,7 @@ def test_nested_sampling():
     
     plat, sc_lat, energy_dict = build_lattice_and_get_corr()
 
-    diagnostics=True
+    diagnostics=False
     write_files=False
     write_log=True
 
