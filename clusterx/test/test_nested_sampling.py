@@ -113,16 +113,21 @@ def test_nested_sampling():
     assert isclose(len(outer_new), float(niter))
     
     if ( float(ncount_new) - float(nsteps)*float(nsub1)*float(niter)) != 0.0:
+        print("TEST NOT PASSED")
         print("Should be Nsteps*Nsubs*Niters random energies walked")
         print("Error with the number of random energies walked")
     elif ( float(len(outer_new)) - float(niter)) != 0.0:
+        print("TEST NOT PASSED")
         print("Should be Niters number of outer energies")
         print("error with the number of Niter (outer) energies")
     elif float(len(lowest_new)) != 1.0:
+        print("TEST NOT PASSED")
         print("Should be one lowest energy found")
     elif np.sum(np.array(outer_new) - np.array(outer_test)) != 0.0:
-        print("List of outer array energies changed")
+        print("TEST NOT PASSED")
+        print("ISSUE FOUND: List of outer array energies changed")
     elif np.sum(np.array(lowest_new) - np.array(lowest_test)) != 0.0:
+        print("TEST NOT PASSED")
         print("Final outer energy changed")
     else:
         print("\n Test of Nested-Sampling method in CELL was successful.\n\n")
