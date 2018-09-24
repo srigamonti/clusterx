@@ -127,7 +127,6 @@ class ClustersSelector():
             if (mult is None):
                 print("Error: Missing argument: array mult for split Bregman")
             else:
-                #opt = self._byhand_loo_cv_split_bregman_lasso_compaprison(x, p, mult)
                 opt = self._select_clusters_split_bregman(x, p, mult)
             self.optimal_clusters = self.cpool.get_subpool(opt)
 
@@ -331,90 +330,12 @@ class ClustersSelector():
 
         return opt_clset
 
-
-    def _byhand_loo_cv_split_bregman_lasso_compaprison(self, corr, evals, clmults):
-        #todo: implement a more robust comparison
-        import collections
-        from collections import defaultdict
-        from math import sqrt
-        #
-        from copy import deepcopy
-        from operator import itemgetter
-        #
-        from sklearn.metrics import mean_squared_error
-        from sklearn.model_selection import LeaveOneOut
-        from sklearn.model_selection import cross_val_score
-        from sklearn import linear_model
-        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
-        import clusterx
-        from clusterx.estimators import EstimatorFactory
-        #from clusterx.split_bregman import SplitBregmanEstimator
-
-        lamb = self.l
-        mu_min = self.sparsity_min
-        mu_max = self.sparsity_max
-        if self.sparsity_step == 0.0:
-            mu_step=float(sparsity/(1.0*10))
-        else:
-            mu_step=self.sparsity_step
-
-        eci_dict = defaultdict(list)
-
-        print("\nRunning split bregman iteration for solving for ECIs\n")
-
-        LOO_corr = np.zeros((1, corr.shape[1]))
-        nstruc = corr.shape[0]
-        cv_list = []
-        lasso_cv_list = []
-        values = reversed(np.arange(mu_min,mu_max,mu_step))
-        values= [0.01, 0.001, 0.0001]
-        for idx, mu in enumerate(values):
-            print(mu, lamb)
-            #self.fitter_cv = SplitBregmanEstimator(mult=clmults, mu=mu, lamb=lamb, tol=1.0e-10)
-            self.fitter_cv = EstimatorFactory.create("SplitBregman",mult=clmults, mu=mu, lamb=lamb, tol=1.0e-10)
-            #lasso_fitter = linear_model.Lasso(alpha=mu, fit_intercept=False, normalize=False, max_iter = 1000000000, tol = 1e-12)
-            lasso_fitter = EstimatorFactory.create("skl_Lasso",alpha=mu, fit_intercept=False, normalize=False, max_iter = 1000000000, tol = 1e-12)
-            self.fitter_cv.fit(corr, evals)
-            print("INITIAL FIT")
-            for i,j in zip(self.fitter_cv.predict(corr), evals):
-                print(i,j)
-            print("MSE OF IN INITIAL FIT", np.mean(self.fitter_cv.predict(corr)-evals))
-            for LOO_idx in range(nstruc):
-                print(LOO_idx)
-                LOO_corr[0,:] = deepcopy(corr[LOO_idx,:])
-                LOO_evals = evals[LOO_idx]
-                t_corr = np.delete(corr, (LOO_idx), axis=0)
-                t_evals = np.delete(evals, (LOO_idx))
-                self.fitter_cv.fit(t_corr, t_evals)
-                lasso_fitter.fit(t_corr,t_evals)
-                print("FIT")
-                for i,j, k in zip(self.fitter_cv.predict(t_corr), lasso_fitter.predict(t_corr), t_evals):
-                    print(i,j,k)
-                mse=mean_squared_error(self.fitter_cv.predict(t_corr),t_evals)
-                lasso_mse=mean_squared_error(lasso_fitter.predict(t_corr),t_evals)
-                LOO_predE = self.fitter_cv.predict(LOO_corr)
-                lasso_LOO_predE =lasso_fitter.predict(LOO_corr)
-                print("SPLIT_BREGMAN", LOO_predE, "LASSO", lasso_LOO_predE, "TRUE", LOO_evals)
-                cv = sqrt(mean_squared_error([LOO_predE], [LOO_evals]))
-                lasso_cv = sqrt(mean_squared_error([lasso_LOO_predE], [LOO_evals]))
-                print("training fit MSE", mse, "RMSE LOO SPLIT_BREGMAN CV",cv, "RMSE LOO LASSO CV", lasso_cv)
-                cv_list.append(cv)
-                lasso_cv_list.append(lasso_cv)
-                print("A COMPARISON OF ECIS FROM SPLIT_BREGMAN AND LASSO")
-                for i,j in zip(self.fitter_cv.coef_, lasso_fitter.coef_):
-                    print(i,j)
-            print("AVERAGE CV SCORE", np.mean(cv_list), np.mean(lasso_cv_list))
-
-        sys.exit()
-
     def _select_clusters_split_bregman(self, corr, evals, clmults, LOO_idx = None):
         import collections
         from collections import defaultdict
         from math import sqrt
-        #
         from copy import deepcopy
         from operator import itemgetter
-        #
         from sklearn.metrics import mean_squared_error
         from sklearn.model_selection import LeaveOneOut
         from sklearn.model_selection import cross_val_score, cross_val_predict
@@ -433,7 +354,6 @@ class ClustersSelector():
             mu_step=self.sparsity_step
         eci_dict = defaultdict(list)
         values = reversed(np.arange(mu_min,mu_max,mu_step))
-        print("\nRunning split bregman iteration for solving for ECIs\n")
 
         for idx, mu in enumerate(values):
             print(mu, lamb)
@@ -443,10 +363,7 @@ class ClustersSelector():
             self.fitter_cv.fit(corr, evals)
             mse = mean_squared_error(self.fitter_cv.predict(corr),evals)
             pred_cvs = cross_val_predict(self.fitter_cv, corr, evals, cv=LeaveOneOut())
-            # for i, j in zip(evals, pred_cvs):
-            #     print(float(i), float(j))
-            mean_cv = np.sqrt(np.average(abs(pred_cvs-evals)))
-            print("CV MSE score",mean_cv)
+            mean_cv = np.sqrt(np.average((pred_cvs-evals)**2))
             self.cvs.append(mean_cv)
             self.rmse.append(np.sqrt(mse))
             #self.set_sizes.append(np.count_nonzero(ecimult))
@@ -458,7 +375,6 @@ class ClustersSelector():
 
         tmp_cv_list = [ eci_dict[i]["cv"] for i in eci_dict.keys() ]
         min_idx, min_cv = min(enumerate(tmp_cv_list), key=itemgetter(1))
-        print("\nMin. CV", min_cv, "min rmse", eci_dict[min_idx]["rmse"] )
         self.opt_rmse = float(eci_dict[min_idx]["rmse"])
         opt_clset=[i for i, e in enumerate(eci_dict[idx]["ecis"]) if e != 0.0]
 
