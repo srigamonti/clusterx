@@ -67,7 +67,7 @@ class ClustersSelector():
         #        break
 
         self.predictions = []
-        self.ecis = []
+        self.opt_ecis = []
         self.optimal_clusters = None
         self.opt_rmse = None
         self.opt_mean_cv = None
@@ -83,8 +83,8 @@ class ClustersSelector():
 
         #self.update()
 
-    def get_ecis(self):
-        return self.ecis
+    def get_opt_ecis(self):
+        return self.opt_ecis
 
     def get_rmse(self):
         return self.rmse
@@ -111,36 +111,38 @@ class ClustersSelector():
         """
         from sklearn.model_selection import LeaveOneOut
 
-        #if np.shape(p)[0] != np.shape(x)[0]:
-        #    print "Error(cross_validation.cv): Number of property values differs from number of rows in correlation matrix."
-        #    sys.exit(0)
-
         if self.method == "lasso":
-            opt = self._select_clusters_lasso(x, p)
+            opt = self._select_clusters_lasso_cv(x, p)
 
             if self.fit_intercept == True:
                 if 0 not in opt:
                     self.fit_intercept = False
 
-        else:
-            if self.clusters_sets == "size":
-                clsets = self.cpool.get_clusters_sets(grouping_strategy = "size")
-            if self.clusters_sets == "combinations":
-                clsets = self.cpool.get_clusters_sets(grouping_strategy = "combinations",  nclmax=self.nclmax)
-            if self.clusters_sets == "size+combinations":
-                clsets = self.cpool.get_clusters_sets(grouping_strategy = "size+combinations", nclmax=self.nclmax , set0=self.set0)
-
-            opt = self._linear_regression(x, p, clsets)
+        elif self.clusters_sets == "size":
+            clsets = self.cpool.get_clusters_sets(grouping_strategy = "size")
+            opt = self._linear_regression_cv(x, p, clsets)
+        elif self.clusters_sets == "combinations":
+            clsets = self.cpool.get_clusters_sets(grouping_strategy = "combinations",  nclmax=self.nclmax)
+            opt = self._linear_regression_cv(x, p, clsets)
+        elif self.clusters_sets == "size+combinations":
+            clsets = self.cpool.get_clusters_sets(grouping_strategy = "size+combinations", nclmax=self.nclmax , set0=self.set0)
+            opt = self._linear_regression_cv(x, p, clsets)
+        elif self.clusters_sets == "identity":
+            opt = np.arange(len(self.cpool))
 
         self.optimal_clusters = self.cpool.get_subpool(opt)
 
+        return self.optimal_clusters
+
+        """
         rows = np.arange(len(p))
         comat_opt =  x[np.ix_(rows,opt)]
 
         self.optimal_ecis(comat_opt,p)
+        """
 
     def get_optimal_cpool(self):
-        """Return optimal ClustersPoll object
+        """Return optimal ClustersPool object
         """
         return self.optimal_clusters
 
@@ -150,14 +152,14 @@ class ClustersSelector():
         return self.optimal_clusters._cpool
 
 
-    def _linear_regression(self,x,p,clsets):
+    def _linear_regression_cv(self,x,p,clsets):
         from sklearn.model_selection import LeaveOneOut
         from sklearn.model_selection import cross_val_score
         from sklearn import linear_model
         from sklearn.metrics import make_scorer, r2_score, mean_squared_error
 
-        if self.method == "linreg":
-            self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept, normalize=False)
+        #if self.method == "linreg":
+        self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept, normalize=False)
 
         rows = np.arange(len(p))
         ecis = []
@@ -171,30 +173,6 @@ class ClustersSelector():
 
         for iset, clset in enumerate(clsets):
             _comat = x[np.ix_(rows,clset)]
-
-            #if self.fit_intercept:
-            #    if int(_comat.shape[1]) > 1:
-            #        _comat = np.delete(_comat, (0), axis=1)
-            #    else:
-            #        fitter_cv2 = linear_model.LinearRegression(fit_intercept=False, normalize=False)
-
-            #        _cvs = cross_val_score(fitter_cv2, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
-            #        mean_cv = np.sqrt(-np.mean(_cvs))
-            #        self.cvs.append(mean_cv)
-            #        fitter_cv2.fit(_comat,p)
-            #        self.rmse.append(np.sqrt(mean_squared_error(fitter_cv2.predict(_comat),p)))
-            #        self.set_sizes.append(len(clset))
-
-            #        if opt_cv <= 0:
-            #            opt_cv=mean_cv
-            #            opt_clset=clset
-            #        else:
-            #            if opt_cv > mean_cv:
-            #                opt_cv = mean_cv
-            #                opt_clset=clset
-
-            #        continue
-
 
             _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
             mean_cv=np.sqrt(-np.mean(_cvs))
@@ -232,12 +210,6 @@ class ClustersSelector():
             _comat = x
 
         self.fitter_cv.fit(_comat,p)
-        self.predictions = [el for el in self.fitter_cv.predict(_comat)]
-
-        self.opt_rmse=np.sqrt(mean_squared_error(self.fitter_cv.predict(_comat),p))
-
-        _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
-        self.opt_mean_cv=np.sqrt(-np.mean(_cvs))
 
         ecimult = []
         if self.fit_intercept:
@@ -246,9 +218,17 @@ class ClustersSelector():
         for coef in self.fitter_cv.coef_:
             ecimult.append(coef)
 
-        self.ecis = ecimult
+        self.opt_ecis = ecimult
 
-    def _select_clusters_lasso(self,x,p):
+        self.predictions = [el for el in self.fitter_cv.predict(_comat)]
+
+        self.opt_rmse=np.sqrt(mean_squared_error(self.fitter_cv.predict(_comat),p))
+
+        _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
+        self.opt_mean_cv=np.sqrt(-np.mean(_cvs))
+
+
+    def _select_clusters_lasso_cv(self,x,p):
         from sklearn.model_selection import LeaveOneOut
         from sklearn.model_selection import cross_val_score
         from sklearn import linear_model

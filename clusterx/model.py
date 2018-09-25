@@ -1,5 +1,6 @@
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.estimators.estimator_factory import EstimatorFactory
+from clusterx.clusters_selector import ClustersSelector
 
 class Model():
     """Model class
@@ -72,11 +73,13 @@ class ModelBuilder():
     def __init__(self,
                  basis="trigonometric",
                  selection_method="identity",
-                 estimator_type="skl_LinearRegression"):
+                 estimator_type="skl_LinearRegression",
+                 estimator_opts={}):
 
         self.basis = basis
         self.selection_method = selection_method
         self.estimator_type = estimator_type
+        self.estimator_opts = estimator_opts
 
         self.opt_estimator = None
         self.opt_cpool = None
@@ -96,13 +99,14 @@ class ModelBuilder():
         comat = corrc.get_correlation_matrix(self.sset)
         pvals_tr = self.sset.get_property_values(property_name = self.prop)
 
-        if self.selection_method == "identity":
-            self.opt_cpool = self.cpool
-            self.opt_corrc = corrc
-            self.opt_comat = self.opt_corrc.get_correlation_matrix(self.sset)
+        # Select optimal clusters using the clusters_selector module
+        self.selector = ClustersSelector(self.selection_method,self.cpool)
+        self.opt_cpool = self.selector.select_clusters(comat, pvals_tr)
+        self.opt_corrc = CorrelationsCalculator(self.basis, self.plat, self.opt_cpool)
+        self.opt_comat = self.opt_corrc.get_correlation_matrix(self.sset)
 
-
-        self.opt_estimator = EstimatorFactory.create(self.estimator_type)
+        # Find out the ECIs using an estimator
+        self.opt_estimator = EstimatorFactory.create(self.estimator_type, **self.estimator_opts)
         self.opt_estimator.fit(self.opt_comat,pvals_tr)
 
         return Model(self.opt_corrc,estimator = self.opt_estimator, property=prop)
