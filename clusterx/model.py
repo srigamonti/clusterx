@@ -1,59 +1,108 @@
-#from clusterx.correlations import CorrelationsCalculator
+from clusterx.correlations import CorrelationsCalculator
+from clusterx.estimators.estimator_factory import EstimatorFactory
 
 class Model():
-    """Description
+    """Model class
 
-    ``mult``: array of integers
-        Will be removed in the future
+    **Parameters:**
+
+    ``corrc``: CorrelationsCalculator object
+        The correlations calculator corresponding to the optimal model.
+    ``estimator``: Estimator object
+        An estimator object to predict the property values. Alternatively,
+        The effective cluster interactions (ECIs) can be set.
+    ``ecis``: Array of float
+        Effective cluster iteractions (multiplied by the corresponding
+        multiplicities). Overrides ``estimator`` object.
 
     """
-    def __init__(self, correlations_calculator, ecis, mult, prop = "model_total_energy",):
+    def __init__(self, corrc, property=None, estimator = None, ecis = None):
+        self.corrc = corrc
+        self.estimator = estimator
         self.ecis = ecis
-        self._corcal = correlations_calculator
-        self._mult = mult
+        self.property = property
 
-        self._prop = prop
+    def predict(self,structure):
+        """Predic property with the optimal cluster expansion model.
 
+        **Parameters:**
 
-    def predict_prop(self, structure):
-        # Calculate correlations X for structure
-        # Calculate property X*ecis
-        # return the result
-        
-        corrs=self._corcal.get_cluster_correlations(structure, mc=True)
-        #mult=self._corcal._cpool.get_multiplicities()
-        prop=0
-        for j in range(len(self.ecis)):
-            prop += self._mult[j] * self.ecis[j] * corrs[j]
-                        
-        return prop
-    
-class ModelConstructor():
+        ``structure``: Structure object
+            structure object to calculate property to.
+        """
+        corrs = self.corrc.get_cluster_correlations(structure)
+        if self.estimator is not None:
+            return self.estimator.predict(corrs.reshape(1,-1))[0]
+        else:
+            pv = 0
+            for i in range(len(corrs)):
+                pv = pv + self.ecis[i]*corrs[i]
+            return pv
+
+class ModelBuilder():
+    """Model class
+
+    Objects of this class represent a cluster expansion model.
+
+    **Parameters:**
+
+    ``sset``: StructuresSet object
+        structures set used for model training.
+
+    ``cpool``: ClustersPool object
+        clusters pool from which to select the best model using the method
+        indicated in ``selection_method``.
+
+    ``prop``: String
+        Property name. Must be a valid name as stored in ``sset``. The list of names
+        can be obtained using ``sset.get_property_names()``.
+
+    ``basis``: string
+        Basis set used to calculate structure-cluster correlations.
+
+    ``selection_method``: string
+        Cluster selection method. For the possible values, look at the
+        documentation for ``ClustersSelector`` class.
+
+    ``estimator_type``: string
+        Estimator type. For the possible values, look at the documentation
+        for ``EstimatorFactory`` class.
+
     """
-    The model constructor will keep a large pool of clusters and pop out models with a correlations calculator
-    containing only the selected clusters. Thus, the model constructor is the heavy weapon, while the model
-    is sort of a cheep calcultor for predicting properties.
-    
+    def __init__(self,
+                 basis="trigonometric",
+                 selection_method="identity",
+                 estimator_type="skl_LinearRegression"):
 
-    Ideally one would be able to construct various models with the constructor 
-    (for instance by changing any of the fitter, the property, the clusters_selector, etc..). The returned models
-    can then be used for several purposes.
-    """
-    def __init__(prop = "energy", # The property to be modeled
-                 method = "", # The method for cluster selection, e.g. L2-CV, LASSO, LASSO+L0, ...
-                 method_params = {}, # The parameters for cluster selection
-                 training_set = None, # The set of training structures, containing the calculated property
-                 fitter = None, # Once clusters are selected, the fitter is used to determine the ECI's
-                 correlations_calculator = None
-    ):
+        self.basis = basis
+        self.selection_method = selection_method
+        self.estimator_type = estimator_type
+
+        self.opt_estimator = None
+        self.opt_cpool = None
+        self.opt_corrc = None
+        self.opt_comat = None
+        self.opt_estimator = None
+
+    def build(self, sset, cpool, prop):
+        """Build optimal cluster expansion model
+        """
+        self.sset = sset
+        self.cpool = cpool
+        self.plat = self.cpool.get_plat()
         self.prop = prop
-        self.method = method
-        self.training_set = training_set
-        self.fitter = fitter
-        self._model = Model()
+
+        corrc = CorrelationsCalculator(self.basis, self.plat, self.cpool)
+        comat = corrc.get_correlation_matrix(self.sset)
+        pvals_tr = self.sset.get_property_values(property_name = self.prop)
+
+        if self.selection_method == "identity":
+            self.opt_cpool = self.cpool
+            self.opt_corrc = corrc
+            self.opt_comat = self.opt_corrc.get_correlation_matrix(self.sset)
 
 
-    def build_model():
+        self.opt_estimator = EstimatorFactory.create(self.estimator_type)
+        self.opt_estimator.fit(self.opt_comat,pvals_tr)
 
-        if method == "L2-CV":
-            return self._model
+        return Model(self.opt_corrc,estimator = self.opt_estimator, property=prop)
