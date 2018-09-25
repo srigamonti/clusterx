@@ -47,17 +47,6 @@ class ModelBuilder():
 
     **Parameters:**
 
-    ``sset``: StructuresSet object
-        structures set used for model training.
-
-    ``cpool``: ClustersPool object
-        clusters pool from which to select the best model using the method
-        indicated in ``selection_method``.
-
-    ``prop``: String
-        Property name. Must be a valid name as stored in ``sset``. The list of names
-        can be obtained using ``sset.get_property_names()``.
-
     ``basis``: string
         Basis set used to calculate structure-cluster correlations.
 
@@ -86,9 +75,36 @@ class ModelBuilder():
         self.opt_corrc = None
         self.opt_comat = None
         self.opt_estimator = None
+        self.selector = None
+
+    def get_selector(self):
+        """
+        Return selector used in build.
+
+        When the ``build`` method is called, a ``ClustersSelector`` object
+        is created to perform the cluster selection task. This selector
+        can be obtained by calling this function. 
+        """
+        return self.selector
 
     def build(self, sset, cpool, prop):
         """Build optimal cluster expansion model
+
+        Acts as a Model factory.
+
+        **Parameters:**
+
+        ``sset``: StructuresSet object
+            structures set used for model training.
+
+        ``cpool``: ClustersPool object
+            clusters pool from which to select the best model using the method
+            indicated in ``selection_method``.
+
+        ``prop``: String
+            Property name. Must be a valid name as stored in ``sset``. The list of names
+            can be obtained using ``sset.get_property_names()``.
+
         """
         self.sset = sset
         self.cpool = cpool
