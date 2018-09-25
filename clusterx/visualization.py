@@ -250,17 +250,16 @@ def plot_optimization_vs_sparsity(clsel):
     plt.show()
 
 
-def plot_predictions(clsel, p):
+def plot_predictions(sset,cemodel, prop_name):
     """Plot predictions versus target with matplotlib
 
     The plot shows the prediction versus the target
 
     **Parameters:**
 
-    ``clsel``: ClustersSelector object
-        The ClustersSelector oject which was used for the optimization.
-    ``p``: array of float
-        the target property values
+    ``sset``: StructuresSet object
+    ``cemodel``: Model object
+    ``prop_name``: string
     """
 
     import matplotlib.pyplot as plt
@@ -268,9 +267,11 @@ def plot_predictions(clsel, p):
     from matplotlib import rc,rcParams
     import math
 
-    energies=p
+    energies = sset.get_property_values(property_name = prop_name)
 
-    predictions=clsel.predictions
+    predictions = []
+    for i,s in enumerate(sset):
+        predictions.append(cemodel.predict(s))
 
     e_min=min([min(energies),min(predictions)])
     e_max=max([max(energies),max(predictions)])
