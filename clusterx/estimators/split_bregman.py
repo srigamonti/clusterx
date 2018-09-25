@@ -45,8 +45,7 @@ class SplitBregman(BaseEstimator, RegressorMixin):
             next_eci = self._split_bregman_rms_opt(self.X_, self.Y_, nextb, lastd, shrink_threshold = 0.1*min(evals))
             self.ecis = deepcopy(next_eci)
             next_eci_mu_prod = np.dot(self.ecis, self.mu)
-            #nextd = self._split_bregman_shrink(next_eci_mu_prod, nextb)
-            nextd = self._other_split_bregman_shrink(next_eci_mu_prod, nextb)
+            nextd = self._split_bregman_shrink(next_eci_mu_prod, nextb)
             tmp = np.subtract(next_eci_mu_prod, nextd)
             lastb = nextb
             nextb = np.add(lastb, tmp)
@@ -100,10 +99,9 @@ class SplitBregman(BaseEstimator, RegressorMixin):
 
         return np.array(eci)
 
-    def _other_split_bregman_shrink(self, eci, b):
+    def _split_bregman_shrink(self, eci, b):
         combine = np.add(eci, b)
         nextd = np.zeros(np.shape(combine)[0])
-        #print("WILL SHRINK FOR ECIS AND RESIDUAL B LESS THAN", float(1/float(self.lamb)))
         for i, x in enumerate(combine):
             if abs(float(x)) <= float(1/float(self.lamb)):
                 nextd[i] = 0.0
@@ -114,20 +112,6 @@ class SplitBregman(BaseEstimator, RegressorMixin):
                     nextd[i] = (float(x)/abs(float(x)))*float(x + 1/float(self.lamb))
 
         return nextd
-
-    def _split_bregman_shrink(self, eci, b):
-        nextd = np.add(eci, b)
-        nextd = np.add(eci, b)
-        for i, x in enumerate(nextd):
-            if abs(float(x)) <= float(1/float(self.lamb)):
-                nextd[i] = 0.0
-            else:
-                if float(x) > float(1/float(self.lamb)):
-                    nextd[i] = float(x - 1/float(self.lamb))
-                elif float(x) < float(-1/float(self.lamb)):
-                    nextd[i] = float(x + 1/float(self.lamb))
-
-        return np.array(nextd)
 
     def split_bregman_eval_energy(self, ecisE, multE, corr):
 
