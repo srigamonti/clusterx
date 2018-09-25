@@ -122,6 +122,9 @@ class ClustersPool():
         return np.array(m)
     """
 
+    def get_plat(self):
+        return self._plat
+
     def get_multiplicities(self):
         """Return cluster multiplicities
 
