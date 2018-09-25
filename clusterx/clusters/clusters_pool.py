@@ -25,7 +25,10 @@ class ClustersPool():
         dimension as ``radii``.
     ``radii``: array of float
         The maximum radii of the clusters in the pool, for each corresponding
-        number of points in ``npoints``.
+        number of points in ``npoints``. If ``super_cell`` is given (see below),
+        any element of the ``radii`` array can be a negative number. In such a
+        case, all clusters fitting in the given ``super_cell`` (for the
+        corresponding number of points in npoints) are generated.
     ``super_cell``: SuperCell object
         If present, ``radii`` is overriden and the pool will consist of all
         possible simmetrically distinct clusters in the given super cell.
@@ -39,6 +42,35 @@ class ClustersPool():
 
     .. todo:
         Fix multiplicities when ``super_cell`` is used
+
+        Add calculation of the multiplicity in add_cluster and get_subpool
+
+        Modify get_containing_supercell for  the case when all radii are negative
+        and no SuperCell is given.
+
+    **Examples:**
+
+    The example below, will generate all possible clusters up to 2 points in the
+    super cell ``scell``, while more compact clusters up to a radius of 4.1 and
+    2.9 for 3 and 4 points, respectively, are generated::
+
+        from ase import Atoms
+        from clusterx.parent_lattice import ParentLattice
+        from clusterx.super_cell import SuperCell
+        from clusterx.clusters.clusters_pool import ClustersPool
+
+        plat = ParentLattice(
+            Atoms(cell=np.diag([2,2,5]),positions=[[0,0,0]]),
+            site_symbols=[["Cu","Al"]],
+            pbc=(1,1,0)
+            )
+
+        scell = SuperCell(plat,np.array([(6,0,0),(0,6,0),(0,0,1)]))
+        cp = ClustersPool(plat, npoints=[0,1,2,3,4], radii=[0,0,-1,4.1,2.9], super_cell=scell)
+
+        cp.write_clusters_db(db_name="cpool.json")
+
+    The example
 
     **Methods:**
     """
@@ -55,7 +87,7 @@ class ClustersPool():
         # Determine which supercell will be used to build the clusters pool
         if (self._npoints < 2).all():
             self._cpool_scell = SuperCell(parent_lattice,np.diag([1,1,1]))
-        elif isinstance(super_cell, SuperCell):
+        elif isinstance(super_cell, SuperCell) or isinstance(super_cell, ParentLattice):
             self._cpool_scell = super_cell
         elif super_cell is None and len(radii) != 0:
             self._cpool_scell = self.get_containing_supercell()
@@ -90,6 +122,9 @@ class ClustersPool():
         return np.array(m)
     """
 
+    def get_plat(self):
+        return self._plat
+
     def get_multiplicities(self):
         """Return cluster multiplicities
 
@@ -114,7 +149,7 @@ class ClustersPool():
         return self._npoints
 
     def get_all_npoints(self):
-        """Return array containing the numper of points of each cluster in the pool
+        """Return array containing the number of points of each cluster in the pool
         """
         npoints = []
         for cl in self._cpool:
@@ -267,7 +302,7 @@ class ClustersPool():
         return clsets
 
 
-    def gen_clusters(self, tight=False):
+    def gen_clusters(self):
         from clusterx.super_cell import SuperCell
         from itertools import product, combinations
         npoints = self._npoints
@@ -285,6 +320,13 @@ class ClustersPool():
         # Check if supercell is large enough
 
         dmax = np.amax(distances)
+        if len(radii) > 0:
+            for i in range(len(radii)):
+                if radii[i]<0:
+                    self._radii[i] = dmax
+
+        radii = self._radii
+
         if len(radii) > 0:
             if np.amax(radii) > dmax:
                 sys.exit("Containing supercell is too small to find clusters pool. Read documentation for ClustersPool class.")
@@ -310,11 +352,11 @@ class ClustersPool():
                         if _cl not in clrs_full:
                             clrs_full.append(_cl)
                             #cl = Cluster(idxs, ss, scell, distances=distances)
-                            orbit, mult = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),tight=tight,distances=distances)
+                            orbit, mult = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),distances=distances)
 
                             for __cl in orbit:
                                 __cl.set_radius(distances)
-                            orbit.sort() # with tight=False, this avoids adding to the returned pool non-compact translations of the cluster.
+                            orbit.sort() # this avoids adding to the returned pool non-compact translations of the cluster.
                             #self._cpool.append(orbit[0])
                             #self._cpool.append(Cluster(orbit[0].get_idxs(),orbit[0].get_nrs(),scell,distances))
                             self._cpool.append(orbit[0])
@@ -349,23 +391,37 @@ class ClustersPool():
             self.gen_atoms_database(fname)
 
     def get_cpool_dict(self):
+        nrs = []
+        idxs = []
+        pos = []
+        alphas = []
+
+        for cl in self._cpool:
+            nrs.append(cl.get_nrs())
+            idxs.append(cl.get_idxs())
+            pos.append(cl.get_positions())
+            alphas.append(cl.get_alphas())
+
+        self._cpool_dict.update({"atom_numbers" : nrs})
+        self._cpool_dict.update({"atom_indexes" : idxs})
+        self._cpool_dict.update({"atom_positions" : pos})
+        self._cpool_dict.update({"multiplicities" : self.get_multiplicities()})
+        self._cpool_dict.update({"npoints" : self.get_all_npoints()})
+        self._cpool_dict.update({"radii" : self.get_all_radii()})
+        self._cpool_dict.update({"alphas" : alphas})
+        self._cpool_dict.update({"nclusters" : len(self)})
+        self._cpool_dict.update({"scell_tmat" : self._cpool_scell.get_transformation()})
+        self._cpool_dict.update({"parent_lattice_pbc" : self._plat.get_pbc()})
+        self._cpool_dict.update({"parent_lattice_pristine_unit_cell" : self._plat.get_cell()})
+        self._cpool_dict.update({"parent_lattice_pristine_positions" : self._plat.get_positions()})
+        self._cpool_dict.update({"parent_lattice_pristine_numbers" : self._plat.get_atomic_numbers()})
+        self._cpool_dict.update({"parent_lattice_tags" : self._plat.get_tags()})
+        self._cpool_dict.update({"parent_lattice_idx_subs" : self._plat.get_idx_subs()})
+
         return self._cpool_dict
 
     def dump_cpool_dict(self):
         print(json.dumps(self._cpool_dict,indent=4))
-
-    def get_clusters_array(self):
-        cld = self.get_cpool_dict()
-        cla = []
-        for key,item in cld.items():
-            cla.append([])
-            cla[key].append(item["multiplicity"])
-            cla[key].append(item["radius"])
-            cla[key].append(item["npoints"])
-            if item["npoints"] > 0:
-                cla[key].append(item["positions_lat"])
-                cla[key].append(item["site_basis"])
-        return cla
 
     def get_cluster(self, cln):
         return self._cpool_dict[cln]
@@ -373,15 +429,15 @@ class ClustersPool():
     def write_clusters_db(self, orbit=None, super_cell=None, db_name="cpool.json"):
         """Write cluster orbit to Atoms database
         """
-        #import clusterx
         from clusterx.structure import Structure
+        from ase.db.jsondb import JSONDatabase
+        from subprocess import call
+
         if orbit is None:
             orbit = self.get_cpool()
         if super_cell is None:
             super_cell = self.get_cpool_scell()
 
-        from ase.db.jsondb import JSONDatabase
-        from subprocess import call
         orbit_nrs = []
         orbit_idxs = []
         for cluster in orbit:
@@ -401,9 +457,6 @@ class ClustersPool():
             for i,atom_idx in enumerate(cl.get_idxs()):
                 ans[atom_idx] = orbit_nrs[icl][i]
             atoms.set_atomic_numbers(ans)
-            ##self._cpool_atoms.append(atoms)
-            #self._cpool_atoms.append(clusterx.structure.Structure(atoms,decoration=ans).get_atoms())
-            #atoms0 = clusterx.structure.Structure(atoms,decoration=ans).get_atoms()
             atoms0 = Structure(atoms,decoration=ans).get_atoms()
             positions = []
             numbers = []
@@ -418,13 +471,37 @@ class ClustersPool():
 
             atoms_db.write(atoms)
 
+        atoms_db.metadata = self.get_cpool_dict()
+
     def get_cpool_atoms(self):
         return self._cpool_atoms
 
-    def get_cluster_orbit(self, super_cell=None, cluster_sites=None, cluster_species=None, tol = 1e-3, tight=False, distances=None, no_trans = False, cluster_index=None):
+    def get_cluster_orbit(self, super_cell=None, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans = False, cluster_index=None):
         """
         Get cluster orbit inside a supercell.
-        cluster_sites: array of atom indices of the cluster, referred to the supercell.
+
+        ``super_cell``: SuperCell object
+            The super cell in which the orbit is calculated.
+        ``cluster_sites``: Array of integer
+            the atom indices of the cluster as referred to the SuperCell object
+            given in ``super_cell``, or the ``ClustersPool.get_cpool_scell()`` superCell
+            object (see ``cluster_index``).
+        ``cluster_species``: array of integer
+            Decoration (with species numbers) of the cluster for which the orbit is calculated. The species
+            numbers serve as index for the site cluster basis functions. Thus, for  instance
+            if in a given site, say, ``i=12``, the possible species to put are ``14``,
+            ``15`` and ``16`` (``14`` for the pristine), then ``15`` represents the site
+            basis function with label ``1`` and ``16`` the basis function with label ``2``.
+        ``tol``: float
+            tolerance to determine whether cluster and atom positions are the same.
+        ``distances``: 2D array of floats
+             distances of all of the atoms with all of the atoms. Can be used to achieve larger efficiency.
+        ``no_trans``: Boolean
+            set to True to ignore translations of the parent_lattice inside the SuperCell. Thus
+            a reduced orbit is obtained which only contains the symmetry operations of the parent lattice.
+        ``cluster_index``: integer
+            Index of a cluster in the pool. Overrides ``super_cell``, and the
+            orbit is calculated on the supercell of the ``ClustersPool.get_cpool_scell()`` object.
         """
         from scipy.spatial.distance import cdist
         from sympy.utilities.iterables import multiset_permutations
@@ -447,12 +524,6 @@ class ClustersPool():
             if _icl not in substitutional_sites:
                 return None
 
-        radius = None
-        if tight:
-            #radius = self.get_cluster_radius(distances,Cluster(cluster_sites,cluster_species,super_cell))
-            radius = Cluster(cluster_sites,cluster_species,super_cell).radius
-
-        #shash = None
         cluster_species = np.array(cluster_species)
         # Get symmetry operations of the parent lattice
         if no_trans:

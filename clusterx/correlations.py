@@ -2,6 +2,7 @@ from collections import Counter
 import numpy as np
 import sys
 from clusterx.symmetry import get_scaled_positions
+from clusterx.utils import PolynomialBasis
 
 class CorrelationsCalculator():
     """
@@ -10,7 +11,7 @@ class CorrelationsCalculator():
     **Parameters:**
 
     ``basis``: string
-        cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric`` and ``chebychev``.
+        cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric``, ``polynomial``, and ``chebychev``.
     ``parent_lattice``: ParentLattice object
         the parent lattice of the cluster expansion.
     ``clusters_pool``: ClustersPool object
@@ -25,12 +26,16 @@ class CorrelationsCalculator():
         ####
         self._cpool = clusters_pool
         self._2pi = 2*np.pi
+        if self.basis == 'polynomial':
+            self.basis_set = PolynomialBasis()
+        elif self.basis == 'chebychev':
+            self.basis_set = PolynomialBasis(symmetric = True)
 
 
     def site_basis_function(self, alpha, sigma, m):
         """
         Calculates the site basis function.
-        
+
         Evaluation of the single site basis functions using different basis sets.
 
         **Parameters:**
@@ -41,7 +46,7 @@ class CorrelationsCalculator():
             integer number between 0 and ``m`` - 1; represents the occupation variable
         ``m``: integer
             number of components of the sublattice
-        
+
         """
         if self.basis == "trigonometric":
             # Axel van de Walle, CALPHAD 33, 266 (2009)
@@ -55,27 +60,29 @@ class CorrelationsCalculator():
                 return -np.sin(self._2pi*np.ceil(alpha/2.0)*sigma/m)
 
         if self.basis == "binary-linear":
-            # Only for binary alloys. Allows for simple interpretation of cluster interactions. 
+            # Only for binary alloys. Allows for simple interpretation of cluster interactions.
             return sigma
 
+        if self.basis == "polynomial":
+
+            return self.basis_set.evaluate(alpha, sigma, m)
+
         if self.basis == "chebychev":
-            # Only for ternary alloys. Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984). 
+            # Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984).
             # Same results as for "trigonometric" in case of a binary.
             # WARNING: Forces that sigma = +-m, +-(m-1), ..., +- 1, (0), i.e. explicitly sigma = -1,0,1
-            # WARNING: Only to be used with a fixed number of species for each lattice point.
-            sigma = sigma - 1
 
-            if alpha == 0:
-                return 1
-            
-            elif alpha == 1:
-                return np.sqrt(3/2) * sigma
+            def _map_sigma(sigma, m):
+                # Maps sigma = 0, 1, 2, ..., M-1 to -M/2 <= sigma <= M/2.
+                shifted_sigma = int(sigma - int(m / 2))
+                if (m % 2) == 0:
+                    if shifted_sigma >= 0:
+                        shifted_sigma += 1
+                return shifted_sigma
 
-            elif alpha == 2:
-                return np.sqrt(2) + (-3/np.sqrt(2)) * sigma**2
+            sigma = _map_sigma(sigma, m)
 
-            else:
-                sys.exit("ERROR! Exceeding possible number of components. This basis functions are intended for ternary compounds only.")
+            return self.basis_set.evaluate(alpha, sigma, m)
 
 
     def cluster_function(self, cluster, structure_sigmas,ems):
@@ -97,7 +104,6 @@ class CorrelationsCalculator():
 
     def get_cluster_correlations(self, structure, mc = False, multiplicities=None):
         """Get cluster correlations for a structure
-
         **Parameters:**
 
         ``structure``: Structure object
@@ -109,6 +115,10 @@ class CorrelationsCalculator():
             if None, the accumulated correlation functions are devided by the size
             of the cluster orbits, otherwise they are devided by the given
             multiplicities.
+
+        .. todo::
+
+            remove multiplicities option and always give intensive correlations.
         """
         from clusterx.utils import get_cl_idx_sc
         cluster_orbits = None
@@ -152,16 +162,25 @@ class CorrelationsCalculator():
 
         return np.around(correlations,decimals=12)
 
-
-    def get_correlation_matrix(self, structrues_set):
+    def get_correlation_matrix(self, structures_set, outfile = None):
         """Return correlation matrix for a structures set.
 
         **Parameters:**
 
         ``structures_set``: StructuresSet object
+            a 2D numpy matrix is returned. every row in the matrix corresponds to
+            a structure in the ``StructuresSet`` object.
         """
-        corrs = np.empty((len(structrues_set),len(self._cpool)))
-        for i,st in enumerate(structrues_set):
+        corrs = np.empty((len(structures_set),len(self._cpool)))
+        for i,st in enumerate(structures_set):
             corrs[i] = self.get_cluster_correlations(st)
+
+        if outfile is not None:
+            f  = open(outfile,"w+")
+            for covec in corrs:
+                for co in covec:
+                    f.write("%2.12f\t"%(co))
+                f.write("\n")
+            f.close()
 
         return corrs
