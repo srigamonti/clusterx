@@ -471,7 +471,6 @@ class StructuresSet():
                 "parent_lattice_idx_subs" : self._parent_lattice.get_idx_subs()
             }
 
-            #db.metadata = {'db_path':"tesTX metadata"}
 
 
     def get_folders(self):
