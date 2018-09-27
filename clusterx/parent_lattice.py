@@ -246,11 +246,6 @@ class ParentLattice(Atoms):
         self._max_nsub = len(self._subs)
         self._set_tags()
 
-
-    def is_binary(self):
-        pass
-        
-        
     def _set_tags(self):
         """Set the ``tags`` attribute of the Atoms object, and the ParentLattice
         attributes ``idx_subs`` and ``sites`` which define the substitutional
@@ -329,7 +324,7 @@ class ParentLattice(Atoms):
         for tag in self.get_tags():
             if len(self.idx_subs[tag]) > 1:
                 st.append(tag)
-        return st
+        return np.unique(np.asarray(st))
 
     def get_spectator_tags(self):
         """Return site types for non substitutional sites
@@ -338,7 +333,39 @@ class ParentLattice(Atoms):
         for tag in self.get_tags():
             if len(self.idx_subs[tag]) == 1:
                 st.append(tag)
-        return st
+        return np.unique(np.asarray(st))
+
+    def get_nsites_per_type(self):
+        """Return number of sites per site type.
+
+        For instance, suppose that the ``sites`` definition of the structure is::
+
+            sites = {0: [14,13], 1: [14,13], 2: [14,13], 3: [56,0,38], 4: [56,0,38], 5:[11]}
+
+        The ``site_types`` dictionary (as returned by ``idx_subs()``) for this will be::
+
+            site_types = {0: [14,13], 1: [56,0,38], 2:[11]}
+
+        Thus, the tags definition will be::
+
+            tags = [0,0,0,1,1,2]
+
+        and, the number of sites per site type (what this function returns)::
+
+            {0: 3, 1: 2, 2: 1}
+
+        That is, there are three sites of type 0, 2 sites of type 1, and 1 site of
+        type 2.
+
+        """
+        nsites_per_type = {}
+        tags = self.get_tags()
+
+        idx_subs = self.get_idx_subs()
+        for site_type, _ in idx_subs.items():
+            nsites_per_type[site_type] = tags.tolist().count(int(site_type))
+
+        return nsites_per_type
 
     def get_sites(self):
         """Return dictionary of sites

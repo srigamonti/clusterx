@@ -613,3 +613,25 @@ class StructuresSet():
         if db is not None:
             for i,p in enumerate(property_vals):
                 db.update([i+1], **{property_name:p})
+
+    def get_predictions(self, cemodel):
+        """Get predictions of CE model on structures set
+
+        Applies the given cluster expansion model to every structure in the
+        structrues set and returns an array with the computed values.
+
+        **Parameters:**
+
+        ``cemodel``: Model object
+            Cluster expansion model for which predictions want to be computed.
+        """
+        predictions = []
+        for s in self:
+            predictions.append(cemodel.predict(s))
+        return predictions
+
+    def get_concentrations(self, site_type = 0):
+        """Get concentration values for a given site type
+        """
+
+        pass

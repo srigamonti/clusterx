@@ -1,6 +1,7 @@
 from clusterx.super_cell import SuperCell
 from ase import Atoms
 import numpy as np
+from ase.data import atomic_numbers as an
 
 class Structure(SuperCell):
     """Structure class
@@ -14,7 +15,9 @@ class Structure(SuperCell):
     ``super_cell``: SuperCell object
         Super cell.
     ``decoration``: list of int
-        Atomic numbers of the structure. Overriden by ``sigma``.
+        Atomic numbers of the structure. Overriden by ``sigma`` and ``atomic_symbols``.
+    ``decoration_symbols``: list of strings
+        Atomic symbols of the structure. Overriden by ``sigma``.
     ``sigmas``: list of int
         Every site in a supercell is represented by an array of the species that
         can occupy the site. Thus, *taking as reference these arrays*, a possible
@@ -22,15 +25,22 @@ class Structure(SuperCell):
         corresponding species. For instance, if the "sites" representation of the SuperCell
         is ``[[10,11],[25],[12,25]]``, then same decoration can be represented
         with the ``decoration`` parameter as ``[10,25,25]`` and with the ``sigmas``
-        parameter as ``[0,0,1]``. If not ``None``, ``sigmas`` overrides ``decoration``
+        parameter as ``[0,0,1]``. If not ``None``, ``sigmas`` overrides ``decoration`` and ``decoration_symbols``.
 
     **Methods:**
     """
-    def __init__(self, super_cell, decoration = None, sigmas = None):
+    def __init__(self, super_cell, decoration = None, decoration_symbols=None, sigmas = None):
         self.scell = super_cell
         self.sites = super_cell.get_sites()
         if sigmas is None:
-            self.decor = decoration
+            if decoration_symbols is None:
+                self.decor = decoration
+            else:
+                self.decor = []
+                for s in decoration_symbols:
+                    self.decor.append(an[s])
+                decoration = self.decor
+
             self.sigmas = np.zeros(len(decoration),dtype=np.int8)
             self.ems = np.zeros(len(decoration),dtype=np.int8)
             for idx, species in enumerate(decoration):
@@ -115,6 +125,17 @@ class Structure(SuperCell):
         self.sigmas = np.zeros(len(decoration),dtype=np.int8)
         for idx, species in enumerate(decoration):
             self.sigmas[idx] = np.argwhere(self.sites[idx] == species)
-        
+
         self.atoms.set_atomic_numbers(self.decor)
-        
+
+    def get_concentration(self):
+        """Get concentration of each species on each sublattice
+        """
+
+        #scell = self.get_supercell()
+        #plat = scell.get_parent_lattice()
+
+        substutitional_site_types = self.get_substitutional_tags()
+        nsites_per_type = self.get_nsites_per_type()
+        print(nsites_per_type)
+        #for site_type in substutitional_site_types:
