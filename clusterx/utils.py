@@ -20,7 +20,7 @@ def isclose(r1,r2,rtol=1e-4):
     return np.linalg.norm(np.subtract(r1,r2)) < rtol
 
 
-def dict_compare(d1, d2):
+def dict_compare(d1, d2, tol=None):
     """Compare two dictionaries containing mutable objects.
 
     This compares two dictionaries. Two dictionaries are considered equal
@@ -29,13 +29,19 @@ def dict_compare(d1, d2):
 
     https://stackoverflow.com/questions/4527942/comparing-two-dictionaries-in-python
 
-    Parameters:
+    **Parameters:**
 
-    d1,d2: python dictionaries
+    ``d1,d2``: python dictionaries
         dictionaries to be compared
 
+    ``tol``: float
+        a small float number. If not ``None``, the comparison of dictionary
+        values is regarded as a vector comparison and done with
+        ``utils.isclose()``. For the meaning of ``tol``, read the documentation
+        for ``rtol`` parameter of ``utils.isclose()``.
+
     Return: boolean
-        True if dicts are equal, False if they are different.
+        ``True`` if dicts are equal, ``False`` if they are different.
     """
     areeq = True
 
@@ -51,8 +57,13 @@ def dict_compare(d1, d2):
     for k in d1_keys:
         try:
             for v1,v2 in zip(d1[k],d2[k]):
-                if v1 != v2:
-                    return False
+                if tol is None:
+                    if v1 != v2:
+                        return False
+                else:
+                    if not isclose(v1,v2,tol):
+                        return False
+
         except TypeError:
             if _is_integrable(d1[k]):
                 if d1[k]!=d2[k]:

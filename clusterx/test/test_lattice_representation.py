@@ -47,23 +47,35 @@ def test_concentration():
     nsites_per_type = s.get_nsites_per_type()
     sites = s.get_sites()
     idx_subs = s.get_idx_subs()
-
+    atidx_site0 = s.get_atom_indices_for_site_type(0)
+    atidx_site1 = s.get_atom_indices_for_site_type(1)
+    atidx_site2 = s.get_atom_indices_for_site_type(2)
     # From SuperCell
     index = s.get_index()
     trafo = s.get_transformation()
 
-    #print("tags",repr(tags))
-    #print("natoms", natoms)
-    #print("n_sub_sites", n_sub_sites)
-    #print("sub_sites", sub_sites)
-    #print("sub_tags", sub_tags)
-    #print("spect_sites", spect_sites)
-    #print("spect_tags", spect_tags)
-    #print("nsites_per_type", nsites_per_type)
-    #print("sites", sites)
-    #print("idx_subs", idx_subs)
-    #print("index", index)
-    #print("trafo", repr(trafo))
+    # From Structure
+    numbers = s.get_atomic_numbers()
+    sigmas = s.get_sigmas()
+
+    print("tags",repr(tags))
+    print("natoms", natoms)
+    print("n_sub_sites", n_sub_sites)
+    print("sub_sites", sub_sites)
+    print("sub_tags", sub_tags)
+    print("spect_sites", spect_sites)
+    print("spect_tags", spect_tags)
+    print("nsites_per_type", nsites_per_type)
+    print("sites", sites)
+    print("idx_subs", idx_subs)
+    print("index", index)
+    print("trafo", repr(trafo))
+    print("atom_indices_for_site_type 0", atidx_site0)
+    print("atom_indices_for_site_type 1", atidx_site1)
+    print("atom_indices_for_site_type 2", atidx_site2)
+    print("numbers", repr(numbers))
+    print("sigmas", repr(sigmas))
+
 
     isok = True
     isok *= (tags == [1, 2, 0, 2, 1, 2, 0, 2, 1, 2, 0, 2]).all()
@@ -78,5 +90,10 @@ def test_concentration():
     isok *= dict_compare(idx_subs, {0: np.array([1]), 1: np.array([1, 6]), 2: np.array([56,  2,  7])})
     isok *= index == 3
     isok *= (trafo == [[1, 0, 0],[0, 3, 0],[0, 0, 1]]).all()
+    isok *= (atidx_site0 == np.array([ 2,  6, 10])).all()
+    isok *= (atidx_site1 == np.array([0, 4, 8])).all()
+    isok *= (atidx_site2 == np.array([ 1,  3,  5,  7,  9, 11])).all()
+    isok *= (numbers == [ 6,  2,  1, 56,  1,  2,  1,  7,  1, 56,  1,  2]).all()
+    isok *= (sigmas == [1, 1, 0, 0, 0, 1, 0, 2, 0, 0, 0, 1]).all()
 
     assert isok

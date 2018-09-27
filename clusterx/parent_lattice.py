@@ -436,6 +436,11 @@ class ParentLattice(Atoms):
 
         return dict
 
+    def get_atom_indices_for_site_type(self, site_type):
+        """Return atom indices of the structure of a certain given site type
+        """
+        return np.where(self.get_tags() == site_type)
+
     def serialize(self,fname="plat.json"):
         """
         Serialize a ParentLattice object

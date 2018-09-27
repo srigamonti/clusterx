@@ -27,6 +27,9 @@ class Structure(SuperCell):
         with the ``decoration`` parameter as ``[10,25,25]`` and with the ``sigmas``
         parameter as ``[0,0,1]``. If not ``None``, ``sigmas`` overrides ``decoration`` and ``decoration_symbols``.
 
+    .. todo::
+        * check input. If a structure is initialized with a non-allowed substitutional species, and error should be raised.
+
     **Methods:**
     """
     def __init__(self, super_cell, decoration = None, decoration_symbols=None, sigmas = None):
@@ -57,6 +60,11 @@ class Structure(SuperCell):
         super(Structure,self).__init__(super_cell.get_parent_lattice(),super_cell.get_transformation())
         self.atoms = Atoms(numbers = self.decor, positions = super_cell.get_positions(), tags = super_cell.get_tags(), cell = super_cell.get_cell(),pbc = super_cell.get_pbc())
         #self.set_atomic_numbers(self.decor)
+
+    def get_sigmas(self):
+        """Return decoration array in terms of sigma variables.
+        """
+        return self.sigmas
 
     def get_supercell(self):
         """Return SuperCell member of the Structure
@@ -128,14 +136,39 @@ class Structure(SuperCell):
 
         self.atoms.set_atomic_numbers(self.decor)
 
-    def get_concentration(self):
-        """Get concentration of each species on each sublattice
+    def get_fractional_concentrations(self):
+        """Get fractional concentration of each species on each sublattice
+
+        This function returns a dictionary. The keys of the dictionary, denoted
+        with :math:`t`, are the site types that admit substitution (i.e., those returned
+        by ``Structure.get_substitutional_tags()``). The values of the dictionary
+        are arrays of float, denoted with vectors :math:`\mathbf{c}_t`.
+        The coordinates of :math:`\mathbf{c}_t` (:math:`c_{\sigma t}`) are equal to
+        :math:`n_{\sigma t}/n_t`, where :math:`\sigma \in [ 0,m-1]`,
+        :math:`n_{\sigma t}` is the number of atoms of species :math:`\sigma`
+        occupying sites of type :math:`t`, and :math:`n_t` is the total number
+        of sites of type :math:`t`. The coordinates of :math:`\mathbf{c}_t` sum
+        up to :math:`1`.
         """
 
         #scell = self.get_supercell()
         #plat = scell.get_parent_lattice()
 
+        concentration = {}
+
         substutitional_site_types = self.get_substitutional_tags()
+        idx_subs = self.get_idx_subs()
         nsites_per_type = self.get_nsites_per_type()
-        print(nsites_per_type)
-        #for site_type in substutitional_site_types:
+        #sigmas = self.get_sigmas()
+        numbers = self.get_atomic_numbers()
+        
+        for site_type in substutitional_site_types:
+            concentration[site_type] = []
+            nsites = nsites_per_type[site_type]
+            atom_indices = self.get_atom_indices_for_site_type(site_type)
+
+            for spnr in idx_subs[site_type]:
+                n = np.array(numbers[atom_indices]).tolist().count(spnr)
+                concentration[site_type].append(n/nsites)
+
+        return concentration
