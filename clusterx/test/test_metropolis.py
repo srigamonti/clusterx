@@ -135,8 +135,7 @@ def test_metropolis():
     
     
     print("Configurations accepted at steps: ",steps)
-    last_sampling_entry = traj.get_sampling_step_entry_at_step(steps[-1])
-    
+    last_sampling_entry = traj.get_sampling_step_entry_at_step(steps[-1])    
 
     rsteps = [0, 1, 2, 3, 4, 6, 10, 11, 16, 17, 18, 26, 27, 34, 37, 38, 44, 45, 47, 48, 50]
     renergies = [-77652.59664207128, -77652.61184305252, -77652.62022569243, -77652.61912760629, -77652.62737663009, -77652.63009501049, -77652.63158443688, -77652.64240196907, -77652.64240196907, -77652.64348105107, -77652.64714764676, -77652.64959679516, -77652.64959679516, -77652.65458138083, -77652.66173231734, -77652.65458138083, -77652.65946542152, -77652.6702829537, -77652.66812810961, -77652.67298251796, -77652.66622624162]
@@ -307,4 +306,12 @@ def test_metropolis():
 
     isok5 = isclose(rsteps3,steps3) and isclose(renergies3, energies3)
     assert(isok5)
+
+    temp = 1000
+
+    print("Samplings steps",nmc)
+    print("Temperature",temp)
+    
+    traj4 = mc.metropolis([kb,temp], nmc)
+
     

@@ -96,7 +96,7 @@ class MonteCarlo():
         self._ensemble = ensemble
         self._no_of_swaps = no_of_swaps
 
-    def metropolis(self, scale_factor, nmc, initial_structure = None, write_to_db = False):
+    def metropolis(self, scale_factor, nmc, initial_structure = None, save_decoration = True, write_to_db = False):
         """Perform metropolis simulation
         
         **Description**: Perfom Metropolis sampling for nmc sampling
@@ -124,6 +124,9 @@ class MonteCarlo():
         ``initial_structure``: Structure object
             Sampling starts with the structure defined by this Structure object. 
             If initial_structure = None: Sampling starts with a structure randomly generated.
+
+        ``save_decoration:`` boolean
+            
 
         ``write_to_db``: boolean (default: False)                                                                                                                                                                                                                             
             Whether to add the structure to the json database (see ``filename`` parameter for MonteCarloTrajectory initialization)
@@ -177,11 +180,12 @@ class MonteCarlo():
                     m=int(self._no_of_swaps-j)
                     struc.swap(indizes_list[j][0],indizes_list[j][1])
 
-        if len(self._models) > 0 :
+        if (len(self._models) > 0) and (traj._save_decoration == True):
             traj.calculate_model_properties(self._models)
                     
         if write_to_db:
             traj.write_to_file()
+            struc.serialize(fname="finalstructure-mc.json")
 
         return traj                                        
 
@@ -202,6 +206,9 @@ class MonteCarloTrajectory():
     ``filename``: string
         The trajectoy can be stored in a json file with the path given by ``filename``.
 
+    ``save_decoration``: boolean
+        Store the decorations at every sampling step. Default is True. 
+
     ``**kwargs``: keyword arguments
 
         ``save_nsteps``: integer
@@ -216,10 +223,11 @@ class MonteCarloTrajectory():
        
     """
     
-    def __init__(self, scell, filename="trajectory.json", **kwargs):
+    def __init__(self, scell, filename="trajectory.json", save_decoration = True, **kwargs):
         self._trajectory = []
         
         self._scell = scell
+        self._save_decoration = save_decoration
         self._save_nsteps = kwargs.pop("save_nsteps",1000000)
         
         self._models = kwargs.pop("models",[])
@@ -246,7 +254,14 @@ class MonteCarloTrajectory():
     def add_decoration(self, struc, step, energy, key_value_pairs={}):
         """Add decoration of Structure object to the trajectory
         """
-        self._trajectory.append(dict([('sampling_step_no',int(step)), ('decoration', deepcopy(struc.decor) ), ('model_total_energy',energy), ('key_value_pairs', key_value_pairs)]))
+        if self._save_decoration :
+            self._trajectory.append(dict([('sampling_step_no',int(step)), ('decoration', deepcopy(struc.decor) ), ('model_total_energy',energy), ('key_value_pairs', key_value_pairs)]))
+
+        else:
+            if len(self._models) > 0:
+                for m,mo in enumerate(self._models):
+                    key_value_pairs.update({mo._prop: mo.predict_prop(sx)})
+            self._trajectory.append(dict([('sampling_step_no',int(step)), ('model_total_energy',energy), ('key_value_pairs', key_value_pairs)]))
 
     def get_sampling_step_entry_at_step(self, nstep):
         """Get the dictionary at the n-th sampling step in the trajectory
@@ -434,7 +449,8 @@ class MonteCarloTrajectory():
 
         trajdic={}
         for j,dec in enumerate(self._trajectory):
-            dec['decoration'] = dec['decoration'].tolist()
+            if self._save_decoration:
+                dec['decoration'] = dec['decoration'].tolist()
             trajdic.update({str(j):dec})
 
         with open(self._filename, 'w') as outfile:
@@ -457,6 +473,7 @@ class MonteCarloTrajectory():
 
         for key in data_keys:
             tr = data[str(key)]
-            tr['decoration'] = np.asarray(tr['decoration'],dtype=np.int8)
+            if self._save_decoration:
+                tr['decoration'] = np.asarray(tr['decoration'],dtype=np.int8)
             self._trajectory.append(tr)
         
