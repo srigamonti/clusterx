@@ -250,7 +250,7 @@ def plot_optimization_vs_sparsity(clsel):
     plt.show()
 
 
-def plot_predictions(sset,cemodel, prop_name):
+def plot_predictions_vs_target(sset,cemodel, prop_name):
     """Plot predictions versus target with matplotlib
 
     The plot shows the prediction versus the target
@@ -268,10 +268,7 @@ def plot_predictions(sset,cemodel, prop_name):
     import math
 
     energies = sset.get_property_values(property_name = prop_name)
-
-    predictions = []
-    for i,s in enumerate(sset):
-        predictions.append(cemodel.predict(s))
+    predictions = sset.get_predictions(cemodel)
 
     e_min=min([min(energies),min(predictions)])
     e_max=max([max(energies),max(predictions)])
@@ -312,3 +309,16 @@ def plot_predictions(sset,cemodel, prop_name):
 
     #plt.savefig("plot_optimization.png")
     plt.show()
+
+def plot_property_vs_concentration(sset, cemodel, property_name = None):
+    import matplotlib.pyplot as plt
+    from matplotlib import rc
+    from matplotlib import rc,rcParams
+
+    energies = sset.get_property_values(property_name = property_name)
+    predictions = sset.get_predictions(cemodel)
+
+    fig = plt.figure()
+    fig.suptitle("Property vs. concentration")
+
+    

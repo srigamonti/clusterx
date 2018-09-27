@@ -45,6 +45,9 @@ class ClustersSelector():
                 the maximum number of clusters in the combinatorial subsets of clusters
                 to be searched for (on top of the fixed subpool, see above).
 
+    .. todo::
+
+        * make ``optimal_ecis`` private
     """
     def __init__(self, method, clusters_pool, **kwargs):
         self.method = method

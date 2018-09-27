@@ -12,8 +12,8 @@ from clusterx.calculators.emt import EMT2
 from clusterx.utils import isclose
 from clusterx.clusters_selector import ClustersSelector
 
-from clusterx.visualization import plot_optimization_vs_number_of_clusters
-from clusterx.visualization import plot_predictions
+#from clusterx.visualization import plot_optimization_vs_number_of_clusters
+#from clusterx.visualization import plot_predictions_vs_target
 
 
 
@@ -98,7 +98,7 @@ def test_clusters_selector():
         radius.append(c.radius)
 
     #plot_optimization_vs_number_of_clusters(clsel)
-    #plot_predictions(clsel, energies)
+    #plot_predictions_vs_target(clsel, energies)
 
     print(clsel.predictions)
 
