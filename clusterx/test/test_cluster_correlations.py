@@ -54,7 +54,7 @@ def test_cluster_correlations():
 
     plat2 = ParentLattice(pri,substitutions=[su21,su22],pbc=pbc)
     cpool2 = ClustersPool(plat2, npoints=[1,2], radii=[0,1.2])
-    corrcal2 =  CorrelationsCalculator("chebychev", plat2, cpool2)
+    corrcal2 =  CorrelationsCalculator("chebyshev", plat2, cpool2)
 
     scell21 = SuperCell(plat2,np.array([(1,0,0),(0,3,0),(0,0,1)]))
     structure21 = Structure(scell21,[1,1,1,6,7,1,6,7,1])
@@ -68,10 +68,10 @@ def test_cluster_correlations():
     # Binary array for Chebychev-polinomials.
     plat3 = ParentLattice(pri, substitutions = [su21], pbc = pbc)
     cpool3 = ClustersPool(plat3,  npoints=[1,2], radii=[0,1.2])
-    corrcal3 =  CorrelationsCalculator("chebychev", plat3, cpool3)
+    corrcal3 =  CorrelationsCalculator("chebyshev", plat3, cpool3)
 
 
-    corrcal4 = CorrelationsCalculator("chebychev", plat2, cpool2)
+    corrcal4 = CorrelationsCalculator("chebyshev", plat2, cpool2)
 
     scell3 = SuperCell(plat3,np.array([(1,0,0),(0,3,0),(0,0,1)]))
     structure3 = Structure(scell3,[1,1,1,6,6,1,6,6,1])
@@ -126,7 +126,7 @@ def test_cluster_correlations():
     print('Time for AfdW basis', time.time() - t)
     t = time.time()
     test_orthonormality(corrcal4.site_basis_function, symmetric = False)
-    print('Time for Chebychev basis', time.time() - t)
+    print('Time for Chebyshev basis', time.time() - t)
 
     print ("\n\n========Test writes========")
     print (test_cluster_correlations.__doc__)
@@ -136,9 +136,9 @@ def test_cluster_correlations():
     structure2.serialize(fmt="json",fname="test_cluster_correlations_structure_2.json")
 
     scell = cpool2.get_cpool_scell()
-    cpool2.write_clusters_db(cpool2.get_cpool(),scell,"test_cluster_correlations_cpool_chebychev.json")
-    structure21.serialize(fmt="json",fname="test_cluster_correlations_structure_1_chebychev.json")
-    structure22.serialize(fmt="json",fname="test_cluster_correlations_structure_2_chebychev.json")
+    cpool2.write_clusters_db(cpool2.get_cpool(),scell,"test_cluster_correlations_cpool_chebyshev.json")
+    structure21.serialize(fmt="json",fname="test_cluster_correlations_structure_1_chebyshev.json")
+    structure22.serialize(fmt="json",fname="test_cluster_correlations_structure_2_chebyshev.json")
 
     print ("===========================\n")
 

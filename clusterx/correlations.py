@@ -11,7 +11,7 @@ class CorrelationsCalculator():
     **Parameters:**
 
     ``basis``: string
-        cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric``, ``polynomial``, and ``chebychev``.
+        cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric``, ``polynomial``, and ``chebyshev``.
     ``parent_lattice``: ParentLattice object
         the parent lattice of the cluster expansion.
     ``clusters_pool``: ClustersPool object
@@ -28,7 +28,7 @@ class CorrelationsCalculator():
         self._2pi = 2*np.pi
         if self.basis == 'polynomial':
             self.basis_set = PolynomialBasis()
-        elif self.basis == 'chebychev':
+        elif self.basis == 'chebyshev':
             self.basis_set = PolynomialBasis(symmetric = True)
 
 
@@ -67,7 +67,7 @@ class CorrelationsCalculator():
 
             return self.basis_set.evaluate(alpha, sigma, m)
 
-        if self.basis == "chebychev":
+        if self.basis == "chebyshev":
             # Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984).
             # Same results as for "trigonometric" in case of a binary.
             # WARNING: Forces that sigma = +-m, +-(m-1), ..., +- 1, (0), i.e. explicitly sigma = -1,0,1
