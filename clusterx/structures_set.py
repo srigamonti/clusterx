@@ -630,8 +630,14 @@ class StructuresSet():
             predictions.append(cemodel.predict(s))
         return predictions
 
-    def get_concentrations(self, site_type = 0):
+    def get_concentrations(self, site_type = 0, sigma = 1):
         """Get concentration values for a given site type
         """
 
-        pass
+        concentrations = []
+
+        for s in self:
+            fc = s.get_fractional_concentrations()
+            concentrations.append(fc[site_type][sigma])
+
+        return concentrations
