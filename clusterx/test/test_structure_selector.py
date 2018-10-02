@@ -17,6 +17,17 @@ def test_structure_selector():
        Tests all subroutines and some variables of the StructureSelector class
     """
 
+    cell = [[1,0,0],
+            [0,1,0],
+            [0,0,5]]
+    positions = [[0,0,0]]
+    pbc = [True,True,False]
+
+    pri = Atoms(['H'], positions=positions, cell=cell, pbc=pbc)
+    su1 = Atoms(['C'], positions=positions, cell=cell, pbc=pbc)
+
+    plat = ParentLattice(pri,substitutions=[su1],pbc=pbc)
+    """
     cell = [[3,0,0],
             [0,1,0],
             [0,0,5]]
@@ -30,32 +41,22 @@ def test_structure_selector():
     su1 = Atoms(['C','H','H'], positions=positions, cell=cell, pbc=pbc)
     su2 = Atoms(['H','He','H'], positions=positions, cell=cell, pbc=pbc)
     su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
-
+    
     plat = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
+    """
     #cpool = ClustersPool(plat, npoints=[0,1,2,3,4], radii=[0,0,2.3,1.42,1.42])
     cpool = ClustersPool(plat, npoints=[1,2], radii=[0,1.1])
     
     cpool.write_clusters_db(cpool.get_cpool(),cpool.get_cpool_scell(),"cpool.json")
     corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
 
-    scell = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
+    scell = SuperCell(plat,np.array([(3,0,0),(0,3,0),(0,0,1)]))
     training_set = StructuresSet(plat, filename="test_structure_selection_training_set.json")
     ntrainingstr = 14
-    training_set.add_structure(Structure(scell,[1,2,1,6,7,1,1,2,1]),write_to_db=True)
-    training_set.add_structure(Structure(scell,[6,1,1,1,1,1,1,1,1]),write_to_db=True)
-    training_set.add_structure(Structure(scell,[1,2,1,1,7,1,6,7,1]),write_to_db=True)
-    training_set.add_structure(Structure(scell,[1,1,1,6,1,1,1,7,1]),write_to_db=True)
-    training_set.add_structure(Structure(scell,[6,7,1,6,7,1,6,2,1]),write_to_db=True)
-    training_set.add_structure(Structure(scell,[1,7,1,6,2,1,1,1,1]),write_to_db=True)
-    training_set.add_structure(Structure(scell,[6,1,1,1,1,1,1,2,1]),write_to_db=True)
-    training_set.add_structure(Structure(scell,[1,1,1,1,7,1,6,7,1]),write_to_db=True)
-    training_set.add_structure(Structure(scell,[1,2,1,6,2,1,6,2,1]),write_to_db=True)
-    training_set.add_structure(Structure(scell,[6,1,1,6,2,1,1,1,1]),write_to_db=True)
-    training_set.add_structure(Structure(scell,[1,1,1,6,7,1,1,2,1]),write_to_db=True)
-    training_set.add_structure(Structure(scell,[1,2,1,6,2,1,1,1,1]),write_to_db=True)
-    training_set.add_structure(Structure(scell,[1,7,1,1,1,1,6,2,1]),write_to_db=True)
-    training_set.add_structure(Structure(scell,[6,1,1,1,7,1,1,7,1]),write_to_db=True)
-
+    
+    for idx in range(ntrainingstr):
+        training_set.add_structure(scell.gen_random(nsubs={0:[5]}))
+    
     structure_selector = StructureSelector(cluster_pool = cpool, training_set = training_set)
 
     comat = corrcal.get_correlation_matrix(training_set)
@@ -83,7 +84,8 @@ def test_structure_selector():
     'Test 3'
     method_list = ['averagedConcentration', 'infiniteCrystalFiniteClusters', 'byConcentration', 'vdWalleAndCeder']
     for method in method_list:
-        tau = structure_selector.calculate_variance_multiplier_expectation(domain_calculation_method = method, concentration = 0.2)
+        tau = structure_selector.calculate_population_variance(domain_calculation_method = method, concentration = 0.2)
+
         if not(isinstance(tau, float)):
             print('tau is no float!')
             sys.exit()
@@ -109,13 +111,10 @@ def test_structure_selector():
 
     candidate_set = StructuresSet(plat, filename="test_structure_selection_candidate_set.json")
     ncandidatestr = 6
-    candidate_set.add_structure(Structure(scell,[1,2,1,6,7,1,6,2,1]),write_to_db=True)
-    candidate_set.add_structure(Structure(scell,[1,7,1,1,2,1,1,1,1]),write_to_db=True)
-    candidate_set.add_structure(Structure(scell,[6,7,1,1,7,1,1,1,1]),write_to_db=True)
-    candidate_set.add_structure(Structure(scell,[6,2,1,6,1,1,6,7,1]),write_to_db=True)
-    candidate_set.add_structure(Structure(scell,[1,7,1,1,1,1,6,2,1]),write_to_db=True)
-    candidate_set.add_structure(Structure(scell,[6,1,1,1,7,1,1,1,1]),write_to_db=True)
+    for idx in range(ncandidatestr):
+        candidate_set.add_structure(scell.gen_random(nsubs={0:[5]}))
 
+        
     structure_selector.set_candidate_set(candidate_set)
     method_list = ['global_averagedConcentration', 'global_infiniteCrystalFiniteClusters', 'global_byConcentration', 'global_vdWalleAndCeder', 'greedy']
     for method in method_list:                   
@@ -138,10 +137,12 @@ def test_structure_selector():
             tau = np.zeros(ncandidatestr)
             for candidate_idx in range(ncandidatestr):
                 candidate = candidate_set.get_structure(candidate_idx)
-                dummy_set = training_set
+                dummy_file_str = "test_structure_selection_dummy_set"+str(candidate_idx)+".json"
+                dummy_set = StructuresSet(plat, filename=dummy_file_str)
+                dummy_set.add_structures(json_db_filepath = "test_structure_selection_training_set.json") 
                 dummy_set.add_structure(candidate, write_to_db = True)
                 dummy_structure_selector = StructureSelector(cluster_pool = cpool, training_set = dummy_set)
-                tau[candidate_idx] = dummy_structure_selector.calculate_variance_multiplier_expectation(domain_calculation_method = calculate_tau_method, concentration = 0.2)
+                tau[candidate_idx] = dummy_structure_selector.calculate_population_variance(domain_calculation_method = calculate_tau_method, concentration = 0.2)
             
             structure_chosen = np.argmin(tau)
 

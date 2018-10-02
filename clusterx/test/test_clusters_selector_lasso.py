@@ -6,7 +6,6 @@ from clusterx.structures_set import StructuresSet
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
 #from clusterx.model import ModelConstructor
-from clusterx.fitter import Fitter
 from ase import Atoms
 import numpy as np
 from clusterx.calculators.emt import EMT2
@@ -14,8 +13,8 @@ from clusterx.utils import isclose
 from clusterx.clusters_selector import ClustersSelector
 
 from clusterx.visualization import plot_optimization_vs_number_of_clusters
-from clusterx.visualization import plot_optimization_vs_sparsity
-from clusterx.visualization import plot_predictions
+#from clusterx.visualization import plot_optimization_vs_sparsity
+#from clusterx.visualization import plot_predictions_vs_target
 
 
 
@@ -97,16 +96,16 @@ def test_clusters_selector_lasso():
 
     #plot_optimization_vs_number_of_clusters(clsel)
     #plot_optimization_vs_sparsity(clsel)
-    #plot_predictions(clsel,energies)
+    #plot_predictions_vs_target(clsel,energies)
 
     print(npoints)
     print(radius)
     print(clsel.rmse)
     print(clsel.cvs)
     print(clsel.lasso_sparsities)
-    print(clsel.ecis)
-    print(clsel.opt_rmse)
-    print(clsel.opt_mean_cv)
+    #print(clsel.ecis)
+    #print(clsel.opt_rmse)
+    #print(clsel.opt_mean_cv)
 
 
     #rnpoints = np.array([0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4])
@@ -129,6 +128,7 @@ def test_clusters_selector_lasso():
 
     isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(recis, clsel.ecis) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
     """
-    isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
+    #isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
+    isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) 
 
     assert(isok)

@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import copy
 
 def isclose(r1,r2,rtol=1e-4):
     """Determine whether two vectors are similar
@@ -19,7 +20,7 @@ def isclose(r1,r2,rtol=1e-4):
     return np.linalg.norm(np.subtract(r1,r2)) < rtol
 
 
-def dict_compare(d1, d2):
+def dict_compare(d1, d2, tol=None):
     """Compare two dictionaries containing mutable objects.
 
     This compares two dictionaries. Two dictionaries are considered equal
@@ -28,13 +29,19 @@ def dict_compare(d1, d2):
 
     https://stackoverflow.com/questions/4527942/comparing-two-dictionaries-in-python
 
-    Parameters:
+    **Parameters:**
 
-    d1,d2: python dictionaries
+    ``d1,d2``: python dictionaries
         dictionaries to be compared
 
+    ``tol``: float
+        a small float number. If not ``None``, the comparison of dictionary
+        values is regarded as a vector comparison and done with
+        ``utils.isclose()``. For the meaning of ``tol``, read the documentation
+        for ``rtol`` parameter of ``utils.isclose()``.
+
     Return: boolean
-        True if dicts are equal, False if they are different.
+        ``True`` if dicts are equal, ``False`` if they are different.
     """
     areeq = True
 
@@ -50,8 +57,13 @@ def dict_compare(d1, d2):
     for k in d1_keys:
         try:
             for v1,v2 in zip(d1[k],d2[k]):
-                if v1 != v2:
-                    return False
+                if tol is None:
+                    if v1 != v2:
+                        return False
+                else:
+                    if not isclose(v1,v2,tol):
+                        return False
+
         except TypeError:
             if _is_integrable(d1[k]):
                 if d1[k]!=d2[k]:
@@ -665,6 +677,7 @@ def mgrep(fpath, search_array, prepend='',root='.'):
 
     return out_str.rstrip()
 
+
 def parent_lattice_to_atat(plat, out_fname="lat.in"):
     """Serializes ParentLattice object to ATAT input file
 
@@ -698,3 +711,121 @@ def parent_lattice_to_atat(plat, out_fname="lat.in"):
         f.write(stri)
 
     f.close()
+
+class Exponential():
+
+    def __init__(self, exponent, coefficient = 1):
+        self.exponent = exponent
+        self.coefficient = coefficient
+
+    def evaluate(self, x):
+        return self.coefficient * np.power(x,self.exponent)
+
+    def normalize(self, value):
+        self.coefficient = self.coefficient / value
+
+    def multiply_scalar(self, scalar):
+        self.coefficient = self.coefficient * scalar
+
+
+
+class PolynomialBasisFunction():
+
+    def __init__(self):
+        self.exponentials = []
+
+    def add_exponential(self, order, coefficient = 1):
+        in_sum = False
+        for exponential in self.exponentials:
+            if exponential.exponent == order:
+                exponential.coefficient += coefficient
+                in_sum = True
+                break
+        if not in_sum:
+            self.exponentials.append(Exponential(order, coefficient))
+
+    def clear_exponentials(self):
+        rmlist = []
+        for exponential in self.exponentials:
+            if abs(exponential.coefficient) < 10**(-10):
+                self.exponentials.remove(exponential)
+
+    def evaluate(self, x):
+        value = 0
+        for exponential in self.exponentials:
+            value += exponential.evaluate(x)
+        return value
+
+    def normalize(self, scalar_product, m):
+        length = scalar_product(self.evaluate, self.evaluate, m)
+        length = np.sqrt(length)
+        for exponential in self.exponentials:
+            exponential.normalize(length)
+
+    def multiply_scalar(self, scalar):
+        for exponential in self.exponentials:
+            exponential.multiply_scalar(scalar)
+
+    def add_polynomial_basis_function(self, polynomial_basis_function):
+        for exponential in polynomial_basis_function.exponentials:
+            self.add_exponential(exponential.exponent, exponential.coefficient)
+
+    def print_polynomial(self):
+        outstring = ''
+        for exponential in self.exponentials:
+            outstring += str(exponential.coefficient) + ' *  x^' + str(exponential.exponent) + ' + '
+        outstring = outstring[:-3]
+        print(outstring)
+
+
+class PolynomialBasis():
+
+    def __init__(self, m = 10, symmetric = False):
+        self.m = m
+        self.symmetric = symmetric
+        self.basis_function_set = {}
+        for M in range(1,m+1):
+            self.basis_function_set[str(M)] = self.construct(M)
+
+    def construct(self, m):
+        basis_functions = []
+        for degree in range(m):
+            new_function = PolynomialBasisFunction()
+            new_function.add_exponential(degree)
+            chi = Exponential(degree)
+            for basis_function in basis_functions:
+                overlap = self.scalar_product(basis_function.evaluate,chi.evaluate, m)
+                overlap = overlap * (-1)
+                summand = copy.deepcopy(basis_function)
+                summand.multiply_scalar(overlap)
+                new_function.add_polynomial_basis_function(summand)
+            new_function.normalize(self.scalar_product, m)
+            new_function.clear_exponentials()
+            basis_functions.append(new_function)
+        return basis_functions
+
+    def scalar_product(self, function1, function2, m):
+        """
+        returns the result of the scalar product 1/m sum_{sigma} f_1(sigma) * f_2(sigma)
+        """
+        scaling = 1 / m
+        if self.symmetric:
+            sigmas = [x for x in range(-int(m/2), int(m/2)+1)]
+            if m % 2 == 0:
+                sigmas.remove(0)
+        else:
+            sigmas = range(m)
+        scalar_product = 0
+        for sigma in sigmas:
+            scalar_product += function1(sigma) * function2(sigma)
+        scalar_product = scalar_product * scaling
+        return scalar_product
+
+    def print_basis_functions(self, m):
+        for function in self.basis_function_set[str(m)]:
+            function.print_polynomial()
+
+    def evaluate(self, alpha, sigma, M):
+        if M > self.m:
+            self.basis_function_set[str(M)] = self.construct(M)
+        return self.basis_function_set[str(M)][int(alpha)].evaluate(sigma)

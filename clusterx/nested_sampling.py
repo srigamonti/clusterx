@@ -34,7 +34,7 @@ import clusterx.parent_lattice
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 
-def nested_sampling(nsubs, sc_lat=None, nw=None,niter=None, nsteps=None, diagnostics=True, write_files=False, write_log=True, plot_outer_v_iter=False):
+def nested_sampling(nsubs, energy_dict, sc_lat=None, nw=None,niter=None, nsteps=None, diagnostics=True, write_files=False, write_log=True, plot_outer_v_iter=False):
     """
     Description:
         Perform nested sampling
@@ -73,6 +73,7 @@ def nested_sampling(nsubs, sc_lat=None, nw=None,niter=None, nsteps=None, diagnos
     #     sys.exit()
 
     #nsubs={0:[16]}
+    #cemodelE=Model(corcE, ecisE, multT)
 
     ns_settings = {}
     ns_settings["walkers"] = nw

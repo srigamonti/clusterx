@@ -2,6 +2,7 @@ from collections import Counter
 import numpy as np
 import sys
 from clusterx.symmetry import get_scaled_positions
+from clusterx.utils import PolynomialBasis
 
 class CorrelationsCalculator():
     """
@@ -10,8 +11,7 @@ class CorrelationsCalculator():
     **Parameters:**
 
     ``basis``: string
-        cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric`` and ``ternary-chebychev``.
-        ``binary-linear``: 
+        cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric``, ``polynomial``, and ``chebyshev``.
     ``parent_lattice``: ParentLattice object
         the parent lattice of the cluster expansion.
     ``clusters_pool``: ClustersPool object
@@ -26,6 +26,10 @@ class CorrelationsCalculator():
         ####
         self._cpool = clusters_pool
         self._2pi = 2*np.pi
+        if self.basis == 'polynomial':
+            self.basis_set = PolynomialBasis()
+        elif self.basis == 'chebyshev':
+            self.basis_set = PolynomialBasis(symmetric = True)
 
 
     def site_basis_function(self, alpha, sigma, m):
@@ -59,8 +63,12 @@ class CorrelationsCalculator():
             # Only for binary alloys. Allows for simple interpretation of cluster interactions.
             return sigma
 
-        if self.basis == "ternary-chebychev":
-            # Only for m <= 3. Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984). 
+        if self.basis == "polynomial":
+
+            return self.basis_set.evaluate(alpha, sigma, m)
+
+        if self.basis == "chebyshev":
+            # Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984).
             # Same results as for "trigonometric" in case of a binary.
             # WARNING: Forces that sigma = +-m, +-(m-1), ..., +- 1, (0), i.e. explicitly sigma = -1,0,1
 
@@ -71,23 +79,10 @@ class CorrelationsCalculator():
                     if shifted_sigma >= 0:
                         shifted_sigma += 1
                 return shifted_sigma
-                
+
             sigma = _map_sigma(sigma, m)
 
-            if m == 2:
-                return sigma
-
-            if alpha == 0:
-                return 1
-
-            elif alpha == 1:
-                return np.sqrt(3/2) * sigma
-
-            elif alpha == 2:
-                return np.sqrt(2) + (-3/np.sqrt(2)) * sigma**2
-
-            else:
-                sys.exit("ERROR! Exceeding possible number of components. This basis functions are intended for ternary compounds only.")
+            return self.basis_set.evaluate(alpha, sigma, m)
 
 
     def cluster_function(self, cluster, structure_sigmas,ems):
@@ -109,7 +104,6 @@ class CorrelationsCalculator():
 
     def get_cluster_correlations(self, structure, mc = False, multiplicities=None):
         """Get cluster correlations for a structure
-
         **Parameters:**
 
         ``structure``: Structure object
@@ -121,6 +115,10 @@ class CorrelationsCalculator():
             if None, the accumulated correlation functions are devided by the size
             of the cluster orbits, otherwise they are devided by the given
             multiplicities.
+
+        .. todo::
+
+            remove multiplicities option and always give intensive correlations.
         """
         from clusterx.utils import get_cl_idx_sc
         cluster_orbits = None

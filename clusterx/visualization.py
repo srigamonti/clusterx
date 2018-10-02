@@ -250,17 +250,16 @@ def plot_optimization_vs_sparsity(clsel):
     plt.show()
 
 
-def plot_predictions(clsel, p):
+def plot_predictions_vs_target(sset,cemodel, prop_name):
     """Plot predictions versus target with matplotlib
 
     The plot shows the prediction versus the target
 
     **Parameters:**
 
-    ``clsel``: ClustersSelector object
-        The ClustersSelector oject which was used for the optimization.
-    ``p``: array of float
-        the target property values
+    ``sset``: StructuresSet object
+    ``cemodel``: Model object
+    ``prop_name``: string
     """
 
     import matplotlib.pyplot as plt
@@ -268,9 +267,8 @@ def plot_predictions(clsel, p):
     from matplotlib import rc,rcParams
     import math
 
-    energies=p
-
-    predictions=clsel.predictions
+    energies = sset.get_property_values(property_name = prop_name)
+    predictions = sset.get_predictions(cemodel)
 
     e_min=min([min(energies),min(predictions)])
     e_max=max([max(energies),max(predictions)])
@@ -310,4 +308,46 @@ def plot_predictions(clsel, p):
         l.set_fontsize(25)
 
     #plt.savefig("plot_optimization.png")
+    plt.show()
+
+def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, property_name = None):
+    """Plot property values versus concentration
+
+    **Parameters:**
+
+    ``sset``: StructuresSet object
+        The property values will be plotted for structures in ``sset``.
+    ``site_type``: integer
+        The x axis of the plot will indicate the fractional concentration for
+        site type ``site_type``
+    ``sigma``: integer
+        The x axis of the plot will indicate the fractional concentration for
+        the atomic species ``sigma`` in site type ``site_type``
+    ``cemodel``: Model object
+        If not ``None``, the property values as predicted by ``cemodel`` will be
+        depicted.
+    ``property_name``: string
+        If not ``None``, the calculated property ``property_name`` will be extracted
+        from the ``sset`` and depicted in the plot. If ``cemodel`` is not ``None``
+        as well, then both predicted and calculated data are plot.
+     """
+    import matplotlib.pyplot as plt
+    from matplotlib import rc
+    from matplotlib import rc,rcParams
+
+    energies = sset.get_property_values(property_name = property_name)
+    predictions = sset.get_predictions(cemodel)
+    frconc = sset.get_concentrations()
+    
+    fig = plt.figure()
+    fig.suptitle("Property vs. concentration")
+
+    plt.scatter(frconc,energies,marker='o', s=50, edgecolors='red', facecolors='none',label='Calculated')
+    plt.scatter(frconc,predictions,marker='o', s=20, edgecolors='none', facecolors='blue',label='Predicted')
+
+    plt.xlabel("Concentration")
+    plt.ylabel(property_name)
+
+    plt.legend()
+
     plt.show()

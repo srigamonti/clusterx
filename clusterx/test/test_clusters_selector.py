@@ -6,15 +6,14 @@ from clusterx.structures_set import StructuresSet
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
 #from clusterx.model import ModelConstructor
-from clusterx.fitter import Fitter
 from ase import Atoms
 import numpy as np
 from clusterx.calculators.emt import EMT2
 from clusterx.utils import isclose
 from clusterx.clusters_selector import ClustersSelector
 
-from clusterx.visualization import plot_optimization_vs_number_of_clusters
-from clusterx.visualization import plot_predictions
+#from clusterx.visualization import plot_optimization_vs_number_of_clusters
+#from clusterx.visualization import plot_predictions_vs_target
 
 
 
@@ -99,7 +98,7 @@ def test_clusters_selector():
         radius.append(c.radius)
 
     #plot_optimization_vs_number_of_clusters(clsel)
-    #plot_predictions(clsel, energies)
+    #plot_predictions_vs_target(clsel, energies)
 
     print(clsel.predictions)
 
@@ -109,7 +108,7 @@ def test_clusters_selector():
     print(radius)
     print(clsel.rmse)
     print(clsel.cvs)
-    print(clsel.ecis)
+    #print(clsel.opt_ecis)
     print(clsel.opt_rmse)
     print(clsel.opt_mean_cv)
 
@@ -118,9 +117,9 @@ def test_clusters_selector():
     rradius=np.array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.4142135623730951, 1.4142135623730951, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.23606797749979, 2.23606797749979, 2.23606797749979, 2.23606797749979])
     rrmse=np.array([153.2841213331535, 16.901897707237335, 6.700789709328075, 3.999376257086468, 3.9993762570864715, 3.999376257086461, 1.3982627586177953e-12, 2.458069680489386e-13, 3.9889575076243714e-13, 1.1566745888836136e-12, 4.3970985792892635e-13, 4.630264154207033e-13])
     rcvs=np.array([161.35170666647736, 21.25070484696078, 21.19282786602867, 18.253021305083315, 18.253021305083205, 18.253021305083017, 27.15157877280046, 112.1639192203313, 119.88992472711024, 48.55167467287421, 116.65562192812081, 120.96386699529319])
-    recis=np.array([217.50240347215293, -9.31812155582009, 170.06833867676676, -329.5269026624669, -15.744168851528736, 24.772705003474446, -4.329642636893942, -11.671744819665708, -5.984567915150287, 28.909090631366357, -10.002053026806305, 17.14173277787912, -4.32964263689407, -11.671744819665765, -5.984567915150287, 28.909090631366315, -15.74416885152874, 24.772705003474446, -10.002053026806333, 17.141732777879128, -10.002053026806319, 17.141732777879128])
-    ropt_rmse=3.999376257086461
-    ropt_mean_cv=18.253021305083017
+    #recis=np.array([217.50240347215293, -9.31812155582009, 170.06833867676676, -329.5269026624669, -15.744168851528736, 24.772705003474446, -4.329642636893942, -11.671744819665708, -5.984567915150287, 28.909090631366357, -10.002053026806305, 17.14173277787912, -4.32964263689407, -11.671744819665765, -5.984567915150287, 28.909090631366315, -15.74416885152874, 24.772705003474446, -10.002053026806333, 17.141732777879128, -10.002053026806319, 17.141732777879128])
+    #ropt_rmse=3.999376257086461
+    #ropt_mean_cv=18.253021305083017
 
     print("CV-----------------------")
     for i,(r,rr) in enumerate(zip(clsel.cvs,rcvs)):
@@ -128,7 +127,7 @@ def test_clusters_selector():
 
     """
     print("ECI-----------------------")
-    for r,rr in zip(clsel.ecis,recis):
+    for r,rr in zip(clsel.opt_ecis,recis):
         print("line:  ",r,rr,r-rr)
 
     print("RMSE-----------------------")
@@ -140,5 +139,6 @@ def test_clusters_selector():
     print(isclose(rcvs, clsel.cvs))
     """
 
-    isok = isclose(rclset,clset) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(recis, clsel.ecis) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
+    #isok = isclose(rclset,clset) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(recis, clsel.opt_ecis) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
+    isok = isclose(rclset,clset) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) 
     assert(isok)

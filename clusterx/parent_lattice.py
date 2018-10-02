@@ -246,7 +246,6 @@ class ParentLattice(Atoms):
         self._max_nsub = len(self._subs)
         self._set_tags()
 
-
     def _set_tags(self):
         """Set the ``tags`` attribute of the Atoms object, and the ParentLattice
         attributes ``idx_subs`` and ``sites`` which define the substitutional
@@ -325,7 +324,7 @@ class ParentLattice(Atoms):
         for tag in self.get_tags():
             if len(self.idx_subs[tag]) > 1:
                 st.append(tag)
-        return st
+        return np.unique(np.asarray(st))
 
     def get_spectator_tags(self):
         """Return site types for non substitutional sites
@@ -334,10 +333,52 @@ class ParentLattice(Atoms):
         for tag in self.get_tags():
             if len(self.idx_subs[tag]) == 1:
                 st.append(tag)
-        return st
+        return np.unique(np.asarray(st))
+
+    def get_nsites_per_type(self):
+        """Return number of sites per site type.
+
+        For instance, suppose that the ``sites`` definition of the structure is::
+
+            sites = {0: [14,13], 1: [14,13], 2: [14,13], 3: [56,0,38], 4: [56,0,38], 5:[11]}
+
+        The ``site_types`` dictionary (as returned by ``idx_subs()``) for this will be::
+
+            site_types = {0: [14,13], 1: [56,0,38], 2:[11]}
+
+        Thus, the tags definition will be::
+
+            tags = [0,0,0,1,1,2]
+
+        and, the number of sites per site type (what this function returns)::
+
+            {0: 3, 1: 2, 2: 1}
+
+        That is, there are three sites of type 0, 2 sites of type 1, and 1 site of
+        type 2.
+
+        """
+        nsites_per_type = {}
+        tags = self.get_tags()
+
+        idx_subs = self.get_idx_subs()
+        for site_type, _ in idx_subs.items():
+            nsites_per_type[site_type] = tags.tolist().count(int(site_type))
+
+        return nsites_per_type
 
     def get_sites(self):
         """Return dictionary of sites
+
+        The keys of the ``sites`` dictionary correspond to the atom indices in
+        the ParentLattice object. The value for each key is an array of
+        integer number representing the species-number that may occupy the site.
+        For instance, if a ParentLattice object consists of six positions, such that
+        the first three positions can be occupied by species 14 or 13, the 4th
+        and 5th positions by species 56, vacant or species 38, and the 6th position
+        can be only occupied by species 11, then the sites dictionary reads::
+
+            sites = {0: [14,13], 1: [14,13], 2: [14,13], 3: [56,0,38], 4: [56,0,38], 5:[11]}
         """
         return self.sites
 
@@ -366,9 +407,21 @@ class ParentLattice(Atoms):
     def get_idx_subs(self):
         """Return dictionary of site type indexes and substitutional species
 
-        The format of the returned dictionary is ``{'0':[pri0,sub00,sub01,...],'1':[pri1,sub10,sub11,...]...}``
+        The format of the returned dictionary is::
+
+            {'0':[pri0,sub00,sub01,...],'1':[pri1,sub10,sub11,...]...}
+
         where the key indicates the site type, ``pri#`` the chemical number of the pristine structure and
         ``sub##`` the possible substitutional chemical numbers for the site.
+
+        For instance, if a ParentLattice object consists of six positions, such that
+        the first three positions can be occupied by species 14 or 13, the 4th
+        and 5th positions by species 56, vacant or species 38, and the 6th position
+        can be only occupied by species 11, then there are three site types, and the
+        returned dictionary will look like::
+
+            {0: [14,13], 1: [56,0,38], 2:[11]}
+
         """
         return self.idx_subs
 
@@ -382,6 +435,11 @@ class ParentLattice(Atoms):
         dict.update({"sites" : self.get_sites()})
 
         return dict
+
+    def get_atom_indices_for_site_type(self, site_type):
+        """Return atom indices of the structure of a certain given site type
+        """
+        return np.where(self.get_tags() == site_type)
 
     def serialize(self,fname="plat.json"):
         """

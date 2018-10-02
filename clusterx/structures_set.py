@@ -471,7 +471,6 @@ class StructuresSet():
                 "parent_lattice_idx_subs" : self._parent_lattice.get_idx_subs()
             }
 
-            #db.metadata = {'db_path':"tesTX metadata"}
 
 
     def get_folders(self):
@@ -614,3 +613,31 @@ class StructuresSet():
         if db is not None:
             for i,p in enumerate(property_vals):
                 db.update([i+1], **{property_name:p})
+
+    def get_predictions(self, cemodel):
+        """Get predictions of CE model on structures set
+
+        Applies the given cluster expansion model to every structure in the
+        structrues set and returns an array with the computed values.
+
+        **Parameters:**
+
+        ``cemodel``: Model object
+            Cluster expansion model for which predictions want to be computed.
+        """
+        predictions = []
+        for s in self:
+            predictions.append(cemodel.predict(s))
+        return predictions
+
+    def get_concentrations(self, site_type = 0, sigma = 1):
+        """Get concentration values for a given site type
+        """
+
+        concentrations = []
+
+        for s in self:
+            fc = s.get_fractional_concentrations()
+            concentrations.append(fc[site_type][sigma])
+
+        return concentrations
