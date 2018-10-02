@@ -194,9 +194,12 @@ class ClustersPool():
             The indexes of the clusters to build the subpool from.
         """
         subpool = ClustersPool(self._plat, super_cell = self._cpool_scell)
+        add_mults = (len(self._multiplicities) == len(self))
         for i,cl in enumerate(self._cpool):
             if i in cluster_indexes:
                 subpool.add_cluster(cl)
+                if add_mults:
+                    subpool._multiplicities.append(self._multiplicities[i])
         return subpool
 
     def get_clusters_sets(self, grouping_strategy = "size", nclmax = 0, set0=[0,0]):
