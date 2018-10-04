@@ -1,6 +1,6 @@
 ## packages needed for MonteCarlo
 import random
-from clusterx.structures_set import StructuresSet
+#from clusterx.structures_set import StructuresSet
 from clusterx.structure import Structure
 ## packages needed for MonteCarloTrajectory
 import json
@@ -67,7 +67,7 @@ class MonteCarlo():
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
-
+        print(self._nsubs)
         self._filename = filename
         self._last_visited_structure_name = last_visited_structure_name
 
@@ -97,7 +97,7 @@ class MonteCarlo():
         self._ensemble = ensemble
         self._no_of_swaps = no_of_swaps
 
-    def metropolis(self, scale_factor, nmc, initial_structure = None, save_decoration = True, write_to_db = False):
+    def metropolis(self, scale_factor, nmc, initial_decoration = None, write_to_db = False):
         """Perform metropolis simulation
 
         **Description**: Perfom Metropolis sampling for nmc sampling
@@ -122,11 +122,9 @@ class MonteCarlo():
         ``nmc``: integer
             Number of sampling steps
 
-        ``initial_structure``: Structure object
+        ``initial_decoration``: Structure object
             Sampling starts with the structure defined by this Structure object.
             If initial_structure = None: Sampling starts with a structure randomly generated.
-
-        ``save_decoration:`` boolean            
 
         ``write_to_db``: boolean (default: False)                                                                                                                                                                                                                             
             Whether to add the structure to the json database (see ``filename`` parameter for MonteCarloTrajectory initialization)
@@ -141,11 +139,13 @@ class MonteCarlo():
         for el in scale_factor:
             scale_factor_product *= float(el)
 
-        if initial_structure == None:
-            struc = self._scell.gen_random(self._nsubs)
+        if initial_decoration is not None:
+            print('1')
+            struc = Structure(self._scell, initial_decoration)
         else:
-            struc = initial_structure
-
+            print('0')
+            struc = self._scell.gen_random(self._nsubs)
+        
         e = self._em.predict(struc)
         
         traj = MonteCarloTrajectory(self._scell, filename=self._filename, models = self._models)
@@ -217,9 +217,6 @@ class MonteCarloTrajectory():
     ``filename``: string
         The trajectoy can be stored in a json file with the path given by ``filename``.
 
-    ``save_decoration``: boolean
-        Store the decorations at every sampling step. Default is True. 
-
     ``**kwargs``: keyword arguments
 
         ``save_nsteps``: integer
@@ -234,11 +231,10 @@ class MonteCarloTrajectory():
 
     """
     
-    def __init__(self, scell, filename="trajectory.json", save_decoration = True, **kwargs):
+    def __init__(self, scell, filename="trajectory.json", **kwargs):
         self._trajectory = []
 
         self._scell = scell
-        self._save_decoration = save_decoration
         self._save_nsteps = kwargs.pop("save_nsteps",1000000)
 
         self._models = kwargs.pop("models",[])
