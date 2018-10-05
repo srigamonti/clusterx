@@ -425,7 +425,7 @@ class ClustersPool():
                     radii[i] = 0.0
                 else:
                     radii[i] = dmax
-        count = 0
+        #count = 0
         for npts,radius in zip(npoints,radii):
             clrs_full = []
             for idxs in combinations(satoms,npts):
@@ -437,8 +437,8 @@ class ClustersPool():
                     #cl = Cluster(idxs, ss, scell, distances=distances)
                     _cl = Cluster(idxs, ss)
                     #if cl.radius <= radius:
-                    count += 1
-                    print("-----",count,"------")
+                    #count += 1
+                    #print("-----",count,"------")
                     if _cl.get_radius(distances) <= radius:
                         if _cl not in clrs_full:
                             #clrs_full.append(_cl)
@@ -455,12 +455,12 @@ class ClustersPool():
                             self._multiplicities.append(mult)
                             for __cl in orbit:
                                 clrs_full.append(__cl)
-                            print("cluster nr: ",len(self._cpool), " added, out of", len(clrs_full))
+                            #print("cluster nr: ",len(self._cpool), " added, out of", len(clrs_full))
 
 
-        print("out of big loop, sorting\n")
+        #print("out of big loop, sorting\n")
         self._cpool, self._multiplicities = (list(t) for t in zip(*sorted(zip(self._cpool, self._multiplicities))))
-        print("finished sorting\n")
+        #print("finished sorting\n")
 
     def get_cpool_scell(self):
         return self._cpool_scell
