@@ -130,6 +130,16 @@ class StructuresSet():
     def write(self, structure, key_value_pairs={}, **kwargs):
         self.json_db.write(structure.get_atoms(),key_value_pairs, data={"pcell":structure.get_parent_lattice().get_cell(),"tmat":structure.get_transformation(), "tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
 
+    def write_to_db(self, json_db_name=None):
+        """Creates ASE's JSON db object containing the structures in the structures set
+        """
+        from subprocess import call
+        from ase.db.jsondb import JSONDatabase
+        call(["rm","-f",json_db_name])
+        atoms_db = JSONDatabase(filename=json_db_name)
+        for s in self:
+            atoms_db.write(s.get_atoms())
+
     def add_structure(self, structure, key_value_pairs={}, write_to_db = False, **kwargs):
         """Add a structure to the StructuresSet object
 
