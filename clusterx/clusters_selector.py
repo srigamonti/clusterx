@@ -1,4 +1,5 @@
 from clusterx.clusters.clusters_pool import ClustersPool
+from clusterx.correlations import CorrelationsCalculator
 import numpy as np
 import sys
 
@@ -15,8 +16,6 @@ class ClustersSelector():
         is performed. In the case of "lasso", the optimal sparsity parameter is
         searched through cross validation, while in "linreg", cross validation
         is directly used as model selector.
-    ``clusters_pool``:ClustersPool object
-        the clusters pool from which the optimal model is selected.
     ``**kwargs``: keyword arguments
         if ``method`` is set to "lasso", the keyword arguments are:
             ``sparsity_max``: positive real, maximal sparsity parameter
@@ -49,7 +48,7 @@ class ClustersSelector():
 
         * make ``optimal_ecis`` private
     """
-    def __init__(self, method, clusters_pool, **kwargs):
+    def __init__(self, basis="trigonometric", method="identity", **kwargs):
         self.method = method
 
         # additional arguments for lasso
@@ -62,7 +61,6 @@ class ClustersSelector():
         self.nclmax = kwargs.pop("nclmax", 0)
         self.set0 = kwargs.pop("set0",[0, 0])
 
-        self.cpool = clusters_pool
         self.fit_intercept=False
         #for c in self.cpool._cpool:
         #    if c.npoints == 0:
@@ -84,6 +82,8 @@ class ClustersSelector():
 
         self.fitter_cv = None
 
+        self.basis = basis
+
         #self.update()
 
     def get_opt_ecis(self):
@@ -92,8 +92,7 @@ class ClustersSelector():
     def get_rmse(self):
         return self.rmse
 
-
-    def select_clusters(self, x, p):
+    def select_clusters(self, sset, cpool, prop):
         """Select clusters
 
         Selects best model for the cluster expansion. The input parameters
@@ -105,7 +104,10 @@ class ClustersSelector():
 
         where J are the effective cluster interactions.
 
-        Parameters:
+        **Parameters:**
+
+        ``clusters_pool``:ClustersPool object
+            the clusters pool from which the optimal model is selected.
 
         x: 2d matrix of cluster correlations
             Rows correspond to structures, columns correspond to clusters.
@@ -114,6 +116,18 @@ class ClustersSelector():
         """
         from sklearn.model_selection import LeaveOneOut
 
+        self.cpool = cpool
+        self.plat = cpool.get_plat()
+        self.sset = sset
+        self.prop = prop
+
+        corrc = CorrelationsCalculator(self.basis, self.plat, self.cpool)
+        self.ini_comat = corrc.get_correlation_matrix(self.sset)
+        self.target = self.sset.get_property_values(property_name = self.prop)
+
+        x = self.ini_comat
+        p = self.target
+
         if self.method == "lasso":
             opt = self._select_clusters_lasso_cv(x, p)
 
@@ -121,17 +135,20 @@ class ClustersSelector():
                 if 0 not in opt:
                     self.fit_intercept = False
 
-        elif self.clusters_sets == "size":
-            clsets = self.cpool.get_clusters_sets(grouping_strategy = "size")
-            opt = self._linear_regression_cv(x, p, clsets)
-        elif self.clusters_sets == "combinations":
-            clsets = self.cpool.get_clusters_sets(grouping_strategy = "combinations",  nclmax=self.nclmax)
-            opt = self._linear_regression_cv(x, p, clsets)
-        elif self.clusters_sets == "size+combinations":
-            clsets = self.cpool.get_clusters_sets(grouping_strategy = "size+combinations", nclmax=self.nclmax , set0=self.set0)
-            opt = self._linear_regression_cv(x, p, clsets)
-        elif self.clusters_sets == "identity":
-            opt = np.arange(len(self.cpool))
+        elif self.method == "linreg":
+            if self.clusters_sets == "size":
+                clsets = self.cpool.get_clusters_sets(grouping_strategy = "size")
+                opt = self._linear_regression_cv(x, p , clsets)
+            elif self.clusters_sets == "combinations":
+                clsets = self.cpool.get_clusters_sets(grouping_strategy = "combinations",  nclmax=self.nclmax)
+                opt = self._linear_regression_cv(x, p, clsets)
+            elif self.clusters_sets == "size+combinations":
+                clsets = self.cpool.get_clusters_sets(grouping_strategy = "size+combinations", nclmax=self.nclmax , set0=self.set0)
+                opt = self._linear_regression_cv(x, p, clsets)
+                
+        elif self.method == "identity":
+            opt = np.arange(len(self.cpool),dtype=int)
+
 
         self.optimal_clusters = self.cpool.get_subpool(opt)
 

@@ -1,6 +1,7 @@
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.estimators.estimator_factory import EstimatorFactory
 from clusterx.clusters_selector import ClustersSelector
+import numpy as np
 
 class Model():
     """Model class
@@ -17,11 +18,11 @@ class Model():
         multiplicities). Overrides ``estimator`` object.
 
     """
-    def __init__(self, corrc, property=None, estimator = None, ecis = None):
+    def __init__(self, corrc, property_name, estimator = None, ecis = None):
         self.corrc = corrc
         self.estimator = estimator
         self.ecis = ecis
-        self.property = property
+        self.property = property_name
 
     def predict(self,structure):
         """Predic property with the optimal cluster expansion model.
@@ -39,6 +40,55 @@ class Model():
             for i in range(len(corrs)):
                 pv = pv + self.ecis[i]*corrs[i]
             return pv
+
+    def get_errors(self,sset):
+        """Compute RMSE, MAE and MaxAE for model in structure set.
+        """
+        calc_vals = sset.get_property_values(property_name = self.property)
+        predictions = sset.get_predictions(self)
+        rmse = 0
+        mae = 0
+        maxae = 0
+        for e,p in zip(calc_vals,predictions):
+            rmse += (e-p)*(e-p)
+            mae += np.abs(e-p)
+            if np.abs(e-p) > maxae:
+                maxae = np.abs(e-p)
+
+        rmse = np.sqrt(rmse/len(calc_vals))
+        mae = mae/len(calc_vals)
+
+        return {"RMSE":rmse, "MAE": mae, "MaxAE":maxae}
+
+    def get_cv_score(self,sset,fit_params=None):
+        """Get leave-one-out cross-validation score over structures set.
+
+        **Parameters:**
+
+        ``fit_params``: dictionary
+            Parameters to pass to the fit method of the estimator.
+        """
+        from sklearn.model_selection import cross_val_score, cross_validate, cross_val_predict
+        from sklearn.model_selection import LeaveOneOut
+        from sklearn.metrics import mean_squared_error
+        from sklearn import linear_model
+
+        X = self.corrc.get_correlation_matrix(sset)
+        y = sset.get_property_values(self.property)
+
+        # cross_val_score internally clones the estimator, so the optimal one in Model is not changed.
+        cvs = cross_val_score(self.estimator, X, y, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
+        pred_cv = cross_val_predict(self.estimator, X, y, fit_params=fit_params, cv=LeaveOneOut())
+        #cv_results = cross_validate(self.estimator, X, y, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
+        #cvs = cv_results['test_score']
+
+        aes = np.sqrt(-cvs)
+        cv = np.sqrt(-np.mean(cvs))
+        maxae = 0
+        for ae in aes:
+            if ae > maxae:
+                maxae = ae
+        return {"RMSE-CV": cv, "AEs-CV": aes, "MaxAE-CV": maxae, "Predictions-CV":pred_cv}
 
 class ModelBuilder():
     """Model class
@@ -83,9 +133,14 @@ class ModelBuilder():
 
         When the ``build`` method is called, a ``ClustersSelector`` object
         is created to perform the cluster selection task. This selector
-        can be obtained by calling this function. 
+        can be obtained by calling this function.
         """
         return self.selector
+
+    def get_estimator(self):
+        """Return estimator object used to create the optimal model
+        """
+        return self.opt_estimator
 
     def build(self, sset, cpool, prop):
         """Build optimal cluster expansion model
@@ -112,17 +167,17 @@ class ModelBuilder():
         self.prop = prop
 
         corrc = CorrelationsCalculator(self.basis, self.plat, self.cpool)
-        comat = corrc.get_correlation_matrix(self.sset)
-        pvals_tr = self.sset.get_property_values(property_name = self.prop)
+        self.ini_comat = corrc.get_correlation_matrix(self.sset)
+        self.target = self.sset.get_property_values(property_name = self.prop)
 
         # Select optimal clusters using the clusters_selector module
-        self.selector = ClustersSelector(self.selection_method,self.cpool)
-        self.opt_cpool = self.selector.select_clusters(comat, pvals_tr)
+        self.selector = ClustersSelector(basis=self.basis, method=self.selection_method)
+        self.opt_cpool = self.selector.select_clusters(sset, cpool, prop)
         self.opt_corrc = CorrelationsCalculator(self.basis, self.plat, self.opt_cpool)
         self.opt_comat = self.opt_corrc.get_correlation_matrix(self.sset)
 
         # Find out the ECIs using an estimator
         self.opt_estimator = EstimatorFactory.create(self.estimator_type, **self.estimator_opts)
-        self.opt_estimator.fit(self.opt_comat,pvals_tr)
+        self.opt_estimator.fit(self.opt_comat,self.target)
 
-        return Model(self.opt_corrc,estimator = self.opt_estimator, property=prop)
+        return Model(self.opt_corrc, prop, estimator = self.opt_estimator)
