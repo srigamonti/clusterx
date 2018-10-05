@@ -310,7 +310,7 @@ def plot_predictions_vs_target(sset,cemodel, prop_name):
     #plt.savefig("plot_optimization.png")
     plt.show()
 
-def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, property_name = None, show_loo_predictions = True):
+def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, property_name = None, show_loo_predictions = True, sset_enum=None):
     """Plot property values versus concentration
 
     **Parameters:**
@@ -337,12 +337,17 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
 
     energies = sset.get_property_values(property_name = property_name)
     predictions = sset.get_predictions(cemodel)
+    if sset_enum is not None:
+        pred_enum = sset_enum.get_predictions(cemodel)
+
     if show_loo_predictions:
         cvs = cemodel.get_cv_score(sset)
 
     pred_cv = cvs["Predictions-CV"]
 
     frconc = sset.get_concentrations()
+    frconc_enum = sset_enum.get_concentrations()
+
 
     fig = plt.figure()
     fig.suptitle("Property vs. concentration")
@@ -350,6 +355,8 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     plt.scatter(frconc,energies,marker='o', s=50, edgecolors='green', facecolors='none',label='Calculated')
     plt.scatter(frconc,pred_cv,marker='x', s=30, edgecolors='none', facecolors='red',label='Predicted-CV')
     plt.scatter(frconc,predictions,marker='o', s=20, edgecolors='none', facecolors='blue',label='Predicted')
+    if sset_enum is not None:
+        plt.scatter(frconc_enum,pred_enum,marker='o', s=10, edgecolors='none', facecolors='gray',label='Enumeration')
 
     plt.xlabel("Concentration")
     plt.ylabel(property_name)
