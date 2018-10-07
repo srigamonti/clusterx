@@ -7,7 +7,6 @@ import json
 import numpy as np
 from copy import deepcopy
 
-
 class MonteCarlo():
     """MonteCarlo class
 
@@ -140,10 +139,8 @@ class MonteCarlo():
             scale_factor_product *= float(el)
 
         if initial_decoration is not None:
-            print('1')
             struc = Structure(self._scell, initial_decoration)
         else:
-            print('0')
             struc = self._scell.gen_random(self._nsubs)
         
         e = self._em.predict(struc)
@@ -235,7 +232,8 @@ class MonteCarloTrajectory():
         self._trajectory = []
 
         self._scell = scell
-        self._save_nsteps = kwargs.pop("save_nsteps",1000000)
+        self._save_nsteps = kwargs.pop("save_nsteps",10)
+        self._write_no = 0
 
         self._models = kwargs.pop("models",[])
 
@@ -247,10 +245,9 @@ class MonteCarloTrajectory():
         for mo in models:
             if mo not in self._models:
                 self._models.append(mo)
-        print(self._models)
-        sx = Structure(self._scell, decoration = self._trajectory[0]['decoration'])
-        print(sx.decor)
 
+        sx = Structure(self._scell, decoration = self._trajectory[0]['decoration'])
+        
         for t,tr in enumerate(self._trajectory):
             indices_list = tr['swapped_positions']
             for j in range(len(indices_list)):
@@ -347,7 +344,7 @@ class MonteCarloTrajectory():
         for tr in self._trajectory:
             steps.append(tr['sampling_step_no'])
 
-        return np.int8(steps)
+        return np.asarray(steps)
 
     def get_sampling_step_no(self, nid):
         """Get sampling step number of entry at index nid in trajectory
@@ -359,11 +356,10 @@ class MonteCarloTrajectory():
         """Get entry index at the n-th sampling step.
         """
         steps = self.get_sampling_step_nos()
-
         nid=0
         try:
             nid = np.where(steps == nstep)[0][0]
-        except ValueError:
+        except:
             if nstep > steps[-1]:
                 nid = steps[-1]
             else:
@@ -443,20 +439,9 @@ class MonteCarloTrajectory():
 
         trajdic={}
         for j,dec in enumerate(self._trajectory):
-            dec_string=""
-            if j == 0:
-                dec['decoration'] = dec['decoration'].tolist()
-            #print(dec)
-            #jsonindent=2, sort_keys=True
-
-
-            #dsw=[]
-            #for sw in dec['swapped_positions']:
-            #    dsw.append(sw.tolist())
-            #dec['swapped_positions'] = dsw
             trajdic.update({str(j):dec})
 
-        with open(self._filename, 'w', encoding='utf-8') as outfile:
+        with open(self._filename, 'a+', encoding='utf-8') as outfile:
             json.dump(trajdic,outfile, cls=NumpyEncoder, indent = 1 , separators = (',',':'))
 
     def read(self, filename = None , append = False):
@@ -476,7 +461,6 @@ class MonteCarloTrajectory():
 
         for key in data_keys:
             tr = data[str(key)]
-            #tr['swapped_positions'] = np.asarray(tr['decoration'],dtype=np.int8)
             self._trajectory.append(tr)
 
 
