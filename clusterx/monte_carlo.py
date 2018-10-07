@@ -30,6 +30,9 @@ class MonteCarlo():
         It indicates how many substitutional atoms of every kind (n#1, n#2, ...)
         may replace the pristine species for sites of site_type#.
 
+        The list of site types can be obtained with the method ``ParentLattice.get_idx_subs()``
+        (see related documentation).
+
         Defines the number of substituted atoms in each sublattice
         Supercell in which the sampling is performed.
 
