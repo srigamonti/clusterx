@@ -37,7 +37,7 @@ class MonteCarlo():
     ``filename``: string
         Trajectory can be written to a json file with the name ``filename``.
 
-    ``sublattice_indizes``: list of int
+    ``sublattice_indices``: list of int
         Sampled sublattices. Each index in the list gives the site_type defining the sublattice.
         If the list is empty (default), the site_type of the sublattices are read from ``nsubs``
         Non-substituted sublattices are excluded for canonical samplings.
@@ -63,34 +63,35 @@ class MonteCarlo():
 
     """
 
-    def __init__(self, energy_model, scell, nsubs, filename = "trajectory.json", sublattice_indizes = [], models = [], no_of_swaps = 1, ensemble = "canonical"):
+    def __init__(self, energy_model, scell, nsubs, filename = "trajectory.json", last_visited_structure_name = "last-visited-structure-mc.json", sublattice_indices = [], models = [], no_of_swaps = 1, ensemble = "canonical"):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
 
         self._filename = filename
+        self._last_visited_structure_name = last_visited_structure_name
 
-        if not sublattice_indizes:
+        if not sublattice_indices:
             try:
-                self._sublattice_indizes = [k for k in self._nsubs.keys()]
+                self._sublattice_indices = [k for k in self._nsubs.keys()]
 
                 if ensemble == "canonical":
                     for key in self._nsubs.keys():
                         if all([ subs == 0 for subs in self._nsubs[key] ]):
-                            self._sublattice_indizes.remove(key)
+                            self._sublattice_indices.remove(key)
 
 
             except AttributeError:
                 raise AttributeError("Index of sublattice is not properly assigned, look at the documentation.")
         else:
-            self._sublattice_indizes = sublattice_indizes
+            self._sublattice_indices = sublattice_indices
 
-        if not self._sublattice_indizes:
+        if not self._sublattice_indices:
             import sys
-            sys.exit('Indizes of sublattice are not porperly assigned, look at the documatation.')
+            sys.exit('Indices of sublattice are not porperly assigned, look at the documatation.')
 
         self._models = []
-        if not models:
+        if models:
             self._models = models
 
         self._ensemble = ensemble
@@ -146,17 +147,24 @@ class MonteCarlo():
             struc = initial_structure
 
         e = self._em.predict(struc)
+        
+        traj = MonteCarloTrajectory(self._scell, filename=self._filename, models = self._models)
+    
+        if self._models:
+            key_value_pairs = {}
+            for m, mo in enumerate(self._models):
+                key_value_pairs.update({mo.property: mo.predict(struc)})
+            traj.add_decoration(0, e, [], decoration = struc.decor, key_value_pairs = key_value_pairs)
 
-        traj = MonteCarloTrajectory(self._scell, filename=self._filename, models=self._models)
-
-        traj.add_decoration(struc, 0, e)
+        else:
+            traj.add_decoration(0, e, [], decoration = struc.decor)
 
         for i in range(1,nmc+1):
-            indizes_list = []
+            indices_list = []
             for j in range(self._no_of_swaps):
                 #ind1,ind2 = struc.swap_random_binary(self._sublattice_index)
-                ind1, ind2 = struc.swap_random(self._sublattice_indizes)
-                indizes_list.append([ind1, ind2])
+                ind1, ind2 = struc.swap_random(self._sublattice_indices)
+                indices_list.append([ind1, ind2])
 
             e1 = self._em.predict(struc)
 
@@ -172,19 +180,23 @@ class MonteCarlo():
 
             if accept_swap:
                 e=e1
-                traj.add_decoration(struc, i, e)
+
+                if self._models:
+                    key_value_pairs = {}
+                    for m, mo in enumerate(self._models):
+                        key_value_pairs.update({mo.property: mo.predict(struc)})
+                    traj.add_decoration(i, e, indices_list, key_value_pairs = key_value_pairs)
+
+                else:
+                    traj.add_decoration(i, e, indices_list)
 
             else:
-                for j in range(self._no_of_swaps):
-                    m=int(self._no_of_swaps-j)
-                    struc.swap(indizes_list[j][0],indizes_list[j][1])
-
-        if (len(self._models) > 0) and (traj._save_decoration == True):
-            traj.calculate_model_properties(self._models)
+                for j in range(self._no_of_swaps-1,-1,-1):
+                    struc.swap(indices_list[j][0],indices_list[j][1])
 
         if write_to_db:
             traj.write_to_file()
-            struc.serialize(fname="finalstructure-mc.json")
+            struc.serialize(fname=self._last_visited_structure_name)
 
         return traj
 
@@ -239,28 +251,31 @@ class MonteCarloTrajectory():
         for mo in models:
             if mo not in self._models:
                 self._models.append(mo)
-
+        print(self._models)
         sx = Structure(self._scell, decoration = self._trajectory[0]['decoration'])
+        print(sx.decor)
 
         for t,tr in enumerate(self._trajectory):
-            sx.update_decoration(decoration = tr['decoration'])
+            indices_list = tr['swapped_positions']
+            for j in range(len(indices_list)):
+                sx.swap(indices_list[j][0],indices_list[j][1])
+                
             sdict={}
-            for m,mo in enumerate(models):
+            for m,mo in enumerate(self._models):
                 sdict.update({mo.property: mo.predict(sx)})
 
             self._trajectory[t]['key_value_pairs'] = sdict
+        print(sx.decor)
 
-    def add_decoration(self, struc, step, energy, key_value_pairs={}):
+    def add_decoration(self, step, energy, indices_list, decoration = None, key_value_pairs = {}):
         """Add decoration of Structure object to the trajectory
         """
-        if self._save_decoration :
-            self._trajectory.append(dict([('sampling_step_no',int(step)), ('decoration', deepcopy(struc.decor) ), ('model_total_energy',energy), ('key_value_pairs', key_value_pairs)]))
-
+        
+        if indices_list:
+            self._trajectory.append(dict([('sampling_step_no', int(step)), ('model_total_energy', energy), ('swapped_positions', indices_list), ('key_value_pairs', key_value_pairs)]))
         else:
-            if len(self._models) > 0:
-                for m,mo in enumerate(self._models):
-                    key_value_pairs.update({mo._prop: mo.predict_prop(sx)})
-            self._trajectory.append(dict([('sampling_step_no',int(step)), ('model_total_energy',energy), ('key_value_pairs', key_value_pairs)]))
+            self._trajectory.append(dict([('sampling_step_no', int(step)), ('model_total_energy', energy), ('swapped_positions', [[0,0]]) , ('decoration', deepcopy(decoration)), ('key_value_pairs', key_value_pairs)]))
+            
 
     def get_sampling_step_entry_at_step(self, nstep):
         """Get the dictionary at the n-th sampling step in the trajectory
@@ -280,35 +295,6 @@ class MonteCarloTrajectory():
         """Get the dictionary (entry) at index nid in the trajectory
         """
         return self._trajectory[nid]
-
-    def get_decoration_at_step(self, nstep):
-        """Get the decoration at the n-th sampling step in the trajectory.
-
-        **Parameters:**
-
-        ``nstep``: int
-            sampling step
-
-        **Returns:**
-            Decoration at the n-th sampling step.
-
-        """
-        return self.get_decoration(self.get_id_sampling_step(nstep))
-
-    def get_decoration(self, nid):
-        """Get the decoration at index nid in the trajectory
-
-        **Parameters:**
-
-        ``nid``: integer
-            index of structure in the trajectory.
-
-        **Returns:**
-            Decoration at index nid.
-
-        """
-        return self._trajectory[nid]['decoration']
-
 
     def get_structure_at_step(self, nstep):
         """Get the structure from decoration at the n-th sampling step in the trajectory.
@@ -336,7 +322,14 @@ class MonteCarloTrajectory():
             Structure object at index nid.
 
         """
-        return Structure(self._scell, decoration = self._trajectory[nid]['decoration'])
+        sx = Structure(self._scell, decoration = deepcopy(self._trajectory[0]['decoration']))
+
+        for t,tr in enumerate(self._trajectory[0:nid+1]):
+            indices_list = tr['swapped_positions']
+            for j in range(len(indices_list)):
+                sx.swap(indices_list[j][0],indices_list[j][1])
+                
+        return sx
 
     def get_lowest_non_degenerate_structure(self):
         """Get lowest-non-degenerate structure from trajectory
@@ -375,12 +368,12 @@ class MonteCarloTrajectory():
         try:
             nid = np.where(steps == nstep)[0][0]
         except ValueError:
-            if nstep>steps[-1]:
-                nid=steps[-1]
+            if nstep > steps[-1]:
+                nid = steps[-1]
             else:
                 for i,s in enumerate(steps):
-                    if s>nstep:
-                        nid=steps[i-1]
+                    if s > nstep:
+                        nid = steps[i-1]
         return nid
 
     def get_model_total_energies(self):
@@ -400,11 +393,17 @@ class MonteCarloTrajectory():
     def get_model_properties(self, prop):
         """Get property of all entries in the trajectory.
         """
-        props = []
-        for tr in self._trajectory:
-            props.append(tr['key_value_pairs'][prop])
-
-        return np.asarray(props)
+        try:
+            props = []
+            for tr in self._trajectory:
+                props.append(tr['key_value_pairs'][prop])
+            return np.asarray(props)
+        
+        except:
+            if prop not in [mo.property for mo in self._models]:
+                print("Model of property is not given, look at the documentation.")
+            else:
+                print("Property not calculated, look at the documentation.")
 
     def get_model_property(self, nid, prop):
         """Get property of entry at index nid in trajectory.
@@ -412,7 +411,7 @@ class MonteCarloTrajectory():
         return self._trajectory[nid]['key_value_pairs'][prop]
 
     def get_id(self, prop, value):
-        """Get indizes of entries in trajectory which contain the key-value pair trajectory.
+        """Get indices of entries in trajectory which contain the key-value pair trajectory.
 
         **Parameters:**
 
@@ -428,7 +427,7 @@ class MonteCarloTrajectory():
         """
         arrayid = []
 
-        if prop in ['sampling_step_no','decoration','model_total_energy']:
+        if prop in ['sampling_step_no','swapped_positions','model_total_energy','decoration']:
             for i,tr in enumerate(self._trajectory):
                 if tr[prop] == value:
                     arrayid.append(i)
@@ -448,12 +447,21 @@ class MonteCarloTrajectory():
 
         trajdic={}
         for j,dec in enumerate(self._trajectory):
-            if self._save_decoration:
+            dec_string=""
+            if j == 0:
                 dec['decoration'] = dec['decoration'].tolist()
+            #print(dec)
+            #jsonindent=2, sort_keys=True
+
+
+            #dsw=[]
+            #for sw in dec['swapped_positions']:
+            #    dsw.append(sw.tolist())
+            #dec['swapped_positions'] = dsw
             trajdic.update({str(j):dec})
 
-        with open(self._filename, 'w') as outfile:
-            json.dump(trajdic,outfile, indent=1, separators=(',',':'))
+        with open(self._filename, 'w', encoding='utf-8') as outfile:
+            json.dump(trajdic,outfile, cls=NumpyEncoder, indent = 1 , separators = (',',':'))
 
     def read(self, filename = None , append = False):
         """Read trajectory from file (default filename trajectory.json)
@@ -472,6 +480,20 @@ class MonteCarloTrajectory():
 
         for key in data_keys:
             tr = data[str(key)]
-            if self._save_decoration:
-                tr['decoration'] = np.asarray(tr['decoration'],dtype=np.int8)
+            #tr['swapped_positions'] = np.asarray(tr['decoration'],dtype=np.int8)
             self._trajectory.append(tr)
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """ Special json encoder for numpy types 
+    https://stackoverflow.com/questions/26646362/numpy-array-is-not-json-serializable/32850511
+
+    """
+    def default(self, obj):
+        if isinstance(obj, (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64)):
+            return int(obj)
+        elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
+            return float(obj)
+        elif isinstance(obj,(np.ndarray,)): 
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
