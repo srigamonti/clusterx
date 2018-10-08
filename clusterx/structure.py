@@ -87,7 +87,7 @@ class Structure(SuperCell):
         if fname is None:
             fname = "structure.json"
 
-        write(fname,images=self.atoms,format=fmt) 
+        write(fname,images=self.atoms,format=fmt)
 
         self._fname = fname
 
@@ -108,7 +108,7 @@ class Structure(SuperCell):
             site_type = site_types[0]
         else:
             site_type = np.random.choice(site_types)
-            
+
         len_subs = len(self.idx_subs[site_type])
         if len_subs > 2:
             sigma_swap = np.sort(np.random.choice(np.arange(len_subs), 2, replace=False))
@@ -116,7 +116,7 @@ class Structure(SuperCell):
             sigma_swap = np.arange(len_subs)
 
         return self.swap_random_binary(site_type, sigma_swap = sigma_swap)
-    
+
     def swap(self, ridx1, ridx2):
         sigma1=self.sigmas[ridx1]
         sigma2=self.sigmas[ridx2]
@@ -125,6 +125,7 @@ class Structure(SuperCell):
         self.sigmas[ridx2] = sigma1
         self.decor[ridx1] = self.sites[ridx1][sigma2]
         self.decor[ridx2] = self.sites[ridx2][sigma1]
+        self.atoms.set_atomic_numbers(self.decor)
 
     def update_decoration(self, decoration):
         """Update decoration of the structure object
@@ -161,7 +162,7 @@ class Structure(SuperCell):
         nsites_per_type = self.get_nsites_per_type()
         #sigmas = self.get_sigmas()
         numbers = self.get_atomic_numbers()
-        
+
         for site_type in substutitional_site_types:
             concentration[site_type] = []
             nsites = nsites_per_type[site_type]
