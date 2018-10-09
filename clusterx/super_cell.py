@@ -61,7 +61,7 @@ class SuperCell(ParentLattice):
     def as_dict(self):
         """Return dictionary with object definition
         """
-        plat_dict = super(SuperCell, self._plat).as_dict()
+        plat_dict = self._plat.as_dict()
         self._dict = {"tmat":self._p,"parent_lattice":plat_dict}
 
         return self._dict

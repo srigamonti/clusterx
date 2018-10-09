@@ -2,6 +2,7 @@
 import random
 #from clusterx.structures_set import StructuresSet
 from clusterx.structure import Structure
+
 ## packages needed for MonteCarloTrajectory
 import json
 import numpy as np
@@ -265,9 +266,9 @@ class MonteCarloTrajectory():
 
     """
 
-    def __init__(self, scell, filename="trajectory.json", **kwargs):
+    def __init__(self, scell = None, filename="trajectory.json", **kwargs):
         self._trajectory = []
-
+        
         self._scell = scell
         self._save_nsteps = kwargs.pop("save_nsteps",10)
         self._write_no = 0
@@ -304,7 +305,7 @@ class MonteCarloTrajectory():
         if indices_list:
             self._trajectory.append(dict([('sampling_step_no', int(step)), ('model_total_energy', energy), ('swapped_positions', indices_list), ('key_value_pairs', key_value_pairs)]))
         else:
-            self._trajectory.append(dict([('sampling_step_no', int(step)), ('model_total_energy', energy), ('swapped_positions', [[0,0]]) , ('decoration', deepcopy(decoration)), ('key_value_pairs', key_value_pairs)]))
+            self._trajectory.append(dict([('sampling_step_no', int(step)), ('model_total_energy', energy), ('swapped_positions', [[0,0]]) , ('decoration', deepcopy(decoration)), ('super_cell_definition', self._scell.as_dict()), ('key_value_pairs', key_value_pairs)]))
 
 
     def get_sampling_step_entry_at_step(self, nstep):
@@ -503,7 +504,7 @@ class MonteCarloTrajectory():
         for j,dec in enumerate(self._trajectory):
             trajdic.update({str(j):dec})
 
-        with open(self._filename, 'a+', encoding='utf-8') as outfile:
+        with open(self._filename, 'w+', encoding='utf-8') as outfile:
             json.dump(trajdic,outfile, cls=NumpyEncoder, indent = 2 , separators = (',',':'))
 
     def read(self, filename = None , append = False):
@@ -525,6 +526,20 @@ class MonteCarloTrajectory():
             tr = data[str(key)]
             self._trajectory.append(tr)
 
+        if self._scell is None:
+            from ase.atoms import Atoms
+            from clusterx.parent_lattice import ParentLattice
+            from clusterx.super_cell import SuperCell
+            _trajz = self._trajectory[0]
+
+            nsp = sorted([int(el) for el in set(_trajz['super_cell_definition']['parent_lattice']['sites'])])
+            species = []
+            for n in nsp:
+                species.append(_trajz['super_cell_definition']['parent_lattice']['sites'][str(n)])
+
+            _plat = ParentLattice(atoms = Atoms(positions = _trajz['super_cell_definition']['parent_lattice']['positions'], cell = _trajz['super_cell_definition']['parent_lattice']['unit_cell'], numbers=np.zeros(len(species)), pbc = np.asarray(_trajz['super_cell_definition']['parent_lattice']['pbc'])), sites  = np.asarray(species), pbc = np.asarray(_trajz['super_cell_definition']['parent_lattice']['pbc']))
+            self._scell = SuperCell(_plat, np.asarray(_trajz['super_cell_definition']['tmat']))
+            
 
 class NumpyEncoder(json.JSONEncoder):
     """ Special json encoder for numpy types

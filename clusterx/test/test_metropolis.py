@@ -199,16 +199,19 @@ def test_metropolis():
     isok2 = isclose(rbondskk,bondskk) and isclose(rbondsii,bondsii)
     assert(isok2)
 
+    trajx = MonteCarloTrajectory()
+
     if os.path.isfile("trajectory.json"):
-        traj.read()
+        trajx.read()
+        print(trajx._trajectory[0])
+        print(trajx._scell._plat.get_nsites_per_type())
+        
+        energies2 = trajx.get_model_total_energies()
+        steps2 = trajx.get_sampling_step_nos()
 
-        energies2 = traj.get_model_total_energies()
-        steps2 = traj.get_sampling_step_nos()
-
-        struc2 = traj.get_structure_at_step(steps2[2])
+        struc2 = trajx.get_structure_at_step(steps2[2])
         decoration2 = struc2.decor
-        last_sampling_entry2 = traj.get_sampling_step_entry_at_step(steps2[-1])
-        #last_sampling_entry2['key_value_pairs']={}
+        last_sampling_entry2 = trajx.get_sampling_step_entry_at_step(steps2[-1])
 
         isok3 = isclose(renergies, energies2) and dict_compare(last_sampling_entry,last_sampling_entry2) and isclose(decoration2,decoration1) and isclose(steps2,rsteps)
 
