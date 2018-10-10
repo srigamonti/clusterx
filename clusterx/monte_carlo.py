@@ -40,6 +40,10 @@ class MonteCarlo():
     ``filename``: string
         Trajectory can be written to a json file with the name ``filename``.
 
+    ``last_visited_structure_name``: string
+        The structure visited at the final step of the sampling can be saved to a json file. 
+        Default name: last-visited-structure-mc.json
+
     ``sublattice_indices``: list of int
         Sampled sublattices. Each index in the list gives the site_type defining the sublattice.
         If the list is empty (default), the site_type of the sublattices are read from ``nsubs``
@@ -65,9 +69,7 @@ class MonteCarlo():
 
         SR: notes from using the class by reading the documentation:
             * Initialization with both nsubs and sublattice_indices is confusing: What happens if I specify a site_type in sublattice_indices and do not put the corresponding sitetype in nsubs, or viceversa?
-            * Doc for last_visited_structure_name missing
             * ensemble parameter needs more extensive documentation. Is a chemical potential defined at some point to adjust average concentration in grandcanonical?
-
 
 
     """
@@ -89,7 +91,6 @@ class MonteCarlo():
                         if all([ subs == 0 for subs in self._nsubs[key] ]):
                             self._sublattice_indices.remove(key)
 
-
             except AttributeError:
                 raise AttributeError("Index of sublattice is not properly assigned, look at the documentation.")
         else:
@@ -97,7 +98,9 @@ class MonteCarlo():
 
         if not self._sublattice_indices:
             import sys
-            sys.exit('Indices of sublattice are not porperly assigned, look at the documatation.')
+            sys.exit('Indices of sublattice are not correctly assigned, look at the documatation.')
+                
+
 
         self._models = []
         if models:
@@ -113,20 +116,18 @@ class MonteCarlo():
              steps at scale factor :math:`k_B T`.  The total energy
              :math:`E` for visited structures in the sampling is
              calculated from the Model ``energ_model`` of the total
-             energy. During the sampling, a new structure is accepted
-             with the probability given by::
-
-                 :math:`min \big( 1, \exp( - E / ( k_B T ) ) \big)`
+             energy. During the sampling, a new structure at step i is accepted
+             with the probability given by :math:`\min( 1, \exp( - (E_i - E_{i-1})/(k_B T)) )`
 
         **Parameters**:
 
         ``scale_factor``: list of floats
             From the product of the float in the list, the scale factor for the energy :math:`k_B T` is obtained.
 
-            E.g. [:math:`k_B`, :math:`T`] with :math:`k_B`:: as the Boltzmann constant and :math:`T` as the temperature for the Metropolis simulation.
+            E.g. [:math:`k_B`, :math:`T`] with :math:`k_B` as the Boltzmann constant and :math:`T` as the temperature for the Metropolis simulation.
             The product :math:`k_B T` defines the scale factor in the Boltzmann distribution.
 
-            Note: The unit of the product :math:`k_B T` and :math:`T` must be the same as for the total energy :math:`E`.
+            Note: The unit of the product :math:`k_B T` must be the same as for the total energy :math:`E`.
 
         ``nmc``: integer
             Number of sampling steps
@@ -147,10 +148,6 @@ class MonteCarlo():
         **Returns**: MonteCarloTrajectory object
             Trajecotoy containing all decorations visited during the sampling
 
-        .. todo::
-            SR: Notes from user perspective:
-                * scale_factor:  it says "The unit of the product kT and T must be". I think it should be "The unit of the product kT must be...".
-                * math works only inline. Fix Description math.
         """
         import math
         from clusterx.utils import poppush
