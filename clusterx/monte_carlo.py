@@ -62,6 +62,12 @@ class MonteCarlo():
 
         Properties given in models are not calculated during the sampling.
 
+        SR: notes from using the class by reading the documentation:
+            * Initialization with both nsubs and sublattice_indices is confusing: What happens if I specify a site_type in sublattice_indices and do not put the corresponding sitetype in nsubs, or viceversa?
+            * Doc for last_visited_structure_name missing
+            * ensemble parameter needs more extensive documentation. Is a chemical potential defined at some point to adjust average concentration in grandcanonical?
+
+
 
     """
 
@@ -99,7 +105,7 @@ class MonteCarlo():
         self._ensemble = ensemble
         self._no_of_swaps = no_of_swaps
 
-    def metropolis(self, scale_factor, nmc, initial_decoration = None, write_to_db = False):
+    def metropolis(self, scale_factor, nmc, initial_decoration = None, write_to_db = False, acceptance_ratio = None):
         """Perform metropolis simulation
 
         **Description**: Perfom Metropolis sampling for nmc sampling
@@ -113,7 +119,7 @@ class MonteCarlo():
 
         **Parameters**:
 
-        ``scale_factors``: list of floats
+        ``scale_factor``: list of floats
             From the product of the float in the list, the scale factor for the energy :math:`k_B T` is obtained.
 
             E.g. [:math:`k_B`, :math:`T`] with :math:`k_B`:: as the Boltzmann constant and :math:`T` as the temperature for the Metropolis simulation.
@@ -128,14 +134,25 @@ class MonteCarlo():
             Sampling starts with the structure defined by this Structure object.
             If initial_structure = None: Sampling starts with a structure randomly generated.
 
-        ``write_to_db``: boolean (default: False)                                                                                                                                                                                                                             
+        ``write_to_db``: boolean (default: False)
             Whether to add the structure to the json database (see ``filename`` parameter for MonteCarloTrajectory initialization)
+
+        ``acceptance_ratio``: float (default: None)
+            Real number between 0 and 100. Represents the percentage of accepted moves.
+            If not ``None``, the initial temperature will be adjusted to match the given
+            acceptance ratio. The acceptance ratio during the simulation is computed using
+            the last 100 moves.
 
         **Returns**: MonteCarloTrajectory object
             Trajecotoy containing all decorations visited during the sampling
 
+        .. todo::
+            SR: Notes from user perspective:
+                * scale_factor:  it says "The unit of the product kT and T must be". I think it should be "The unit of the product kT must be...".
+                * math works only inline. Fix Description math.
         """
         import math
+        from clusterx.utils import poppush
 
         scale_factor_product = 1
         for el in scale_factor:
@@ -145,11 +162,11 @@ class MonteCarlo():
             struc = Structure(self._scell, initial_decoration)
         else:
             struc = self._scell.gen_random(self._nsubs)
-        
+
         e = self._em.predict(struc)
-        
+
         traj = MonteCarloTrajectory(self._scell, filename=self._filename, models = self._models)
-    
+
         if self._models:
             key_value_pairs = {}
             for m, mo in enumerate(self._models):
@@ -158,6 +175,11 @@ class MonteCarlo():
 
         else:
             traj.add_decoration(0, e, [], decoration = struc.decor)
+
+        if acceptance_ratio:
+            nar = 100
+            ar = acceptance_ratio
+            hist = np.zeros(nar,dtype=int)
 
         for i in range(1,nmc+1):
             indices_list = []
@@ -190,9 +212,21 @@ class MonteCarlo():
                 else:
                     traj.add_decoration(i, e, indices_list)
 
+                if acceptance_ratio:
+                    ar = poppush(hist,1)
+
             else:
                 for j in range(self._no_of_swaps-1,-1,-1):
                     struc.swap(indices_list[j][0],indices_list[j][1])
+
+                if acceptance_ratio:
+                    ar = poppush(hist,0)
+
+            if acceptance_ratio:
+                if i%10 == 0 and i >= nar:
+                    scale_factor_product *= math.exp((acceptance_ratio/100.0-ar)/10.0)
+                #if acceptance_ratio and i%100 == 0:
+                #    print(i,acceptance_ratio,ar*100,scale_factor_product)
 
         if write_to_db:
             traj.write_to_file()
@@ -230,7 +264,7 @@ class MonteCarloTrajectory():
         Improve appearance of json file - decoration array in one line
 
     """
-    
+
     def __init__(self, scell, filename="trajectory.json", **kwargs):
         self._trajectory = []
 
@@ -250,12 +284,12 @@ class MonteCarloTrajectory():
                 self._models.append(mo)
 
         sx = Structure(self._scell, decoration = self._trajectory[0]['decoration'])
-        
+
         for t,tr in enumerate(self._trajectory):
             indices_list = tr['swapped_positions']
             for j in range(len(indices_list)):
                 sx.swap(indices_list[j][0],indices_list[j][1])
-                
+
             sdict={}
             for m,mo in enumerate(self._models):
                 sdict.update({mo.property: mo.predict(sx)})
@@ -266,12 +300,12 @@ class MonteCarloTrajectory():
     def add_decoration(self, step, energy, indices_list, decoration = None, key_value_pairs = {}):
         """Add decoration of Structure object to the trajectory
         """
-        
+
         if indices_list:
             self._trajectory.append(dict([('sampling_step_no', int(step)), ('model_total_energy', energy), ('swapped_positions', indices_list), ('key_value_pairs', key_value_pairs)]))
         else:
             self._trajectory.append(dict([('sampling_step_no', int(step)), ('model_total_energy', energy), ('swapped_positions', [[0,0]]) , ('decoration', deepcopy(decoration)), ('key_value_pairs', key_value_pairs)]))
-            
+
 
     def get_sampling_step_entry_at_step(self, nstep):
         """Get the dictionary at the n-th sampling step in the trajectory
@@ -318,13 +352,37 @@ class MonteCarloTrajectory():
             Structure object at index nid.
 
         """
+        decoration = deepcopy(self._trajectory[0]['decoration'])
+
+        for t,tr in enumerate(self._trajectory[0:nid+1]):
+            indices_list = tr['swapped_positions']
+            for j in range(len(indices_list)):
+                idx1 = indices_list[j][0]
+                idx2 = indices_list[j][1]
+                decoration[idx1], decoration[idx2] = decoration[idx2], decoration[idx1]
+
+        sx = Structure(self._scell, decoration = decoration)
+        return sx
+
+    def get_structure2(self, nid):
+        """Get structure from entry at index nid in the trajectory
+
+        **Parameters:**
+
+        ``nid``: integer
+            index of structure in the trajectory.
+
+        **Returns:**
+            Structure object at index nid.
+
+        """
         sx = Structure(self._scell, decoration = deepcopy(self._trajectory[0]['decoration']))
 
         for t,tr in enumerate(self._trajectory[0:nid+1]):
             indices_list = tr['swapped_positions']
             for j in range(len(indices_list)):
                 sx.swap(indices_list[j][0],indices_list[j][1])
-                
+
         return sx
 
     def get_lowest_non_degenerate_structure(self):
@@ -347,7 +405,7 @@ class MonteCarloTrajectory():
         for tr in self._trajectory:
             steps.append(tr['sampling_step_no'])
 
-        return np.asarray(steps)
+        return np.int_(steps)
 
     def get_sampling_step_no(self, nid):
         """Get sampling step number of entry at index nid in trajectory
@@ -364,11 +422,12 @@ class MonteCarloTrajectory():
             nid = np.where(steps == nstep)[0][0]
         except:
             if nstep > steps[-1]:
-                nid = steps[-1]
+                nid = len(steps)-1
             else:
                 for i,s in enumerate(steps):
                     if s > nstep:
-                        nid = steps[i-1]
+                        nid = i-1
+                        break
         return nid
 
     def get_model_total_energies(self):
@@ -393,7 +452,7 @@ class MonteCarloTrajectory():
             for tr in self._trajectory:
                 props.append(tr['key_value_pairs'][prop])
             return np.asarray(props)
-        
+
         except:
             if prop not in [mo.property for mo in self._models]:
                 print("Model of property is not given, look at the documentation.")
@@ -468,7 +527,7 @@ class MonteCarloTrajectory():
 
 
 class NumpyEncoder(json.JSONEncoder):
-    """ Special json encoder for numpy types 
+    """ Special json encoder for numpy types
     https://stackoverflow.com/questions/26646362/numpy-array-is-not-json-serializable/32850511
 
     """
@@ -477,6 +536,6 @@ class NumpyEncoder(json.JSONEncoder):
             return int(obj)
         elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
             return float(obj)
-        elif isinstance(obj,(np.ndarray,)): 
+        elif isinstance(obj,(np.ndarray,)):
             return obj.tolist()
         return json.JSONEncoder.default(self, obj)

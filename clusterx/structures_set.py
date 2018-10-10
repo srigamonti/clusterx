@@ -134,9 +134,11 @@ class StructuresSet():
         """Creates ASE's JSON db object containing the structures in the structures set
         """
         from subprocess import call
-        from ase.db.jsondb import JSONDatabase
+        #from ase.db.jsondb import JSONDatabase
+        from ase.db import connect
         call(["rm","-f",json_db_name])
-        atoms_db = JSONDatabase(filename=json_db_name)
+        #atoms_db = JSONDatabase(filename=json_db_name)
+        atoms_db = connect(json_db_name)
         for s in self:
             atoms_db.write(s.get_atoms())
 
