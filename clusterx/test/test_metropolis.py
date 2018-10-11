@@ -93,7 +93,7 @@ def test_metropolis():
     print("Tags: ", tags)
 
     nsubs={0:[16]}
-    cemodelE=Model(corcE, ecis=np.multiply(ecisE, multT))
+    cemodelE=Model(corcE, "energy", ecis=np.multiply(ecisE, multT))
 
     ecisBkk= [
         2.45499482287556,
@@ -113,8 +113,8 @@ def test_metropolis():
     corcBonds = CorrelationsCalculator("binary-linear", plat, cpoolBonds)
 
     multB=[1,24,16,6]
-    cemodelBkk=Model(corcBonds, ecis=np.multiply(ecisBkk, multB), property = 'bond_kk')
-    cemodelBii=Model(corcBonds, ecis=np.multiply(ecisBii, multB), property = 'bond_ii')
+    cemodelBkk=Model(corcBonds, 'bond_kk', ecis=np.multiply(ecisBkk, multB))
+    cemodelBii=Model(corcBonds, 'bond_ii', ecis=np.multiply(ecisBii, multB))
 
     mc = MonteCarlo(cemodelE, scellE, nsubs, models = [cemodelBkk, cemodelBii])
 
@@ -123,7 +123,7 @@ def test_metropolis():
     kb = float(3.16681009610757e-6)
     # temperature in K
     temp = 1000
-    
+
     print("Samplings steps",nmc)
     print("Temperature",temp)
 
@@ -162,7 +162,7 @@ def test_metropolis():
     renergies = [-77652.59664207128, -77652.61184305252, -77652.62022569243, -77652.61912760629, -77652.62737663009, -77652.63009501049, -77652.63158443688, -77652.64240196907, -77652.64240196907, -77652.64348105107, -77652.64714764676, -77652.64959679516, -77652.64959679516, -77652.65458138083, -77652.66173231734, -77652.65458138083, -77652.65946542152, -77652.6702829537, -77652.66812810961, -77652.67298251796, -77652.66622624162]
     rlast_decoration = np.int8([14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56])
     rlast_sampling_entry = {'sampling_step_no': 50, 'model_total_energy': -77652.66622624162, 'swapped_positions': [[5, 43]], 'key_value_pairs': {'bond_kk': 2.49116603472051, 'bond_ii': 2.397621971688995}}
-    
+
     isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and dict_compare(last_sampling_entry,rlast_sampling_entry) and isclose(rlast_decoration,last_structure.decor)
     assert(isok1)
 
@@ -174,7 +174,7 @@ def test_metropolis():
     bondsii2 = traj.get_model_properties('bond_ii')
     print(bondskk2)
     print(bondsii2)
-        
+
     traj.calculate_model_properties([cemodelBkk,cemodelBii])
 
     print("Cluster expansion models for the properties: ",[mo.property for mo in traj._models])
@@ -199,16 +199,19 @@ def test_metropolis():
     isok2 = isclose(rbondskk,bondskk) and isclose(rbondsii,bondsii)
     assert(isok2)
 
+    trajx = MonteCarloTrajectory()
+
     if os.path.isfile("trajectory.json"):
-        traj.read()
+        trajx.read()
+        print(trajx._trajectory[0])
+        print(trajx._scell._plat.get_nsites_per_type())
+        
+        energies2 = trajx.get_model_total_energies()
+        steps2 = trajx.get_sampling_step_nos()
 
-        energies2 = traj.get_model_total_energies()
-        steps2 = traj.get_sampling_step_nos()
-
-        struc2 = traj.get_structure_at_step(steps2[2])
+        struc2 = trajx.get_structure_at_step(steps2[2])
         decoration2 = struc2.decor
-        last_sampling_entry2 = traj.get_sampling_step_entry_at_step(steps2[-1])
-        #last_sampling_entry2['key_value_pairs']={}
+        last_sampling_entry2 = trajx.get_sampling_step_entry_at_step(steps2[-1])
 
         isok3 = isclose(renergies, energies2) and dict_compare(last_sampling_entry,last_sampling_entry2) and isclose(decoration2,decoration1) and isclose(steps2,rsteps)
 
@@ -216,7 +219,7 @@ def test_metropolis():
         isok3 = False
 
     assert(isok3)
-    
+
     #Clathrate ternary `Si_{46-x-y} Al_x Vac_y Ba_{8-z} Sr_z`
     print("\nSampling in `Si_{46-x-y} Al_x Vac_y Ba_{8-z} Sr_z`")
     sub2 = crystal(['X','X','X','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
@@ -258,7 +261,7 @@ def test_metropolis():
         23.09
     ]
 
-    cemodelE2=Model(corcE2, ecis=np.multiply(ecisE2, smultT2))
+    cemodelE2=Model(corcE2, "energy2",ecis=np.multiply(ecisE2, smultT2))
 
     # Sampling in sublattice with index 0 - ternary sampling
     print("Start sampling in sublattice with index 0:")
@@ -276,7 +279,7 @@ def test_metropolis():
     energies2 = traj2.get_model_total_energies()
     last_entry2 = traj2.get_sampling_step_entry_at_step(steps2[-1])
     last_structure2 = traj2.get_structure_at_step(steps2[-1])
-    
+
     traj2.write_to_file()
 
     print("Configurations accepted at steps: ",steps2)
@@ -316,4 +319,3 @@ def test_metropolis():
 
     isok5 = isclose(rsteps3,steps3) and isclose(renergies3, energies3)
     assert(isok5)
-    
