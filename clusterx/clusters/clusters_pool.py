@@ -305,6 +305,94 @@ class ClustersPool():
         return clsets
 
 
+    def gen_clusters2(self):
+        from clusterx.super_cell import SuperCell
+        from itertools import product, combinations
+        npoints = self._npoints
+        radii = self._radii
+
+        scell = self._cpool_scell
+        natoms = scell.get_natoms()
+        sites = scell.get_sites()
+        satoms = scell.get_substitutional_sites()
+        nsatoms = len(satoms)
+        idx_subs = scell.get_idx_subs()
+        tags = scell.get_tags()
+        distances = scell.get_all_distances(mic=False)
+
+        # Check if supercell is large enough
+
+        dmax = np.amax(distances)
+        if len(radii) > 0:
+            for i in range(len(radii)):
+                if radii[i]<0:
+                    self._radii[i] = dmax
+
+        radii = self._radii
+
+        if len(radii) > 0:
+            if np.amax(radii) > dmax:
+                sys.exit("Containing supercell is too small to find clusters pool. Read documentation for ClustersPool class.")
+        else:
+            radii = np.zeros(len(npoints))
+            for i, npts in enumerate(npoints):
+                if npts == 0 or npts == 1:
+                    radii[i] = 0.0
+                else:
+                    radii[i] = dmax
+        count = 0
+        clrs_full = []
+        for npts,radius in zip(npoints,radii):
+
+            for idxs in combinations(satoms,npts):
+                sites_arrays = []
+                for idx in idxs:
+                    sites_arrays.append(sites[idx][1:])
+                for ss in product(*sites_arrays):
+                    #tc0 = time.time()
+                    #cl = Cluster(idxs, ss, scell, distances=distances)
+                    _cl = Cluster(idxs, ss)
+                    #if cl.radius <= radius:
+                    if _cl.get_radius(distances) <= radius:
+                        clrs_full.append(_cl)
+
+        for _cl in clrs_full:
+            orbit, mult = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),distances=distances)
+            orbit.sort()
+            self._cpool.append(orbit[0])
+            self._multiplicities.append(mult)
+
+            for __cl in orbit:
+                if __cl in clrs_full:
+                    clrs_full.remove(__cl)
+
+            print("---",len(clrs_full),"---")
+        """
+                    count += 1
+                    print("-----",count,"------")
+                    if _cl.get_radius(distances) <= radius:
+                        if _cl not in clrs_full:
+                            #clrs_full.append(_cl)
+                            #cl = Cluster(idxs, ss, scell, distances=distances)
+                            orbit, mult = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),distances=distances)
+
+                            for __cl in orbit:
+                                __cl.set_radius(distances)
+                            orbit.sort() # this avoids adding to the returned pool non-compact translations of the cluster.
+                            #self._cpool.append(orbit[0])
+                            #self._cpool.append(Cluster(orbit[0].get_idxs(),orbit[0].get_nrs(),scell,distances))
+                            self._cpool.append(orbit[0])
+                            #self._cpool.append(cl)
+                            self._multiplicities.append(mult)
+                            for __cl in orbit:
+                                clrs_full.append(__cl)
+                            print("cluster nr: ",len(self._cpool), " added, out of", len(clrs_full))
+
+        """
+        print("out of big loop, sorting\n")
+        self._cpool, self._multiplicities = (list(t) for t in zip(*sorted(zip(self._cpool, self._multiplicities))))
+        print("finished sorting\n")
+
     def gen_clusters(self):
         from clusterx.super_cell import SuperCell
         from itertools import product, combinations
@@ -340,6 +428,7 @@ class ClustersPool():
                     radii[i] = 0.0
                 else:
                     radii[i] = dmax
+        #count = 0
         for npts,radius in zip(npoints,radii):
             clrs_full = []
             for idxs in combinations(satoms,npts):
@@ -347,13 +436,15 @@ class ClustersPool():
                 for idx in idxs:
                     sites_arrays.append(sites[idx][1:])
                 for ss in product(*sites_arrays):
-                    tc0 = time.time()
+                    #tc0 = time.time()
                     #cl = Cluster(idxs, ss, scell, distances=distances)
                     _cl = Cluster(idxs, ss)
                     #if cl.radius <= radius:
+                    #count += 1
+                    #print("-----",count,"------")
                     if _cl.get_radius(distances) <= radius:
                         if _cl not in clrs_full:
-                            clrs_full.append(_cl)
+                            #clrs_full.append(_cl)
                             #cl = Cluster(idxs, ss, scell, distances=distances)
                             orbit, mult = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),distances=distances)
 
@@ -367,9 +458,12 @@ class ClustersPool():
                             self._multiplicities.append(mult)
                             for __cl in orbit:
                                 clrs_full.append(__cl)
+                            #print("cluster nr: ",len(self._cpool), " added, out of", len(clrs_full))
 
+
+        #print("out of big loop, sorting\n")
         self._cpool, self._multiplicities = (list(t) for t in zip(*sorted(zip(self._cpool, self._multiplicities))))
-
+        #print("finished sorting\n")
 
     def get_cpool_scell(self):
         return self._cpool_scell
@@ -478,6 +572,24 @@ class ClustersPool():
 
     def get_cpool_atoms(self):
         return self._cpool_atoms
+
+    def get_cpool_structures(self):
+        """Get array of structure objects representing the clusters in the clusters pool
+        """
+        from clusterx.structure import Structure
+
+        strs = []
+        nrs0 = self.get_cpool_scell().get_atomic_numbers()
+        for cluster in self._cpool:
+            cl_nrs = cluster.get_nrs()
+            cl_idxs = cluster.get_idxs()
+            nrs = nrs0.copy()
+            for i,idx in enumerate(cl_idxs):
+                nrs[idx] = cl_nrs[i]
+
+            strs.append(Structure(super_cell=self.get_cpool_scell(), decoration = nrs))
+
+        return strs
 
     def get_cluster_orbit(self, super_cell=None, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans = False, cluster_index=None):
         """

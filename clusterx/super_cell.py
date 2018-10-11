@@ -61,7 +61,7 @@ class SuperCell(ParentLattice):
     def as_dict(self):
         """Return dictionary with object definition
         """
-        plat_dict = super(SuperCell, self._plat).as_dict()
+        plat_dict = self._plat.as_dict()
         self._dict = {"tmat":self._p,"parent_lattice":plat_dict}
 
         return self._dict
@@ -103,7 +103,7 @@ class SuperCell(ParentLattice):
             The nsubs argument must have the format ``{site_type0:[nsub01,nsub02,...], site_type1: ...}``
             where ``site_type#`` and ``nsub##`` are, respectively, an integer indicating
             the site type index and the number of substitutional species of each kind, as returned by
-            ``SuperCell.get_idx_subs``.
+            ``SuperCell.get_idx_subs()``.
         """
         import clusterx.structure
 

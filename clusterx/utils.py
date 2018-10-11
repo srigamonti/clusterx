@@ -829,3 +829,14 @@ class PolynomialBasis():
         if M > self.m:
             self.basis_function_set[str(M)] = self.construct(M)
         return self.basis_function_set[str(M)][int(alpha)].evaluate(sigma)
+
+
+def poppush(x, val):
+    """Left-shift array one position and writes new value to the right. Returns average.
+
+    **Parameters:**
+    ``x``: numpy array
+    ``val``: int or float
+    """
+    x[:-1] = x[1:]; x[-1] = val
+    return x.mean()

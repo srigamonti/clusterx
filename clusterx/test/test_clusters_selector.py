@@ -81,10 +81,9 @@ def test_clusters_selector():
     #fitter_model = Fitter(method = "skl_LinearRegression")
 
 
-    clsel = ClustersSelector('linreg', cpool, clusters_sets = "size")
-    #clsel = ClustersSelector('linreg', cpool, clusters_sets = "combinations", nclmax=2)
-    #clsel = ClustersSelector('linreg', cpool, clusters_sets = "size+combinations", nclmax = 2, set0 = [2,2])
-    clsel.select_clusters(comat,energies)
+    clsel = ClustersSelector(method='linreg', clusters_sets = "size")
+    
+    clsel.select_clusters(strset,cpool,"energy")
 
     #clsets.get_subpool(clsel.get_optimal_clusters())
 
@@ -140,5 +139,5 @@ def test_clusters_selector():
     """
 
     #isok = isclose(rclset,clset) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(recis, clsel.opt_ecis) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
-    isok = isclose(rclset,clset) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) 
+    isok = isclose(rclset,clset) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs)
     assert(isok)
