@@ -2,6 +2,7 @@
 import random
 #from clusterx.structures_set import StructuresSet
 from clusterx.structure import Structure
+
 ## packages needed for MonteCarloTrajectory
 import json
 import numpy as np
@@ -39,6 +40,10 @@ class MonteCarlo():
     ``filename``: string
         Trajectory can be written to a json file with the name ``filename``.
 
+    ``last_visited_structure_name``: string
+        The structure visited at the final step of the sampling can be saved to a json file. 
+        Default name: last-visited-structure-mc.json
+
     ``sublattice_indices``: list of int
         Sampled sublattices. Each index in the list gives the site_type defining the sublattice.
         If the list is empty (default), the site_type of the sublattices are read from ``nsubs``
@@ -64,9 +69,7 @@ class MonteCarlo():
 
         SR: notes from using the class by reading the documentation:
             * Initialization with both nsubs and sublattice_indices is confusing: What happens if I specify a site_type in sublattice_indices and do not put the corresponding sitetype in nsubs, or viceversa?
-            * Doc for last_visited_structure_name missing
             * ensemble parameter needs more extensive documentation. Is a chemical potential defined at some point to adjust average concentration in grandcanonical?
-
 
 
     """
@@ -88,7 +91,6 @@ class MonteCarlo():
                         if all([ subs == 0 for subs in self._nsubs[key] ]):
                             self._sublattice_indices.remove(key)
 
-
             except AttributeError:
                 raise AttributeError("Index of sublattice is not properly assigned, look at the documentation.")
         else:
@@ -96,7 +98,9 @@ class MonteCarlo():
 
         if not self._sublattice_indices:
             import sys
-            sys.exit('Indices of sublattice are not porperly assigned, look at the documatation.')
+            sys.exit('Indices of sublattice are not correctly assigned, look at the documatation.')
+                
+
 
         self._models = []
         if models:
@@ -112,20 +116,18 @@ class MonteCarlo():
              steps at scale factor :math:`k_B T`.  The total energy
              :math:`E` for visited structures in the sampling is
              calculated from the Model ``energ_model`` of the total
-             energy. During the sampling, a new structure is accepted
-             with the probability given by::
-
-                 :math:`min \big( 1, \exp( - E / ( k_B T ) ) \big)`
+             energy. During the sampling, a new structure at step i is accepted
+             with the probability given by :math:`\min( 1, \exp( - (E_i - E_{i-1})/(k_B T)) )`
 
         **Parameters**:
 
         ``scale_factor``: list of floats
             From the product of the float in the list, the scale factor for the energy :math:`k_B T` is obtained.
 
-            E.g. [:math:`k_B`, :math:`T`] with :math:`k_B`:: as the Boltzmann constant and :math:`T` as the temperature for the Metropolis simulation.
+            E.g. [:math:`k_B`, :math:`T`] with :math:`k_B` as the Boltzmann constant and :math:`T` as the temperature for the Metropolis simulation.
             The product :math:`k_B T` defines the scale factor in the Boltzmann distribution.
 
-            Note: The unit of the product :math:`k_B T` and :math:`T` must be the same as for the total energy :math:`E`.
+            Note: The unit of the product :math:`k_B T` must be the same as for the total energy :math:`E`.
 
         ``nmc``: integer
             Number of sampling steps
@@ -146,10 +148,6 @@ class MonteCarlo():
         **Returns**: MonteCarloTrajectory object
             Trajecotoy containing all decorations visited during the sampling
 
-        .. todo::
-            SR: Notes from user perspective:
-                * scale_factor:  it says "The unit of the product kT and T must be". I think it should be "The unit of the product kT must be...".
-                * math works only inline. Fix Description math.
         """
         import math
         from clusterx.utils import poppush
@@ -265,9 +263,9 @@ class MonteCarloTrajectory():
 
     """
 
-    def __init__(self, scell, filename="trajectory.json", **kwargs):
+    def __init__(self, scell = None, filename="trajectory.json", **kwargs):
         self._trajectory = []
-
+        
         self._scell = scell
         self._save_nsteps = kwargs.pop("save_nsteps",10)
         self._write_no = 0
@@ -304,7 +302,7 @@ class MonteCarloTrajectory():
         if indices_list:
             self._trajectory.append(dict([('sampling_step_no', int(step)), ('model_total_energy', energy), ('swapped_positions', indices_list), ('key_value_pairs', key_value_pairs)]))
         else:
-            self._trajectory.append(dict([('sampling_step_no', int(step)), ('model_total_energy', energy), ('swapped_positions', [[0,0]]) , ('decoration', deepcopy(decoration)), ('key_value_pairs', key_value_pairs)]))
+            self._trajectory.append(dict([('sampling_step_no', int(step)), ('model_total_energy', energy), ('swapped_positions', [[0,0]]) , ('decoration', deepcopy(decoration)), ('super_cell_definition', self._scell.as_dict()), ('key_value_pairs', key_value_pairs)]))
 
 
     def get_sampling_step_entry_at_step(self, nstep):
@@ -503,8 +501,8 @@ class MonteCarloTrajectory():
         for j,dec in enumerate(self._trajectory):
             trajdic.update({str(j):dec})
 
-        with open(self._filename, 'a+', encoding='utf-8') as outfile:
-            json.dump(trajdic,outfile, cls=NumpyEncoder, indent = 1 , separators = (',',':'))
+        with open(self._filename, 'w+', encoding='utf-8') as outfile:
+            json.dump(trajdic,outfile, cls=NumpyEncoder, indent = 2 , separators = (',',':'))
 
     def read(self, filename = None , append = False):
         """Read trajectory from file (default filename trajectory.json)
@@ -525,6 +523,20 @@ class MonteCarloTrajectory():
             tr = data[str(key)]
             self._trajectory.append(tr)
 
+        if self._scell is None:
+            from ase.atoms import Atoms
+            from clusterx.parent_lattice import ParentLattice
+            from clusterx.super_cell import SuperCell
+            _trajz = self._trajectory[0]
+
+            nsp = sorted([int(el) for el in set(_trajz['super_cell_definition']['parent_lattice']['sites'])])
+            species = []
+            for n in nsp:
+                species.append(_trajz['super_cell_definition']['parent_lattice']['sites'][str(n)])
+
+            _plat = ParentLattice(atoms = Atoms(positions = _trajz['super_cell_definition']['parent_lattice']['positions'], cell = _trajz['super_cell_definition']['parent_lattice']['unit_cell'], numbers=np.zeros(len(species)), pbc = np.asarray(_trajz['super_cell_definition']['parent_lattice']['pbc'])), sites  = np.asarray(species), pbc = np.asarray(_trajz['super_cell_definition']['parent_lattice']['pbc']))
+            self._scell = SuperCell(_plat, np.asarray(_trajz['super_cell_definition']['tmat']))
+            
 
 class NumpyEncoder(json.JSONEncoder):
     """ Special json encoder for numpy types
@@ -532,10 +544,13 @@ class NumpyEncoder(json.JSONEncoder):
 
     """
     def default(self, obj):
-        if isinstance(obj, (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64)):
+        if isinstance(obj, list):
+            return obj.tolist()
+        elif isinstance(obj, (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64)):
             return int(obj)
         elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
             return float(obj)
         elif isinstance(obj,(np.ndarray,)):
             return obj.tolist()
+
         return json.JSONEncoder.default(self, obj)
