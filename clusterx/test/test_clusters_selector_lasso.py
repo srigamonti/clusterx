@@ -79,10 +79,11 @@ def test_clusters_selector_lasso():
     strset.set_calculator(EMT2())
     energies = strset.calculate_property()
 
-    clsel = ClustersSelector('lasso', cpool, sparsity_max=0.10, sparsity_min=0.01)
+    clsel = ClustersSelector(method='lasso', sparsity_max=0.10, sparsity_min=0.01)
     #clsel = ClustersSelector('combinations', cpool, fitter_size = "linreg", nclmax=2)
     #clsel = ClustersSelector('size+combinations', cpool, fitter_size = "linreg", nclmax = 2, set0 = [2,1])
-    clsel.select_clusters(comat,energies)
+    #clsel.select_clusters(comat,energies)
+    clsel.select_clusters(strset,cpool,"energy")
 
     #clsets.get_subpool(clsel.get_optimal_clusters())
 
@@ -129,6 +130,6 @@ def test_clusters_selector_lasso():
     isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(recis, clsel.ecis) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
     """
     #isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
-    isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) 
+    isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs)
 
     assert(isok)

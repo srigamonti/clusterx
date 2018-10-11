@@ -335,7 +335,7 @@ class StructuresSet():
             ats = st.get_atoms()
             ats.set_calculator(calc)
             props[i] = ats.get_potential_energy()
-        self._props = props
+        self._props[prop] = props
         return props
 
         """
