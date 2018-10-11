@@ -11,7 +11,11 @@ class CorrelationsCalculator():
     **Parameters:**
 
     ``basis``: string
-        cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric``, ``polynomial``, and ``chebyshev``.
+        |  cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric``, ``polynomial``, and ``chebyshev``.
+        |  ``binary-linear``: highly interpretable, non-orthogonal basis functions for binary compounds 
+        |  ``trigonomentric``: orthonormal basis; constructed from sine and cosine functions; based on: Axel van de Walle, CALPHAD 33, 266 (2009)
+        |  ``polynomial``: orthonormal basis; uses orthogonalized polynomials
+        |  ``chebyshev``: orthonormsl basis; chebyshev polynomials for symmetrized sigmas (sigma in {-m/2, ..., 0, ..., m/2 }); based on: J.M. Sanchez, Physica 128A, 334-350 (1984)
     ``parent_lattice``: ParentLattice object
         the parent lattice of the cluster expansion.
     ``clusters_pool``: ClustersPool object
@@ -64,13 +68,13 @@ class CorrelationsCalculator():
             return sigma
 
         if self.basis == "polynomial":
+            
 
             return self.basis_set.evaluate(alpha, sigma, m)
 
         if self.basis == "chebyshev":
             # Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984).
-            # Same results as for "trigonometric" in case of a binary.
-            # WARNING: Forces that sigma = +-m, +-(m-1), ..., +- 1, (0), i.e. explicitly sigma = -1,0,1
+            # Equivalent to polynomial basis.
 
             def _map_sigma(sigma, m):
                 # Maps sigma = 0, 1, 2, ..., M-1 to -M/2 <= sigma <= M/2.
