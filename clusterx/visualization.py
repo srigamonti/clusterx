@@ -346,7 +346,8 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     pred_cv = cvs["Predictions-CV"]
 
     frconc = sset.get_concentrations()
-    frconc_enum = sset_enum.get_concentrations()
+    if sset_enum is not None:
+        frconc_enum = sset_enum.get_concentrations()
 
 
     fig = plt.figure()
