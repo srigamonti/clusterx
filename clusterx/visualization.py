@@ -287,7 +287,6 @@ def plot_predictions_vs_target(sset,cemodel, prop_name):
 
     plt.ylim(e_min-e_range/8,e_max+e_range/10)
     plt.xlim(e_min-e_range/8,e_max+e_range/10)
-1
     plt.xticks(fontsize=ticksize)
     plt.yticks(fontsize=ticksize)
     ax = plt.gca()
@@ -351,7 +350,7 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     frconc = sset.get_concentrations()
     if sset_enum is not None:
         frconc_enum = sset_enum.get_concentrations()
-    if sset_gss in not None:
+    if sset_gss is not None:
         frconc_gss = sset_gss.get_concentrations()
 
 
