@@ -745,9 +745,8 @@ class PolynomialBasisFunction():
             self.exponentials.append(Exponential(order, coefficient))
 
     def clear_exponentials(self):
-        rmlist = []
         for exponential in self.exponentials:
-            if abs(exponential.coefficient) < 10**(-10):
+            if abs(exponential.coefficient) < 10**(-15):
                 self.exponentials.remove(exponential)
 
     def evaluate(self, x):
