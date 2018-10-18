@@ -2,6 +2,9 @@ from clusterx.super_cell import SuperCell
 from ase import Atoms
 import numpy as np
 from ase.data import atomic_numbers as an
+import time
+
+import bisect
 
 class Structure(SuperCell):
     """Structure class
@@ -35,6 +38,11 @@ class Structure(SuperCell):
     def __init__(self, super_cell, decoration = None, decoration_symbols=None, sigmas = None):
         self.scell = super_cell
         self.sites = super_cell.get_sites()
+        self.time0=0
+        self.time1=0
+        self.time2=0
+        self.time3=0
+        
         if sigmas is None:
             if decoration_symbols is None:
                 self.decor = decoration
@@ -56,10 +64,26 @@ class Structure(SuperCell):
             for idx, sigma in enumerate(sigmas):
                 self.decor[idx] = self.sites[idx][sigma]
                 self.ems[idx] = len(self.sites[idx])
+                
+        #self.idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == 0] and tags[index] == site_type]
+        print(super_cell.get_substitutional_sites())
+        print(super_cell.get_tags())
 
         super(Structure,self).__init__(super_cell.get_parent_lattice(),super_cell.get_transformation())
         self.atoms = Atoms(numbers = self.decor, positions = super_cell.get_positions(), tags = super_cell.get_tags(), cell = super_cell.get_cell(),pbc = super_cell.get_pbc())
         #self.set_atomic_numbers(self.decor)
+        self.idxs = {}
+        tags=self.get_tags()
+        sublats = self.get_idx_subs()
+        print(sublats)
+        for key in sublats.keys():
+            idxs=[]
+            for i,el in enumerate(sublats[key]):
+                print(el)
+                idx =  [index for index in range(len(self.decor)) if self.sigmas[index] == i and tags[index] == key]
+                idxs.append(idx)
+            self.idxs.update({ key:idxs})
+
 
     def get_sigmas(self):
         """Return decoration array in terms of sigma variables.
@@ -93,13 +117,25 @@ class Structure(SuperCell):
 
     def swap_random_binary(self, site_type, sigma_swap = [0,1]):
         tags=self.get_tags()
-        idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[0] and tags[index] == site_type]
-        idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[1] and tags[index] == site_type]
-        ridx1 = np.random.choice(idx1)
-        ridx2 = np.random.choice(idx2)
-
+        t1 = time.process_time_ns()
+        #idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[0] and tags[index] == site_type]
+        
+        t2 = time.process_time_ns()
+        self.time0 += t2-t1
+        t1 = time.process_time_ns()
+        #idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[1] and tags[index] == site_type]
+        t2 = time.process_time_ns()
+        self.time1 += t2-t1
+        t1 = time.process_time_ns()
+        ridx1 = np.random.choice(self.idxs[site_type][sigma_swap[0]])
+        ridx2 = np.random.choice(self.idxs[site_type][sigma_swap[1]])
+        t2 = time.process_time_ns()
+        self.time2 += t2-t1
+        t1 = time.process_time_ns()
         self.swap(ridx1,ridx2)
-
+        t2 = time.process_time_ns()
+        self.time3 += t2-t1
+        
         return ridx1,ridx2
 
     def swap_random(self, site_types):
@@ -123,10 +159,25 @@ class Structure(SuperCell):
 
         self.sigmas[ridx1] = sigma2
         self.sigmas[ridx2] = sigma1
+        
         self.decor[ridx1] = self.sites[ridx1][sigma2]
         self.decor[ridx2] = self.sites[ridx2][sigma1]
         self.atoms.set_atomic_numbers(self.decor)
+        for key in self.idxs.keys():
+            for i,sigma in enumerate(self.idxs[key]):
+                if ridx1 in sigma:
+                    site_type=key
+                    x1 = i
+                elif ridx2 in sigma:
+                    x2 = i
 
+        self.idxs[site_type][x1].remove(ridx1)                    
+        #bisect.insort(self.idxs[site_type][x1],ridx2)
+        self.idxs[site_type][x1].append(ridx2)
+        self.idxs[site_type][x2].remove(ridx2)
+        #bisect.insort(self.idxs[site_type][x2],ridx1)
+        self.idxs[site_type][x2].append(ridx1)
+        
     def update_decoration(self, decoration):
         """Update decoration of the structure object
         """
