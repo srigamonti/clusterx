@@ -81,6 +81,9 @@ def test_cluster_correlations():
     test_orthonormality(corrcal_poly.site_basis_function, symmetric = False)
     print('Time for polynomial basis', time.time() - t)
 
+    print('\nPolynomial basis functions (m=3):')
+    corrcal_poly.basis_set.print_basis_functions(3)
+
     print ("\n\n========Test writes========")
     print (test_cluster_correlations.__doc__)
     scell = cpool.get_cpool_scell()
