@@ -81,12 +81,24 @@ def test_cluster_correlations():
     test_orthonormality(corrcal_poly.site_basis_function, symmetric = False)
     print('Time for polynomial basis', time.time() - t)
 
+    print("Test binary-linear basis")
+
+    bin_plat = ParentLattice(pri, substitutions = [su1], pbc = pbc)
+    bin_cpool = ClustersPool(bin_plat, npoints=[1,2], radii=[0,1.2])
+    coorrcal_bin_lin = CorrelationsCalculator("binary-linear", bin_plat, bin_cpool)
+
+    scell_bin = SuperCell(bin_plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
+    structure_bin = Structure(scell1,[1,1,1,6,1,1,6,1,1])
+    corrs_bin = coorrcal_bin_lin.get_cluster_correlations(structure_bin)
+
     print ("\n\n========Test writes========")
     print (test_cluster_correlations.__doc__)
     scell = cpool.get_cpool_scell()
     cpool.write_clusters_db(cpool.get_cpool(),scell,"test_cluster_correlations_cpool.json")
+    bin_cpool.write_clusters_db(bin_cpool.get_cpool(),scell_bin,"test_cluster_correlations_cpool_bin.json")
     structure1.serialize(fmt="json",fname="test_cluster_correlations_structure_1.json")
     structure2.serialize(fmt="json",fname="test_cluster_correlations_structure_2.json")
+    structure_bin.serialize(fmt="json",fname="test_cluster_correlations_structure_bin.json")
 
     #print(corrs1_poly)
     #print(corrs1_tri)
@@ -98,3 +110,5 @@ def test_cluster_correlations():
 
     assert np.allclose([-0.33333333, 0., 0., 0.81649658, 0.47140452, -0.33333333, -0.5, -0., -0.5], corrs2_poly,atol=1e-5)
     assert np.allclose(corrs1_poly, corrs2_poly, atol=1e-5)
+
+    assert np.allclose(corrs_bin, [0.6666666, 0.33333333], atol=1e-5)

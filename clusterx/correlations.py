@@ -4,6 +4,8 @@ import sys
 from clusterx.symmetry import get_scaled_positions
 from clusterx.utils import PolynomialBasis
 
+from time import time
+
 class CorrelationsCalculator():
     """
     Correlations calculator object.
@@ -12,7 +14,7 @@ class CorrelationsCalculator():
 
     ``basis``: string
         |  cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric``, ``polynomial``, and ``chebyshev``.
-        |  ``binary-linear``: highly interpretable, non-orthogonal basis functions for binary compounds 
+        |  ``binary-linear``: highly interpretable, non-orthogonal basis functions for binary compounds
         |  ``trigonomentric``: orthonormal basis; constructed from sine and cosine functions; based on: Axel van de Walle, CALPHAD 33, 266 (2009)
         |  ``polynomial``: orthonormal basis; uses orthogonalized polynomials
         |  ``chebyshev``: orthonormsl basis; chebyshev polynomials for symmetrized sigmas (sigma in {-m/2, ..., 0, ..., m/2 }); based on: J.M. Sanchez, Physica 128A, 334-350 (1984)
@@ -21,7 +23,9 @@ class CorrelationsCalculator():
     ``clusters_pool``: ClustersPool object
         The clusters pool to be used in the calculator
     """
-    def __init__(self, basis, parent_lattice, clusters_pool):
+    def __init__(self, basis, parent_lattice, clusters_pool, lookup = True):
+        self.timings = {'importing':0, 'corrloop':0, 'cf_loop':0, 'cf_evaluations':0, 'site_basis_functions' : 0}
+        self.calls = 0
         self.basis = basis
         self._plat = parent_lattice
         # For each supercell (with corresponding transformation matrix) a set of cluster orbit set is created
@@ -34,7 +38,21 @@ class CorrelationsCalculator():
             self.basis_set = PolynomialBasis()
         elif self.basis == 'chebyshev':
             self.basis_set = PolynomialBasis(symmetric = True)
+        if lookup:
+            self._lookup_table = self._get_lookup_table()
+        self.lookup = lookup
 
+    def _get_lookup_table(self):
+        idx_subs = self._plat.get_idx_subs()
+        max_m = max([len(idx_subs[x]) for x in idx_subs])
+        if max_m < 2:
+            raise ValueError("No substitutional sites.")
+        lookup_table = np.empty((max_m,max_m,max_m))
+        for m in range(max_m):
+            for alpha in range(m+1):
+                for sigma in range(m+1):
+                    lookup_table[m][alpha][sigma] = self.site_basis_function(alpha, sigma, m+1)
+        return lookup_table
 
     def site_basis_function(self, alpha, sigma, m):
         """
@@ -52,8 +70,13 @@ class CorrelationsCalculator():
             number of components of the sublattice
 
         """
+
         if self.basis == "trigonometric":
             # Axel van de Walle, CALPHAD 33, 266 (2009)
+
+            if m == 2:
+                return -np.power(-1,sigma)
+
             if alpha == 0:
                 return 1
 
@@ -68,7 +91,6 @@ class CorrelationsCalculator():
             return sigma
 
         if self.basis == "polynomial":
-            
 
             return self.basis_set.evaluate(alpha, sigma, m)
 
@@ -93,9 +115,16 @@ class CorrelationsCalculator():
         cluster_atomic_idxs = cluster.get_idxs()
         cluster_alphas = cluster.alphas
         cf = 1.0
+        #if self.basis == 'binary-linear':
+        #    cf = np.prod([structure_sigmas[x] for x in cluster_atomic_idxs])
         for cl_alpha, cl_idx in zip(cluster_alphas,cluster_atomic_idxs):
-            cf *= self.site_basis_function(cl_alpha, structure_sigmas[cl_idx], ems[cl_idx])
-
+            t1 = time()
+            if self.lookup:
+                cf *= self._lookup_table[ems[cl_idx]-1][cl_alpha][structure_sigmas[cl_idx]]
+            else:
+                cf *= self.site_basis_function(cl_alpha, structure_sigmas[cl_idx], ems[cl_idx])
+            t2 = time()
+            self.timings['site_basis_functions'] += t2 - t1
         return cf
 
     def get_binary_random_structure_correlations(self,concentration):
@@ -124,7 +153,11 @@ class CorrelationsCalculator():
 
             remove multiplicities option and always give intensive correlations.
         """
+        self.calls += 1
+        t1 = time()
         from clusterx.utils import get_cl_idx_sc
+        t2 = time()
+        self.timings['importing'] += t2 - t1
         cluster_orbits = None
         if mc and self._cluster_orbits_set != []:
             cluster_orbits = self._cluster_orbits_set[0]
@@ -152,18 +185,24 @@ class CorrelationsCalculator():
             self._scells.append(scell) # Add supercell to calculator
             self._cluster_orbits_set.append(cluster_orbits) # Add corresponding cluster orbits
 
+        t1 = time()
         correlations = np.zeros(len(self._cpool))
         for icl, cluster in enumerate(self._cpool.get_cpool()):
             cluster_orbit = cluster_orbits[icl]
+            t3 = time()
             for cluster in cluster_orbit:
                 cf = self.cluster_function(cluster, structure.sigmas, structure.ems)
                 correlations[icl] += cf
+                self.timings['cf_evaluations'] += 1
+            t4 = time()
+            self.timings['cf_loop'] += t4 - t3
 
             if multiplicities is None:
                 correlations[icl] /= len(cluster_orbit)
             else:
                 correlations[icl] /= multiplicities[icl]
-
+        t2 = time()
+        self.timings['corrloop'] += t2 - t1
         return np.around(correlations,decimals=12)
 
     def get_correlation_matrix(self, structures_set, outfile = None):
@@ -188,3 +227,6 @@ class CorrelationsCalculator():
             f.close()
 
         return corrs
+
+    def get_timings(self):
+        return [self.timings, self.calls]
