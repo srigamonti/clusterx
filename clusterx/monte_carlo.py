@@ -74,7 +74,7 @@ class MonteCarlo():
 
     """
 
-    def __init__(self, energy_model, scell, nsubs, filename = "trajectory.json", last_visited_structure_name = "last-visited-structure-mc.json", sublattice_indices = [], models = [], no_of_swaps = 1, ensemble = "canonical"):
+    def __init__(self, energy_model, scell, nsubs, filename = "trajectory.json", last_visited_structure_name = "last-visited-structure-mc.json", sublattice_indices = [], models = [], no_of_swaps = 1, ensemble = "canonical", mc = False):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
@@ -108,6 +108,7 @@ class MonteCarlo():
 
         self._ensemble = ensemble
         self._no_of_swaps = no_of_swaps
+        self._mc = mc
 
     def metropolis(self, scale_factor, nmc, initial_decoration = None, write_to_db = False, acceptance_ratio = None):
         """Perform metropolis simulation
@@ -157,9 +158,9 @@ class MonteCarlo():
             scale_factor_product *= float(el)
 
         if initial_decoration is not None:
-            struc = Structure(self._scell, initial_decoration)
+            struc = Structure(self._scell, initial_decoration, mc = self._mc)
         else:
-            struc = self._scell.gen_random(self._nsubs)
+            struc = self._scell.gen_random(self._nsubs, mc = self._mc)
 
         e = self._em.predict(struc)
 
@@ -182,9 +183,12 @@ class MonteCarlo():
         for i in range(1,nmc+1):
             indices_list = []
             for j in range(self._no_of_swaps):
-                #ind1,ind2 = struc.swap_random_binary(self._sublattice_index)
-                ind1, ind2 = struc.swap_random(self._sublattice_indices)
-                indices_list.append([ind1, ind2])
+                if self._mc == True:
+                    ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
+                    indices_list.append([ind1, ind2, site_type, rindices])
+                else:
+                    ind1,ind2 = struc.swap_random(self._sublattice_indices)
+                    indices_list.append([ind1, ind2])
 
             e1 = self._em.predict(struc)
 
@@ -215,7 +219,10 @@ class MonteCarlo():
 
             else:
                 for j in range(self._no_of_swaps-1,-1,-1):
-                    struc.swap(indices_list[j][0],indices_list[j][1])
+                    if self._mc == True:
+                        struc.swap(indices_list[j][0],indices_list[j][1], site_type = indices_list[j][2], rindices = indices_list[j][3])
+                    else:
+                        struc.swap(indices_list[j][0],indices_list[j][1])
 
                 if acceptance_ratio:
                     ar = poppush(hist,0)

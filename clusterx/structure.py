@@ -35,7 +35,7 @@ class Structure(SuperCell):
 
     **Methods:**
     """
-    def __init__(self, super_cell, decoration = None, decoration_symbols=None, sigmas = None):
+    def __init__(self, super_cell, decoration = None, decoration_symbols=None, sigmas = None, mc = False):
         self.scell = super_cell
         self.sites = super_cell.get_sites()
         self.time0=0
@@ -67,23 +67,30 @@ class Structure(SuperCell):
                 
         #self.idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == 0] and tags[index] == site_type]
         print(super_cell.get_substitutional_sites())
-        print(super_cell.get_tags())
+        #print(super_cell.get_tags())
 
         super(Structure,self).__init__(super_cell.get_parent_lattice(),super_cell.get_transformation())
         self.atoms = Atoms(numbers = self.decor, positions = super_cell.get_positions(), tags = super_cell.get_tags(), cell = super_cell.get_cell(),pbc = super_cell.get_pbc())
         #self.set_atomic_numbers(self.decor)
-        self.idxs = {}
-        tags=self.get_tags()
-        sublats = self.get_idx_subs()
-        print(sublats)
-        for key in sublats.keys():
-            idxs=[]
-            for i,el in enumerate(sublats[key]):
-                print(el)
-                idx =  [index for index in range(len(self.decor)) if self.sigmas[index] == i and tags[index] == key]
-                idxs.append(idx)
-            self.idxs.update({ key:idxs})
 
+        self.mc = mc
+
+        if self.mc:
+            self._idxs = {}
+            self._comps = {}
+
+            tags=self.get_tags()
+            sublats = self.get_idx_subs()
+            for key in sublats.keys():
+                idxs=[]
+                lens=[]
+                for i,el in enumerate(sublats[key]):
+                    idx =  [index for index in range(len(self.decor)) if self.sigmas[index] == i and tags[index] == key]
+                    l = len(idx)
+                    idxs.append(idx)
+                    lens.append(l)
+                self._idxs.update({key:idxs})
+                self._comps.update({key:lens})     
 
     def get_sigmas(self):
         """Return decoration array in terms of sigma variables.
@@ -117,26 +124,34 @@ class Structure(SuperCell):
 
     def swap_random_binary(self, site_type, sigma_swap = [0,1]):
         tags=self.get_tags()
-        t1 = time.process_time_ns()
+
         #idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[0] and tags[index] == site_type]
+        if self.mc == True:
+            t1 = time.process_time_ns()
+            rind1 = np.random.choice(range(self._comps[site_type][sigma_swap[0]]))
+            rind2 = np.random.choice(range(self._comps[site_type][sigma_swap[1]]))
+            ridx1 = self._idxs[site_type][sigma_swap[0]][rind1]
+            ridx2 = self._idxs[site_type][sigma_swap[1]][rind2]
+            t2 = time.process_time_ns()
+            self.time0  = t2-t1
+            t1 = time.process_time_ns()
+            rindices = [sigma_swap,[rind1,rind2]]
+            t1 = time.process_time_ns()
+            self.swap(ridx1, ridx2, site_type = site_type,rindices = rindices)
+            t2 = time.process_time_ns()
+            self.time1 = t2-t1
+            print(ridx1,ridx2)
+            print(self._idxs[site_type])
+
+            return ridx1,ridx2,site_type,rindices
+        else:
+            idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[0] and tags[index] == site_type]
+            idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[1] and tags[index] == site_type]
+            ridx1 = np.random.choice(idx1)
+            ridx2 = np.random.choice(idx2)
         
-        t2 = time.process_time_ns()
-        self.time0 += t2-t1
-        t1 = time.process_time_ns()
-        #idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[1] and tags[index] == site_type]
-        t2 = time.process_time_ns()
-        self.time1 += t2-t1
-        t1 = time.process_time_ns()
-        ridx1 = np.random.choice(self.idxs[site_type][sigma_swap[0]])
-        ridx2 = np.random.choice(self.idxs[site_type][sigma_swap[1]])
-        t2 = time.process_time_ns()
-        self.time2 += t2-t1
-        t1 = time.process_time_ns()
-        self.swap(ridx1,ridx2)
-        t2 = time.process_time_ns()
-        self.time3 += t2-t1
-        
-        return ridx1,ridx2
+            self.swap(ridx1,ridx2)
+            return ridx1,ridx2
 
     def swap_random(self, site_types):
 
@@ -153,7 +168,7 @@ class Structure(SuperCell):
 
         return self.swap_random_binary(site_type, sigma_swap = sigma_swap)
 
-    def swap(self, ridx1, ridx2):
+    def swap(self, ridx1, ridx2, site_type = None, rindices = None):
         sigma1=self.sigmas[ridx1]
         sigma2=self.sigmas[ridx2]
 
@@ -163,21 +178,11 @@ class Structure(SuperCell):
         self.decor[ridx1] = self.sites[ridx1][sigma2]
         self.decor[ridx2] = self.sites[ridx2][sigma1]
         self.atoms.set_atomic_numbers(self.decor)
-        for key in self.idxs.keys():
-            for i,sigma in enumerate(self.idxs[key]):
-                if ridx1 in sigma:
-                    site_type=key
-                    x1 = i
-                elif ridx2 in sigma:
-                    x2 = i
 
-        self.idxs[site_type][x1].remove(ridx1)                    
-        #bisect.insort(self.idxs[site_type][x1],ridx2)
-        self.idxs[site_type][x1].append(ridx2)
-        self.idxs[site_type][x2].remove(ridx2)
-        #bisect.insort(self.idxs[site_type][x2],ridx1)
-        self.idxs[site_type][x2].append(ridx1)
-        
+        if site_type is not None:
+            self._idxs[site_type][rindices[0][0]][rindices[1][0]] = ridx2
+            self._idxs[site_type][rindices[0][1]][rindices[1][1]] = ridx1
+            
     def update_decoration(self, decoration):
         """Update decoration of the structure object
         """
