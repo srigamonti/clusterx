@@ -71,11 +71,11 @@ class CorrelationsCalculator():
 
         """
 
+        if hasattr(self, "_lookup_table") and self.basis != "binary-linear":
+            return self._lookup_table[m-1][alpha][sigma]
+
         if self.basis == "trigonometric":
             # Axel van de Walle, CALPHAD 33, 266 (2009)
-
-            if m == 2:
-                return -np.power(-1,sigma)
 
             if alpha == 0:
                 return 1
@@ -112,17 +112,12 @@ class CorrelationsCalculator():
 
 
     def cluster_function(self, cluster, structure_sigmas,ems):
-        cluster_atomic_idxs = cluster.get_idxs()
+        cluster_atomic_idxs = np.array(cluster.get_idxs())
         cluster_alphas = cluster.alphas
         cf = 1.0
-        #if self.basis == 'binary-linear':
-        #    cf = np.prod([structure_sigmas[x] for x in cluster_atomic_idxs])
         for cl_alpha, cl_idx in zip(cluster_alphas,cluster_atomic_idxs):
             t1 = time()
-            if self.lookup:
-                cf *= self._lookup_table[ems[cl_idx]-1][cl_alpha][structure_sigmas[cl_idx]]
-            else:
-                cf *= self.site_basis_function(cl_alpha, structure_sigmas[cl_idx], ems[cl_idx])
+            cf *= self.site_basis_function(cl_alpha, structure_sigmas[cl_idx], ems[cl_idx])
             t2 = time()
             self.timings['site_basis_functions'] += t2 - t1
         return cf
