@@ -163,7 +163,7 @@ def test_metropolis():
     rlast_decoration = np.int8([14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56])
     rlast_sampling_entry = {'sampling_step_no': 50, 'model_total_energy': -77652.66622624162, 'swapped_positions': [[5, 43]], 'key_value_pairs': {'bond_kk': 2.49116603472051, 'bond_ii': 2.397621971688995}}
 
-    isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and dict_compare(last_sampling_entry,rlast_sampling_entry) and isclose(rlast_decoration,last_structure.decor)
+    isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and dict_compare(last_sampling_entry, rlast_sampling_entry, tol=float(1e-4) ) and isclose(rlast_decoration,last_structure.decor)
     assert(isok1)
 
     traj._models =[]
@@ -296,7 +296,7 @@ def test_metropolis():
                                  13, 14, 13, 13, 13, 14, 14, 14, 14, 13, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 13, 14, 13, 14, 13, 13, 14,  0,  0, 14, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
                                  14, 14, 13, 14, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14,  0, 13, 14, 14, 13, 13, 14, 13, 14, 13, 13, 13, 14, 13, 13, 13, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
                                  14, 14, 14, 13, 14, 14, 13, 14, 14,  0, 14, 14, 13, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14,  0, 14, 14, 13, 14, 13,  0, 14, 13, 13, 14, 13, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56])
-    isok4 = isclose(rsteps2,steps2) and isclose(renergies2, energies2) and isclose(last_structure2.decor,rlast_decoration2) and dict_compare(last_entry2,rlast_entry2)
+    isok4 = isclose(rsteps2,steps2) and isclose(renergies2, energies2) and isclose(last_structure2.decor,rlast_decoration2) and dict_compare(last_entry2,rlast_entry2, tol=float(1.0e-4))
     assert(isok4)
 
     # Sampling in the sublattices with indizes 0 and 1 - ternary sampling in sublattice 0 and binary sampling in sublattice 1

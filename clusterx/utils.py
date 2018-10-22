@@ -65,6 +65,9 @@ def dict_compare(d1, d2, tol=None):
                         return False
 
         except TypeError:
+            #if isinstance(d1[k],dict):
+            #    for subk in d1[k].keys():
+                    
             if _is_integrable(d1[k]):
                 if d1[k]!=d2[k]:
                     return False
