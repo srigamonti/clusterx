@@ -25,7 +25,7 @@ class Model():
         self.property = property_name
 
     def predict(self,structure):
-        """Predic property with the optimal cluster expansion model.
+        """Predict property with the optimal cluster expansion model.
 
         **Parameters:**
 
@@ -41,6 +41,154 @@ class Model():
                 pv = pv + self.ecis[i]*corrs[i]
             return pv
 
+    def predict_swap_binary_linear(self,structure, ind1 = None, ind2 = None):
+        """Predict property difference with the optimal cluster expansion model only for binary-linear)
+
+        **Parameters:**
+
+        ``structure``: Structure object
+            structure object to calculate property difference to.
+
+        ``ind1``: int
+            index of first atom position has been swapped
+
+        ``ind2``: int
+            index of second atom position has been swapped
+
+        """
+        #corrsx = self.corrc.get_cluster_correlations(structure)
+        try:
+            cluster_orbits = self.corrc._cluster_orbits_set[0]
+        except AttributeError:
+            raise AttributeError("Cluster_orbit set is not predefined, look at the documentation.")
+        corrs = np.zeros(len(cluster_orbits))
+
+        sigma_ind1=structure.sigmas[ind1]
+        sigma_ind2=structure.sigmas[ind2]
+        
+        for icl, cluster_orbit in enumerate(cluster_orbits):
+            for cluster in cluster_orbit:
+                cluster_atomic_idxs = cluster.get_idxs()
+                if ind1 in cluster_atomic_idxs:
+                    #cluster_alphas = cluster.alphas
+                    sigmas = [structure.sigmas[cl_idx] for cl_idx in cluster_atomic_idxs]
+                    cf1 = np.prod(np.array(sigmas))
+                    sigmas[cluster_atomic_idxs.index(ind1)] = sigma_ind2
+                    if ind2 in cluster_atomic_idxs:
+                        sigmas[cluster_atomic_idxs.index(ind2)] = sigma_ind1
+                    cf0 = np.prod(np.array(sigmas))
+                    corrs[icl] += cf1
+                    corrs[icl] += (-1)*cf0
+                        
+                elif ind2 in cluster_atomic_idxs:
+                    #cluster_alphas = cluster.alphas
+                    sigmas = [structure.sigmas[cl_idx] for cl_idx in cluster_atomic_idxs]
+                    cf1 = np.prod(np.array(sigmas))
+                    sigmas[cluster_atomic_idxs.index(ind2)] = sigma_ind1
+                    cf0 = np.prod(np.array(sigmas))
+                    corrs[icl] += cf1
+                    corrs[icl] += (-1)*cf0
+
+                
+            corrs[icl] /= len(cluster_orbit)
+        corrs = np.around(corrs,decimals=12)
+            
+        if self.estimator is not None:
+            return self.estimator.predict(corrs.reshape(1,-1))[0]
+        else:
+            pv = 0
+            for i in range(len(corrs)):
+                pv = pv + self.ecis[i]*corrs[i]
+            return pv
+
+    def predict_swap(self, structure, ind1 = None, ind2 = None):
+        """Predict property difference with the optimal cluster expansion model. 
+
+        **Parameters:**
+
+        ``structure``: Structure object
+            structure object to calculate property difference to.
+
+        ``ind1``: int
+            index of first atom position has been swapped
+
+        ``ind2``: int
+            index of second atom position has been swapped
+
+        """
+        #corrsx = self.corrc.get_cluster_correlations(structure)
+        try:
+            cluster_orbits = self.corrc._cluster_orbits_set[0]
+        except AttributeError:
+            raise AttributeError("Cluster_orbit set is not predefined, look at the documentation.")
+        corrs = np.zeros(len(cluster_orbits))
+
+        sigma_ind1=structure.sigmas[ind1]
+        sigma_ind2=structure.sigmas[ind2]
+
+        ems_ind1=structure.ems[ind1]
+        ems_ind2=structure.ems[ind2]
+        
+        for icl, cluster_orbit in enumerate(cluster_orbits):
+            for cluster in cluster_orbit:
+                cluster_atomic_idxs = cluster.get_idxs()
+                contribute = False
+                if ind1 in cluster_atomic_idxs:
+                    cluster_alphas = cluster.alphas
+                    sigmas = [structure.sigmas[cl_idx] for cl_idx in cluster_atomic_idxs]
+                    ems = [structure.ems[cl_idx] for cl_idx in cluster_atomic_idxs]
+
+                    cf1 = 1.0
+                    for i,alpha in enumerate(cluster_alphas):
+                        cf1 *= self.corrc.site_basis_function(alpha, sigmas[i], ems[i])
+                        
+                    clind =cluster_atomic_idxs.index(ind1)
+                    sigmas[clind] = sigma_ind2
+                    ems[clind] = ems_ind2
+                    if ind2 in cluster_atomic_idxs:
+                        clind =cluster_atomic_idxs.index(ind2)
+                        sigmas[clind] = sigma_ind1
+                        ems[clind] = ems_ind1
+
+                    cf0 = 1.0
+                    for i,alpha in enumerate(cluster_alphas):
+                        cf0 *= self.corrc.site_basis_function(alpha, sigmas[i], ems[i])
+                    
+                    corrs[icl] += cf1
+                    corrs[icl] += (-1)*cf0
+                        
+                elif ind2 in cluster_atomic_idxs:
+                    cluster_alphas = cluster.alphas
+                    sigmas = [structure.sigmas[cl_idx] for cl_idx in cluster_atomic_idxs]
+                    ems = [structure.ems[cl_idx] for cl_idx in cluster_atomic_idxs]
+
+                    cf1 = 1.0
+                    for i,alpha in enumerate(cluster_alphas):
+                        cf1 *= self.corrc.site_basis_function(alpha, sigmas[i], ems[i])
+
+                    clind =cluster_atomic_idxs.index(ind2)
+                    sigmas[clind] = sigma_ind1
+                    ems[clind] = ems_ind1
+                    
+                    cf0 = 1.0
+                    for i,alpha in enumerate(cluster_alphas):
+                        cf0 *= self.corrc.site_basis_function(alpha, sigmas[i], ems[i])
+                    
+                    corrs[icl] += cf1
+                    corrs[icl] += (-1)*cf0
+                    
+            corrs[icl] /= len(cluster_orbit)
+        corrs = np.around(corrs,decimals=12)
+            
+        if self.estimator is not None:
+            return self.estimator.predict(corrs.reshape(1,-1))[0]
+        else:
+            pv = 0
+            for i in range(len(corrs)):
+                pv = pv + self.ecis[i]*corrs[i]
+            return pv
+
+        
     def get_errors(self,sset):
         """Compute RMSE, MAE and MaxAE for model in structure set.
         """

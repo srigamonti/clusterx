@@ -63,14 +63,18 @@ def dict_compare(d1, d2, tol=None):
                 else:
                     if not isclose(v1,v2,tol):
                         return False
-
+        
         except TypeError:
-            if _is_integrable(d1[k]):
-                if d1[k]!=d2[k]:
-                    return False
-            else:
-                return False
-
+            try:
+                if _is_integrable(d1[k]):
+                    if not isclose(d1[k],d2[k],tol):
+                        return False
+            except:
+                if type(d1[k]) is dict:
+                    for subkeys in d1[k].keys():
+                        if not isclose(d1[k][subkeys],d2[k][subkeys],tol):
+                            return False
+                
     return areeq
 
 

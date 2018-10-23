@@ -98,9 +98,7 @@ class MonteCarlo():
 
         if not self._sublattice_indices:
             import sys
-            sys.exit('Indices of sublattice are not correctly assigned, look at the documatation.')
-                
-
+            sys.exit('Indices of sublattice are not correctly assigned, look at the documatation.')                
 
         self._models = []
         if models:
@@ -147,7 +145,7 @@ class MonteCarlo():
             the last 100 moves.
 
         **Returns**: MonteCarloTrajectory object
-            Trajecotoy containing all decorations visited during the sampling
+            Trajectory containing all information of the structures visited during the sampling
 
         """
         import math
@@ -179,7 +177,15 @@ class MonteCarlo():
             nar = 100
             ar = acceptance_ratio
             hist = np.zeros(nar,dtype=int)
-
+            
+        if self._no_of_swaps > 1:
+            control_flag = False
+        else: 
+            errorcancel = 50000
+            x = 1
+            control_flag = True
+           
+            
         for i in range(1,nmc+1):
             indices_list = []
             for j in range(self._no_of_swaps):
@@ -189,19 +195,30 @@ class MonteCarlo():
                 else:
                     ind1,ind2 = struc.swap_random(self._sublattice_indices)
                     indices_list.append([ind1, ind2])
-
-            e1 = self._em.predict(struc)
+                
+            if control_flag:
+                x += 1
+                if (x > errorcancel):
+                    x = 0
+                    e1 = self._em.predict(struc)
+                else:
+                    #de = self._em.predict_swap_binary_linear(struc, ind1 = ind1 , ind2 = ind2)
+                    de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2)
+                    e1 = e+de
+            else:
+                e1 = self._em.predict(struc)
 
             if e >= e1:
                 accept_swap = True
                 boltzmann_factor = 0
             else:
                 boltzmann_factor = math.exp((e-e1)/(scale_factor_product))
+                    
                 if np.random.uniform(0,1) <= boltzmann_factor:
                     accept_swap = True
                 else:
                     accept_swap = False
-
+                    
             if accept_swap:
                 e = e1
 
@@ -232,12 +249,14 @@ class MonteCarlo():
                     scale_factor_product *= math.exp((acceptance_ratio/100.0-ar)/10.0)
                 #if acceptance_ratio and i%100 == 0:
                 #    print(i,acceptance_ratio,ar*100,scale_factor_product)
-
+                
         if write_to_db:
             traj.write_to_file()
             struc.serialize(fname=self._last_visited_structure_name)
 
         return traj
+
+
 
 class MonteCarloTrajectory():
     """MonteCarloTrajectory class

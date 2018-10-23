@@ -163,7 +163,7 @@ def test_metropolis():
     rlast_decoration = np.int8([14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56])
     rlast_sampling_entry = {'sampling_step_no': 50, 'model_total_energy': -77652.66622624162, 'swapped_positions': [[5, 43]], 'key_value_pairs': {'bond_kk': 2.49116603472051, 'bond_ii': 2.397621971688995}}
 
-    isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and dict_compare(last_sampling_entry,rlast_sampling_entry) and isclose(rlast_decoration,last_structure.decor)
+    isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and isclose(rlast_decoration,last_structure.decor) and dict_compare(last_sampling_entry, rlast_sampling_entry, tol=float(1e-7) )
     assert(isok1)
 
     traj._models =[]
@@ -203,8 +203,8 @@ def test_metropolis():
 
     if os.path.isfile("trajectory.json"):
         trajx.read()
-        print(trajx._trajectory[0])
-        print(trajx._scell._plat.get_nsites_per_type())
+        #print(trajx._trajectory[0])
+        #print(trajx._scell._plat.get_nsites_per_type())
         
         energies2 = trajx.get_model_total_energies()
         steps2 = trajx.get_sampling_step_nos()
@@ -213,7 +213,7 @@ def test_metropolis():
         decoration2 = struc2.decor
         last_sampling_entry2 = trajx.get_sampling_step_entry_at_step(steps2[-1])
 
-        isok3 = isclose(renergies, energies2) and dict_compare(last_sampling_entry,last_sampling_entry2) and isclose(decoration2,decoration1) and isclose(steps2,rsteps)
+        isok3 = isclose(renergies, energies2) and isclose(decoration2,decoration1) and isclose(steps2,rsteps) and dict_compare(last_sampling_entry,last_sampling_entry2, tol = float(1.0e-7))
 
     else:
         isok3 = False
@@ -296,7 +296,8 @@ def test_metropolis():
                                  13, 14, 13, 13, 13, 14, 14, 14, 14, 13, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 13, 14, 13, 14, 13, 13, 14,  0,  0, 14, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
                                  14, 14, 13, 14, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14,  0, 13, 14, 14, 13, 13, 14, 13, 14, 13, 13, 13, 14, 13, 13, 13, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
                                  14, 14, 14, 13, 14, 14, 13, 14, 14,  0, 14, 14, 13, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14,  0, 14, 14, 13, 14, 13,  0, 14, 13, 13, 14, 13, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56])
-    isok4 = isclose(rsteps2,steps2) and isclose(renergies2, energies2) and isclose(last_structure2.decor,rlast_decoration2) and dict_compare(last_entry2,rlast_entry2)
+
+    isok4 = isclose(rsteps2,steps2) and isclose(renergies2, energies2) and isclose(last_structure2.decor,rlast_decoration2) and dict_compare(last_entry2,rlast_entry2, tol=float(1.0e-7))
     assert(isok4)
 
     # Sampling in the sublattices with indizes 0 and 1 - ternary sampling in sublattice 0 and binary sampling in sublattice 1
