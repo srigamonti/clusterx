@@ -2,9 +2,6 @@ from clusterx.super_cell import SuperCell
 from ase import Atoms
 import numpy as np
 from ase.data import atomic_numbers as an
-import time
-
-import bisect
 
 class Structure(SuperCell):
     """Structure class
@@ -38,10 +35,6 @@ class Structure(SuperCell):
     def __init__(self, super_cell, decoration = None, decoration_symbols=None, sigmas = None, mc = False):
         self.scell = super_cell
         self.sites = super_cell.get_sites()
-        self.time0=0
-        self.time1=0
-        self.time2=0
-        self.time3=0
         
         if sigmas is None:
             if decoration_symbols is None:
@@ -73,9 +66,9 @@ class Structure(SuperCell):
         self.atoms = Atoms(numbers = self.decor, positions = super_cell.get_positions(), tags = super_cell.get_tags(), cell = super_cell.get_cell(),pbc = super_cell.get_pbc())
         #self.set_atomic_numbers(self.decor)
 
-        self.mc = mc
+        self._mc = mc
 
-        if self.mc:
+        if self._mc:
             self._idxs = {}
             self._comps = {}
 
@@ -90,7 +83,8 @@ class Structure(SuperCell):
                     idxs.append(idx)
                     lens.append(l)
                 self._idxs.update({key:idxs})
-                self._comps.update({key:lens})     
+                self._comps.update({key:lens})
+            print(self._idxs)
 
     def get_sigmas(self):
         """Return decoration array in terms of sigma variables.
@@ -125,23 +119,14 @@ class Structure(SuperCell):
     def swap_random_binary(self, site_type, sigma_swap = [0,1]):
         tags=self.get_tags()
 
-        #idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[0] and tags[index] == site_type]
-        if self.mc == True:
-            t1 = time.process_time_ns()
+        if self._mc == True:
             rind1 = np.random.choice(range(self._comps[site_type][sigma_swap[0]]))
             rind2 = np.random.choice(range(self._comps[site_type][sigma_swap[1]]))
             ridx1 = self._idxs[site_type][sigma_swap[0]][rind1]
             ridx2 = self._idxs[site_type][sigma_swap[1]][rind2]
-            t2 = time.process_time_ns()
-            self.time0  = t2-t1
-            t1 = time.process_time_ns()
             rindices = [sigma_swap,[rind1,rind2]]
-            t1 = time.process_time_ns()
             self.swap(ridx1, ridx2, site_type = site_type,rindices = rindices)
-            t2 = time.process_time_ns()
-            self.time1 = t2-t1
-            print(ridx1,ridx2)
-            print(self._idxs[site_type])
+            #self.swap(ridx1, ridx2, site_type = site_type,rindices = rindices)
 
             return ridx1,ridx2,site_type,rindices
         else:

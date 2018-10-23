@@ -183,7 +183,7 @@ class MonteCarlo():
         for i in range(1,nmc+1):
             indices_list = []
             for j in range(self._no_of_swaps):
-                if self._mc == True:
+                if self._mc:
                     ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
                     indices_list.append([ind1, ind2, site_type, rindices])
                 else:
@@ -203,7 +203,7 @@ class MonteCarlo():
                     accept_swap = False
 
             if accept_swap:
-                e=e1
+                e = e1
 
                 if self._models:
                     key_value_pairs = {}
@@ -219,7 +219,7 @@ class MonteCarlo():
 
             else:
                 for j in range(self._no_of_swaps-1,-1,-1):
-                    if self._mc == True:
+                    if self._mc:
                         struc.swap(indices_list[j][0],indices_list[j][1], site_type = indices_list[j][2], rindices = indices_list[j][3])
                     else:
                         struc.swap(indices_list[j][0],indices_list[j][1])
