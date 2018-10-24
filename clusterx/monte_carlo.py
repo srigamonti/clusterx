@@ -201,7 +201,7 @@ class MonteCarlo():
                 
             if control_flag:
                 if self._error_reset:
-                    if (x > errorcancel):
+                    if (x > errorsteps):
                         x = 1
                         e1 = self._em.predict(struc)
                     else:
