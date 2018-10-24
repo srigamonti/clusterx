@@ -57,11 +57,8 @@ class Structure(SuperCell):
             for idx, sigma in enumerate(sigmas):
                 self.decor[idx] = self.sites[idx][sigma]
                 self.ems[idx] = len(self.sites[idx])
-                
-        #self.idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == 0] and tags[index] == site_type]
-        print(super_cell.get_substitutional_sites())
-        #print(super_cell.get_tags())
 
+                
         super(Structure,self).__init__(super_cell.get_parent_lattice(),super_cell.get_transformation())
         self.atoms = Atoms(numbers = self.decor, positions = super_cell.get_positions(), tags = super_cell.get_tags(), cell = super_cell.get_cell(),pbc = super_cell.get_pbc())
         #self.set_atomic_numbers(self.decor)
@@ -84,7 +81,6 @@ class Structure(SuperCell):
                     lens.append(l)
                 self._idxs.update({key:idxs})
                 self._comps.update({key:lens})
-            print(self._idxs)
 
     def get_sigmas(self):
         """Return decoration array in terms of sigma variables.
@@ -167,6 +163,10 @@ class Structure(SuperCell):
         if site_type is not None:
             self._idxs[site_type][rindices[0][0]][rindices[1][0]] = ridx2
             self._idxs[site_type][rindices[0][1]][rindices[1][1]] = ridx1
+            
+            self._idxs[site_type][rindices[0][0]].sort()
+            self._idxs[site_type][rindices[0][1]].sort()
+            
             
     def update_decoration(self, decoration):
         """Update decoration of the structure object

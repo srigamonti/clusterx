@@ -8,6 +8,8 @@ import json
 import numpy as np
 from copy import deepcopy
 
+import time
+
 class MonteCarlo():
     """MonteCarlo class
 
@@ -74,7 +76,7 @@ class MonteCarlo():
 
     """
 
-    def __init__(self, energy_model, scell, nsubs, filename = "trajectory.json", last_visited_structure_name = "last-visited-structure-mc.json", sublattice_indices = [], models = [], no_of_swaps = 1, ensemble = "canonical", mc = False):
+    def __init__(self, energy_model, scell, nsubs, filename = "trajectory.json", last_visited_structure_name = "last-visited-structure-mc.json", sublattice_indices = [], models = [], no_of_swaps = 1, ensemble = "canonical", mc = False, error_reset = False):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
@@ -107,6 +109,13 @@ class MonteCarlo():
         self._ensemble = ensemble
         self._no_of_swaps = no_of_swaps
         self._mc = mc
+
+        self._error_reset = error_reset
+
+        self.time0=0
+        self.time1=0
+        self.time2=0
+        self.time3=0
 
     def metropolis(self, scale_factor, nmc, initial_decoration = None, write_to_db = False, acceptance_ratio = None):
         """Perform metropolis simulation
@@ -180,14 +189,16 @@ class MonteCarlo():
             
         if self._no_of_swaps > 1:
             control_flag = False
-        else: 
-            errorcancel = 50000
-            x = 1
+        else:
             control_flag = True
+            if self._error_reset:
+                errorsteps = 50000
+                x = 1
            
             
         for i in range(1,nmc+1):
             indices_list = []
+            t1 = time.process_time_ns()
             for j in range(self._no_of_swaps):
                 if self._mc:
                     ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
@@ -195,19 +206,30 @@ class MonteCarlo():
                 else:
                     ind1,ind2 = struc.swap_random(self._sublattice_indices)
                     indices_list.append([ind1, ind2])
+            t2 = time.process_time_ns()
+            self.time0 += t2-t1
                 
+            t1 = time.process_time_ns()
             if control_flag:
-                x += 1
-                if (x > errorcancel):
-                    x = 0
-                    e1 = self._em.predict(struc)
+                if self._error_reset:
+                    if (x > errorcancel):
+                        x = 1
+                        e1 = self._em.predict(struc)
+                    else:
+                        x += 1
+                        #de = self._em.predict_swap_binary_linear(struc, ind1 = ind1 , ind2 = ind2)
+                        de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2)
+                        e1 = e+de
                 else:
-                    #de = self._em.predict_swap_binary_linear(struc, ind1 = ind1 , ind2 = ind2)
                     de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2)
                     e1 = e+de
             else:
                 e1 = self._em.predict(struc)
+                
+            t2 = time.process_time_ns()
+            self.time1 += t2-t1
 
+            t1 = time.process_time_ns()
             if e >= e1:
                 accept_swap = True
                 boltzmann_factor = 0
@@ -218,7 +240,10 @@ class MonteCarlo():
                     accept_swap = True
                 else:
                     accept_swap = False
+            t2 = time.process_time_ns()
+            self.time2 += t2-t1
                     
+            t1 = time.process_time_ns()
             if accept_swap:
                 e = e1
 
@@ -243,6 +268,8 @@ class MonteCarlo():
 
                 if acceptance_ratio:
                     ar = poppush(hist,0)
+            t2 = time.process_time_ns()
+            self.time3 += t2-t1
 
             if acceptance_ratio:
                 if i%10 == 0 and i >= nar:
