@@ -309,7 +309,7 @@ def plot_predictions_vs_target(sset,cemodel, prop_name):
     #plt.savefig("plot_optimization.png")
     plt.show()
 
-def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, property_name = None, show_loo_predictions = True, sset_enum=None, sset_gss=None):
+def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, property_name = None, show_loo_predictions = True, sset_enum=None, sset_gss=None, show_plot = True):
     """Plot property values versus concentration
 
     **Parameters:**
@@ -369,5 +369,5 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     plt.ylabel(property_name)
 
     plt.legend()
-
-    plt.show()
+    if show_plot:
+        plt.show()

@@ -47,6 +47,7 @@ class StructuresSet():
         * Use plat.as_dict to serialize metadata part of structures_set database.
         * Add idx_tags dict in metadata.
         * So far, the class allows to have only a subset of the structures written to the member json database. This may be dengerous in certain contexts, analyze whether changing this.
+        * Add merge of two StructureSets
 
 
     **Methods:**
@@ -79,7 +80,7 @@ class StructuresSet():
         self._folders  = self._metadata["folders"]
         self._props = self._metadata.get("properties",{})
 
-        self.add_structures(json_db_filepath = self._folders_db_fname)
+        self.add_structures(structures = self._folders_db_fname)
         """
         if self._parent_lattice is None:
             pris = Atoms(cell=self._metadata["parent_lattice_pristine_unit_cell"],
@@ -123,7 +124,8 @@ class StructuresSet():
         nplat = len(self._parent_lattice)
         indices = np.zeros(self.get_nstr(),dtype=int)
         for i in range(self.get_nstr()):
-            ni = len(self.get_structure(i))
+            ni = len(self.get_structure(iall_SiGe_structures = StructuresSet(SiGe_parlat, filename='test_structures_set_merge.json')
+))
             indices[i] = ni//nplat
         return indices
 
@@ -164,24 +166,19 @@ class StructuresSet():
             self.write(structure, key_value_pairs, **kwargs)
             #self.json_db.write(structure.get_atoms(),key_value_pairs, data={"tmat":structure.get_transformation(),"tags":structure.get_tags(),"idx_subs":structure.get_idx_subs()},**kwargs)
 
-    def add_structures(self, structures = None, json_db_filepath = None, write_to_db = False):
+    def add_structures(self, structures = None, write_to_db = False):
         """Add structures to the StructureSet object
 
         **Parameters:**
 
-        ``structures``: list of Structure objects
+        ``structures``: list of Structure objects, path to JSON file, or StructuresSet object
             Structures to be added
-
-        ``json_db_filepath``: path to JSON file
-            Json database file. The database must contain a data dict with keys
-            tags and idx_subs
         """
-        if structures is not None:
+        if isinstance(structures, (list, np.ndarray)):
             for structure in structures:
                 self.add_structure(structure, write_to_db = write_to_db)
-
-        elif json_db_filepath is not None:
-            db = connect(json_db_filepath)
+        elif isinstance(structures, str):
+            db = connect(structures)
             for row in db.select():
                 atoms = row.toatoms()
                 tmat = row.get("data",{}).get("tmat")
@@ -189,7 +186,53 @@ class StructuresSet():
                     tmat = calculate_trafo_matrix(self._parent_lattice.get_cell(),atoms.get_cell())
                 scell = SuperCell(self._parent_lattice,tmat)
                 self.add_structure(Structure(scell, decoration=atoms.get_atomic_numbers()))
-
+        elif isinstance(structures, StructuresSet):
+            if not hasattr(self, 'metadata'):
+                self.metadata = {}
+            if self._folders_db == None:
+                self._folders_db_fname = self._filename
+                self._folders_db = connect(self._filename)
+            if self._parent_lattice != structures._parent_lattice:
+                raise ValueError("Parent lattices do not match.")
+            n_old_structures = len(self._structures)
+            for structure in structures._structures:
+                self.add_structure(structure, write_to_db = write_to_db)
+            if not 'folders_db_fname' in self.metadata.keys():
+                self.metadata['folders_db_fname'] = self._filename
+            if 'folders' in structures._metadata.keys(): #are we adding a new folder structure?
+                if 'folders' in self._metadata.keys(): # do we already have folders stored?
+                    if n_old_structures == len(self._metadata['folders']): #all structures have a folder
+                        for folder in structures._metadata['folders']: #we merge them
+                            self._metadata['folders'].append(folder)
+                    else:
+                        pass #not sure what to do in this case #TODO ask Santiago
+                elif n_old_structures == 0:
+                    self._metadata['folders'] = structures._metadata['folders']
+                else:
+                    pass #same here
+            #n_existing_structure = self._metadata['nstr']
+            if 'nstr' in self._metadata.keys():
+                self._metadata['nstr'] += structures._metadata['nstr']
+            else:
+                self._metadata['nstr'] = structures._metadata['nstr']
+            for new_prop_key in structures._props.keys():
+                if new_prop_key in self._props.keys():
+                    for prop in structures._props[new_prop_key]:
+                        self._props[new_prop_key].append(prop)
+                else:
+                    nones = []
+                    for d in range(n_old_structures):
+                        nones.append('None')
+                    for prop in structures._props[new_prop_key]:
+                        nones.append(prop)
+                    self._props[new_prop_key] = nones
+            if write_to_db:
+                for property_vals, property_name in zip([self._props[x] for x in self._props.keys()], self._props.keys()):
+                    for i,p in enumerate(property_vals): #see "set_property_values"
+                        self._folders_db.update([i+1], **{property_name:p})
+                for meta_key in self._metadata.keys():
+                    self._folders_db.metadata = {**self._folders_db.metadata,meta_key : self._metadata[meta_key]}
+                self._folders_db.metadata = {**self._folders_db.metadata,"properties":self._props}
 
     def get_structure(self,sid):
         """Get one structure of the set

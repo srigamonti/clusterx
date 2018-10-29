@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import copy
+from ase.data import chemical_symbols as cs
 
 def isclose(r1,r2,rtol=1e-4):
     """Determine whether two vectors are similar
@@ -678,7 +679,7 @@ def mgrep(fpath, search_array, prepend='',root='.'):
     return out_str.rstrip()
 
 
-def parent_lattice_to_atat(plat, out_fname="lat.in"):
+def parent_lattice_to_atat(plat, out_fname="lat.in", for_str = False):
     """Serializes ParentLattice object to ATAT input file
 
     **Parameters:**
@@ -690,7 +691,10 @@ def parent_lattice_to_atat(plat, out_fname="lat.in"):
     """
     cell = plat.get_cell()
     positions = plat.get_scaled_positions()
-    sites = plat.get_sites()
+    if for_str:
+        sites = plat.get_atomic_numbers()
+    else:
+        sites = plat.get_sites()
 
     f = open(out_fname,'w+')
 
@@ -703,10 +707,13 @@ def parent_lattice_to_atat(plat, out_fname="lat.in"):
 
     for i,pos in enumerate(positions):
         stri = u"%2.12f\t%2.12f\t%2.12f\t"%(pos[0],pos[1],pos[2])
-        if len(sites[i])>1:
-            for z in sites[i][:-1]:
-                stri = stri + "%s,\t"%cs[z]
-        stri = stri + "%s\n"%cs[sites[i][-1]]
+        if for_str:
+            stri = stri + "%s\n"%cs[sites[i]]
+        else:
+            if len(sites[i])>1:
+                for z in sites[i][:-1]:
+                    stri = stri + "%s,"%cs[z]
+            stri = stri + "%s\n"%cs[sites[i][-1]]
 
         f.write(stri)
 
