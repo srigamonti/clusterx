@@ -93,7 +93,7 @@ class SuperCell(ParentLattice):
         """
         view(self)
 
-    def gen_random(self,nsubs):
+    def gen_random(self, nsubs, mc = False):
         """
         Generate a random Structure with given number of substitutions.
 
@@ -109,7 +109,7 @@ class SuperCell(ParentLattice):
 
         decoration, sigmas = self.gen_random_decoration(nsubs)
 
-        return clusterx.structure.Structure(SuperCell(self._plat,self._p),sigmas=sigmas)
+        return clusterx.structure.Structure(SuperCell(self._plat,self._p),sigmas=sigmas, mc = mc)
 
     def gen_random_decoration(self,nsubs):
         """Generate a random decoration of the super cell with given number of substitutions.
