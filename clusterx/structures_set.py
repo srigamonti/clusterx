@@ -47,7 +47,7 @@ class StructuresSet():
         * Use plat.as_dict to serialize metadata part of structures_set database.
         * Add idx_tags dict in metadata.
         * So far, the class allows to have only a subset of the structures written to the member json database. This may be dengerous in certain contexts, analyze whether changing this.
-        * Add merge of two StructureSets
+        * Refactor merge of two StructureSets
 
 
     **Methods:**
