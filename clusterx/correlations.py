@@ -164,7 +164,7 @@ class CorrelationsCalculator():
                 sc_spos = structure.get_scaled_positions(wrap=True)
                 cl_idxs = get_cl_idx_sc(cl_spos,sc_spos,method=1)
 
-                cluster_orbit, mult = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs())
+                cluster_orbit, mult = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=True)
                 cluster_orbits.append(cluster_orbit)
 
             self._scells.append(scell) # Add supercell to calculator

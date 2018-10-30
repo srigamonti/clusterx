@@ -74,7 +74,7 @@ class MonteCarlo():
 
     """
 
-    def __init__(self, energy_model, scell, nsubs, filename = "trajectory.json", last_visited_structure_name = "last-visited-structure-mc.json", sublattice_indices = [], models = [], no_of_swaps = 1, ensemble = "canonical"):
+    def __init__(self, energy_model, scell, nsubs, filename = "trajectory.json", last_visited_structure_name = "last-visited-structure-mc.json", sublattice_indices = [], models = [], no_of_swaps = 1, ensemble = "canonical", mc = False, error_reset = False):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
@@ -98,9 +98,7 @@ class MonteCarlo():
 
         if not self._sublattice_indices:
             import sys
-            sys.exit('Indices of sublattice are not correctly assigned, look at the documatation.')
-                
-
+            sys.exit('Indices of sublattice are not correctly assigned, look at the documatation.')                
 
         self._models = []
         if models:
@@ -108,6 +106,9 @@ class MonteCarlo():
 
         self._ensemble = ensemble
         self._no_of_swaps = no_of_swaps
+        self._mc = mc
+
+        self._error_reset = error_reset
 
     def metropolis(self, scale_factor, nmc, initial_decoration = None, write_to_db = False, acceptance_ratio = None):
         """Perform metropolis simulation
@@ -146,7 +147,7 @@ class MonteCarlo():
             the last 100 moves.
 
         **Returns**: MonteCarloTrajectory object
-            Trajecotoy containing all decorations visited during the sampling
+            Trajectory containing all information of the structures visited during the sampling
 
         """
         import math
@@ -157,11 +158,12 @@ class MonteCarlo():
             scale_factor_product *= float(el)
 
         if initial_decoration is not None:
-            struc = Structure(self._scell, initial_decoration)
+            struc = Structure(self._scell, initial_decoration, mc = self._mc)
         else:
-            struc = self._scell.gen_random(self._nsubs)
+            struc = self._scell.gen_random(self._nsubs, mc = self._mc)
 
         e = self._em.predict(struc)
+        print(e)
 
         traj = MonteCarloTrajectory(self._scell, filename=self._filename, models = self._models)
 
@@ -178,28 +180,55 @@ class MonteCarlo():
             nar = 100
             ar = acceptance_ratio
             hist = np.zeros(nar,dtype=int)
-
+            
+        if self._no_of_swaps > 1:
+            control_flag = False
+        else:
+            control_flag = True
+            if self._error_reset:
+                errorsteps = 50000
+                x = 1
+           
+            
         for i in range(1,nmc+1):
             indices_list = []
             for j in range(self._no_of_swaps):
-                #ind1,ind2 = struc.swap_random_binary(self._sublattice_index)
-                ind1, ind2 = struc.swap_random(self._sublattice_indices)
-                indices_list.append([ind1, ind2])
-
-            e1 = self._em.predict(struc)
-
+                if self._mc:
+                    ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
+                    indices_list.append([ind1, ind2, site_type, rindices])
+                else:
+                    ind1,ind2 = struc.swap_random(self._sublattice_indices)
+                    indices_list.append([ind1, ind2])
+                
+            if control_flag:
+                if self._error_reset:
+                    if (x > errorsteps):
+                        x = 1
+                        e1 = self._em.predict(struc)
+                    else:
+                        x += 1
+                        #de = self._em.predict_swap_binary_linear(struc, ind1 = ind1 , ind2 = ind2)
+                        de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2)
+                        e1 = e+de
+                else:
+                    de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2)
+                    e1 = e+de
+            else:
+                e1 = self._em.predict(struc)
+                
             if e >= e1:
                 accept_swap = True
                 boltzmann_factor = 0
             else:
                 boltzmann_factor = math.exp((e-e1)/(scale_factor_product))
+                    
                 if np.random.uniform(0,1) <= boltzmann_factor:
                     accept_swap = True
                 else:
                     accept_swap = False
 
             if accept_swap:
-                e=e1
+                e = e1
 
                 if self._models:
                     key_value_pairs = {}
@@ -208,14 +237,17 @@ class MonteCarlo():
                     traj.add_decoration(i, e, indices_list, key_value_pairs = key_value_pairs)
 
                 else:
-                    traj.add_decoration(i, e, indices_list)
+                    traj.add_decoration(i, e, [[li[0],li[1]] for li in indices_list])
 
                 if acceptance_ratio:
                     ar = poppush(hist,1)
 
             else:
                 for j in range(self._no_of_swaps-1,-1,-1):
-                    struc.swap(indices_list[j][0],indices_list[j][1])
+                    if self._mc:
+                        struc.swap(indices_list[j][0],indices_list[j][1], site_type = indices_list[j][2], rindices = indices_list[j][3])
+                    else:
+                        struc.swap(indices_list[j][0],indices_list[j][1])
 
                 if acceptance_ratio:
                     ar = poppush(hist,0)
@@ -225,12 +257,14 @@ class MonteCarlo():
                     scale_factor_product *= math.exp((acceptance_ratio/100.0-ar)/10.0)
                 #if acceptance_ratio and i%100 == 0:
                 #    print(i,acceptance_ratio,ar*100,scale_factor_product)
-
+                
         if write_to_db:
             traj.write_to_file()
             struc.serialize(fname=self._last_visited_structure_name)
 
         return traj
+
+
 
 class MonteCarloTrajectory():
     """MonteCarloTrajectory class

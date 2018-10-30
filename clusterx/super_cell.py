@@ -20,7 +20,7 @@ class SuperCell(ParentLattice):
         In **CELL**, a super cell is a periodic repetition of a parent lattice
         object. This parameter defines such a parent lattice for the created
         super cell.
-    p: 3x3 integer array
+    p: integer or 1x3 or 3x3 integer array
         Transformation matrix :math:`P`. The cartesian coordinates of the
         latttice vectors defining the created SuperCell object, are the rows of
         the matrix :math:`S` defined by :math:`S = PV` where the rows of
@@ -32,7 +32,7 @@ class SuperCell(ParentLattice):
         non-periodic directions.
 
     .. todo::
-        Take into account pbc when building the super cell. Either ignore
+        Proper check of pbc when building the super cell. Either ignore
         translation in ``p`` along non-periodic directions or warn in some way
         if ``p`` is not compatible with pbc.
 
@@ -41,7 +41,22 @@ class SuperCell(ParentLattice):
 
     def __init__(self, parent_lattice, p):
         self._plat = parent_lattice
-        self._p = p
+
+        if not isinstance(p,int):
+            self._p = np.array(p)
+
+        if isinstance(p,int):
+            if pbc[0]==1 and pbc[1]==0 and pbc[2]==0:
+                self._p = np.diag([p,0,0])
+            elif pbc[0]==1 and pbc[1]==1 and pbc[2]==0:
+                self._p = np.diag([p,p,0])
+            elif pbc[0]==1 and pbc[1]==1 and pbc[2]==1:
+                self._p = np.diag([p,p,p])
+            else:
+                sys.exit("SuperCell(Error)")
+        elif self._p.shape ==(3,):
+            self._p = np.diag(p)
+
         self.index = int(round(np.linalg.det(p)))
         #prist = make_supercell(parent_lattice.get_atoms(),p)
         prist = make_supercell(parent_lattice.get_pristine(),p)
@@ -93,7 +108,7 @@ class SuperCell(ParentLattice):
         """
         view(self)
 
-    def gen_random(self,nsubs):
+    def gen_random(self, nsubs, mc = False):
         """
         Generate a random Structure with given number of substitutions.
 
@@ -109,7 +124,7 @@ class SuperCell(ParentLattice):
 
         decoration, sigmas = self.gen_random_decoration(nsubs)
 
-        return clusterx.structure.Structure(SuperCell(self._plat,self._p),sigmas=sigmas)
+        return clusterx.structure.Structure(SuperCell(self._plat,self._p),sigmas=sigmas, mc = mc)
 
     def gen_random_decoration(self,nsubs):
         """Generate a random decoration of the super cell with given number of substitutions.
