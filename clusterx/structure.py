@@ -102,6 +102,11 @@ class Structure(SuperCell):
         """
         return self.atoms.get_atomic_numbers()
 
+    def get_chemical_symbols(self):
+        """Get decoration array
+        """
+        return self.atoms.get_chemical_symbols()
+
     def serialize(self, fmt="json", tmp=False, fname=None):
         from ase.io import write
 

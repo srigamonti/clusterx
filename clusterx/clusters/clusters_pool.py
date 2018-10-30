@@ -85,10 +85,10 @@ class ClustersPool():
         self._cpool_dict = {}
 
         # Determine which supercell will be used to build the clusters pool
-        if (self._npoints < 2).all():
-            self._cpool_scell = SuperCell(parent_lattice,np.diag([1,1,1]))
-        elif isinstance(super_cell, SuperCell) or isinstance(super_cell, ParentLattice):
+        if isinstance(super_cell, SuperCell) or isinstance(super_cell, ParentLattice):
             self._cpool_scell = super_cell
+        elif (self._npoints < 2).all():
+            self._cpool_scell = SuperCell(parent_lattice,np.diag([1,1,1]))
         elif super_cell is None and len(radii) != 0:
             self._cpool_scell = self.get_containing_supercell()
         else:
@@ -100,7 +100,22 @@ class ClustersPool():
             self.gen_clusters()
 
         self.nclusters = len(self._cpool)
+        self.current = 0
+        self.high = self.nclusters - 1
         self._cpool_atoms = []
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.current > self.high:
+            raise StopIteration
+        else:
+            self.current+=1
+            return self._cpool[self.current-1]
+
+    def __getitem__(self, index):
+        return self._cpool[index]
 
     def __len__(self):
         return len(self._cpool)
@@ -389,9 +404,7 @@ class ClustersPool():
                             print("cluster nr: ",len(self._cpool), " added, out of", len(clrs_full))
 
         """
-        print("out of big loop, sorting\n")
         self._cpool, self._multiplicities = (list(t) for t in zip(*sorted(zip(self._cpool, self._multiplicities))))
-        print("finished sorting\n")
 
     def gen_clusters(self):
         from clusterx.super_cell import SuperCell
@@ -446,7 +459,7 @@ class ClustersPool():
                         if _cl not in clrs_full:
                             #clrs_full.append(_cl)
                             #cl = Cluster(idxs, ss, scell, distances=distances)
-                            orbit, mult = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),distances=distances)
+                            orbit, mult = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),distances=distances, as_array=True)
 
                             for __cl in orbit:
                                 __cl.set_radius(distances)
@@ -469,6 +482,9 @@ class ClustersPool():
         return self._cpool_scell
 
     def get_cpool(self):
+        return self.get_cpool_clusters()
+
+    def get_cpool_clusters(self):
         return self._cpool
 
     def get_cpool_arrays(self):
@@ -485,6 +501,9 @@ class ClustersPool():
 
     def serialize(self, fmt, fname=None):
         if fmt == "json":
+            if fname is None:
+                fname = "cpool.json"
+
             self.gen_atoms_database(fname)
 
     def get_cpool_dict(self):
@@ -524,14 +543,36 @@ class ClustersPool():
         return self._cpool_dict[cln]
 
     def write_clusters_db(self, orbit=None, super_cell=None, db_name="cpool.json"):
-        """Write cluster orbit to Atoms database
+        """Write cluster orbit to Atoms JSON database
+
+        **Parameters:**
+
+        ``orbit``:
+
+        ``super_cell``: ``SuperCell`` object
+
+        ``db_name``: string
+            Name of the json file containing the database
         """
-        from clusterx.structure import Structure
         from ase.db.jsondb import JSONDatabase
         from subprocess import call
+        call(["rm","-f",db_name])
+        atoms_db = JSONDatabase(filename=db_name)
+
+        cpool_atoms  = self.get_cpool_atoms(orbit=orbit, super_cell=super_cell)
+
+        for atoms in cpool_atoms:
+            atoms_db.write(atoms)
+
+        atoms_db.metadata = self.get_cpool_dict()
+
+    def get_cpool_atoms(self, orbit=None, super_cell=None):
+        from clusterx.structure import Structure
 
         if orbit is None:
             orbit = self.get_cpool()
+        elif isinstance(orbit,self.__class__):
+            orbit = orbit.get_cpool()
         if super_cell is None:
             super_cell = self.get_cpool_scell()
 
@@ -546,8 +587,7 @@ class ClustersPool():
         idx_subs = super_cell.get_idx_subs()
         tags = super_cell.get_tags()
 
-        call(["rm","-f",db_name])
-        atoms_db = JSONDatabase(filename=db_name) # For visualization
+        self._cpool_atoms = []
         for icl,cl in enumerate(orbit):
             atoms = super_cell.copy()
             ans = atnums.copy()
@@ -566,11 +606,6 @@ class ClustersPool():
                     numbers.append(nr)
             self._cpool_atoms.append(Atoms(cell=atoms0.get_cell(), pbc=atoms0.get_pbc(),numbers=numbers,positions=positions))
 
-            atoms_db.write(atoms)
-
-        atoms_db.metadata = self.get_cpool_dict()
-
-    def get_cpool_atoms(self):
         return self._cpool_atoms
 
     def get_cpool_structures(self):
@@ -591,9 +626,11 @@ class ClustersPool():
 
         return strs
 
-    def get_cluster_orbit(self, super_cell=None, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans = False, cluster_index=None):
+    def get_cluster_orbit(self, super_cell=None, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans = False, cluster_index=None, as_array=False):
         """
         Get cluster orbit inside a supercell.
+
+        Returns a pool of clusters representing a cluster orbit.
 
         ``super_cell``: SuperCell object
             The super cell in which the orbit is calculated.
@@ -617,6 +654,10 @@ class ClustersPool():
         ``cluster_index``: integer
             Index of a cluster in the pool. Overrides ``super_cell``, and the
             orbit is calculated on the supercell of the ``ClustersPool.get_cpool_scell()`` object.
+        ``as_array``: Boolean (default: ``False``)
+            If true, instead of returning a clusters pool, it returns an array of cluster objects
+            and the multiplicities, i.e. call it in this way::
+                cluster_array, multiplicities = cpool.get_cluster_orbit(as_array=True)
         """
         from scipy.spatial.distance import cdist
         from sympy.utilities.iterables import multiset_permutations
@@ -694,7 +735,13 @@ class ClustersPool():
         for cl in _orbit:
             orbit.append(Cluster(cl.get_idxs(),cl.get_nrs(),super_cell,distances))
 
-        return np.array(orbit), mult
+        if as_array:
+            return np.array(orbit), mult
+        else:
+            subpool = ClustersPool(self._plat, super_cell = self._cpool_scell)
+            for cl in orbit:
+                subpool.add_cluster(cl)
+            return subpool, mult
 
     def _find_hash(self,a,b):
         table = np.zeros(len(a),dtype=int)
@@ -757,7 +804,8 @@ class ClustersPool():
         rtol = 1e-3
         cld = self.get_cpool_dict()
         prim_cell = self._plat.get_cell()
-        scell = self.get_containing_supercell()
+        #scell = self.get_containing_supercell()
+        scell = self._cpool_scell
 
         call(["rm","-f",fname])
         atoms_db = JSONDatabase(filename=fname) # For visualization
@@ -787,6 +835,9 @@ class ClustersPool():
 
             atoms = Atoms(symbols=chem,positions=scell.get_positions(),cell=scell.get_cell(),pbc=scell.get_pbc())
             atoms_db.write(atoms)
+
+    def get_atoms_database(self):
+        pass
 
     def display_info(self):
         """Display in screen information about the clusters pools

@@ -36,6 +36,7 @@ def test_parent_lattice_creation():
     sub3 = crystal(['Si','Si','Si','Sr','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
 
     parent_lattice1 = ParentLattice(atoms=pri,substitutions=[sub1,sub2,sub3])
+    print(parent_lattice1.get_sublattice_types(pretty_print=True))
     parent_lattice1.serialize(fname="test_parent_lattice_creation_1.json")
 
     parent_lattice2 = ParentLattice(json_db_filepath="test_parent_lattice_creation_1.json")

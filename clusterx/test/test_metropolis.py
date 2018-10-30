@@ -205,7 +205,7 @@ def test_metropolis():
         trajx.read()
         #print(trajx._trajectory[0])
         #print(trajx._scell._plat.get_nsites_per_type())
-        
+
         energies2 = trajx.get_model_total_energies()
         steps2 = trajx.get_sampling_step_nos()
 
