@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import copy
+from ase.data import chemical_symbols as cs
 
 def isclose(r1,r2,rtol=1e-4):
     """Determine whether two vectors are similar
@@ -682,7 +683,7 @@ def mgrep(fpath, search_array, prepend='',root='.'):
     return out_str.rstrip()
 
 
-def parent_lattice_to_atat(plat, out_fname="lat.in"):
+def parent_lattice_to_atat(plat, out_fname="lat.in", for_str = False):
     """Serializes ParentLattice object to ATAT input file
 
     **Parameters:**
@@ -694,7 +695,10 @@ def parent_lattice_to_atat(plat, out_fname="lat.in"):
     """
     cell = plat.get_cell()
     positions = plat.get_scaled_positions()
-    sites = plat.get_sites()
+    if for_str:
+        sites = plat.get_atomic_numbers()
+    else:
+        sites = plat.get_sites()
 
     f = open(out_fname,'w+')
 
@@ -707,16 +711,28 @@ def parent_lattice_to_atat(plat, out_fname="lat.in"):
 
     for i,pos in enumerate(positions):
         stri = u"%2.12f\t%2.12f\t%2.12f\t"%(pos[0],pos[1],pos[2])
-        if len(sites[i])>1:
-            for z in sites[i][:-1]:
-                stri = stri + "%s,\t"%cs[z]
-        stri = stri + "%s\n"%cs[sites[i][-1]]
+        if for_str:
+            stri = stri + "%s\n"%cs[sites[i]]
+        else:
+            if len(sites[i])>1:
+                for z in sites[i][:-1]:
+                    stri = stri + "%s,"%cs[z]
+            stri = stri + "%s\n"%cs[sites[i][-1]]
 
         f.write(stri)
 
     f.close()
 
 class Exponential():
+    """Basic exponential object of type ``coefficient`` * ``x`` ^ ``exponent`` . Numerically evalueted using the method ``evaluate`` ( ``x`` ) .
+
+    **Parameters:**
+
+    ``exponent``: exponent of the exponential
+
+    ``coefficient``: coefficient of the exponential
+
+    """
 
     def __init__(self, exponent, coefficient = 1):
         self.exponent = exponent
@@ -725,15 +741,17 @@ class Exponential():
     def evaluate(self, x):
         return self.coefficient * np.power(x,self.exponent)
 
-    def normalize(self, value):
+    def divide_scalar(self, value):
         self.coefficient = self.coefficient / value
 
     def multiply_scalar(self, scalar):
         self.coefficient = self.coefficient * scalar
 
 
+class PolynomialFunction():
+    """Polynomial function, build from ``Exponential()`` .
+    """
 
-class PolynomialBasisFunction():
 
     def __init__(self):
         self.exponentials = []
@@ -749,9 +767,8 @@ class PolynomialBasisFunction():
             self.exponentials.append(Exponential(order, coefficient))
 
     def clear_exponentials(self):
-        rmlist = []
         for exponential in self.exponentials:
-            if abs(exponential.coefficient) < 10**(-10):
+            if abs(exponential.coefficient) < 10**(-15):
                 self.exponentials.remove(exponential)
 
     def evaluate(self, x):
@@ -764,14 +781,14 @@ class PolynomialBasisFunction():
         length = scalar_product(self.evaluate, self.evaluate, m)
         length = np.sqrt(length)
         for exponential in self.exponentials:
-            exponential.normalize(length)
+            exponential.divide_scalar(length)
 
     def multiply_scalar(self, scalar):
         for exponential in self.exponentials:
             exponential.multiply_scalar(scalar)
 
-    def add_polynomial_basis_function(self, polynomial_basis_function):
-        for exponential in polynomial_basis_function.exponentials:
+    def add_polynomial_function(self, polynomial_function):
+        for exponential in polynomial_function.exponentials:
             self.add_exponential(exponential.exponent, exponential.coefficient)
 
     def print_polynomial(self):
@@ -783,18 +800,29 @@ class PolynomialBasisFunction():
 
 
 class PolynomialBasis():
+    """Polynomial basis, constructed from several ``PolynomialFunction()``.
+    Constructs orthonormal basis sets using ``scalcar_product`` .
+    When initialized, all orthonormal basis sets to the order ``max_order`` are generated.
 
-    def __init__(self, m = 10, symmetric = False):
-        self.m = m
+    **Parameters**
+
+    ``max_order``: Maximal order to which the basis set is initialized.
+
+    ``symmetric``: Defines if the scalar product uses sigmas symmetrized around 0 or ascending from 0.
+
+    """
+
+    def __init__(self, max_order = 10, symmetric = False):
+        self.m = max_order
         self.symmetric = symmetric
         self.basis_function_set = {}
-        for M in range(1,m+1):
-            self.basis_function_set[str(M)] = self.construct(M)
+        for order in range(1,max_order+1):
+            self.basis_function_set[str(order)] = self.construct(order)
 
     def construct(self, m):
         basis_functions = []
         for degree in range(m):
-            new_function = PolynomialBasisFunction()
+            new_function = PolynomialFunction()
             new_function.add_exponential(degree)
             chi = Exponential(degree)
             for basis_function in basis_functions:
@@ -802,7 +830,7 @@ class PolynomialBasis():
                 overlap = overlap * (-1)
                 summand = copy.deepcopy(basis_function)
                 summand.multiply_scalar(overlap)
-                new_function.add_polynomial_basis_function(summand)
+                new_function.add_polynomial_function(summand)
             new_function.normalize(self.scalar_product, m)
             new_function.clear_exponentials()
             basis_functions.append(new_function)
@@ -829,10 +857,10 @@ class PolynomialBasis():
         for function in self.basis_function_set[str(m)]:
             function.print_polynomial()
 
-    def evaluate(self, alpha, sigma, M):
-        if M > self.m:
-            self.basis_function_set[str(M)] = self.construct(M)
-        return self.basis_function_set[str(M)][int(alpha)].evaluate(sigma)
+    def evaluate(self, alpha, sigma, m):
+        if m > self.m:
+            self.basis_function_set[str(m)] = self.construct(m)
+        return self.basis_function_set[str(m)][int(alpha)].evaluate(sigma)
 
 
 def poppush(x, val):

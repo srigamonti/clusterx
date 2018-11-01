@@ -17,12 +17,21 @@ def juview(plat,n=None):
     import nglview
     from clusterx.parent_lattice import ParentLattice
     from clusterx.structures_set import StructuresSet
+    from clusterx.clusters.clusters_pool import ClustersPool
+    from clusterx.clusters.cluster import Cluster
 
     if isinstance(plat,ParentLattice):
         return _makeview(plat.get_all_atoms())
 
     if isinstance(plat,StructuresSet):
         return _makeview(plat.get_images(n=n))
+
+    if isinstance(plat,ClustersPool):
+        atoms = plat.get_cpool_atoms()
+        if n is not None:
+            return _makeview(atoms[0:n])
+        else:
+            return _makeview(atoms)
 
     if isinstance(plat,list):
         if n is not None:
@@ -287,7 +296,6 @@ def plot_predictions_vs_target(sset,cemodel, prop_name):
 
     plt.ylim(e_min-e_range/8,e_max+e_range/10)
     plt.xlim(e_min-e_range/8,e_max+e_range/10)
-
     plt.xticks(fontsize=ticksize)
     plt.yticks(fontsize=ticksize)
     ax = plt.gca()
@@ -310,7 +318,7 @@ def plot_predictions_vs_target(sset,cemodel, prop_name):
     #plt.savefig("plot_optimization.png")
     plt.show()
 
-def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, property_name = None, show_loo_predictions = True, sset_enum=None, sset_gss=None):
+def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, property_name = None, show_loo_predictions = True, sset_enum=None, sset_gss=None, show_plot = True):
     """Plot property values versus concentration
 
     **Parameters:**
@@ -349,8 +357,10 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     pred_cv = cvs["Predictions-CV"]
 
     frconc = sset.get_concentrations()
-    frconc_enum = sset_enum.get_concentrations()
-    frconc_gss = sset_gss.get_concentrations()
+    if sset_enum is not None:
+        frconc_enum = sset_enum.get_concentrations()
+    if sset_gss is not None:
+        frconc_gss = sset_gss.get_concentrations()
 
 
     fig = plt.figure()
@@ -368,5 +378,5 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     plt.ylabel(property_name)
 
     plt.legend()
-
-    plt.show()
+    if show_plot:
+        plt.show()

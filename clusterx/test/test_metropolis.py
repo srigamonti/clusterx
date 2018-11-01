@@ -205,7 +205,7 @@ def test_metropolis():
         trajx.read()
         #print(trajx._trajectory[0])
         #print(trajx._scell._plat.get_nsites_per_type())
-        
+
         energies2 = trajx.get_model_total_energies()
         steps2 = trajx.get_sampling_step_nos()
 
@@ -236,7 +236,7 @@ def test_metropolis():
     print("Sublattices with corresponding atomic numbers: ",idx_subs)
 
     cpoolE2 = ClustersPool(plat2, npoints=[0,1], radii=[0,0])
-    corcE2 = CorrelationsCalculator("trigonometric", plat, cpoolE2)
+    corcE2 = CorrelationsCalculator("trigonometric", plat2, cpoolE2)
 
     multT2=cpoolE2.get_multiplicities()
     print("Cluster multiplicities: ",multT2)

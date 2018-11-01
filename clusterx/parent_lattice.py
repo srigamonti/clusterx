@@ -24,7 +24,10 @@ class ParentLattice(Atoms):
     **Parameters:**
 
     ``atoms``: ASE's ``Atoms`` object
-        ``atoms`` object corresponding to the pristine lattice.
+        ``atoms`` object corresponding to the pristine lattice. If ``sites`` or
+        ``site_symbols`` is not None, then the passed ``Atoms`` objects may not
+        contain a definition of atomic species, i.e., can be initialized by only
+        indicating atomic positions, unit cell, and periodic boundary conditions.
     ``substitutions``: list of ASE's ``Atoms`` objects.
         Every ``Atoms`` object in the list, corresponds to a possible full
         substitution of only one sublattice. If set, overrides ``sites`` (see
@@ -404,16 +407,23 @@ class ParentLattice(Atoms):
             a.append(sub.copy())
         return a
 
-    def get_idx_subs(self):
+    def get_sublattice_types(self, pretty_print = False):
         """Return dictionary of site type indexes and substitutional species
 
         The format of the returned dictionary is::
 
             {'0':[pri0,sub00,sub01,...],'1':[pri1,sub10,sub11,...]...}
 
-        where the key indicates the site type, ``pri#`` the chemical number of the pristine structure and
-        ``sub##`` the possible substitutional chemical numbers for the site.
+        where the key indicates the site type, ``pri#`` the atomic number of the pristine structure and
+        ``sub##`` the possible substitutional atomic numbers for the site.
 
+        **Parameters:**
+
+        ``pretty_print``: boolean
+            Whether to return a dictionary or a self-explanatory and nicely
+            formatted string.
+
+        **Examples:**
         For instance, if a ParentLattice object consists of six positions, such that
         the first three positions can be occupied by species 14 or 13, the 4th
         and 5th positions by species 56, vacant or species 38, and the 6th position
@@ -421,9 +431,21 @@ class ParentLattice(Atoms):
         returned dictionary will look like::
 
             {0: [14,13], 1: [56,0,38], 2:[11]}
-
         """
-        return self.idx_subs
+        if not pretty_print:
+            return self.idx_subs
+        else:
+            from ase.data import chemical_symbols as cs
+            sld = self.idx_subs
+            cs = np.array(cs)
+            info = "\nThe structure consists of "+str(len(sld))+" sublattices."
+            info += "\n\n{0:<17s}|{1:<30s}|{2:<19s}".format("Sublattice type","Chemical symbols","Atomic numbers")
+            for slind,slsps in self.idx_subs.items():
+                info+="\n{0:<17s}|{1:<30s}|{2:<19s}".format(str(slind),str(cs[slsps]),str(slsps))
+            return info
+
+    def get_idx_subs(self):
+        return self.get_sublattice_types()
 
     def as_dict(self):
         """Return dictionary with object definition

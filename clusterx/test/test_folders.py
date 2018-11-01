@@ -31,7 +31,7 @@ def test_folders():
     e1 = sset1.get_property_values("my_total_energy")
 
     sset2 = StructuresSet(plat)
-    sset2.add_structures(json_db_filepath=sset1.get_folders_db_fname()) # Test adding structures from json database file
+    sset2.add_structures(structures=sset1.get_folders_db_fname()) # Test adding structures from json database file
     for s1,s2 in zip(sset1,sset2):
         print((s1.get_atomic_numbers()==s2.get_atomic_numbers()).all())
 

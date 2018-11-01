@@ -163,6 +163,7 @@ class MonteCarlo():
             struc = self._scell.gen_random(self._nsubs, mc = self._mc)
 
         e = self._em.predict(struc)
+        print(e)
 
         traj = MonteCarloTrajectory(self._scell, filename=self._filename, models = self._models)
 
@@ -236,7 +237,7 @@ class MonteCarlo():
                     traj.add_decoration(i, e, indices_list, key_value_pairs = key_value_pairs)
 
                 else:
-                    traj.add_decoration(i, e, indices_list)
+                    traj.add_decoration(i, e, [[li[0],li[1]] for li in indices_list])
 
                 if acceptance_ratio:
                     ar = poppush(hist,1)
