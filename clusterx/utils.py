@@ -338,7 +338,7 @@ def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_latti
         tmat = np.asarray(np.rint(np.dot(cell,np.linalg.inv(pcell))).astype(int))
         from clusterx.super_cell import SuperCell
         scell = SuperCell(parent_lattice,tmat)
-        pris = scell.get_atoms()
+        pris = scell.get_pristine()
 
         pos = pris.get_positions()
         new_nrs = np.zeros(len(pos))
