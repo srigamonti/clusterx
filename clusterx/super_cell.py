@@ -43,24 +43,33 @@ class SuperCell(ParentLattice):
         self._plat = parent_lattice
 
         if not isinstance(p,int):
-            self._p = np.array(p)
+            p = np.array(p)
+            if p.shape == (1,):
+                self._p = np.diag([p[0],1,1])
+            elif p.shape == (2,):
+                self._p = np.diag([p[0],p[1],1])
+            elif p.shape == (3,):
+                self._p = np.diag(p)
+            elif p.shape == (3,3):
+                self._p = p
 
         if isinstance(p,int):
             if pbc[0]==1 and pbc[1]==0 and pbc[2]==0:
-                self._p = np.diag([p,0,0])
+                self._p = np.diag([p,1,1])
             elif pbc[0]==1 and pbc[1]==1 and pbc[2]==0:
-                self._p = np.diag([p,p,0])
+                self._p = np.diag([p,p,1])
             elif pbc[0]==1 and pbc[1]==1 and pbc[2]==1:
                 self._p = np.diag([p,p,p])
             else:
                 sys.exit("SuperCell(Error)")
-        elif self._p.shape ==(3,):
-            self._p = np.diag(p)
 
-        self.index = int(round(np.linalg.det(p)))
+        #elif self._p.shape ==(3,):
+        #    self._p = np.diag(p)
+
+        self.index = int(round(np.linalg.det(self._p)))
         #prist = make_supercell(parent_lattice.get_atoms(),p)
-        prist = make_supercell(parent_lattice.get_pristine(),p)
-        subs = [make_supercell(atoms,p) for atoms in parent_lattice.get_substitutions()]
+        prist = make_supercell(parent_lattice.get_pristine(),self._p)
+        subs = [make_supercell(atoms,self._p) for atoms in parent_lattice.get_substitutions()]
         #ParentLattice.__init__(self, atoms = prist, substitutions = subs )
         super(SuperCell,self).__init__(atoms = prist, substitutions = subs )
         self._natoms = len(self)
