@@ -438,11 +438,16 @@ class ParentLattice(Atoms):
             from ase.data import chemical_symbols as cs
             sld = self.idx_subs
             cs = np.array(cs)
-            info = "\nThe structure consists of "+str(len(sld))+" sublattices."
-            info += "\n\n{0:<17s}|{1:<30s}|{2:<19s}".format("Sublattice type","Chemical symbols","Atomic numbers")
+            print("\n+--------------------------------------------------------------------+")
+            print("|{0:^68s}|".format("The structure consists of "+str(len(sld))+" sublattices"))
+            print("+--------------------------------------------------------------------+")
+            print("|{0:^17s}|{1:^30s}|{2:^19s}|".format("Sublattice type","Chemical symbols","Atomic numbers"))
+            print("+--------------------------------------------------------------------+")
+
             for slind,slsps in self.idx_subs.items():
-                info+="\n{0:<17s}|{1:<30s}|{2:<19s}".format(str(slind),str(cs[slsps]),str(slsps))
-            return info
+                print("|{0:^17s}|{1:^30s}|{2:^19s}|".format(str(slind),str(cs[slsps]),str(slsps)))
+            print("+--------------------------------------------------------------------+\n")
+
 
     def get_idx_subs(self):
         return self.get_sublattice_types()

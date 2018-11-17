@@ -124,8 +124,7 @@ class StructuresSet():
         nplat = len(self._parent_lattice)
         indices = np.zeros(self.get_nstr(),dtype=int)
         for i in range(self.get_nstr()):
-            ni = len(self.get_structure(iall_SiGe_structures = StructuresSet(SiGe_parlat, filename='test_structures_set_merge.json')
-))
+            ni = len(self.get_structure(iall_SiGe_structures = StructuresSet(SiGe_parlat, filename='test_structures_set_merge.json')))
             indices[i] = ni//nplat
         return indices
 

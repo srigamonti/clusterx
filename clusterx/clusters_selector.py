@@ -10,6 +10,8 @@ class ClustersSelector():
     the optimal set of clusters, for given training data and clusters pool.
 
     **Parameters:**
+    ``basis``: string
+        Cluster basis used for the optimization.
 
     ``method``: string
         can be "lasso" or "linreg". In both cases a cross-validation optimization
@@ -32,7 +34,7 @@ class ClustersSelector():
             parameter below) is always kept and the combinations are searched only
             for subsets of ``nclmax`` (see below) clusters.
 
-            ``set0``: array with to elements ``[int,float]``
+            ``set0``: array with two elements ``[int,float]``
                 if ``clusters_sets`` is set to "size+combinations", this indicates
                 the size of the fixed pool of clusters, above which a combinatorial
                 search is performed. The first element of the array indicates the
@@ -95,23 +97,19 @@ class ClustersSelector():
     def select_clusters(self, sset, cpool, prop):
         """Select clusters
 
-        Selects best model for the cluster expansion. The input parameters
-        :math:`x` and :math:`p` relate to each other as in:
-
-        .. math::
-
-            xJ = p^T
-
-        where J are the effective cluster interactions.
+        Returns a subpool containing
+        the optimal set of clusters.
 
         **Parameters:**
+        ``sset``: StructuresSet object
+            The structures set corresponding to the training data.
 
-        ``clusters_pool``:ClustersPool object
+        ``cpool``:ClustersPool object
             the clusters pool from which the optimal model is selected.
 
-        x: 2d matrix of cluster correlations
+        ``x``: 2d matrix of cluster correlations
             Rows correspond to structures, columns correspond to clusters.
-        p: list of property values
+        ``p``: list of property values
             Property values for the training structures set.
         """
         from sklearn.model_selection import LeaveOneOut
@@ -145,7 +143,7 @@ class ClustersSelector():
             elif self.clusters_sets == "size+combinations":
                 clsets = self.cpool.get_clusters_sets(grouping_strategy = "size+combinations", nclmax=self.nclmax , set0=self.set0)
                 opt = self._linear_regression_cv(x, p, clsets)
-                
+
         elif self.method == "identity":
             opt = np.arange(len(self.cpool),dtype=int)
 

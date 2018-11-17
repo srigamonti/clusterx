@@ -121,6 +121,8 @@ class ClustersPool():
         return len(self._cpool)
 
     def sort(self):
+        """Sort clusters pool
+        """
         self._cpool.sort()
 
     """
@@ -138,6 +140,8 @@ class ClustersPool():
     """
 
     def get_plat(self):
+        """Return parent lattice for the clusters pool
+        """
         return self._plat
 
     def get_multiplicities(self):
@@ -839,9 +843,35 @@ class ClustersPool():
     def get_atoms_database(self):
         pass
 
-    def display_info(self):
+    def display_info(self, ecis = None):
         """Display in screen information about the clusters pools
+
+        Displays on screen a table with information concerning the clusters pool.
+
+        **Parameters**:
+        ``ecis``: Array of float (optional)
+            Effective cluster interactions. If not ``None``, the displayed
+            table contains the ECI values in the last column.
         """
-        print("{0:<19s}|{1:<19s}|{2:<19s}".format("Index","Nr. of points","Radius"))
+        if ecis is None:
+            print("\n+-----------------------------------------------------------+")
+            print("|                   Clusters Pool Info                      |")
+            print("+-----------------------------------------------------------+")
+            print("|{0:^19s}|{1:^19s}|{2:^19s}|".format("Index","Nr. of points","Radius"))
+            print("+-----------------------------------------------------------+")
+        else:
+            print("\n+-------------------------------------------------------------------------------+")
+            print("|                             Clusters Pool Info                                |")
+            print("+-------------------------------------------------------------------------------+")
+            print("|{0:^19s}|{1:^19s}|{2:^19s}|{3:^19s}|".format("Index","Nr. of points","Radius","ECI"))
+            print("+-------------------------------------------------------------------------------+")
         for i, cl in enumerate(self._cpool):
-            print("{0:<19d}|{1:<19d}|{2:<19.3f}".format(i,cl.npoints,cl.radius))
+            if ecis is None:
+                print("|{0:^19d}|{1:^19d}|{2:^19.3f}|".format(i,cl.npoints,cl.radius))
+            else:
+                print("|{0:^19d}|{1:^19d}|{2:^19.3f}|{3:^19.4f}|".format(i,cl.npoints,cl.radius,ecis[i]))
+
+        if ecis is None:
+            print("+-----------------------------------------------------------+\n")
+        else:
+            print("+-------------------------------------------------------------------------------+\n")

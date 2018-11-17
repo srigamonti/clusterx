@@ -124,6 +124,66 @@ class CorrelationsCalculator():
 
         return np.around(correlations,decimals=12)
 
+    def get_orbit_lengths(self,structure):
+        """Return integer array of orbit lenghts
+
+        ``structure``: ParentLattice, SuperCell, or Structure object
+            Object containing the lattice definition to determine the orbit
+            of the clusters in the CorrelationsCalculator.
+
+        """
+        cluster_orbits = self.get_cluster_orbits_for_scell(structure)
+        lengths = np.zeros(len(cluster_orbits),dtype=int)
+        for i,orbit in enumerate(cluster_orbits):
+            lengths[i] = len(orbit)
+        return lengths
+
+    def get_cluster_orbits_for_scell(self,scell):
+        """Return array of cluster orbits for a given supercell
+
+        **Parameters**
+
+        ``scell``: ParentLattice, SuperCell, or Structure object
+            Object containing the lattice definition to determine the orbit
+            of the clusters in the CorrelationsCalculator.
+        """
+        #if isinstance(scell,Structure):
+        from clusterx.utils import get_cl_idx_sc
+        cluster_orbits = None
+
+        for i, _scell in enumerate(self._scells):
+            if cluster_orbits is None:
+                if len(scell.get_positions()) == len(_scell.get_positions()):
+                    if np.allclose(scell.get_positions(),_scell.get_positions(),atol=1e-3):
+                        cluster_orbits = self._cluster_orbits_set[i]
+                        break
+
+        if cluster_orbits is None:
+            from clusterx.structure import Structure
+            # Add new super cell and calculate cluster orbits for it.
+            cluster_orbits = []
+            #scell = structure.get_supercell()
+            from clusterx.super_cell import SuperCell
+            if isinstance(scell,Structure):
+                scell = scell.get_supercell()
+            elif isinstance(scell,SuperCell):
+                pass
+            elif isinstance(scell,ParentLattice):
+                scell = SuperCell(scell,[1,1,1])
+
+            for icl,cluster in enumerate(self._cpool.get_cpool()):
+                positions = cluster.get_positions()
+                cl_spos = get_scaled_positions(positions, scell.get_cell(), pbc=scell.get_pbc(), wrap=True)
+                sc_spos = scell.get_scaled_positions(wrap=True)
+                cl_idxs = get_cl_idx_sc(cl_spos,sc_spos,method=1)
+                cluster_orbit, mult = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=True)
+                cluster_orbits.append(cluster_orbit)
+
+            self._scells.append(scell) # Add supercell to calculator
+            self._cluster_orbits_set.append(cluster_orbits) # Add corresponding cluster orbits
+
+        return cluster_orbits
+
     def get_cluster_correlations(self, structure, mc = False, multiplicities=None):
         """Get cluster correlations for a structure
         **Parameters:**
@@ -142,10 +202,14 @@ class CorrelationsCalculator():
 
             remove multiplicities option and always give intensive correlations.
         """
-        from clusterx.utils import get_cl_idx_sc
+        #from clusterx.utils import get_cl_idx_sc
         cluster_orbits = None
         if mc and self._cluster_orbits_set != []:
             cluster_orbits = self._cluster_orbits_set[0]
+        else:
+            cluster_orbits = self.get_cluster_orbits_for_scell(structure.get_supercell())
+
+        """
         elif not mc:
             for i, scell in enumerate(self._scells):
                 if cluster_orbits is None:
@@ -169,7 +233,7 @@ class CorrelationsCalculator():
 
             self._scells.append(scell) # Add supercell to calculator
             self._cluster_orbits_set.append(cluster_orbits) # Add corresponding cluster orbits
-
+        """
         correlations = np.zeros(len(self._cpool))
         for icl, cluster in enumerate(self._cpool.get_cpool()):
             cluster_orbit = cluster_orbits[icl]
