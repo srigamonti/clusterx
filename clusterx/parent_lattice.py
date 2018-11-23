@@ -172,7 +172,7 @@ class ParentLattice(Atoms):
             tags = np.zeros(self._natoms).astype(int)
             for ius, us in enumerate(unique_sites):
                 for idx in range(self._natoms):
-                    if (np.array(sites[idx]) == us).all():
+                    if (np.array_equal(sites[idx], us)):
 
                         tags[idx] = int(ius)
 
