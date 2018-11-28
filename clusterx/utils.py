@@ -303,7 +303,7 @@ def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_latti
         x.append([struc[2][i][0][0],struc[2][i][0][1],struc[2][i][0][2]])
         nrs = []
         for sp in struc[2][i][1]:
-            if sp == "Vac":
+            if sp == "Vac" or sp == "V":
                 sp = "X"
             nrs.append(atomic_numbers[sp])
         species.append(nrs)

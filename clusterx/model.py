@@ -46,7 +46,7 @@ class Model():
                 pv = pv + self.ecis[i]*corrs[i]
             return pv
 
-    def predict_swap_binary_linear(self,structure, ind1 = None, ind2 = None):
+    def predict_swap_binary_linear(self,structure, ind1 = None, ind2 = None, correlation = False):
         """Predict property difference with the optimal cluster expansion model only for binary-linear)
 
         **Parameters:**
@@ -97,6 +97,8 @@ class Model():
 
             corrs[icl] /= len(cluster_orbit)
         corrs = np.around(corrs,decimals=12)
+        if correlation:
+            return corrs
 
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1,-1))[0]
@@ -105,8 +107,9 @@ class Model():
             for i in range(len(corrs)):
                 pv = pv + self.ecis[i]*corrs[i]
             return pv
-
-    def predict_swap(self, structure, ind1 = None, ind2 = None):
+        
+        
+    def predict_swap(self, structure, ind1 = None, ind2 = None, correlation = False):
         """Predict property difference with the optimal cluster expansion model.
 
         **Parameters:**
@@ -184,6 +187,8 @@ class Model():
 
             corrs[icl] /= len(cluster_orbit)
         corrs = np.around(corrs,decimals=12)
+        if correlation:
+            return corrs
 
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1,-1))[0]
