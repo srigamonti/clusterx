@@ -228,7 +228,7 @@ class StructuresSet():
             if write_to_db:
                 for property_vals, property_name in zip([self._props[x] for x in self._props.keys()], self._props.keys()):
                     for i,p in enumerate(property_vals): #see "set_property_values"
-                        self._folders_db.update([i+1], **{property_name:p})
+                        self._folders_db.update(i+1, **{property_name:p})
                 for meta_key in self._metadata.keys():
                     self._folders_db.metadata = {**self._folders_db.metadata,meta_key : self._metadata[meta_key]}
                 self._folders_db.metadata = {**self._folders_db.metadata,"properties":self._props}
@@ -620,7 +620,7 @@ class StructuresSet():
         for i,folder in enumerate(self._folders):
             pval = read_property(i,folder,**kwargs)
             self._props[property_name].append(pval)
-            db.update([i+1], **{property_name:pval})
+            db.update(i+1, **{property_name:pval})
             if write_to_file:
                 f = open(os.path.join(folder,property_name+".dat"),"w+")
                 f.write("%2.9f\n"%(pval))
@@ -666,7 +666,7 @@ class StructuresSet():
 
         if db is not None:
             for i,p in enumerate(property_vals):
-                db.update([i+1], **{property_name:p})
+                db.update(i+1, **{property_name:p})
 
     def get_predictions(self, cemodel):
         """Get predictions of CE model on structures set
