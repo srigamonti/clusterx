@@ -123,15 +123,32 @@ class SuperCell(ParentLattice):
 
         Parameters:
 
-        nsubs: dictionary
-            The nsubs argument must have the format ``{site_type0:[nsub01,nsub02,...], site_type1: ...}``
+        ``nsubs``: int or dictionary
+            If dictionary, the ``nsubs`` argument must have the format ``{site_type0:[nsub01,nsub02,...], site_type1: ...}``
             where ``site_type#`` and ``nsub##`` are, respectively, an integer indicating
             the site type index and the number of substitutional species of each kind, as returned by
-            ``SuperCell.get_idx_subs()``.
+            ``SuperCell.get_sublattice_types()``.
+
+            If integer, the SuperCell object must be correspond to a binary, i.e.
+            the output of ``scell.is_nary(2)`` must be True. In this case, nsub indicates
+            the number of substitutional atoms in the binary.
         """
         import clusterx.structure
 
-        decoration, sigmas = self.gen_random_decoration(nsubs)
+        if isinstance(nsubs,int):
+            if self.is_nary(2):
+                slts = self.get_sublattice_types()
+                _nsubs = {}
+                for k,v in slts.items():
+                    if len(v) != 0:
+                        _nsubs[k] = [nsubs]
+
+            else:
+                return None
+        else:
+            _nsubs = nsubs
+
+        decoration, sigmas = self.gen_random_decoration(_nsubs)
 
         return clusterx.structure.Structure(SuperCell(self._plat,self._p),sigmas=sigmas, mc = mc)
 

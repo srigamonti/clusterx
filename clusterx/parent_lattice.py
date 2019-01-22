@@ -249,6 +249,53 @@ class ParentLattice(Atoms):
         self._max_nsub = len(self._subs)
         self._set_tags()
 
+    def is_nary(self,n):
+        """Check whether lattice is n-ary
+
+        Returns ``True`` if the structure is based on a n-ary ParentLattice object,
+        i.e., whether it consists of a single n-ary substitutional sublattice (plus any number of
+        spectator sublattices). Otherwise returns ``False``.
+
+        **Example:**
+        Check whether a structure is a ternary::
+
+            from clusterx.parent_lattice import ParentLattice
+            from clusterx.super_cell import SuperCell
+            from ase.build import bulk
+
+            cu = bulk("Cu","fcc")
+            au = bulk("Au","fcc")
+            ag = bulk("Ag","fcc")
+
+            plat = ParentLattice(atoms=cu, substitutions=[au,ag])
+
+            scell = SuperCell(plat, [[2,2,-2],[2,-2,2],[-2,2,2]])
+
+            s = scell.gen_random(nsubs={0:[10,3]})
+
+            If s.is_nary(3):
+                print("The structure is ternary")
+
+
+        **Parameters:**
+
+        ``n``: int
+            Integer number indicating how many different species can be hosted by
+            the substitutional sublattice.
+        """
+        _is_nary = False
+        sublt = self.get_sublattice_types()
+        m = np.zeros(len(sublt),dtype=int)
+        for i,(k,v) in enumerate(sublt.items()):
+            m[i]= len(v)-1
+
+        if (np.sum(m) == n-1) and (np.sum(m) in m):
+            _is_nary = True
+
+        return _is_nary
+
+
+
     def _set_tags(self):
         """Set the ``tags`` attribute of the Atoms object, and the ParentLattice
         attributes ``idx_subs`` and ``sites`` which define the substitutional
