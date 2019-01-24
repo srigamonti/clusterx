@@ -172,6 +172,12 @@ class StructuresSet():
 
         ``structures``: list of Structure objects, path to JSON file, or StructuresSet object
             Structures to be added
+
+        .. todo::
+            Look at possible issues when structures instance is str: it may fail if
+            positions in actual structure are shuffled wrt parent lattice (a situation
+            that is not common, but that may appear when using
+            runs not designed for a CE ...).
         """
         if isinstance(structures, (list, np.ndarray)):
             for structure in structures:
