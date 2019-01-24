@@ -578,6 +578,8 @@ def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
         positions are expected to be wrapped inside supercell ``sc``
     ``sc``: natoms x 3 matrix
         matrix of cartesian or scaled coordinates of supercell atomic positions.
+        The type of coordinates (either cartesion or scaled) must coincide with
+        that of ``cl``
     ``method``: integer
         Method to use. 0: (slow) nested for loop using numpy allclose. 1: (fast)
         calculates all distances from points in ``cl`` to atoms in ``sc``, and
