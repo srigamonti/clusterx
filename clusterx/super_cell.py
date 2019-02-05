@@ -41,6 +41,7 @@ class SuperCell(ParentLattice):
 
     def __init__(self, parent_lattice, p):
         self._plat = parent_lattice
+        pbc = self._plat.get_pbc()
 
         if not isinstance(p,int):
             p = np.array(p)

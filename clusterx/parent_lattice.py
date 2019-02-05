@@ -478,6 +478,8 @@ class ParentLattice(Atoms):
         returned dictionary will look like::
 
             {0: [14,13], 1: [56,0,38], 2:[11]}
+        .. todo::
+            give option to also print the list of atom indexes for every site type.
         """
         if not pretty_print:
             return self.idx_subs
