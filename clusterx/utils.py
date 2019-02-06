@@ -874,3 +874,30 @@ def poppush(x, val):
     """
     x[:-1] = x[1:]; x[-1] = val
     return x.mean()
+
+def sort_atoms(atoms, key = (2,1,0)):
+    """Return atoms object with sorted atomic coordinates
+
+    The default sorting is: increasing z-coordinate first, increasing
+    y-coordinate second, increasing x-coordinate third. Useful to get
+    well ordered slab structures, for instance. Sorting can be changed
+    by appropriately setting the ``key`` argument, with the same
+    effect as in::
+
+        from operator import itemgetter
+        sp = sorted(p, key=itemgetter(2,1,0))
+
+    where p is a Nx3 array of vector coordinates.
+    """
+    nrs = atoms.get_atomic_numbers()
+    poss = atoms.get_positions()
+    pn = []
+    for p,n in zip(poss,nrs):
+        pn.append([p[0],p[1],p[2],n])
+    from operator import itemgetter
+    import numpy as np
+    _pn = sorted(pn, key=itemgetter(*key))
+    _poss = np.delete(np.array(_pn),3,1)
+    _nrs = np.delete(np.array(_pn),[0,1,2],1).flatten()
+    from ase import Atoms
+    return Atoms(positions=_poss, numbers=_nrs, cell=atoms.get_cell(), pbc=atoms.get_pbc())

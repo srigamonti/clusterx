@@ -28,6 +28,7 @@ def HatZnO_10m10(a=3.2493, c=5.2054, u=0.345, nlayers=12, ads_symbol="X",vacuum 
     vacuum: float
         amount of vacuum between top-most adsorbed atom and slab bottom surface.
     """
+    from clusterx.utils import sort_atoms
     zno_bondlength_over_c = u
 
     zno = crystal(['Zn','O'],[(1./3.,2./3.,0),(1./3.,2./3.,zno_bondlength_over_c)],
@@ -43,19 +44,7 @@ def HatZnO_10m10(a=3.2493, c=5.2054, u=0.345, nlayers=12, ads_symbol="X",vacuum 
     znos.translate([0,0,-vacuum/2.0])
     znos.set_pbc([True,True,False])
 
-    nrs = znos.get_atomic_numbers()
-    poss = znos.get_positions()
-    pn = []
-    for p,n in zip(poss,nrs):
-        pn.append([p[0],p[1],p[2],n])
-    from operator import itemgetter
-    import numpy as np
-    _pn = sorted(pn, key=itemgetter(2,1,0))
-    #_pn = (list(t) for t in zip(*sorted(zip(np.array(pn)),key=itemgetter(2,1,0))))
-    _poss = np.delete(np.array(_pn),3,1)
-    _nrs = np.delete(np.array(_pn),[0,1,2],1).flatten()
-    from ase import Atoms
-    _znos = Atoms(positions=_poss, numbers=_nrs, cell=cell, pbc=[True,True,False])
+    _znos = sort_atoms(znos)
     _znos.center(vacuum=vacuum/2.0,axis=2)
     _znos.translate([0,0,-vacuum/2.0])
     add_adsorbate(_znos,ads_symbol,1.769,position=(0.5*a,0.3826*c)) # H@Zn
