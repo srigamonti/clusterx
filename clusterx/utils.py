@@ -64,7 +64,7 @@ def dict_compare(d1, d2, tol=None):
                 else:
                     if not isclose(v1,v2,tol):
                         return False
-        
+
         except TypeError:
             try:
                 if _is_integrable(d1[k]):
@@ -75,7 +75,7 @@ def dict_compare(d1, d2, tol=None):
                     for subkeys in d1[k].keys():
                         if not isclose(d1[k][subkeys],d2[k][subkeys],tol):
                             return False
-                
+
     return areeq
 
 
@@ -199,7 +199,7 @@ def list_integer_named_folders(root=".", prefix='', suffix='', containing_files=
 
 
 
-def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_lattice=None,pbc=None):
+def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_lattice=None,pbc=None,wrap=True):
     """Parse a ``lat.in`` or ``str.out`` file from ``ATAT``.
 
     ``ATAT`` users may use the input files from ``ATAT`` to perform a cluster
@@ -314,7 +314,13 @@ def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_latti
 
     ####################
     # Calculate real cartesian coordinates
+    if wrap:
+        from clusterx.symmetry import wrap_scaled_positions
+        if pbc == None:
+            pbc = (1,1,1)
+        x = wrap_scaled_positions(x,pbc)
     r = x*b
+
     cell = a*b
     if interpret_as == None:
         return cell, r, species

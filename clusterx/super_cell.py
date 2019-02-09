@@ -16,11 +16,11 @@ class SuperCell(ParentLattice):
 
     **Parameters:**
 
-    parent_lattice: ParentLattice object
+    ``parent_lattice``: ParentLattice object
         In **CELL**, a super cell is a periodic repetition of a parent lattice
         object. This parameter defines such a parent lattice for the created
         super cell.
-    p: integer or 1x3 or 3x3 integer array
+    ``p``: integer or 1x3 or 3x3 integer array
         Transformation matrix :math:`P`. The cartesian coordinates of the
         latttice vectors defining the created SuperCell object, are the rows of
         the matrix :math:`S` defined by :math:`S = PV` where the rows of
@@ -30,6 +30,20 @@ class SuperCell(ParentLattice):
         with the periodic boundary conditions of the parent lattice, i.e. the
         resulting super cell must not contain translations along the
         non-periodic directions.
+    ``sort_key``: list of three integers, optional
+        Create supercell object with sorted atomic coordinates
+
+        Example:``sort_key=(2,1,0)`` will result in atoms sorted
+        according to increasing z-coordinate first, increasing
+        y-coordinate second, increasing x-coordinate third. Useful to get
+        well ordered slab structures, for instance. Sorting can be changed
+        by appropriately setting the ``sort_key`` argument, with the same
+        effect as in the argument to ``itemgetter`` below::
+
+            from operator import itemgetter
+            sp = sorted(p, key=itemgetter(2,1,0))
+
+        here p is a Nx3 array of vector coordinates.
 
     .. todo::
         Proper check of pbc when building the super cell. Either ignore
@@ -39,7 +53,7 @@ class SuperCell(ParentLattice):
     **Methods:**
     """
 
-    def __init__(self, parent_lattice, p):
+    def __init__(self, parent_lattice, p, sort_key=None):
         self._plat = parent_lattice
         pbc = self._plat.get_pbc()
 
@@ -71,6 +85,11 @@ class SuperCell(ParentLattice):
         #prist = make_supercell(parent_lattice.get_atoms(),p)
         prist = make_supercell(parent_lattice.get_pristine(),self._p)
         subs = [make_supercell(atoms,self._p) for atoms in parent_lattice.get_substitutions()]
+        if sort_key is not None:
+            from clusterx.utils import sort_atoms
+            prist = sort_atoms(prist,key=sort_key)
+            for i in range(len(subs)):
+                subs[i] = sort_atoms(subs[i],key=sort_key)
         #ParentLattice.__init__(self, atoms = prist, substitutions = subs )
         super(SuperCell,self).__init__(atoms = prist, substitutions = subs )
         self._natoms = len(self)
