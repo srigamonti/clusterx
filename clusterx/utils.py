@@ -682,6 +682,7 @@ def mgrep(fpath, search_array, prepend='',root='.'):
     Grep strings in file and return matching lines.
 
     **Parameters:**
+    
     ``fpath``: string
         File path to grep
     ``search_array``: array of strings

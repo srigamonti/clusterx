@@ -121,9 +121,9 @@ class ParentLattice(Atoms):
         * Add in metadata the tags, and the idx_tags relation.
 
         * override get_distance and get_distances from Atoms. Such that if get_all_distances
-        was ever called, it sets a self.distances attribute which is used for get_distance
-        and get_distances, saving computation time. Care should be paid in cases where
-        positions are updated either by relaxation or deformation of the lattice.
+            was ever called, it sets a self.distances attribute which is used for get_distance
+            and get_distances, saving computation time. Care should be paid in cases where
+            positions are updated either by relaxation or deformation of the lattice.
 
     **Methods:**
     """
@@ -478,6 +478,7 @@ class ParentLattice(Atoms):
         returned dictionary will look like::
 
             {0: [14,13], 1: [56,0,38], 2:[11]}
+
         .. todo::
             give option to also print the list of atom indexes for every site type.
         """
