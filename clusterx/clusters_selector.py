@@ -10,6 +10,7 @@ class ClustersSelector():
     the optimal set of clusters, for given training data and clusters pool.
 
     **Parameters:**
+
     ``basis``: string
         Cluster basis used for the optimization.
 
@@ -101,6 +102,7 @@ class ClustersSelector():
         the optimal set of clusters.
 
         **Parameters:**
+        
         ``sset``: StructuresSet object
             The structures set corresponding to the training data.
 

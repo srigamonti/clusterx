@@ -41,7 +41,7 @@ class MonteCarlo():
         Trajectory can be written to a json file with the name ``filename``.
 
     ``last_visited_structure_name``: string
-        The structure visited at the final step of the sampling can be saved to a json file. 
+        The structure visited at the final step of the sampling can be saved to a json file.
         Default name: last-visited-structure-mc.json
 
     ``sublattice_indices``: list of int
@@ -60,7 +60,7 @@ class MonteCarlo():
     ``ensemble``: string
         "canonical" allows only for swapping of atoms inside scell
         "grandcanonical"  allows for replacing atoms within the given scell
-            (the number of substitutents in each sublattice is not kept)
+        (the number of substitutents in each sublattice is not kept)
 
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
@@ -68,6 +68,7 @@ class MonteCarlo():
         Properties given in models are not calculated during the sampling.
 
         SR: notes from using the class by reading the documentation:
+        
             * Initialization with both nsubs and sublattice_indices is confusing: What happens if I specify a site_type in sublattice_indices and do not put the corresponding sitetype in nsubs, or viceversa?
             * ensemble parameter needs more extensive documentation. Is a chemical potential defined at some point to adjust average concentration in grandcanonical?
 
@@ -98,7 +99,7 @@ class MonteCarlo():
 
         if not self._sublattice_indices:
             import sys
-            sys.exit('Indices of sublattice are not correctly assigned, look at the documatation.')                
+            sys.exit('Indices of sublattice are not correctly assigned, look at the documatation.')
 
         self._models = []
         if models:
@@ -180,7 +181,7 @@ class MonteCarlo():
             nar = 100
             ar = acceptance_ratio
             hist = np.zeros(nar,dtype=int)
-            
+
         if self._no_of_swaps > 1:
             control_flag = False
         else:
@@ -188,8 +189,8 @@ class MonteCarlo():
             if self._error_reset:
                 errorsteps = 50000
                 x = 1
-           
-            
+
+
         for i in range(1,nmc+1):
             indices_list = []
             for j in range(self._no_of_swaps):
@@ -199,7 +200,7 @@ class MonteCarlo():
                 else:
                     ind1,ind2 = struc.swap_random(self._sublattice_indices)
                     indices_list.append([ind1, ind2])
-                
+
             if control_flag:
                 if self._error_reset:
                     if (x > errorsteps):
@@ -215,13 +216,13 @@ class MonteCarlo():
                     e1 = e+de
             else:
                 e1 = self._em.predict(struc)
-                
+
             if e >= e1:
                 accept_swap = True
                 boltzmann_factor = 0
             else:
                 boltzmann_factor = math.exp((e-e1)/(scale_factor_product))
-                    
+
                 if np.random.uniform(0,1) <= boltzmann_factor:
                     accept_swap = True
                 else:
@@ -257,7 +258,7 @@ class MonteCarlo():
                     scale_factor_product *= math.exp((acceptance_ratio/100.0-ar)/10.0)
                 #if acceptance_ratio and i%100 == 0:
                 #    print(i,acceptance_ratio,ar*100,scale_factor_product)
-                
+
         if write_to_db:
             traj.write_to_file()
             struc.serialize(fname=self._last_visited_structure_name)
@@ -299,7 +300,7 @@ class MonteCarloTrajectory():
 
     def __init__(self, scell = None, filename="trajectory.json", **kwargs):
         self._trajectory = []
-        
+
         self._scell = scell
         self._save_nsteps = kwargs.pop("save_nsteps",10)
         self._write_no = 0
@@ -570,7 +571,7 @@ class MonteCarloTrajectory():
 
             _plat = ParentLattice(atoms = Atoms(positions = _trajz['super_cell_definition']['parent_lattice']['positions'], cell = _trajz['super_cell_definition']['parent_lattice']['unit_cell'], numbers=np.zeros(len(species)), pbc = np.asarray(_trajz['super_cell_definition']['parent_lattice']['pbc'])), sites  = np.asarray(species), pbc = np.asarray(_trajz['super_cell_definition']['parent_lattice']['pbc']))
             self._scell = SuperCell(_plat, np.asarray(_trajz['super_cell_definition']['tmat']))
-            
+
 
 class NumpyEncoder(json.JSONEncoder):
     """ Special json encoder for numpy types

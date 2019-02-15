@@ -636,6 +636,8 @@ class ClustersPool():
 
         Returns a pool of clusters representing a cluster orbit.
 
+        **Parameters:**
+
         ``super_cell``: SuperCell object
             The super cell in which the orbit is calculated.
         ``cluster_sites``: Array of integer
@@ -661,6 +663,7 @@ class ClustersPool():
         ``as_array``: Boolean (default: ``False``)
             If true, instead of returning a clusters pool, it returns an array of cluster objects
             and the multiplicities, i.e. call it in this way::
+            
                 cluster_array, multiplicities = cpool.get_cluster_orbit(as_array=True)
         """
         from scipy.spatial.distance import cdist
@@ -849,6 +852,7 @@ class ClustersPool():
         Displays on screen a table with information concerning the clusters pool.
 
         **Parameters**:
+
         ``ecis``: Array of float (optional)
             Effective cluster interactions. If not ``None``, the displayed
             table contains the ECI values in the last column.

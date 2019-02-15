@@ -107,8 +107,8 @@ class Model():
             for i in range(len(corrs)):
                 pv = pv + self.ecis[i]*corrs[i]
             return pv
-        
-        
+
+
     def predict_swap(self, structure, ind1 = None, ind2 = None, correlation = False):
         """Predict property difference with the optimal cluster expansion model.
 
@@ -202,6 +202,7 @@ class Model():
         """Report fit and CV scores
 
         **Parameters**:
+        
         ``sset``: StructuresSet object
             the scores are computed for the give structures set
         """
