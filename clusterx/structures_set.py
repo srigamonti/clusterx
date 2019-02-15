@@ -183,13 +183,18 @@ class StructuresSet():
             for structure in structures:
                 self.add_structure(structure, write_to_db = write_to_db)
         elif isinstance(structures, str):
+            from clusterx.utils import sort_atoms
             db = connect(structures)
+            sort_key = (2,1,0)
             for row in db.select():
-                atoms = row.toatoms()
+                atoms = sort_atoms(row.toatoms(), key = sort_key)
+                atoms.wrap()
                 tmat = row.get("data",{}).get("tmat")
                 if tmat is None:
                     tmat = calculate_trafo_matrix(self._parent_lattice.get_cell(),atoms.get_cell())
-                scell = SuperCell(self._parent_lattice,tmat)
+                scell = SuperCell(self._parent_lattice,tmat,sort_key=sort_key)
+                #print(scell.get_scaled_positions())
+                #print(atoms.get_scaled_positions())
                 self.add_structure(Structure(scell, decoration=atoms.get_atomic_numbers()))
         elif isinstance(structures, StructuresSet):
             if not hasattr(self, 'metadata'):
@@ -424,7 +429,7 @@ class StructuresSet():
             os.chdir(cwd)
 
 
-    def write_files(self, root = ".", prefix = '', suffix = '', fnames = None, formats = [], overwrite = True):
+    def write_files(self, root = ".", prefix = '', suffix = '', fnames = None, formats = [], overwrite = True, fix_atoms=None, remove_vacancies=False):
         """Create folders containing structure files for ab-initio calculations.
 
         Structure files are written to files with path::
@@ -471,6 +476,17 @@ class StructuresSet():
 
         ``overwrite``: boolean
             Whether to overrite content of existing folders.
+
+        ``fix_atoms``: list of integer or ``None`` (Default:``None``)
+            List of atom indices which should remain fixed during atomic relaxation.
+            In ``None``, no constrain is applied. Constraints only take effect for
+            certain output formats. Uses ``FixAtoms`` constraint of ``ASE``.
+
+        ``remove_vacancies``: Boolean
+            Vacancies are represented with chemical symbol ``X`` and atomic number
+            0. Output file formats will contain lines with atomic positions corresponding
+            to vacancies. If you want them absent in the files, set ``remove_vacancies``
+            to ``True``.
         """
         import os
         from ase.io import write
@@ -494,6 +510,10 @@ class StructuresSet():
             for i in range(len(fnames)):
                 formats.append(None)
 
+        images = self.get_images(remove_vacancies=remove_vacancies)
+        if fix_atoms is not None:
+            from ase.constraints import FixAtoms
+
         for i in range(self.get_nstr()):
             path = os.path.join(root,prefix+str(i)+suffix)
             if not os.path.exists(path):
@@ -504,7 +524,12 @@ class StructuresSet():
             else:
                 self._folders.append(path)
 
-            atoms = self.get_structure(i).get_atoms()
+            #atoms = self.get_structure(i).get_atoms()
+            atoms = images[i]
+
+            if fix_atoms is not None:
+                c = FixAtoms(indices=fix_atoms)
+                atoms.set_constraint(c)
 
             for fname, format in zip(fnames,formats):
                 path = os.path.join(root,prefix+str(i)+suffix,fname)

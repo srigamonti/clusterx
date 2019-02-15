@@ -117,10 +117,17 @@ class CorrelationsCalculator():
         return cf
 
     def get_binary_random_structure_correlations(self,concentration):
+        """Return cluster correlations for binary quasirandom structure
+
+        .. todo::
+            extend for other bases. Write method for n-aries.
+        """
         correlations = np.zeros(len(self._cpool))
         if self.basis == "binary-linear":
             for icl,cl in enumerate(self._cpool.get_cpool()):
                 correlations[icl]=np.power(concentration,cl.npoints)
+        else:
+            return None
 
         return np.around(correlations,decimals=12)
 

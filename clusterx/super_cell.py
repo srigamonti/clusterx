@@ -56,6 +56,7 @@ class SuperCell(ParentLattice):
     def __init__(self, parent_lattice, p, sort_key=None):
         self._plat = parent_lattice
         pbc = self._plat.get_pbc()
+        self._sort_key = sort_key
 
         if not isinstance(p,int):
             p = np.array(p)
@@ -85,6 +86,11 @@ class SuperCell(ParentLattice):
         #prist = make_supercell(parent_lattice.get_atoms(),p)
         prist = make_supercell(parent_lattice.get_pristine(),self._p)
         subs = [make_supercell(atoms,self._p) for atoms in parent_lattice.get_substitutions()]
+
+        prist.wrap()
+        for i in range(len(subs)):
+            subs[i].wrap
+
         if sort_key is not None:
             from clusterx.utils import sort_atoms
             prist = sort_atoms(prist,key=sort_key)
@@ -160,7 +166,7 @@ class SuperCell(ParentLattice):
                 slts = self.get_sublattice_types()
                 _nsubs = {}
                 for k,v in slts.items():
-                    if len(v) != 0:
+                    if len(v) != 1:
                         _nsubs[k] = [nsubs]
 
             else:
@@ -170,7 +176,7 @@ class SuperCell(ParentLattice):
 
         decoration, sigmas = self.gen_random_decoration(_nsubs)
 
-        return clusterx.structure.Structure(SuperCell(self._plat,self._p),sigmas=sigmas, mc = mc)
+        return clusterx.structure.Structure(SuperCell(self._plat,self._p,self._sort_key),sigmas=sigmas, mc = mc)
 
     def gen_random_decoration(self,nsubs):
         """Generate a random decoration of the super cell with given number of substitutions.

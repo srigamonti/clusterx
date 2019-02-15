@@ -209,10 +209,10 @@ def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_latti
 
     **Parameters:**
 
-    file_path: string
+    ``file_path``: string
         string containing the path of the file to be parsed. The file must have
         format corresponding to a ``lat.in`` or ``str.out`` file from ATAT.
-    interpret_as: string or None
+    ``interpret_as``: string or None
         Indicate how to interpret the file in ``file_path``. Possible values are:
 
         * ``None``:
@@ -235,16 +235,21 @@ def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_latti
             lattice must be provided (see ``parent_lattice`` parameter below).
             In this case a ``Structure`` object will be returned.
 
-    parent_lattice: ParentLattice object
+    ``parent_lattice``: ParentLattice object
         If ``interpret_as`` is ``super_cell`` or ``structure``, a parent lattice
         must be provided. This must be compatible with the information in the
         ``lat.in`` file that was used to create the ``str.out`` files. See the
         examples below.
-
-    pbc: one or three bool (same as ASE's Atoms object)
+    ``pbc``: one or three bool (same as ASE's Atoms object)
         Periodic boundary conditions flags. Examples: True, False, 0, 1,
         (1, 1, 0), (True, False, False). Default value: False. The returned
         **CELL** objects will have these pbc's set up.
+    ``wrap``: boolean (default:``True``)
+        Wrap atomic coordinates. If pbc is ``None``, pbc is set to (1,1,1).
+        Set ``wrap`` to ``False`` if structure corresponds
+        to a supercell, i.e., if the second matrix of the structure definition
+        in either the lat.in or str.out file is different from the identity
+        matrix.
 
     **Returns:**
 
@@ -255,6 +260,15 @@ def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_latti
     (``interpret_as="Structure"``).
 
     **Examples:**
+
+    .. todo::
+        Clarify wrap option. Right now it is not guaranteed to
+        work when the supercell definition in lat.in is not the
+        identity matrix. This is so, because in the lat.in format
+        the scaled coordinates are given in reference to the
+        cartesian vectors of the parent lattice, but may define a
+        supercell. Fix it such that the x matrix below referrs to
+        a*b and not b as it is now.
 
     """
     from ase.data import atomic_numbers
