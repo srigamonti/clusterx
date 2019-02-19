@@ -24,7 +24,7 @@ class SuperCell(ParentLattice):
         In **CELL**, a super cell is a periodic repetition of a parent lattice
         object. This parameter defines such a parent lattice for the created
         super cell.
-    ``p``: integer or 1x3 or 3x3 integer array
+    ``p``: integer, or 1x3, 2x2, or 3x3 integer array
         Transformation matrix :math:`P`. The cartesian coordinates of the
         latttice vectors defining the created SuperCell object, are the rows of
         the matrix :math:`S` defined by :math:`S = PV` where the rows of
@@ -70,6 +70,8 @@ class SuperCell(ParentLattice):
                 self._p = np.diag([p[0],p[1],1])
             elif p.shape == (3,):
                 self._p = np.diag(p)
+            elif p.shape == (2,2):
+                self._p = np.array([[p[0,0],p[0,1],0],[p[1,0],p[1,1],0],[0,0,1]])
             elif p.shape == (3,3):
                 self._p = p
 
