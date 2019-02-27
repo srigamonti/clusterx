@@ -39,7 +39,7 @@ class Structure(SuperCell):
     def __init__(self, super_cell, decoration = None, decoration_symbols=None, sigmas = None, mc = False):
         self.scell = super_cell
         self.sites = super_cell.get_sites()
-        
+
         if sigmas is None:
             if decoration_symbols is None:
                 self.decor = decoration
@@ -62,7 +62,7 @@ class Structure(SuperCell):
                 self.decor[idx] = self.sites[idx][sigma]
                 self.ems[idx] = len(self.sites[idx])
 
-                
+
         super(Structure,self).__init__(super_cell.get_parent_lattice(),super_cell.get_transformation())
         self.atoms = Atoms(numbers = self.decor, positions = super_cell.get_positions(), tags = super_cell.get_tags(), cell = super_cell.get_cell(),pbc = super_cell.get_pbc())
         #self.set_atomic_numbers(self.decor)
@@ -111,11 +111,22 @@ class Structure(SuperCell):
         """
         return self.atoms.get_chemical_symbols()
 
-    def serialize(self, fmt="json", tmp=False, fname=None):
-        from ase.io import write
+    def serialize(self, fmt="json", fname="structure.json"):
+        """Serialize structure object
 
-        if fname is None:
-            fname = "structure.json"
+        Wrapper for ASEs write method.
+
+        **Parameters:**
+
+        ``fmt``: string (default: ``json``)
+            Indicate the file format of the output file. All the formats
+            accepted by ``ase.io.write()`` method are valid (see corresponding
+            documentation in https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write).
+
+        ``fname``: string (default: ``structure.json``)
+            file name (may includ absolute or relative path).
+        """
+        from ase.io import write
 
         write(fname,images=self.atoms,format=fmt)
 
@@ -139,7 +150,7 @@ class Structure(SuperCell):
             idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[1] and tags[index] == site_type]
             ridx1 = np.random.choice(idx1)
             ridx2 = np.random.choice(idx2)
-        
+
             self.swap(ridx1,ridx2)
             return ridx1,ridx2
 
@@ -164,7 +175,7 @@ class Structure(SuperCell):
 
         self.sigmas[ridx1] = sigma2
         self.sigmas[ridx2] = sigma1
-        
+
         self.decor[ridx1] = self.sites[ridx1][sigma2]
         self.decor[ridx2] = self.sites[ridx2][sigma1]
         self.atoms.set_atomic_numbers(self.decor)
@@ -172,11 +183,11 @@ class Structure(SuperCell):
         if site_type is not None:
             self._idxs[site_type][rindices[0][0]][rindices[1][0]] = ridx2
             self._idxs[site_type][rindices[0][1]][rindices[1][1]] = ridx1
-            
+
             self._idxs[site_type][rindices[0][0]].sort()
             self._idxs[site_type][rindices[0][1]].sort()
-            
-            
+
+
     def update_decoration(self, decoration):
         """Update decoration of the structure object
         """

@@ -72,7 +72,7 @@ class MonteCarlo():
         Properties given in models are not calculated during the sampling.
 
         SR: notes from using the class by reading the documentation:
-        
+
             * Initialization with both nsubs and sublattice_indices is confusing: What happens if I specify a site_type in sublattice_indices and do not put the corresponding sitetype in nsubs, or viceversa?
             * ensemble parameter needs more extensive documentation. Is a chemical potential defined at some point to adjust average concentration in grandcanonical?
 
@@ -154,6 +154,8 @@ class MonteCarlo():
         **Returns**: MonteCarloTrajectory object
             Trajectory containing all information of the structures visited during the sampling
 
+        .. todo:
+            Besides list of floats, give option to set ``scale_factor`` as float too.
         """
         import math
         from clusterx.utils import poppush

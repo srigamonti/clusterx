@@ -585,11 +585,15 @@ class StructuresSet():
     def read_energy(i,folder,**kwargs):
         """Read value stored in ``energy.dat`` file.
 
-        This is to be used as the ``read_property`` keyword argument of
-        ``StructureSet.read_property_values()`` method. Can be used as a
-        template for reading different properties to passed to ``StructureSet.read_property_values()``.
+        This is to be used as the default argument for the ``read_property``
+        parameter of the ``StructureSet.read_property_values()``
+        method. Can be used as a template for reading different properties to
+        be passed to ``StructureSet.read_property_values()``.
 
         **Parameters:**
+
+        ``i``: integer
+            folder number
 
         ``folder``: string
             absolute or relative path of the folder containing the file/s to be read.
@@ -597,6 +601,10 @@ class StructuresSet():
         ``**kwargs``: keyword arguments
             Extra arguments needed for the property reading. See documentation of
             ``StructureSet.read_property_values()``.
+
+        .. todo:
+
+            Remove parameter ``i`` from this template.
         """
         import os
         f = open(os.path.join(folder,"energy.dat"),"r")
@@ -626,6 +634,9 @@ class StructuresSet():
         ``property_name``: string
             key for the ``self._props`` dictionary of property values
 
+        ``write_to_file``: Boolean
+            Whether to write property values to a file with name ``property_name.dat``.
+
         ``read_property``: function
             Function to extract property value from ab-initio files. Return value
             must be scalar and signature is::
@@ -635,10 +646,7 @@ class StructuresSet():
             where ``i`` is the structure index, and ``folder_path`` is the path
             of the folder containing the relevant property files.
 
-        ``write_to_file``: Boolean
-            Whether to write property values to a file with name ``property_name.dat``.
-
-        ``**kwargs``: keyworded variable length argument list
+        ``**kwargs``: keyworded argument list, arbitrary length
             You may call this method as::
 
                 sset_instance.read_property_values(read_property, arg1=arg1, arg2=arg2, ... argN=argN)
