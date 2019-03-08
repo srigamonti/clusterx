@@ -570,10 +570,10 @@ class MonteCarloTrajectory():
             from clusterx.super_cell import SuperCell
             _trajz = self._trajectory[0]
 
-            nsp = sorted([int(el) for el in set(_trajz['super_cell_definition']['parent_lattice']['sites'])])
+            nsp = sorted([int(el) for el in set(_trajz['super_cell_definition']['parent_lattice']['numbers'])])
             species = []
             for n in nsp:
-                species.append(_trajz['super_cell_definition']['parent_lattice']['sites'][str(n)])
+                species.append(_trajz['super_cell_definition']['parent_lattice']['numbers'][str(n)])
 
             _plat = ParentLattice(atoms = Atoms(positions = _trajz['super_cell_definition']['parent_lattice']['positions'], cell = _trajz['super_cell_definition']['parent_lattice']['unit_cell'], numbers=np.zeros(len(species)), pbc = np.asarray(_trajz['super_cell_definition']['parent_lattice']['pbc'])), sites  = np.asarray(species), pbc = np.asarray(_trajz['super_cell_definition']['parent_lattice']['pbc']))
             self._scell = SuperCell(_plat, np.asarray(_trajz['super_cell_definition']['tmat']))

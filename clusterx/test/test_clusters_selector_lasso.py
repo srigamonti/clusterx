@@ -53,7 +53,7 @@ def test_clusters_selector_lasso():
     corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
 
     scell = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
-    strset = StructuresSet(plat, filename="test_cluster_selector_structures_set.json")
+    strset = StructuresSet(plat)
     nstr = 20
     #for i in range(nstr):
     #    strset.add_structure(scell.gen_random(nsubs={}))
@@ -77,7 +77,7 @@ def test_clusters_selector_lasso():
     strset.add_structure(Structure(scell,[6,2,1,6,1,1,6,7,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,7,1,1,1,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,1,7,1,1,1,1]),write_to_db=True)
-
+    strset.serialize(path="test_cluster_selector_structures_set.json")
     # Get the DATA(comat) + TARGET(energies)
     comat = corrcal.get_correlation_matrix(strset)
     strset.set_calculator(EMT2())

@@ -20,14 +20,14 @@ from clusterx.utils import isclose
 import numpy as np
 
 def test_cluster_selector_split_bregman():
-    
+
     strset, energies, comat, clmults, cpool = get_structure_set()
 
     lamb = 0.9
     mu_min = 0.00001
     mu_max = 0.10
     mu_step = 0.001
-    
+
     ####### Class ClusterSelector ##########
     clsel = ClustersSelector('split_bregman', cpool, sparsity_max=mu_max, sparsity_min=mu_min, sparsity_step=mu_step, l=lamb, LOO_idx=18)
     clsel.select_clusters(comat, energies, mult = clmults)
@@ -73,8 +73,8 @@ def get_structure_set():
     corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
 
     scell = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
- 
-    strset = StructuresSet(plat, filename="test_cluster_selector_structures_set.json")
+
+    strset = StructuresSet(plat)
     #nstr = 20
     #for i in range(nstr):
     #    strset.add_structure(scell.gen_random(nsubs={}))
@@ -98,17 +98,16 @@ def get_structure_set():
     strset.add_structure(Structure(scell,[6,2,1,6,1,1,6,7,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,7,1,1,1,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,1,7,1,1,1,1]),write_to_db=True)
-    
+    strset.serialize(path="test_cluster_selector_structures_set.json")
     # Get the DATA(comat) + TARGET(energies)
     comat = corrcal.get_correlation_matrix(strset)
 
     strset.set_calculator(EMT2())
     energies = strset.calculate_property()
-   
+
     clmults = cpool.get_multiplicities()
 
     return strset, energies, comat, clmults, cpool
 
 if __name__ == "__main__":
     test_cluster_selector_split_bregman()
-

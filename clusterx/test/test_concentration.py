@@ -32,7 +32,7 @@ def test_concentration():
     plat = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
 
     scell = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
-    strset = StructuresSet(plat, filename="test_cluster_selector_structures_set.json")
+    strset = StructuresSet(plat)
     nstr = 20
     #for i in range(nstr):
     #    strset.add_structure(scell.gen_random(nsubs={}))
@@ -56,7 +56,7 @@ def test_concentration():
         {1: [0.33333, 0.66666, 0.0], 2: [0.33333, 0.66666]},
         {1: [0.33333, 0.33333, 0.33333], 2: [0.0, 1.0]}
     ]
-    
+    strset.serialize(path="test_cluster_selector_structures_set.json")
     isok = True
     for i,s in enumerate(strset):
         fc = s.get_fractional_concentrations()

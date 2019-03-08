@@ -63,8 +63,8 @@ class Structure(SuperCell):
                 self.ems[idx] = len(self.sites[idx])
 
 
-        super(Structure,self).__init__(super_cell.get_parent_lattice(),super_cell.get_transformation())
         self.atoms = Atoms(numbers = self.decor, positions = super_cell.get_positions(), tags = super_cell.get_tags(), cell = super_cell.get_cell(),pbc = super_cell.get_pbc())
+        super(Structure,self).__init__(super_cell.get_parent_lattice(),super_cell.get_transformation())
         #self.set_atomic_numbers(self.decor)
 
         self._mc = mc
@@ -85,6 +85,11 @@ class Structure(SuperCell):
                     lens.append(l)
                 self._idxs.update({key:idxs})
                 self._comps.update({key:lens})
+
+    def set_calculator(self, calculator):
+        #super(Structure,self).set_calculator(calculator)
+        self._calc = calculator
+        self.atoms.set_calculator(calculator)
 
     def get_sigmas(self):
         """Return decoration array in terms of sigma variables.
@@ -110,6 +115,13 @@ class Structure(SuperCell):
         """Get decoration array
         """
         return self.atoms.get_chemical_symbols()
+
+    """
+    def get_potential_energy(self):
+        from clusterx.utils import remove_vacancies
+        _atoms = remove_vacancies(self.get_atoms())
+        return _atoms.get_potential_energy()
+    """
 
     def serialize(self, fmt="json", fname="structure.json"):
         """Serialize structure object
@@ -228,7 +240,6 @@ class Structure(SuperCell):
             concentration[site_type] = []
             nsites = nsites_per_type[site_type]
             atom_indices = self.get_atom_indices_for_site_type(site_type)
-
             for spnr in idx_subs[site_type]:
                 n = np.array(numbers[atom_indices]).tolist().count(spnr)
                 concentration[site_type].append(n/nsites)

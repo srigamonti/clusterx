@@ -85,11 +85,7 @@ class SuperCell(ParentLattice):
             else:
                 sys.exit("SuperCell(Error)")
 
-        #elif self._p.shape ==(3,):
-        #    self._p = np.diag(p)
-
         self.index = int(round(np.linalg.det(self._p)))
-        #prist = make_supercell(parent_lattice.get_atoms(),p)
         prist = make_supercell(parent_lattice.get_pristine(),self._p)
         subs = [make_supercell(atoms,self._p) for atoms in parent_lattice.get_substitutions()]
 
@@ -102,13 +98,13 @@ class SuperCell(ParentLattice):
             prist = sort_atoms(prist,key=sort_key)
             for i in range(len(subs)):
                 subs[i] = sort_atoms(subs[i],key=sort_key)
-        #ParentLattice.__init__(self, atoms = prist, substitutions = subs )
         super(SuperCell,self).__init__(atoms = prist, substitutions = subs )
         self._natoms = len(self)
         self.set_pbc(self._plat.get_pbc())
 
     def copy(self):
-        #Return a copy.
+        """Return a copy
+        """
 
         sc = self.__class__(self._plat, self._p)
 
@@ -149,13 +145,13 @@ class SuperCell(ParentLattice):
         """
         view(self)
 
-    def gen_random(self, nsubs, mc = False):
+    def gen_random(self, nsubs=None, mc = False):
         """
         Generate a random Structure with given number of substitutions.
 
         Parameters:
 
-        ``nsubs``: int or dictionary
+        ``nsubs``: None, int or dictionary (default: None)
             If dictionary, the ``nsubs`` argument must have the format ``{site_type0:[nsub01,nsub02,...], site_type1: ...}``
             where ``site_type#`` and ``nsub##`` are, respectively, an integer indicating
             the site type index and the number of substitutional species of each kind, as returned by
@@ -164,10 +160,22 @@ class SuperCell(ParentLattice):
             If integer, the SuperCell object must be correspond to a binary, i.e.
             the output of ``scell.is_nary(2)`` must be True. In this case, nsub indicates
             the number of substitutional atoms in the binary.
+
+            If ``None``, the number of substitutions in each sublattice is
+            generated at random.
         """
         import clusterx.structure
 
-        if isinstance(nsubs,int):
+        if nsubs is None:
+            import numpy as np
+            slts = self.get_sublattice_types()
+            tags = self.get_tags()
+            _nsubs = {}
+            for k,v in slts.items():
+                if len(v) != 1:
+                    _nsubs[k] = [np.random.randint(0,len(np.where(self.get_tags() == k)[0]))]
+
+        elif isinstance(nsubs,int):
             if self.is_nary(2):
                 slts = self.get_sublattice_types()
                 _nsubs = {}
@@ -261,3 +269,21 @@ class SuperCell(ParentLattice):
             #neigs = Atoms(numbers=chem_num,positions=pos,cell=self.get_cell(),pbc=self.get_pbc())
 
             atoms_db.write(neigs)
+
+    def serialize(self,fname="scell.json"):
+        """
+        Serialize a SuperCell object
+
+        Writes a `ASE's json database <https://wiki.fysik.dtu.dk/ase/ase/db/db.html>`_
+        file containing a representation of the super cell.
+        The created database can be visualized using
+        `ASE's gui <https://wiki.fysik.dtu.dk/ase/ase/gui/gui.html>`_, e.g.: ::
+
+            ase gui scell.json
+
+        **Parameters:**
+
+        ``fname``: string
+            Output file name.
+        """
+        super(SuperCell,self).serialize(fname = fname)

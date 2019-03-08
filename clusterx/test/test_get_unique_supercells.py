@@ -39,11 +39,12 @@ def test_get_unique_supercells():
 
             unique_scs, unique_trafos = utils.get_unique_supercells(index,pl)
 
-            sset = StructuresSet(pl,filename="test_get_unique_supercells-square_lattice.json")
+            sset = StructuresSet(pl)
             for t in unique_trafos:
                 scell = SuperCell(pl,t)
                 sset.add_structure(Structure(scell,scell.get_atomic_numbers()),write_to_db = True)
 
+            sset.serialize(path="test_get_unique_supercells-square_lattice.json", overwrite=True)
             print("\nFound ",len(unique_scs), " unique HNFs for a 2D square lattice of index ",index)
             #print("SCS: ", unique_scs)
             #print("TRA: ", unique_trafos)
@@ -61,11 +62,12 @@ def test_get_unique_supercells():
 
             unique_scs, unique_trafos = utils.get_unique_supercells(index,pl)
 
-            sset = StructuresSet(pl,filename="test_get_unique_supercells-fcc.json")
+            sset = StructuresSet(pl)
             for t in unique_trafos:
                 scell = SuperCell(pl,t)
                 sset.add_structure(Structure(scell,scell.get_atomic_numbers()),write_to_db = True)
 
+            sset.serialize(path="test_get_unique_supercells-fcc.json")
             print("Found ",len(unique_scs), " unique HNFs for a FCC lattice of index ",index)
             #print("SCS: ", unique_scs)
             #print("TRA: ", unique_trafos)
@@ -83,11 +85,12 @@ def test_get_unique_supercells():
 
             unique_scs, unique_trafos = utils.get_unique_supercells(index,pl)
 
-            sset = StructuresSet(pl,filename="test_get_unique_supercells-sc.json")
+            sset = StructuresSet(pl)
             for t in unique_trafos:
                 scell = SuperCell(pl,t)
                 sset.add_structure(Structure(scell,scell.get_atomic_numbers()),write_to_db = True)
 
+            sset.serialize(path="test_get_unique_supercells-sc.json")
             print("Found ",len(unique_scs), " unique HNFs for a simple cubic lattice of index ",index)
             #print("SCS: ", unique_scs)
             #print("TRA: ", unique_trafos)

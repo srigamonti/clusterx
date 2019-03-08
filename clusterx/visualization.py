@@ -21,8 +21,12 @@ def juview(plat,n=None):
     import nglview
     from clusterx.parent_lattice import ParentLattice
     from clusterx.structures_set import StructuresSet
+    from clusterx.structures_set import Structure
     from clusterx.clusters.clusters_pool import ClustersPool
     from clusterx.clusters.cluster import Cluster
+
+    if isinstance(plat,Structure):
+        return _makeview( [ plat.get_atoms() ] )
 
     if isinstance(plat,ParentLattice):
         return _makeview(plat.get_all_atoms())

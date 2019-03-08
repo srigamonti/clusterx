@@ -36,13 +36,13 @@ class ParentLattice(Atoms):
         Every ``Atoms`` object in the list, corresponds to a possible full
         substitution of only one sublattice. If set, overrides ``sites`` (see
         below).
-    ``sites``: list of integer arrays
+    ``numbers``: list of integer arrays or dict
         This is an array of length equal to the number of atoms in the parent
         lattice. Every element in the array is an array with species numbers,
         representing the species which can occupy the crystal
         sites (see examples below). This is overriden by ``substitutions``
-        if set.
-    ``site_symbols``: list of strings
+        if set. If a dict, the dict keys must be the site indices.
+    ``symbols``: list of strings
         This is an array of length equal to the number of atoms in the parent
         lattice. Every element in the array is an array with species symbols
         (e.g. ``[["Cu","Au"]]``),
@@ -128,12 +128,24 @@ class ParentLattice(Atoms):
             was ever called, it sets a self.distances attribute which is used for get_distance
             and get_distances, saving computation time. Care should be paid in cases where
             positions are updated either by relaxation or deformation of the lattice.
+        * remove deprecated sites and site_symbols parameters from __init__(), calls around the code,
+        and documentation / tutorials
 
     **Methods:**
     """
 
-    def __init__(self, atoms=None, substitutions=None, sites=None, site_symbols=None, json_db_filepath=None, pbc=None):
-
+    def __init__(self, atoms=None, substitutions=None, numbers=None, symbols=None, json_db_filepath=None, pbc=None, sites=None, site_symbols=None):
+        if numbers is not None:
+            if isinstance(numbers, dict):
+                sites = []
+                for i in range(len(atoms)):
+                    sites.append(None)
+                for site_index, nrs in numbers.items():
+                    sites[int(site_index)] = nrs
+            else:
+                sites = numbers
+        if symbols is not None:
+            site_symbols = symbols
         if json_db_filepath is not None:
             db = connect(json_db_filepath)
             substitutions = []
@@ -513,9 +525,24 @@ class ParentLattice(Atoms):
         dict.update({"unit_cell" : self.get_cell()})
         dict.update({"pbc" : self.get_pbc()})
         dict.update({"positions" : self.get_positions()})
-        dict.update({"sites" : self.get_sites()})
+        dict.update({"numbers" : self.get_sites()})
 
         return dict
+
+    def plat_from_dict(dict):
+        """Generates ParentLattice object from a dictionary as returned by ParentLattice.as_dict()
+        """
+        cell = np.array(dict["unit_cell"])
+        pbc = dict["pbc"]
+        positions = np.array(dict["positions"])
+        _numbers = dict["numbers"]
+
+        numbers = np.zeros(len(positions), dtype=int)
+        for site_index, nrs in _numbers.items():
+            numbers[site_index] = nrs[0]
+
+        prist = Atoms(positions=positions, numbers=numbers, cell=cell, pbc=pbc)
+        return ParentLattice(atoms=prist, numbers=_numbers, pbc=pbc)
 
     def get_atom_indices_for_site_type(self, site_type):
         """Return atom indices of the structure of a certain given site type

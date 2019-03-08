@@ -686,7 +686,7 @@ def mgrep(fpath, search_array, prepend='',root='.'):
     Grep strings in file and return matching lines.
 
     **Parameters:**
-    
+
     ``fpath``: string
         File path to grep
     ``search_array``: array of strings
@@ -914,15 +914,61 @@ def sort_atoms(atoms, key = (2,1,0)):
 
     where p is a Nx3 array of vector coordinates.
     """
-    nrs = atoms.get_atomic_numbers()
-    poss = atoms.get_positions()
-    pn = []
-    for p,n in zip(poss,nrs):
-        pn.append([p[0],p[1],p[2],n])
-    from operator import itemgetter
-    import numpy as np
-    _pn = sorted(pn, key=itemgetter(*key))
-    _poss = np.delete(np.array(_pn),3,1)
-    _nrs = np.delete(np.array(_pn),[0,1,2],1).flatten()
+    if key is None:
+        return atoms
+    else:
+        nrs = atoms.get_atomic_numbers()
+        poss = atoms.get_positions()
+        pn = []
+        for p,n in zip(poss,nrs):
+            pn.append([p[0],p[1],p[2],n])
+        from operator import itemgetter
+        import numpy as np
+        _pn = sorted(pn, key=itemgetter(*key))
+        _poss = np.delete(np.array(_pn),3,1)
+        _nrs = np.delete(np.array(_pn),[0,1,2],1).flatten()
+        from ase import Atoms
+        return Atoms(positions=_poss, numbers=_nrs, cell=atoms.get_cell(), pbc=atoms.get_pbc())
+
+def remove_vacancies(at):
+    """Remove every Atom containing 'X' as species symbol or 0 as atomic number
+    from an Atoms object and return the resulting Atoms object.
+
+    **Parameters:**
+    ``at``: Atoms object
+
+    .. todo::
+        find cleaner way to do this...
+    """
     from ase import Atoms
-    return Atoms(positions=_poss, numbers=_nrs, cell=atoms.get_cell(), pbc=atoms.get_pbc())
+    positions = []
+    numbers = []
+    indices = []
+    tags = []
+    tags0 = at.get_tags()
+    momenta = []
+    momenta0 = at.get_momenta()
+    masses = []
+    masses0 = at.get_masses()
+
+    for i,atom in enumerate(at):
+        nr = atom.get('number')
+        if nr != 0:
+            indices.append(i)
+            positions.append(atom.get('position'))
+            tags.append(tags0[i])
+            momenta.append(momenta0[i])
+            masses.append(masses0[i])
+            numbers.append(nr)
+
+    return Atoms(cell=at.get_cell(),
+                 pbc=at.get_pbc(),
+                 numbers=numbers,
+                 positions=positions,
+                 calculator=at.get_calculator(),
+                 tags=tags,
+                 momenta=momenta,
+                 masses=masses,
+                 celldisp=at.get_celldisp(),
+                 constraint=at.constraints,
+                 info=at.info)

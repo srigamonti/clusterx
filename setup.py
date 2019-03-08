@@ -8,6 +8,6 @@ setup(name='clusterX',
       author_email='srigamonti@physik.hu-berlin.de',
       license='http://www.apache.org/licenses/LICENSE-2.0',
       packages=find_packages(),
-      install_requires=['numpy', 'scipy', 'sklearn', 'matplotlib','ase','plac','pytest','spglib','sympy','nglview','ipywidgets'],
+      install_requires=['numpy', 'scipy', 'sklearn', 'matplotlib','ase','plac','pytest','spglib','sympy','nglview','ipywidgets','pytest-html'],
       entry_points={'console_scripts': ['cell=clusterx.cli.main:main']}
 )

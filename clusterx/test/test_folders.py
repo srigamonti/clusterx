@@ -35,14 +35,15 @@ def test_folders():
     e1 = sset1.get_property_values("my_total_energy")
 
     sset2 = StructuresSet(plat)
-    sset2.add_structures(structures=sset1.get_folders_db_fname()) # Test adding structures from json database file
+    sset2.add_structures(structures=sset1.get_db_fname()) # Test adding structures from json database file
     for s1,s2 in zip(sset1,sset2):
         print((s1.get_atomic_numbers()==s2.get_atomic_numbers()).all())
 
-    sset3 = StructuresSet(plat, folders_db_fname=sset1.get_folders_db_fname()) # Test init structures set from folders database
+    #sset3 = StructuresSet(plat, db_fname=sset1.get_db_fname()) # Test init structures set from folders database
+    sset3 = StructuresSet(db_fname=sset1.get_db_fname()) # Test init structures set from folders database
     e3 = sset3.get_property_values("my_total_energy")
 
-    print((e1==e3).all())
+    print((np.array(e1)==np.array(e3)).all())
 
 
 
