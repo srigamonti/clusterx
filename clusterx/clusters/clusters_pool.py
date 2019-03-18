@@ -427,7 +427,8 @@ class ClustersPool():
 
                 if new:
                     #self._cpool.append(_cl)
-                    self._cpool.append(orbit[0])
+                    self._cpool.append(Cluster(_cl.get_idxs(),_cl.get_nrs(),self._cpool_scell,self._distances))
+                    #self._cpool.append(orbit[0])
                     self._multiplicities.append(mult)
 
         if len(self._cpool) == 0:
