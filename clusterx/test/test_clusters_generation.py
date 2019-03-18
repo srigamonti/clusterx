@@ -21,231 +21,256 @@ def test_clusters_generation():
 
     """
     tassert = True
-    #######################################################
-    # Part 1: 2D, radii.
-    #######################################################
-    """
-    print("\nPart I")
-    cell = [[3,0,0],
-            [0,1,0],
-            [0,0,5]]
-    positions = [
-        [0,0,0],
-        [1,0,0],
-        [2,0,0]]
-    pbc = [True,True,False]
+    doparts = [2,3,5,6,7]
+    #doparts = [7]
+    isok = []
+    if 1 in doparts:
+        #######################################################
+        # Part 1: 2D, radii.
+        #######################################################
+        print("\nPart I")
+        cell = [[3,0,0],
+                [0,1,0],
+                [0,0,5]]
+        positions = [
+            [0,0,0],
+            [1,0,0],
+            [2,0,0]]
+        pbc = [True,True,False]
 
-    pri = Atoms(['H','H','H'], positions=positions, cell=cell, pbc=pbc)
-    su1 = Atoms(['C','H','H'], positions=positions, cell=cell, pbc=pbc)
-    su2 = Atoms(['H','He','H'], positions=positions, cell=cell, pbc=pbc)
-    su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
+        pri = Atoms(['H','H','H'], positions=positions, cell=cell, pbc=pbc)
+        su1 = Atoms(['C','H','H'], positions=positions, cell=cell, pbc=pbc)
+        su2 = Atoms(['H','He','H'], positions=positions, cell=cell, pbc=pbc)
+        su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
 
-    pl = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
+        pl = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
 
-    cp = ClustersPool(pl, npoints=[1,2,3], radii=[0,2.1,2.1])
-    cp.write_clusters_db(db_name="test_clusters_generation_1.json")
+        cp = ClustersPool(pl, npoints=[1,2,3], radii=[0,2.1,2.1])
+        cp.write_clusters_db(db_name="test_clusters_generation_1.json")
 
-    print("\nMult: ", cp.get_multiplicities())
-    print("\nMult2: ", cp.get_cluster_multiplicities())
+        print("\nMult: ", cp.get_multiplicities())
+        print("\nMult2: ", cp.get_cluster_multiplicities())
 
-    if tassert:
-        atom_idxs, atom_nrs = cp.get_cpool_arrays()
-    """
-    #######################################################
-    # Part 2: 1D, supercell.
-    #######################################################
-    print("Part II")
-    a=3.0
-    cell = np.array([[1,0,0],[0,4,0],[0,0,1]])
-    positions = np.array([[0,0,0],[0,1,0],[0,2,0],[0,3,0]])
-    sites = [[12,13],[12,13],[12,13],[12,13]]
-    pris = Atoms(cell=cell*a, positions=positions*a)
+        if tassert:
+            try:
+                atom_idxs, atom_nrs = cp.get_cpool_arrays()
+                isok.append(True)
+            except:
+                isok.append(False)
 
-    pl = ParentLattice(pris, sites=sites, pbc=(1,0,0))
-    sc = SuperCell(pl,[[4,0,0],[0,1,0],[0,0,1]])
+    if 2 in doparts:
+        #######################################################
+        # Part 2: 1D, supercell.
+        #######################################################
+        print("Part II")
+        a=3.0
+        cell = np.array([[1,0,0],[0,4,0],[0,0,1]])
+        positions = np.array([[0,0,0],[0,1,0],[0,2,0],[0,3,0]])
+        sites = [[12,13],[12,13],[12,13],[12,13]]
+        pris = Atoms(cell=cell*a, positions=positions*a)
+
+        pl = ParentLattice(pris, sites=sites, pbc=(1,0,0))
+        sc = SuperCell(pl,[[4,0,0],[0,1,0],[0,0,1]])
 
 
-    cp = ClustersPool(pl,npoints=[1,2],super_cell=sc) # Here radii are not given, therefore all the clusters which can fit in the supercell are generated.
-    #cp = ClustersPool(pl,npoints=[0,1,2],radii=[0,0,3.9*a]) # Here radii are not given, therefore all the clusters which can fit in the supercell are generated.
-    cp.write_clusters_db(db_name="test_clusters_generation_2.json")
+        cp = ClustersPool(pl,npoints=[1,2],super_cell=sc) # Here radii are not given, therefore all the clusters which can fit in the supercell are generated.
+        #cp = ClustersPool(pl,npoints=[0,1,2],radii=[0,0,3.9*a]) # Here radii are not given, therefore all the clusters which can fit in the supercell are generated.
+        cp.write_clusters_db(db_name="test_clusters_generation_2.json")
 
-    mult = cp.get_multiplicities()
-    radii = cp.get_all_radii()
-    npoints = cp.get_all_npoints()
+        mult = cp.get_multiplicities()
+        radii = cp.get_all_radii()
+        npoints = cp.get_all_npoints()
 
-    #atom_idxs, atom_nrs = cp.get_cpool_arrays()
-    #print(atom_idxs[1][0],atom_idxs[7][0],atom_idxs[12][1],len(atom_nrs[17]),len(cp))
+        #atom_idxs, atom_nrs = cp.get_cpool_arrays()
+        #print(atom_idxs[1][0],atom_idxs[7][0],atom_idxs[12][1],len(atom_nrs[17]),len(cp))
 
-    if tassert:
-        atom_idxs, atom_nrs = cp.get_cpool_arrays()
-        isok2 = atom_idxs[1][0] == 1 and atom_idxs[7][0] == 2 and atom_idxs[12][1] == 8 and len(atom_nrs[17]) == 2 and len(cp) == 18
+        if tassert:
+            atom_idxs, atom_nrs = cp.get_cpool_arrays()
+            isok2 = atom_idxs[1][0] == 1 and atom_idxs[7][0] == 2 and atom_idxs[12][1] == 8 and len(atom_nrs[17]) == 2 and len(cp) == 18
+            isok.append(isok2)
 
-    #######################################################
-    # Part 3: FCC, radii.
-    #######################################################
-    print("Part III")
+    if 3 in doparts:
+        #######################################################
+        # Part 3: FCC, radii.
+        #######################################################
+        print("Part III")
 
-    from ase.data import atomic_numbers as an
-    a=4.1
-    pris = bulk("Cu",crystalstructure="fcc", a=a)
-    sites = [[an["Cu"],an["Au"]]]
-    pl = ParentLattice(pris,sites=sites)
+        from ase.data import atomic_numbers as an
+        a=4.1
+        pris = bulk("Cu",crystalstructure="fcc", a=a)
+        sites = [[an["Cu"],an["Au"]]]
+        pl = ParentLattice(pris,sites=sites)
 
-    cp = ClustersPool(pl,npoints=[0,1,2,3],radii=[0,0,5.0,5.0])
-    cp.write_clusters_db(db_name="test_clusters_generation_3.json")
+        cp = ClustersPool(pl,npoints=[0,1,2,3],radii=[0,0,5.0,5.0])
+        cp.write_clusters_db(db_name="test_clusters_generation_3.json")
 
-    mult = cp.get_multiplicities()
-    npoints = cp.get_all_npoints()
-    radii = cp.get_all_radii()
+        mult = cp.get_multiplicities()
+        npoints = cp.get_all_npoints()
+        radii = cp.get_all_radii()
 
-    rmult = np.array([1,1,6,3,8,12])
-    rnpoints = np.array([0,1,2,2,3,3])
-    rradii = np.array([0.       , 0.       , 2.8991378, 4.1      , 2.8991378, 4.1      ])
+        rmult = np.array([1,1,6,3,8,12])
+        rnpoints = np.array([0,1,2,2,3,3])
+        rradii = np.array([0.       , 0.       , 2.8991378, 4.1      , 2.8991378, 4.1      ])
 
-    if tassert:
-        isok3 = len(cp) == 6 and (mult == rmult).all() and (npoints == rnpoints).all() and isclose(radii,rradii)
+        if tassert:
+            isok3 = len(cp) == 6 and (mult == rmult).all() and (npoints == rnpoints).all() and isclose(radii,rradii)
+            isok.append(isok3)
 
-    """
-    #######################################################
-    # Part 4: 2D cell with acute angle.
-    #######################################################
-    print("Part IV")
-    from ase.io import write
+    if 4 in doparts:
+        #######################################################
+        # Part 4: 2D cell with acute angle.
+        #######################################################
+        print("Part IV")
+        from ase.io import write
 
-    a=4.1
-    cell = np.array([[5,0,0],[4,1,0],[0,0,1]])
-    positions = np.array([[0,0,0],[1,0,0],[2,0,0],[3,0,0],[4,0,0]])
-    pbc = (1,1,0)
-    #sites = [[an["Cu"],an["Au"]]]*5
-    sites = [[an["Cu"],an["Au"]],[an["Cu"],an["Au"]],[12],[12],[12]]
-    pris = Atoms(cell=cell*a,positions=positions*a,pbc=pbc)
-    pl = ParentLattice(pris,sites=sites,pbc=pbc)
+        a=4.1
+        cell = np.array([[5,0,0],[4,1,0],[0,0,1]])
+        positions = np.array([[0,0,0],[1,0,0],[2,0,0],[3,0,0],[4,0,0]])
+        pbc = (1,1,0)
+        #sites = [[an["Cu"],an["Au"]]]*5
+        sites = [[an["Cu"],an["Au"]],[an["Cu"],an["Au"]],[12],[12],[12]]
+        pris = Atoms(cell=cell*a,positions=positions*a,pbc=pbc)
+        pl = ParentLattice(pris,sites=sites,pbc=pbc)
 
-    #cp = ClustersPool(pl,npoints=[0,1,2,3],radii=[0,0,4.5*a,4.5*a])
-    cp = ClustersPool(pl,npoints=[2],radii=[2.0*a])
-    write(filename="test_clusters_generation_scell_part4.json",images=cp.get_cpool_scell().get_atoms(),format="json")
-    cp.write_clusters_db(db_name="test_clusters_generation_4.json")
+        #cp = ClustersPool(pl,npoints=[0,1,2,3],radii=[0,0,4.5*a,4.5*a])
+        cp = ClustersPool(pl,npoints=[2],radii=[2.0*a])
+        write(filename="test_clusters_generation_scell_part4.json",images=cp.get_cpool_scell().get_atoms(),format="json")
+        cp.write_clusters_db(db_name="test_clusters_generation_4.json")
 
-    print("\nMult: ", cp.get_multiplicities())
-    print("\nMult2: ", cp.get_cluster_multiplicities())
-    if tassert:
-        atom_idxs, atom_nrs = cp.get_cpool_arrays()
-        isok4 = atom_idxs[2][0] == 30 and atom_idxs[3][1] == 16 and atom_idxs[4][0] == 10
-    """
-    #######################################################
-    # Part 5: Pt on O(111)
-    #######################################################
-    print("Part V")
-    from ase.io import write
+        print("\nMult: ", cp.get_multiplicities())
+        print("\nMult2: ", cp.get_cluster_multiplicities())
+        if tassert:
+            atom_idxs, atom_nrs = cp.get_cpool_arrays()
+            isok4 = atom_idxs[2][0] == 30 and atom_idxs[3][1] == 16 and atom_idxs[4][0] == 10
+            isok.append(isok4)
 
-    cell = np.array([[2.785200119, 0.0, 0.0], [-1.3926000595, 2.4120540577, 0.0], [0.0, 0.0, 7.2740998268]])
-    positions = np.array([[0.0, 0.0, 2.274101], [1.392600, 0.804018, 0.0], [0.0, 0.0, 2.916914], [1.392600, 0.804018, 2.924188], [0.0, 1.608036, 2.931462]])
-    pbc = (1,1,0)
-    sites = [[78], [78], [0,8], [0,8], [0,8]]
-    pris = Atoms(cell=cell,positions=positions,pbc=pbc)
-    pl = ParentLattice(pris,sites=sites,pbc=pbc)
+    if 5 in doparts:
+        #######################################################
+        # Part 5: O on Pt(111)
+        #######################################################
+        print("Part V")
+        from ase.io import write
 
-    cp = ClustersPool(pl,npoints=[0,1,2,3],radii=[0,0,3.3,3.0])
-    #write(filename="test_clusters_generation_scell_part5.json",images=cp.get_cpool_scell().get_atoms(),format="json")
-    cp.write_clusters_db(db_name="test_clusters_generation_5.json")
+        cell = np.array([[2.785200119, 0.0, 0.0], [-1.3926000595, 2.4120540577, 0.0], [0.0, 0.0, 7.2740998268]])
+        positions = np.array([[0.0, 0.0, 2.274101], [1.392600, 0.804018, 0.0], [0.0, 0.0, 2.916914], [1.392600, 0.804018, 2.924188], [0.0, 1.608036, 2.931462]])
+        pbc = (1,1,0)
+        sites = [[78], [78], [0,8], [0,8], [0,8]]
+        pris = Atoms(cell=cell,positions=positions,pbc=pbc)
+        pl = ParentLattice(pris,sites=sites,pbc=pbc)
 
-    mult = cp.get_multiplicities()
-    radii = cp.get_all_radii()
-    npoints = cp.get_all_npoints()
+        cp = ClustersPool(pl,npoints=[0,1,2,3],radii=[0,0,3.3,3.0])
+        #cp = ClustersPool(pl,npoints=[0,1,2],radii=[0,0,3.3])
+        #write(filename="test_clusters_generation_scell_part5.json",images=cp.get_cpool_scell().get_atoms(),format="json")
+        cp.write_clusters_db(db_name="test_clusters_generation_5.json")
 
-    #print(repr(mult))
-    #print(repr(radii))
-    #print(repr(npoints))
+        mult = cp.get_multiplicities()
+        radii = cp.get_all_radii()
+        npoints = cp.get_all_npoints()
 
-    mult_ref = np.array([1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 6, 3, 3, 3, 3, 3, 1, 3, 1, 1, 1, 1, 1])
-    radii_ref = np.array(
-        [0.        , 0.        , 0.        , 0.        , 1.60805243,
-        1.60805243, 1.60810181, 2.78520012, 2.78520012, 2.78520012,
-        3.21608028, 3.21608028, 3.21610496, 1.60810181, 2.78520012,
-        2.78520012, 2.78520012, 2.78520012, 2.78520012, 2.78520012,
-        2.78520012, 2.78520012, 2.78520012, 2.78520012, 2.78520012,
-        2.78520012])
-    npoints_ref = np.array([0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3])
+        print(repr(mult))
+        #print(repr(radii))
+        #print(repr(npoints))
 
-    if tassert:
-        isok5 = True
-        if (mult != mult_ref).any() or not isclose(radii,radii_ref) or (npoints != npoints_ref).any():
-            isok5 = False
+        mult_ref = np.array([1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 6, 3, 3, 3, 3, 3, 1, 3, 1, 1, 1, 1, 1])
+        radii_ref = np.array(
+            [0.        , 0.        , 0.        , 0.        , 1.60805243,
+            1.60805243, 1.60810181, 2.78520012, 2.78520012, 2.78520012,
+            3.21608028, 3.21608028, 3.21610496, 1.60810181, 2.78520012,
+            2.78520012, 2.78520012, 2.78520012, 2.78520012, 2.78520012,
+            2.78520012, 2.78520012, 2.78520012, 2.78520012, 2.78520012,
+            2.78520012])
+        npoints_ref = np.array([0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3])
 
-    #######################################################
-    # Part 6: Clathrate
-    #######################################################
-    print("Part VI")
-    from ase.io import write
-    from ase.spacegroup import crystal
-    a = 10.515
-    #x = 0.185; y = 0.304; z = 0.116
-    x = 0.1847; y = 0.2977; z = 0.1067
-    wyckoff = [
-        (0, y, z), #24k
-        (x, x, x), #16i
-        (1/4., 0, 1/2.), #6c
-        (1/4., 1/2., 0), #6d
-        (0, 0 , 0) #2a
-    ]
+        if tassert:
+            isok5 = True
+            if len(mult) != len(mult_ref) or len(npoints) != len(npoints_ref):
+                isok5 = False
+            elif (mult != mult_ref).any() or not isclose(radii,radii_ref) or (npoints != npoints_ref).any():
+                isok5 = False
+            isok.append(isok5)
 
-    pri = crystal(['Si','Si','Si','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
-    sub = crystal(['Al','Al','Al','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
+    if 6 in doparts:
+        #######################################################
+        # Part 6: Clathrate
+        #######################################################
+        print("Part VI")
+        from ase.io import write
+        from ase.spacegroup import crystal
+        a = 10.515
+        #x = 0.185; y = 0.304; z = 0.116
+        x = 0.1847; y = 0.2977; z = 0.1067
+        wyckoff = [
+            (0, y, z), #24k
+            (x, x, x), #16i
+            (1/4., 0, 1/2.), #6c
+            (1/4., 1/2., 0), #6d
+            (0, 0 , 0) #2a
+        ]
 
-    plat = ParentLattice(atoms=pri,substitutions=[sub])
+        pri = crystal(['Si','Si','Si','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
+        sub = crystal(['Al','Al','Al','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
 
-    #cp = ClustersPool(plat,npoints=[1,2],radii=[0,5.7],super_cell=SuperCell(plat,np.diag([2,1,1])))
-    cp = ClustersPool(plat,npoints=[0,1,2],radii=[0,0,5.0])
-    cp.write_clusters_db(db_name="test_clusters_generation_6.json")
+        plat = ParentLattice(atoms=pri,substitutions=[sub])
 
-    mult = cp.get_multiplicities()
-    radii = cp.get_all_radii()
-    npoints = cp.get_all_npoints()
+        #cp = ClustersPool(plat,npoints=[1,2],radii=[0,5.7],super_cell=SuperCell(plat,np.diag([2,1,1])))
+        cp = ClustersPool(plat,npoints=[0,1,2],radii=[0,0,5.0])
+        cp.write_clusters_db(db_name="test_clusters_generation_6.json")
 
-    mult_ref = np.array([1, 24, 16, 6, 12, 8, 48, 24, 48, 24, 48, 48, 48, 12, 24, 24])
-    radii_ref = np.array([0.0,0.0,0.0,0.0,2.243901, 2.378554359,2.419983103,2.606790868,3.817351239, 3.88424099, 3.88473654, 3.90320808, 3.979588005, 4.254368999, 4.258122441, 4.31192162])
-    npoints_ref = np.array([0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
+        mult = cp.get_multiplicities()
+        radii = cp.get_all_radii()
+        npoints = cp.get_all_npoints()
 
-    if tassert:
-        isok6 = True
-        if (mult != mult_ref).any() or not isclose(radii,radii_ref) or (npoints != npoints_ref).any():
-            isok6 = False
+        mult_ref = np.array([1, 24, 16, 6, 12, 8, 48, 24, 48, 24, 48, 48, 48, 12, 24, 24])
+        radii_ref = np.array([0.0,0.0,0.0,0.0,2.243901, 2.378554359,2.419983103,2.606790868,3.817351239, 3.88424099, 3.88473654, 3.90320808, 3.979588005, 4.254368999, 4.258122441, 4.31192162])
+        npoints_ref = np.array([0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
 
-    #######################################################
-    # Part 7: Negative radii
-    #######################################################
+        if tassert:
+            isok6 = True
+            if len(mult) != len(mult_ref) or len(npoints) != len(npoints_ref):
+                isok6 = False
+            elif (mult != mult_ref).any() or not isclose(radii,radii_ref) or (npoints != npoints_ref).any():
+                isok6 = False
+            isok.append(isok6)
 
-    print("Part VII")
+    if 7 in doparts:
+        #######################################################
+        # Part 7: Negative radii
+        #######################################################
 
-    plat = ParentLattice(
-        Atoms(cell=np.diag([2,2,5]),positions=[[0,0,0]]),
-        site_symbols=[["Cu","Al"]],
-        pbc=(1,1,0)
-        )
+        print("Part VII")
 
-    scell = SuperCell(plat,np.array([(6,0,0),(0,6,0),(0,0,1)]))
-    cp = ClustersPool(plat, npoints=[0,1,2,3,4], radii=[0,0,-1,4.1,2.9], super_cell=scell)
+        plat = ParentLattice(
+            Atoms(cell=np.diag([2,2,5]),positions=[[0,0,0]]),
+            site_symbols=[["Cu","Al"]],
+            pbc=(1,1,0)
+            )
 
-    cp.write_clusters_db(db_name="test_clusters_generation_7.json")
+        scell = SuperCell(plat,np.array([(6,0,0),(0,6,0),(0,0,1)]))
+        cp = ClustersPool(plat, npoints=[0,1,2,3,4], radii=[0,0,-1,4.1,2.9], super_cell=scell)
 
-    mult = cp.get_multiplicities()
-    radii = cp.get_all_radii()
-    npoints = cp.get_all_npoints()
+        cp.write_clusters_db(db_name="test_clusters_generation_7.json")
 
-    #print(repr(mult))
-    #print(repr(radii))
-    #print(repr(npoints))
+        mult = cp.get_multiplicities()
+        radii = cp.get_all_radii()
+        npoints = cp.get_all_npoints()
 
-    mult_ref = np.array([1, 1, 2, 2, 2, 4, 2, 2, 2, 2, 1, 4, 2, 4, 1])
-    radii_ref = np.array([0.        , 0.        , 2.        , 2.82842712, 4.        ,
-       4.47213595, 5.65685425, 6.        , 6.32455532, 7.21110255,
-       8.48528137, 2.82842712, 4.        , 4.        , 2.82842712])
-    npoints_ref = np.array([0, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 4])
+        print(repr(mult))
+        print(repr(radii))
+        print(repr(npoints))
 
-    if tassert:
-        isok7 = True
-        if (mult != mult_ref).any() or not isclose(radii,radii_ref) or (npoints != npoints_ref).any():
-            isok7 = False
+        mult_ref = np.array([1, 1, 2, 2, 2, 4, 2, 2, 2, 2, 1, 4, 2, 4, 1])
+        radii_ref = np.array([0.        , 0.        , 2.        , 2.82842712, 4.        ,
+           4.47213595, 5.65685425, 6.        , 6.32455532, 7.21110255,
+           8.48528137, 2.82842712, 4.        , 4.        , 2.82842712])
+        npoints_ref = np.array([0, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 4])
+
+        if tassert:
+            isok7 = True
+            if len(mult) != len(mult_ref) or len(npoints) != len(npoints_ref):
+                isok7 = False
+            elif (mult != mult_ref).any() or not isclose(radii,radii_ref) or (npoints != npoints_ref).any():
+                isok7 = False
+            isok.append(isok7)
 
     print ("\n\n========Test writes========")
     print (test_clusters_generation.__doc__)
@@ -253,6 +278,10 @@ def test_clusters_generation():
 
     print ("========Asserts========")
     if tassert:
+        for i,p in enumerate(doparts):
+            print("Test part ",p)
+            assert isok[i]
+        """
         #print("test part 1")
         #assert isok1
         print("test part 2")
@@ -267,3 +296,4 @@ def test_clusters_generation():
         assert isok6
         print("test part 7")
         assert isok7
+        """

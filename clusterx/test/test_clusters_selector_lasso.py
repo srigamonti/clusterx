@@ -134,6 +134,7 @@ def test_clusters_selector_lasso():
     isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(recis, clsel.ecis) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
     """
     #isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
-    isok = isclose(rsparsities,clsel.lasso_sparsities) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs)
+    rtol=1e-2
+    isok = isclose(rsparsities,clsel.lasso_sparsities,rtol=rtol) and isclose(rrmse, clsel.rmse,rtol=rtol) and isclose(rcvs, clsel.cvs,rtol=rtol)
 
     assert(isok)

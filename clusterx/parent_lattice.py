@@ -368,6 +368,16 @@ class ParentLattice(Atoms):
                 ss.append(i)
         return ss
 
+    def get_substitutional_atoms(self):
+        """Return Atoms object for pristine lattice containing only sites which may be substituted
+        """
+        ats = Atoms(cell=self.get_cell(), pbc=self.get_pbc())
+        pats = self.get_pristine()
+        ss = self.get_substitutional_sites()
+        for i in ss:
+            ats.append(pats[i])
+        return ats
+
     def get_n_sub_sites(self):
         """Return total number of substitutional sites
         """

@@ -39,9 +39,12 @@ class Cluster():
     **Methods:**
     """
     def __new__(cls, atom_indexes, atom_numbers, super_cell=None, distances=None):
-        for iai, ai in enumerate(atom_indexes):
-            for _iai, _ai in enumerate(atom_indexes):
-                if ai == _ai and atom_numbers[iai] != atom_numbers[_iai]:
+        n = len(atom_indexes)
+        ai = atom_indexes
+        an = atom_numbers
+        for i in range(n):
+            for j in range(i,n):
+                if ai[i] == ai[j] and an[i] != an[j]:
                     raise ValueError("Cluster may not have different species on the same site.")
 
         if len(atom_indexes) != len(atom_numbers):
@@ -138,10 +141,22 @@ class Cluster():
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
-            ais = self.ais
-            ans = self.ans
-            oais = other.ais
-            oans = other.ans
+            try:
+                ais,ans = list(zip(*sorted(zip(self.ais,self.ans))))
+            except:
+                if len(other.ais) == 0 and len(self.ais)==0:
+                    return True
+                else:
+                    return False
+
+            try:
+                oais,oans = list(zip(*sorted(zip(other.ais,other.ans))))
+            except:
+                if len(other.ais) == 0 and len(self.ais)==0:
+                    return True
+                else:
+                    return False
+
             npoints = self.npoints
 
             ns = len(ais)
@@ -149,31 +164,23 @@ class Cluster():
             if ns != no:
                 return False
 
-            #if Counter(ais) != Counter(oais):
-            #    return False
+            for i in range(len(ais)):
+                if ais[i] != oais[i]:
+                    return False
 
-            #if sorted(ais) != sorted(oais):
-            #    return False
+            for i in range(len(ais)):
+                for j in range(i,len(ais)):
+                    if ais[i] == oais[j] and  ans[i] != oans[j]:
+                        return False
 
+            """
             for i in range(ns):
                 if ais[i] != oais[i] or ans[i] != oans[i]:
                     return False
-
-            #if (ais != oais).any():
-            #    return False
-
-            #if (ans != oans).any():
-            #    return False
-
-            """
-            for i in range(npoints):
-                for j in range(npoints):
-                    if ais[i] == oais[j] and ans[i] != oans[j]:
-                        return False
             """
             return True
-
         else:
+
             return False
 
     def __len__(self):
