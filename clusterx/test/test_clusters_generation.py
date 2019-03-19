@@ -21,8 +21,8 @@ def test_clusters_generation():
 
     """
     tassert = True
-    doparts = [2,3,5,6,7]
-    #doparts = [7]
+    doparts = [2,3,5,6,7,8]
+    #doparts = [8]
     isok = []
     if 1 in doparts:
         #######################################################
@@ -167,7 +167,7 @@ def test_clusters_generation():
         radii = cp.get_all_radii()
         npoints = cp.get_all_npoints()
 
-        print(repr(mult))
+        #print(repr(mult))
         #print(repr(radii))
         #print(repr(npoints))
 
@@ -271,6 +271,52 @@ def test_clusters_generation():
             elif (mult != mult_ref).any() or not isclose(radii,radii_ref) or (npoints != npoints_ref).any():
                 isok7 = False
             isok.append(isok7)
+
+    if 8 in doparts:
+        #######################################################
+        # Part 8: FCC(111) with alloying and Adsorption in hollow sites
+        #######################################################
+
+        print("Part VIII")
+        from ase.build import fcc111, add_adsorbate
+
+        pristine = fcc111('Re', size=(1,1,3), a=3.2) # 3-atomic-layer Al slab
+        add_adsorbate(pristine,'X',1.7,position='fcc') # Hollow FCC vacancy site
+        pristine.center(vacuum=10.0, axis=2) # add vacuum along z-axis
+
+        symbols = [['Co'],['Co'],['Co','Ni'],['X','Al']]
+        platt = ParentLattice(pristine, symbols=symbols)
+
+        scell = SuperCell(platt,[[5,0],[0,2]])
+        scell.serialize(fname="scell.json")
+        print(scell.get_sublattice_types())
+
+        npoints = [2]
+        radii = [-1]
+        cp = ClustersPool(platt, npoints=npoints, radii=radii, super_cell=scell,method=1)
+
+        cp.write_clusters_db(db_name="test_clusters_generation_8.json")
+
+        mult = cp.get_multiplicities()
+        radii = cp.get_all_radii()
+        npoints = cp.get_all_npoints()
+
+        #print(repr(mult))
+        #print(repr(radii))
+        #print(repr(npoints))
+
+        mult_ref = np.array([3, 3, 3, 2, 3, 3, 2, 2, 5])
+        radii_ref = np.array([2.14398383, 2.2627417 , 2.2627417 , 3.11715682, 3.91918359,
+       3.91918359, 4.5254834 , 4.5254834 , 5.0076608 ])
+        npoints_ref = np.array([2, 2, 2, 2, 2, 2, 2, 2, 2])
+
+        if tassert:
+            isok8 = True
+            if len(mult) != len(mult_ref) or len(npoints) != len(npoints_ref):
+                isok8 = False
+            elif (mult != mult_ref).any() or not isclose(radii,radii_ref) or (npoints != npoints_ref).any():
+                isok8 = False
+            isok.append(isok8)
 
     print ("\n\n========Test writes========")
     print (test_clusters_generation.__doc__)

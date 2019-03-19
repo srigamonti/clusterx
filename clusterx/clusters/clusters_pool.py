@@ -43,6 +43,10 @@ class ClustersPool():
         (Note: Experimental feature.  The generated multiplicities may not be
         valid for clusters larger than half the size of the supercell. Use
         ``radii`` to get accurate multiplicities.)
+    ``method``: integer (1 or 2)
+        If 1, an elimination method is used to build the clusters pool. If 2, an
+        incremental method is used instead. Use method 2 only if ``super_cell`` is
+        ``None``.
 
     .. todo:
         Fix multiplicities when ``super_cell`` is used
