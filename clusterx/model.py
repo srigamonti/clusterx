@@ -67,7 +67,7 @@ class Model():
         """
         #corrsx = self.corrc.get_cluster_correlations(structure)
         try:
-            cluster_orbits = self.corrc._cluster_orbits_set[0]
+            cluster_orbits = self.corrc._cluster_orbits_set[-1]
         except AttributeError:
             raise AttributeError("Cluster_orbit set is not predefined, look at the documentation.")
         corrs = np.zeros(len(cluster_orbits))
@@ -130,7 +130,7 @@ class Model():
         """
         #corrsx = self.corrc.get_cluster_correlations(structure)
         try:
-            cluster_orbits = self.corrc._cluster_orbits_set[0]
+            cluster_orbits = self.corrc._cluster_orbits_set[-1]
         except AttributeError:
             raise AttributeError("Cluster_orbit set is not predefined, look at the documentation.")
         corrs = np.zeros(len(cluster_orbits))
