@@ -539,6 +539,25 @@ class ParentLattice(Atoms):
 
         return dict
 
+    def plat_from_dict_obsolete(dict):
+        cell = np.array(dict["parent_lattice_pristine_unit_cell"])
+        pbc = dict["parent_lattice_pbc"]
+        positions = np.array(dict["parent_lattice_pristine_positions"])
+        _site_types = dict["parent_lattice_idx_subs"]
+        _tags = np.array(dict["parent_lattice_tags"])
+
+        #numbers = np.zeros(len(positions), dtype=int)
+        numbers = []
+        for site_index,tag in enumerate(_tags):
+            numbers.append(_site_types[tag])
+            #numbers[site_index] = _site_types[tag]
+        numbers_pris = []
+        for nrs in numbers:
+            numbers_pris.append(nrs[0])
+
+        prist = Atoms(positions=positions, numbers=numbers_pris, cell=cell, pbc=pbc)
+        return ParentLattice(atoms=prist, numbers=numbers, pbc=pbc)
+
     def plat_from_dict(dict):
         """Generates ParentLattice object from a dictionary as returned by ParentLattice.as_dict()
         """

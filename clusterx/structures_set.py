@@ -43,6 +43,9 @@ class StructuresSet():
 
     ``calculator``: ASE calculator object (default: None)
 
+    ``folders_db_fname``: String (deprecated)
+        same as ``db_name``. Use ``db_name`` instead. If set overrides ``db_name``.
+
     **Examples:**
 
     .. todo::
@@ -50,7 +53,7 @@ class StructuresSet():
 
     **Methods:**
     """
-    def __init__(self, parent_lattice=None, db_fname=None, calculator = None):
+    def __init__(self, parent_lattice=None, db_fname=None, calculator = None, folders_db_fname=None):
 
         self._iter = 0
         self._parent_lattice = parent_lattice
@@ -62,6 +65,8 @@ class StructuresSet():
         self._ids = []
         #########################
         self._db_fname = db_fname
+        if folders_db_fname is not None:
+            self._db_fname = folders_db_fname
 
         if isinstance(calculator,Calculator):
             self.set_calculator(calculator)
@@ -78,8 +83,12 @@ class StructuresSet():
         #_folders  = self._db.metadata["folders"]
         _folders  = self._db.metadata.get("folders",[])
         _props = self._db.metadata.get("properties",{})
-        plat_dict = self._db.metadata.get("parent_lattice",{})
-        self._parent_lattice = ParentLattice.plat_from_dict(plat_dict)
+
+        plat_dict = self._db.metadata.get("parent_lattice")
+        if plat_dict is not None:
+            self._parent_lattice = ParentLattice.plat_from_dict(plat_dict)
+        else:
+            self._parent_lattice = ParentLattice.plat_from_dict_obsolete(self._db.metadata)
 
         for i,row in enumerate(self._db.select()):
             atoms = row.toatoms()
