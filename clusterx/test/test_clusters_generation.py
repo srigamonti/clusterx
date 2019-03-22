@@ -21,7 +21,7 @@ def test_clusters_generation():
 
     """
     tassert = True
-    doparts = [2,3,5,6,7,8]
+    doparts = [2,3,5,6,7]
     #doparts = [8]
     isok = []
     if 1 in doparts:

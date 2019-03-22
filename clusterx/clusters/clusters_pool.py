@@ -392,7 +392,6 @@ class ClustersPool():
         tags = scell.get_tags()
         distances = self._distances
         radii = self._radii
-
         for npts,radius in zip(npoints,radii):
             clrs_full = []
             for idxs in combinations(satoms,npts):
@@ -420,6 +419,8 @@ class ClustersPool():
                 clrs_full = [c for i,c in enumerate(clrs_full) if i not in delids]
 
                 new = True
+                """
+
                 for __cl1 in orbit:
                     for __cl2 in self._cpool:
                         if __cl1 == __cl2:
@@ -427,8 +428,9 @@ class ClustersPool():
                             break
                     if not new:
                         break
-                #new = True
-
+                if _cl in self._cpool:
+                    new = False
+                """
                 if new:
                     #self._cpool.append(_cl)
                     self._cpool.append(Cluster(_cl.get_idxs(),_cl.get_nrs(),self._cpool_scell,self._distances))
