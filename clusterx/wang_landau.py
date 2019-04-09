@@ -64,12 +64,12 @@ class WangLandau():
 
     """
 
-    def __init__(self, energy_model, scell, nsubs, filename = "dos.json", sublattice_indices = [], ensemble = "canonical", mc = False, error_reset = False):
+    def __init__(self, energy_model, scell, nsubs, fileprefix = "cdos.json", sublattice_indices = [], ensemble = "canonical", mc = False, error_reset = False):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
         print(self._nsubs)
-        self._filename = filename
+        self._fileprefix = fileprefix
 
         if not sublattice_indices:
             try:
@@ -146,30 +146,32 @@ class WangLandau():
         e = self._em.predict(struc)
         print(e)
 
-        hist=[]
+        cdos=[]
         eb=energy_range[0]
         while eb < energy_range[1]:
-            hist.append([eb,1,0])
+            cdos.append([eb,1,0])
             eb=eb+energy_bin_width
+        cdos=np.asarray(cdos)
 
-        for k,h in enumerate(hist):
+        for k,d in enumerate(cdos):
             
-            if e < h[0]:
-                diffe1=float(e-hist[k-1][0])
-                diffe2=float(h[0]-e)
+            if e < d[0]:
+                diffe1=float(e-cdos[k-1][0])
+                diffe2=float(d[0]-e)
                 if diffe1 < diffe2:
                     inde=k-1
                 else:
                     inde=k
                 break
+        
             
         f=f_range[0]
         fi=0
         g=1+math.log(f)
         histogram_flatness=flatness_conditions[fi][0]
 
-        hist[inde][1]=hist[inde][1]+math.log(f)
-        hist[inde][2]=hist[inde][2]+1
+        cdos[inde][1]=cdos[inde][1]+math.log(f)
+        cdos[inde][2]=cdos[inde][2]+1
 
         control_flag = True
         if self._error_reset:
@@ -179,18 +181,19 @@ class WangLandau():
 
         while f > f_range[1]:
 
-            struc, e, g, inde, hist = self.flat_histogram(struc, e, g, inde, f, hist, histogram_flatness)
+            struc, e, g, inde, cdos = self.flat_histogram(struc, e, g, inde, f, cdos, histogram_flatness)
             print(self._nsubs)
             logcfile = "cdos_nsub%d_binw%2.8f_flatcond%1.2f_modfac%2.12f.log"%( 16, energy_bin_width, histogram_flatness, f)
-            logcdos=open(logcfile,'w')
-            for h in hist:
-                logcdos.write("%2.12f\t%2.12f\t%d\n"%(float(h[0]),float(h[1]),int(h[2])))
-            logcdos.close()
-                
-            for m,h in enumerate(hist):
-                if h[2]>0:
-                    print(h)
-                    hist[m][2]=0
+
+            filestring=self._fileprefix+"_modificationf-"+str(f)+"_histogram_flatness-"+str(histogram_flatness)+".json"
+            cd = ConfigurationalDensityOfStates(filename=filestring,scell=self._scell, modification_factor = f, flatness_condition = histogram_flatness)
+            cd._cdos = cdos
+            cd.wang_landau_write_to_file()
+            
+            for m,d in enumerate(cdos):
+                if d[2]>0:
+                    print(d)
+                    cdos[m][2]=0
         
             if update_method == 'square_root':
                 f=math.sqrt(f)
@@ -205,9 +208,9 @@ class WangLandau():
                     histogram_flatness = float(0.99)
                     
         print("Loop over modification factor f finished")
-        return hist
+        return cd
             
-    def flat_histogram(self, struc, e, g, inde, f, hist, histogram_flatness):
+    def flat_histogram(self, struc, e, g, inde, f, cdos, histogram_flatness):
 
         hist_min=0
         hist_avg=1
@@ -217,18 +220,18 @@ class WangLandau():
         while (hist_min < histogram_flatness*hist_avg) or (i < 10):
             
             for i in range(500):
-                struc, e, g, inde, hist = self.dos_step(struc, e, g, inde, lnf, hist)
+                struc, e, g, inde, cdos = self.dos_step(struc, e, g, inde, lnf, cdos)
                     
             hist_sum=0
             i=0
-            for h in hist:
-                if float(h[2])>0:
+            for d in cdos:
+                if float(d[2])>0:
                     i=i+1
-                    hist_sum=hist_sum+h[2]
+                    hist_sum=hist_sum+d[2]
                     if i==1:
-                        hist_min=h[2]
-                    elif h[2]<hist_min:
-                        hist_min=h[2]
+                        hist_min=d[2]
+                    elif d[2]<hist_min:
+                        hist_min=d[2]
                         hist_avg=(hist_sum)/(1.0*i)
                                 
         print("\n")
@@ -237,52 +240,132 @@ class WangLandau():
         print(hist_min,hist_avg)
         print("Flat histogram for f=%2.12f and flatness condition g_min > %1.2f * g_mean finished"%(f,histogram_flatness))
         
-        return struc, e, g, inde, hist
+        return struc, e, g, inde, cdos
                                                                                                                                                                                                                                                     
-    def dos_step(self, struc, e, g, inde, lnf, hist):
+    def dos_step(self, struc, e, g, inde, lnf, cdos):
     
-        ind1,ind2=struc.swap_random(self._sublattice_indices)
+        ind1, ind2 = struc.swap_random(self._sublattice_indices)
 
         e1 = self._em.predict(struc)
 
-        for k,h in enumerate(hist):
+        for k,d in enumerate(cdos):
 
-            if e1 < h[0]:
-                diffe1=float(e1-hist[k-1][0])
-                diffe2=float(h[0]-e1)
+            if e1 < d[0]:
+                diffe1 = float(e1-cdos[k-1][0])
+                diffe2 = float(d[0]-e1)
                 if diffe1 < diffe2:
-                    g1=hist[k-1][1]
-                    kinde=k-1
+                    g1 = cdos[k-1][1]
+                    kinde = k-1
                 else:
-                    g1=h[1]
-                    kinde=k
+                    g1 = d[1]
+                    kinde = k
                 break
 
         if g >= g1:
-            accept_swap=True
-            trans_prob=1
+            accept_swap = True
+            trans_prob = 1
         else:
-            trans_prob=math.exp(g-g1)
+            trans_prob = math.exp(g-g1)
             if random.uniform(0,1) <= trans_prob:
-                accept_swap=True
+                accept_swap = True
             else:
-                accept_swap=False
+                accept_swap = False
 
         if accept_swap:
             g=g1+lnf
             e=e1
             inde=kinde
             
-            hist[kinde][1]=g
-            hist[kinde][2]=hist[kinde][2]+1
+            cdos[kinde][1] = g
+            cdos[kinde][2] = cdos[kinde][2]+1
             
         else:
             g=g+lnf
             
-            hist[inde][1]=g
-            hist[inde][2]=hist[inde][2]+1
+            cdos[inde][1]=g
+            cdos[inde][2]=cdos[inde][2]+1
 
             struc.swap(ind1,ind2)
 
-        return struc, e, g, inde, hist
+        return struc, e, g, inde, cdos
         
+class ConfigurationalDensityOfStates():
+    """ConfigurationalDensityOfStates class
+
+    **Description**:
+        Configurational density of states from a sampling performed in the supercell scell.
+        Additional information about the sampling procedure, e.g. the modification factor, is stored.
+
+    **Parameters**:
+
+    ``scell``: SuperCell object
+        Super cell in which the sampling is performed.
+
+    ``filename``: string
+        The trajectoy can be stored in a json file with the path given by ``filename``.
+
+    ``**kwargs``: keyword arguments
+
+        ``modification_factor``: float
+
+        ``flatness_condition``: float
+
+    """
+
+    def __init__(self, scell = None, filename="cdos.json", **kwargs):
+        self._cdos = []
+
+        self._scell = scell
+        self._save_nsteps = kwargs.pop("save_nsteps",10)
+        self._write_no = 0
+
+        self._models = kwargs.pop("models",[])
+
+        self._filename = filename
+
+        #Parameter for Wang Landau
+        self._f = kwargs.pop("modification_factor",math.exp(1))
+        self._flatness_condition = kwargs.pop("flatness_condition",0.50)
+
+
+    def calculate_thermodynamics(self, quantity):
+        """Calculate the thermodynamic for all decoration in the trajectory
+        """
+        pass
+    
+    def wang_landau_write_to_file(self, filename = None):
+        """Write trajectory to file (default filename trajectory.json).
+        """
+
+        if filename is not None:
+            self._filename = filename
+
+        cdosdict={}
+        #for j,dec in enumerate(self._trajectory):
+        #    trajdic.update({str(j):dec})
+        cdosdict.update({'modification_factor': self._f })
+        cdosdict.update({'flatness_condiction': self._flatness_condition })
+        cdosdict.update({'super_cell_definition': self._scell.as_dict()})
+        cdosdict.update({"cdos": self._cdos})
+
+        with open(self._filename, 'w+', encoding='utf-8') as outfile:
+            json.dump(cdosdict, outfile, cls=NumpyEncoder, indent = 2 , separators = (',',':'))
+
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """ Special json encoder for numpy types
+    https://stackoverflow.com/questions/26646362/numpy-array-is-not-json-serializable/32850511
+
+    """
+    def default(self, obj):
+        if isinstance(obj, list):
+            return obj.tolist()
+        elif isinstance(obj, (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64)):
+            return int(obj)
+        elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
+            return float(obj)
+        elif isinstance(obj,(np.ndarray,)):
+            return obj.tolist()
+
+        return json.JSONEncoder.default(self, obj)
