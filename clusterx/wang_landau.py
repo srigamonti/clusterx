@@ -64,7 +64,7 @@ class WangLandau():
 
     """
 
-    def __init__(self, energy_model, scell, nsubs, fileprefix = "cdos.json", sublattice_indices = [], ensemble = "canonical", mc = False, error_reset = False):
+    def __init__(self, energy_model, scell, nsubs, fileprefix = "cdos", sublattice_indices = [], ensemble = "canonical", mc = False, error_reset = False):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
