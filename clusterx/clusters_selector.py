@@ -29,6 +29,10 @@ class ClustersSelector():
             ``sparsity_min``: positive real, minimal sparsity parameter
             ``sparsity_step``: positive real, optional, if set to 0.0, a logarithmic
             grid from sparsity_max to sparsity_min is automatically created.
+            ``max_iter``: integer, maximum number of iterations for LASSO algorithm.
+            ``tol``: small positive real, tolerance of LASSO solution.
+            ``sparsity_scale``: either "log" or "piece_log".
+            ``cv_splits``: None or integer, default 3, number of splits for CV. If None, LeaveOneOut is performed
         if ``method`` is set to "linreg", the keyword arguments are:
             ``clusters_sets``: one of "size", "combinations", and "size+combinations".
             In the first case, clusters sub_pools of increasing size are extracted from
@@ -62,6 +66,10 @@ class ClustersSelector():
         self.sparsity_max = kwargs.pop("sparsity_max",1)
         self.sparsity_min = kwargs.pop("sparsity_min",0.01)
         self.sparsity_step = kwargs.pop("sparsity_step",0.0)
+        self.sparsity_scale = kwargs.pop("sparsity_scale","log")
+        self.cv_splits = kwargs.pop("cv_splits",3)
+        self.max_iter = kwargs.pop("max_iter",10000)
+        self.tol = kwargs.pop("tol",1e-5)
 
         # additional arguments for linear regression
         self.clusters_sets = kwargs.pop("clusters_sets","size")
@@ -106,7 +114,7 @@ class ClustersSelector():
         the optimal set of clusters.
 
         **Parameters:**
-        
+
         ``sset``: StructuresSet object
             The structures set corresponding to the training data.
 
@@ -279,8 +287,7 @@ class ClustersSelector():
             else:
 
                 _comat = x
-
-            fitter_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, normalize=False, max_iter = 1000000000, tol = 1e-12)
+            fitter_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, normalize=False, max_iter = self.max_iter, tol = self.tol)
             fitter_cv.fit(_comat,p)
 
             ecimult = []
@@ -290,7 +297,10 @@ class ClustersSelector():
             for coef in fitter_cv.coef_:
                 ecimult.append(coef)
 
-            _cvs = cross_val_score(fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
+            if self.cv_splits is None:
+                _cvs = cross_val_score(fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
+            else:
+                _cvs = cross_val_score(fitter_cv, _comat, p, cv=self.cv_splits, scoring = 'neg_mean_squared_error')
             mean_cv=np.sqrt(-np.mean(_cvs))
 
             self.cvs.append(mean_cv)
@@ -310,13 +320,19 @@ class ClustersSelector():
                     self.opt_sparsity=sparsity
 
             if self.sparsity_step == 0.0:
-                if idx==10:
-                    idx=2
+                if self.sparsity_scale is "log":
                     step=float(sparsity/(1.0*10))
-                    sparsity = sparsity - step
-                else:
-                    idx=idx+1
-                    sparsity = sparsity - step
+                    sparsity = sparsity - 3*step
+
+                elif self.sparsity_scale is "piece_log":
+                    if idx==10:
+                        idx=2
+                        step=float(sparsity/(1.0*10))
+                        sparsity = sparsity - step
+                    else:
+                        idx=idx+1
+                        sparsity = sparsity - step
+
             else:
                 sparsity = sparsity - step
 

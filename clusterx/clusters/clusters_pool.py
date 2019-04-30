@@ -535,12 +535,20 @@ class ClustersPool():
 
         return np.array(atom_idxs), np.array(atom_nrs)
 
+    def serialize(self,db_name=None):
+        if db_name is None:
+            db_name = "cpool.json"
+
+        self.write_clusters_db(db_name=db_name)
+
+    """
     def serialize(self, fmt, fname=None):
         if fmt == "json":
             if fname is None:
                 fname = "cpool.json"
 
             self.gen_atoms_database(fname)
+    """
 
     def get_cpool_dict(self):
         nrs = []

@@ -83,7 +83,7 @@ def test_clusters_selector_lasso():
     strset.set_calculator(EMT2())
     energies = strset.calculate_property()
 
-    clsel = ClustersSelector(method='lasso', sparsity_max=0.10, sparsity_min=0.01)
+    clsel = ClustersSelector(method='lasso', sparsity_max=0.10, sparsity_min=0.01, max_iter=1000000000, tol=1e-12, sparsity_scale = "piece_log", cv_splits=None)
     #clsel = ClustersSelector('combinations', cpool, fitter_size = "linreg", nclmax=2)
     #clsel = ClustersSelector('size+combinations', cpool, fitter_size = "linreg", nclmax = 2, set0 = [2,1])
     #clsel.select_clusters(comat,energies)

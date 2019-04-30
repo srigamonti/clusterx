@@ -370,7 +370,7 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     ax.tick_params(width=3*scale,size=10*scale,pad=10*scale)
 
     if refs is None:
-        refs = [0,0]
+        refs = [0.0,0.0]
 
     energies = sset.get_property_values(property_name = property_name)
     if cemodel is not None:
@@ -399,6 +399,7 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
 
     #fig = plt.figure()
     #fig.suptitle("Property vs. concentration")
+    print("REFERS",vl_en)
 
     plt.scatter(frconc,energies-vl_en,marker='o', s=150*scale, edgecolors='green', facecolors='none',label='Calculated')
     if cemodel is not None:

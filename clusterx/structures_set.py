@@ -507,6 +507,10 @@ class StructuresSet():
         db_path = os.path.join(root,prefix+"0"+"-"+str(self.get_nstr()-1)+suffix+".json")
         self.serialize(path=db_path,overwrite=True)
 
+    # Deprecated
+    def write_to_db(self, path="sset.json", overwrite=False, rm_vac=False):
+        self.serialize(path=path, overwrite=overwrite, rm_vac=rm_vac)
+
     def serialize(self, path="sset.json", overwrite=False, rm_vac=False):
         """Serialize StructuresSet object
 

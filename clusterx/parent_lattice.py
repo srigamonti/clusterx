@@ -141,7 +141,7 @@ class ParentLattice(Atoms):
                 for i in range(len(atoms)):
                     sites.append(None)
                 for site_index, nrs in numbers.items():
-                    sites[int(site_index)] = nrs
+                    sites[int(site_index)] = list(nrs)
             else:
                 sites = numbers
         if symbols is not None:
