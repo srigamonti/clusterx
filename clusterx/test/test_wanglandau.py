@@ -11,7 +11,7 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.clusters.cluster import Cluster
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.model import Model
-from clusterx.wang_landau import WangLandau
+from clusterx.thermodynamics.wang_landau import WangLandau
 from clusterx.utils import isclose
 from clusterx.utils import dict_compare
 

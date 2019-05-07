@@ -11,8 +11,8 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.clusters.cluster import Cluster
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.model import Model
-from clusterx.monte_carlo import MonteCarlo
-from clusterx.monte_carlo import MonteCarloTrajectory
+from clusterx.thermodynamics.monte_carlo import MonteCarlo
+from clusterx.thermodynamics.monte_carlo import MonteCarloTrajectory
 from clusterx.utils import isclose
 from clusterx.utils import dict_compare
 
