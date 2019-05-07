@@ -129,7 +129,7 @@ class ParentLattice(Atoms):
             and get_distances, saving computation time. Care should be paid in cases where
             positions are updated either by relaxation or deformation of the lattice.
         * remove deprecated sites and site_symbols parameters from __init__(), calls around the code,
-        and documentation / tutorials
+            and documentation / tutorials
 
     **Methods:**
     """

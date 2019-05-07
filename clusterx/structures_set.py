@@ -352,7 +352,7 @@ class StructuresSet():
 
         ``prop_name``: string (default: "energy")
             Name of the property to be calculated. This is used as a key for the
-            ``self._pros`` dictionary. The property values can be recovered by
+            ``self._props`` dictionary. The property values can be recovered by
             calling the method ``StructureSet.get_property_values(prop_name)`` (see documentation).
 
         ``prop_func``: function (default: ``None``)
@@ -365,7 +365,7 @@ class StructuresSet():
             Only takes effect if ``prop_func`` is ``None``, i.e., when an ASE calculator
             (or derived calculator) is used. If True, the "Atoms.get_potential_energy()" method
             is applied to a copy of Structure.atoms object with vacancy sites removed,
-            i.e., atom positions containint species with species number 0 or species
+            i.e., atom positions containing species with species number 0 or species
             symbol "X".
         """
         props = []
@@ -517,18 +517,19 @@ class StructuresSet():
         The serialization creates a Json ASE database object and writes a json file.
         This file can be used to reconstruct a StructuresSet object, by initializing
         with::
+
             StructuresSet(filename="sset.json")
 
         where "sset.json" is the file written in ``path``.
 
         .. todo::
             * At the moment, if properties where calculated using a calculator from ASE,
-            the last state of the calculator (energy, forces) is stored in the last
-            structure of the database. If the calculator es set every time a property is
-            evaluated for every structure, then every structure contains this state. Both are
-            undesired behaviors. However, it is not obvious how to get rid of it without
-            modifying ASE. So far we leave it like that, but should be removed in the
-            future.
+                the last state of the calculator (energy, forces) is stored in the last
+                structure of the database. If the calculator es set every time a property is
+                evaluated for every structure, then every structure contains this state. Both are
+                undesired behaviors. However, it is not obvious how to get rid of it without
+                modifying ASE. So far we leave it like that, but should be removed in the
+                future.
 
         """
         from ase.io import write
