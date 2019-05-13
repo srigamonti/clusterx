@@ -51,6 +51,11 @@ class Structure(SuperCell):
 
             self.sigmas = np.zeros(len(decoration),dtype=np.int8)
             self.ems = np.zeros(len(decoration),dtype=np.int8)
+
+            for idx, species in enumerate(decoration):
+                if species not in self.sites[idx]:
+                    raise AttributeError("CELL: decoration not compatible with parent lattice definition.")
+
             for idx, species in enumerate(decoration):
                 self.sigmas[idx] = np.argwhere(self.sites[idx] == species)
                 self.ems[idx] = len(self.sites[idx])

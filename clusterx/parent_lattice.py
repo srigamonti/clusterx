@@ -50,7 +50,9 @@ class ParentLattice(Atoms):
         sites (see examples below). This is overriden by ``substitutions``
         if set.
     ``json_db_filepath``: string
-        Json database file. Overrides all the above.
+        Path to a Json database file, as created by ``ParentLattice.serialize()``.
+        Overrides all the above. Allows to create a ``ParentLattice`` object
+        from file.
     ``pbc``: three bool
         Periodic boundary conditions flags. Examples:
         (1, 1, 0), (True, False, False). Default value: (1,1,1)

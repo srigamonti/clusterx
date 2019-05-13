@@ -79,6 +79,7 @@ class StructuresSet():
             self._db = None
 
     def _init_from_db(self):
+        from clusterx.utils import get_cl_idx_sc
         self._db = connect(self._db_fname)
         #_folders  = self._db.metadata["folders"]
         _folders  = self._db.metadata.get("folders",[])
@@ -102,7 +103,10 @@ class StructuresSet():
             for k,v in _props.items():
                 props[k] = v[i]
 
-            self.add_structure(Structure(scell, decoration=atoms.get_atomic_numbers()),folder=_folders[i],**props)
+            idxs = get_cl_idx_sc(scell.get_positions(),atoms.get_positions(),method=1)
+            s = Structure(scell, decoration=atoms.get_atomic_numbers()[idxs])
+            
+            self.add_structure(s,folder=_folders[i],**props)
 
 
     def __iter__(self):
@@ -207,6 +211,8 @@ class StructuresSet():
             positions in actual structure are shuffled wrt parent lattice (a situation
             that is not common, but that may appear when using
             runs not designed for a CE ...).
+
+            It would be very good that ``structures`` can be a list of Atoms objects too.
         """
         if isinstance(structures, (list, np.ndarray)):
             for structure in structures:
@@ -414,9 +420,12 @@ class StructuresSet():
             f.close()
             os.chdir(cwd)
 
-
+    # Deprecated: Use write_input_files instead
     def write_files(self, root = ".", prefix = '', suffix = '', fnames = None, formats = [], overwrite = True, rm_vac=False):
-        """Create folders containing structure files for ab-initio calculations.
+        self.write_input_files(root, prefix, suffix, fnames, formats, overwrite, rm_vac)
+
+    def write_input_files(self, root = ".", prefix = '', suffix = '', fnames = None, formats = [], overwrite = True, rm_vac=False):
+        """Create folders containing structure input files for ab-initio calculations.
 
         Structure files are written to files with path::
 
@@ -555,7 +564,7 @@ class StructuresSet():
                 self._db.update(i+1, folder=self._folders[i])
 
             self._db.metadata = {
-                "folders" : self._folders,
+                "folders" : self._folders, # "folders" must be removed from the metadata, must stay only on the structures, as the properties
                 "db_fname" : self._db_fname,
                 "nstr" : self.get_nstr(),
                 "parent_lattice" : self._parent_lattice.as_dict()
