@@ -43,6 +43,13 @@ class StructuresSet():
 
     ``calculator``: ASE calculator object (default: None)
 
+    ``quick_parse``: Boolean (default: ``False``)
+        if True, it assumes that, in the json file to be parsed (see ``db_fname``),
+        the atom indices of the structures are the same as those of the supercell.
+        Otherwise, the atom positions of structures and supercell are verified for
+        every structure in the structures set being parsed. This leads to a slower parsing
+        but safer if not sure how the file was built.
+
     ``folders_db_fname``: String (deprecated)
         same as ``db_name``. Use ``db_name`` instead. If set overrides ``db_name``.
 
@@ -53,7 +60,7 @@ class StructuresSet():
 
     **Methods:**
     """
-    def __init__(self, parent_lattice=None, db_fname=None, calculator = None, folders_db_fname=None):
+    def __init__(self, parent_lattice=None, db_fname=None, calculator = None, folders_db_fname=None, quick_parse=False):
 
         self._iter = 0
         self._parent_lattice = parent_lattice
@@ -74,11 +81,11 @@ class StructuresSet():
             self._calculator = None
 
         if self._db_fname is not None:
-            self._init_from_db()
+            self._init_from_db(quick_parse=quick_parse)
         else:
             self._db = None
 
-    def _init_from_db(self):
+    def _init_from_db(self,quick_parse = False):
         from clusterx.utils import get_cl_idx_sc
         self._db = connect(self._db_fname)
         #_folders  = self._db.metadata["folders"]
@@ -103,9 +110,12 @@ class StructuresSet():
             for k,v in _props.items():
                 props[k] = v[i]
 
-            idxs = get_cl_idx_sc(scell.get_positions(),atoms.get_positions(),method=1)
-            s = Structure(scell, decoration=atoms.get_atomic_numbers()[idxs])
-            
+            if quick_parse:
+                s = Structure(scell, decoration=atoms.get_atomic_numbers())
+            else:
+                idxs = get_cl_idx_sc(scell.get_positions(),atoms.get_positions(),method=1)
+                s = Structure(scell, decoration=atoms.get_atomic_numbers()[idxs])
+
             self.add_structure(s,folder=_folders[i],**props)
 
 
