@@ -380,10 +380,24 @@ class ParentLattice(Atoms):
             ats.append(pats[i])
         return ats
 
-    def get_n_sub_sites(self):
+    def get_n_sub_sites(self, unique=True):
         """Return total number of substitutional sites
+
+        **Parameters:**
+
+        ``unique``: Boolean (default ``True``)
+            If ``True``, return the number of site-types which may be substituted.
+            If ``False``, return the number of sites which may be substituted.
         """
-        return len(self.get_substitutional_tags())
+        if unique:
+            return len(self.get_substitutional_tags())
+        else:
+            st = []
+            for tag in self.get_tags():
+                if len(self.idx_subs[tag]) > 1:
+                    st.append(tag)
+
+            return len(st)
 
     def get_spectator_sites(self):
         """Return atom indexes which may not be substituted

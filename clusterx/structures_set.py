@@ -108,7 +108,10 @@ class StructuresSet():
 
             props = {}
             for k,v in _props.items():
-                props[k] = v[i]
+                try:
+                    props[k] = v[i]
+                except:
+                    props[k] = None
 
             if quick_parse:
                 s = Structure(scell, decoration=atoms.get_atomic_numbers())
@@ -602,7 +605,7 @@ class StructuresSet():
         """
         return self._db_fname
 
-    def read_energy(i,folder,**kwargs):
+    def read_energy(i,folder,structure=None, **kwargs):
         """Read value stored in ``energy.dat`` file.
 
         This is to be used as the default argument for the ``read_property``
@@ -661,10 +664,12 @@ class StructuresSet():
             Function to extract property value from ab-initio files. Return value
             must be scalar and signature is::
 
-                read_property(i,folder_path, args[0], args[1], ...)
+                read_property(i,folder_path, structure = None, **kwargs)
 
-            where ``i`` is the structure index, and ``folder_path`` is the path
-            of the folder containing the relevant property files.
+            where ``i`` is the structure index, ``folder_path`` is the path
+            of the folder containing the relevant ab-initio files, structure
+            is the structure object for structure index ``i``, and **kwars are
+            any additional keyword arguments.
 
         ``**kwargs``: keyworded argument list, arbitrary length
             You may call this method as::
@@ -682,7 +687,7 @@ class StructuresSet():
         self._props[property_name] = []
         for i,folder in enumerate(self._folders):
             try:
-                pval = read_property(i,folder,**kwargs)
+                pval = read_property(i,folder,structure=self.get_structure(i),**kwargs)
             except:
                 pval = None
 

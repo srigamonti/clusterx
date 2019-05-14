@@ -91,14 +91,15 @@ class SuperCell(ParentLattice):
 
         prist.wrap()
         for i in range(len(subs)):
-            subs[i].wrap
+            subs[i].wrap()
 
         if sort_key is not None:
             from clusterx.utils import sort_atoms
             prist = sort_atoms(prist,key=sort_key)
             for i in range(len(subs)):
                 subs[i] = sort_atoms(subs[i],key=sort_key)
-        super(SuperCell,self).__init__(atoms = prist, substitutions = subs )
+
+        super(SuperCell,self).__init__(atoms = prist, substitutions = subs)
         self._natoms = len(self)
         self.set_pbc(self._plat.get_pbc())
 
