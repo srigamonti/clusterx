@@ -10,6 +10,7 @@ from ase.visualize import view
 from ase.build import make_supercell
 from clusterx.parent_lattice import ParentLattice
 import clusterx
+from ase.db import connect
 
 class SuperCell(ParentLattice):
     """
@@ -48,21 +49,34 @@ class SuperCell(ParentLattice):
             sp = sorted(p, key=itemgetter(2,1,0))
 
         here p is a Nx3 array of vector coordinates.
+    ``json_db_filepath``: string (default: None)
+        Overrides all the above. Used to initialize from file. Path of a json
+        file containing a serialized superCell object, as generated
+        by the ``SuperCell.serialize()`` method.
 
     .. todo::
         Proper check of pbc when building the super cell. Either ignore
         translation in ``p`` along non-periodic directions or warn in some way
         if ``p`` is not compatible with pbc.
 
-        Implement init from file. Maybe use internally the ParentLattice parser.
 
     **Methods:**
     """
 
-    def __init__(self, parent_lattice, p, sort_key=None):
-        self._plat = parent_lattice
+    def __init__(self, parent_lattice=None, p=None, sort_key=None, json_db_filepath=None):
+
+        if json_db_filepath is not None:
+            db = connect(json_db_filepath)
+
+            plat_dict = db.metadata.get("parent_lattice",{})
+            self._plat = ParentLattice.plat_from_dict(plat_dict)
+            p = db.metadata.get("tmat",np.identity(3,dtype=int))
+            self._sort_key = db.metadata.get("sort_key",None)
+        else:
+            self._plat = parent_lattice
+            self._sort_key = sort_key
+
         pbc = self._plat.get_pbc()
-        self._sort_key = sort_key
 
         if not isinstance(p,int):
             p = np.array(p)
@@ -88,18 +102,18 @@ class SuperCell(ParentLattice):
                 sys.exit("SuperCell(Error)")
 
         self.index = int(round(np.linalg.det(self._p)))
-        prist = make_supercell(parent_lattice.get_pristine(),self._p)
-        subs = [make_supercell(atoms,self._p) for atoms in parent_lattice.get_substitutions()]
+        prist = make_supercell(self._plat.get_pristine(),self._p)
+        subs = [make_supercell(atoms,self._p) for atoms in self._plat.get_substitutions()]
 
         prist.wrap()
         for i in range(len(subs)):
             subs[i].wrap()
 
-        if sort_key is not None:
+        if self._sort_key is not None:
             from clusterx.utils import sort_atoms
-            prist = sort_atoms(prist,key=sort_key)
+            prist = sort_atoms(prist,key=self._sort_key)
             for i in range(len(subs)):
-                subs[i] = sort_atoms(subs[i],key=sort_key)
+                subs[i] = sort_atoms(subs[i],key=self._sort_key)
 
         super(SuperCell,self).__init__(atoms = prist, substitutions = subs)
         self._natoms = len(self)
@@ -117,7 +131,7 @@ class SuperCell(ParentLattice):
         """Return dictionary with object definition
         """
         plat_dict = self._plat.as_dict()
-        self._dict = {"tmat":self._p,"parent_lattice":plat_dict}
+        self._dict = {"tmat":self._p,"parent_lattice":plat_dict,"sort_key":self._sort_key}
 
         return self._dict
 
