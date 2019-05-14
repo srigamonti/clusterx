@@ -15,6 +15,7 @@ import subprocess
 import numpy as np
 import json
 import time
+from ase.db import connect
 
 class ClustersPool():
     """
@@ -47,6 +48,11 @@ class ClustersPool():
         If 1, an elimination method is used to build the clusters pool. If 2, an
         incremental method is used instead. Use method 2 only if ``super_cell`` is
         ``None``.
+    ``json_db_filepath``: string (default: None)
+        Overrides all the above. Used to initialize from file. Path of a json
+        file containing a serialized ClustersPool object, as generated
+        by the ``ClustersPool.serialize()`` method.
+
 
     .. todo:
         Fix multiplicities when ``super_cell`` is used
@@ -82,7 +88,16 @@ class ClustersPool():
 
     **Methods:**
     """
-    def __init__(self, parent_lattice, npoints=[], radii=[], super_cell=None, method=1):
+    def __init__(self, parent_lattice=None, npoints=[], radii=[], super_cell=None, method=1, json_db_filepath=None):
+        if json_db_filepath is not None:
+            db = connect(json_db_filepath)
+            plat_dict = db.metadata.get("parent_lattice",{})
+            parent_lattice = ParentLattice.plat_from_dict(plat_dict)
+            npoints =  db.metadata.get("_npoints",[])
+            radii =  db.metadata.get("_radii",[])
+            scell_dict = db.metadata.get("super_cell",{})
+            super_cell = SuperCell.scell_from_dict(scell_dict)
+
         self._npoints = np.array(npoints)
         self._radii = np.array(radii,dtype=float)
         self._plat = parent_lattice
@@ -535,21 +550,29 @@ class ClustersPool():
 
         return np.array(atom_idxs), np.array(atom_nrs)
 
-    def serialize(self,db_name=None):
+    def serialize(self,db_name="cpool.json"):
+        """Serialize clusters pool object to json database file
+
+        The generated json file is compatible with ASE's GUI, so you can
+        visualize the clusters with it. You can also initialize a new
+        ClustersPool object from this file, for this read the documentation
+        for the ``json_db_filepath`` attribute of ClustersPool class.
+
+        **Parameters:**
+        ``db_name``: string (default: "cpool.json")
+            Name of the json database file.
+        """
         if db_name is None:
             db_name = "cpool.json"
 
         self.write_clusters_db(db_name=db_name)
 
-    """
-    def serialize(self, fmt, fname=None):
-        if fmt == "json":
-            if fname is None:
-                fname = "cpool.json"
+    def as_dict(self):
+        """Return a python-dictionary representation of the clusters pool
+        """
+        return self.get_cpool_dict()
 
-            self.gen_atoms_database(fname)
-    """
-
+    # Deprecated: use as_dict() instead.
     def get_cpool_dict(self):
         nrs = []
         idxs = []
@@ -568,15 +591,18 @@ class ClustersPool():
         self._cpool_dict.update({"multiplicities" : self.get_multiplicities()})
         self._cpool_dict.update({"npoints" : self.get_all_npoints()})
         self._cpool_dict.update({"radii" : self.get_all_radii()})
+        self._cpool_dict.update({"_npoints" : self._npoints})
+        self._cpool_dict.update({"_radii" : self._radii})
         self._cpool_dict.update({"alphas" : alphas})
         self._cpool_dict.update({"nclusters" : len(self)})
-        self._cpool_dict.update({"scell_tmat" : self._cpool_scell.get_transformation()})
-        self._cpool_dict.update({"parent_lattice_pbc" : self._plat.get_pbc()})
-        self._cpool_dict.update({"parent_lattice_pristine_unit_cell" : self._plat.get_cell()})
-        self._cpool_dict.update({"parent_lattice_pristine_positions" : self._plat.get_positions()})
-        self._cpool_dict.update({"parent_lattice_pristine_numbers" : self._plat.get_atomic_numbers()})
-        self._cpool_dict.update({"parent_lattice_tags" : self._plat.get_tags()})
-        self._cpool_dict.update({"parent_lattice_idx_subs" : self._plat.get_idx_subs()})
+        self._cpool_dict.update({"super_cell" : self._cpool_scell.as_dict()})
+        self._cpool_dict.update({"parent_lattice" : self._plat.as_dict()})
+        #self._cpool_dict.update({"parent_lattice_pbc" : self._plat.get_pbc()})
+        #self._cpool_dict.update({"parent_lattice_pristine_unit_cell" : self._plat.get_cell()})
+        #self._cpool_dict.update({"parent_lattice_pristine_positions" : self._plat.get_positions()})
+        #self._cpool_dict.update({"parent_lattice_pristine_numbers" : self._plat.get_atomic_numbers()})
+        #self._cpool_dict.update({"parent_lattice_tags" : self._plat.get_tags()})
+        #self._cpool_dict.update({"parent_lattice_idx_subs" : self._plat.get_idx_subs()})
 
         return self._cpool_dict
 
@@ -607,6 +633,7 @@ class ClustersPool():
 
         for atoms in cpool_atoms:
             atoms_db.write(atoms)
+        #atoms_db.write(Atoms(symbols=None))
 
         atoms_db.metadata = self.get_cpool_dict()
 

@@ -127,6 +127,16 @@ class SuperCell(ParentLattice):
 
         return sc
 
+    def scell_from_dict(dict):
+        """Generates SuperCell object from a dictionary as returned by SuperCell.as_dict()
+        """
+        plat_dict = dict.get("parent_lattice",{})
+        plat = ParentLattice.plat_from_dict(plat_dict)
+        p = dict.get("tmat",np.identity(3,dtype=int))
+        sort_key = dict.get("sort_key",None)
+
+        return SuperCell(plat,p,sort_key)
+
     def as_dict(self):
         """Return dictionary with object definition
         """
