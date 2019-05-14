@@ -540,7 +540,7 @@ class ParentLattice(Atoms):
                 print("|{0:^17s}|{1:^30s}|{2:^19s}|".format(str(slind),str(cs[slsps]),str(slsps)))
             print("+--------------------------------------------------------------------+\n")
 
-
+    # Deprecated, use get_sublattice_types instead
     def get_idx_subs(self):
         return self.get_sublattice_types()
 

@@ -503,7 +503,7 @@ class ClustersPool():
                             for __cl in orbit:
                                 #if __cl not in clrs_full: # Desirable condition, however slows down the generation considerably. Result is the same, only that clsr_full may contain repeated clusters.
                                 clrs_full.append(__cl)
-                            print(len(clrs_full))
+                            #print(len(clrs_full))
                             #print("cluster nr: ",len(self._cpool), " added, out of", len(clrs_full))
 
 

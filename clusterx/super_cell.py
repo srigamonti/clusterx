@@ -54,6 +54,8 @@ class SuperCell(ParentLattice):
         translation in ``p`` along non-periodic directions or warn in some way
         if ``p`` is not compatible with pbc.
 
+        Implement init from file. Maybe use internally the ParentLattice parser.
+
     **Methods:**
     """
 
@@ -107,7 +109,7 @@ class SuperCell(ParentLattice):
         """Return a copy
         """
 
-        sc = self.__class__(self._plat, self._p)
+        sc = self.__class__(self._plat, self._p, sort_key = self._sort_key)
 
         return sc
 
