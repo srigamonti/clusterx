@@ -16,6 +16,7 @@ import numpy as np
 import json
 import time
 from ase.db import connect
+from clusterx.utils import get_cl_idx_sc
 
 class ClustersPool():
     """
@@ -91,40 +92,62 @@ class ClustersPool():
     def __init__(self, parent_lattice=None, npoints=[], radii=[], super_cell=None, method=1, json_db_filepath=None):
         if json_db_filepath is not None:
             db = connect(json_db_filepath)
+            self.nclusters = db.metadata.get("nclusters",0)
             plat_dict = db.metadata.get("parent_lattice",{})
-            parent_lattice = ParentLattice.plat_from_dict(plat_dict)
-            npoints =  db.metadata.get("_npoints",[])
-            radii =  db.metadata.get("_radii",[])
+            self._plat = ParentLattice.plat_from_dict(plat_dict)
+            self.sc_sg, self.sc_sym = get_spacegroup(self._plat) # Scaled to parent_lattice
+            self._multiplicities = np.zeros(self.nclusters, dtype=int)
+            self._cpool = []
+            self._cpool_dict = {}
+            self._npoints =  db.metadata.get("_npoints",[])
+            self._radii =  db.metadata.get("_radii",[])
             scell_dict = db.metadata.get("super_cell",{})
-            super_cell = SuperCell.scell_from_dict(scell_dict)
+            self._cpool_scell = SuperCell.scell_from_dict(scell_dict)
+            self._distances = self._cpool_scell.get_all_distances(mic=False)
+            self._sdistances = self._cpool_scell.get_substitutional_atoms().get_all_distances(mic=True)
 
-        self._npoints = np.array(npoints)
-        self._radii = np.array(radii,dtype=float)
-        self._plat = parent_lattice
-        self.sc_sg, self.sc_sym = get_spacegroup(self._plat) # Scaled to parent_lattice
+            cl_nrs = db.metadata.get("atom_numbers",[])
+            cl_positions = db.metadata.get("atom_positions",[])
+            sc_positions = self._cpool_scell.get_positions(wrap=True)
+            for i in range(self.nclusters):
+                if len(cl_positions[i]) == 0:
+                    idxs = []
+                else:
+                    idxs = get_cl_idx_sc(cl_positions[i],sc_positions, method=1, tol=1e-3)
+                self._cpool.append(Cluster(idxs,cl_nrs[i],self._cpool_scell,self._distances))
 
-        self._multiplicities = []
-        self._cpool = []
-        self._cpool_dict = {}
+            self._multiplicities = db.metadata.get("multiplicities",[])
 
-        # Determine which supercell will be used to build the clusters pool
-        if isinstance(super_cell, SuperCell) or isinstance(super_cell, ParentLattice):
-            self._cpool_scell = super_cell
-        elif (self._npoints < 2).all():
-            self._cpool_scell = SuperCell(parent_lattice,np.diag([1,1,1]))
-        elif super_cell is None and len(radii) != 0:
-            self._cpool_scell = self.get_containing_supercell()
+
         else:
-            self._cpool_scell = SuperCell(parent_lattice,np.diag([1,1,1]))
+            self._npoints = np.array(npoints)
+            self._radii = np.array(radii,dtype=float)
+            self._plat = parent_lattice
+            self.sc_sg, self.sc_sym = get_spacegroup(self._plat) # Scaled to parent_lattice
 
-        self._distances = self._cpool_scell.get_all_distances(mic=False)
-        self._sdistances = self._cpool_scell.get_substitutional_atoms().get_all_distances(mic=True)
-        self.set_radii(npoints=npoints,radii=radii)
+            self._multiplicities = []
+            self._cpool = []
+            self._cpool_dict = {}
 
-        if self._npoints.size != 0:
-            self.gen_clusters(method=method)
+            # Determine which supercell will be used to build the clusters pool
+            if isinstance(super_cell, SuperCell) or isinstance(super_cell, ParentLattice):
+                self._cpool_scell = super_cell
+            elif (self._npoints < 2).all():
+                self._cpool_scell = SuperCell(parent_lattice,np.diag([1,1,1]))
+            elif super_cell is None and len(radii) != 0:
+                self._cpool_scell = self.get_containing_supercell()
+            else:
+                self._cpool_scell = SuperCell(parent_lattice,np.diag([1,1,1]))
 
-        self.nclusters = len(self._cpool)
+            self._distances = self._cpool_scell.get_all_distances(mic=False)
+            self._sdistances = self._cpool_scell.get_substitutional_atoms().get_all_distances(mic=True)
+            self.set_radii(npoints=npoints,radii=radii)
+
+            if self._npoints.size != 0:
+                self.gen_clusters(method=method)
+
+            self.nclusters = len(self._cpool)
+
         self.current = 0
         self.high = self.nclusters - 1
         self._cpool_atoms = []
@@ -739,7 +762,6 @@ class ClustersPool():
         """
         from scipy.spatial.distance import cdist
         from sympy.utilities.iterables import multiset_permutations
-        from clusterx.utils import get_cl_idx_sc
         import sys
         from collections import Counter
 
