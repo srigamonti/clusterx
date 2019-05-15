@@ -43,6 +43,13 @@ class StructuresSet():
 
     ``calculator``: ASE calculator object (default: None)
 
+    ``quick_parse``: Boolean (default: ``False``)
+        if True, it assumes that, in the json file to be parsed (see ``db_fname``),
+        the atom indices of the structures are the same as those of the supercell.
+        Otherwise, the atom positions of structures and supercell are verified for
+        every structure in the structures set being parsed. This leads to a slower parsing
+        but safer if not sure how the file was built.
+
     ``folders_db_fname``: String (deprecated)
         same as ``db_name``. Use ``db_name`` instead. If set overrides ``db_name``.
 
@@ -53,7 +60,7 @@ class StructuresSet():
 
     **Methods:**
     """
-    def __init__(self, parent_lattice=None, db_fname=None, calculator = None, folders_db_fname=None):
+    def __init__(self, parent_lattice=None, db_fname=None, calculator = None, folders_db_fname=None, quick_parse=False):
 
         self._iter = 0
         self._parent_lattice = parent_lattice
@@ -74,11 +81,12 @@ class StructuresSet():
             self._calculator = None
 
         if self._db_fname is not None:
-            self._init_from_db()
+            self._init_from_db(quick_parse=quick_parse)
         else:
             self._db = None
 
-    def _init_from_db(self):
+    def _init_from_db(self,quick_parse = False):
+        from clusterx.utils import get_cl_idx_sc
         self._db = connect(self._db_fname)
         #_folders  = self._db.metadata["folders"]
         _folders  = self._db.metadata.get("folders",[])
@@ -100,9 +108,18 @@ class StructuresSet():
 
             props = {}
             for k,v in _props.items():
-                props[k] = v[i]
+                try:
+                    props[k] = v[i]
+                except:
+                    props[k] = None
 
-            self.add_structure(Structure(scell, decoration=atoms.get_atomic_numbers()),folder=_folders[i],**props)
+            if quick_parse:
+                s = Structure(scell, decoration=atoms.get_atomic_numbers())
+            else:
+                idxs = get_cl_idx_sc(scell.get_positions(),atoms.get_positions(),method=1)
+                s = Structure(scell, decoration=atoms.get_atomic_numbers()[idxs])
+
+            self.add_structure(s,folder=_folders[i],**props)
 
 
     def __iter__(self):
@@ -207,6 +224,8 @@ class StructuresSet():
             positions in actual structure are shuffled wrt parent lattice (a situation
             that is not common, but that may appear when using
             runs not designed for a CE ...).
+
+            It would be very good that ``structures`` can be a list of Atoms objects too.
         """
         if isinstance(structures, (list, np.ndarray)):
             for structure in structures:
@@ -352,7 +371,7 @@ class StructuresSet():
 
         ``prop_name``: string (default: "energy")
             Name of the property to be calculated. This is used as a key for the
-            ``self._pros`` dictionary. The property values can be recovered by
+            ``self._props`` dictionary. The property values can be recovered by
             calling the method ``StructureSet.get_property_values(prop_name)`` (see documentation).
 
         ``prop_func``: function (default: ``None``)
@@ -365,7 +384,7 @@ class StructuresSet():
             Only takes effect if ``prop_func`` is ``None``, i.e., when an ASE calculator
             (or derived calculator) is used. If True, the "Atoms.get_potential_energy()" method
             is applied to a copy of Structure.atoms object with vacancy sites removed,
-            i.e., atom positions containint species with species number 0 or species
+            i.e., atom positions containing species with species number 0 or species
             symbol "X".
         """
         props = []
@@ -414,9 +433,12 @@ class StructuresSet():
             f.close()
             os.chdir(cwd)
 
-
+    # Deprecated: Use write_input_files instead
     def write_files(self, root = ".", prefix = '', suffix = '', fnames = None, formats = [], overwrite = True, rm_vac=False):
-        """Create folders containing structure files for ab-initio calculations.
+        self.write_input_files(root, prefix, suffix, fnames, formats, overwrite, rm_vac)
+
+    def write_input_files(self, root = ".", prefix = '', suffix = '', fnames = None, formats = [], overwrite = True, rm_vac=False):
+        """Create folders containing structure input files for ab-initio calculations.
 
         Structure files are written to files with path::
 
@@ -517,18 +539,19 @@ class StructuresSet():
         The serialization creates a Json ASE database object and writes a json file.
         This file can be used to reconstruct a StructuresSet object, by initializing
         with::
+
             StructuresSet(filename="sset.json")
 
         where "sset.json" is the file written in ``path``.
 
         .. todo::
             * At the moment, if properties where calculated using a calculator from ASE,
-            the last state of the calculator (energy, forces) is stored in the last
-            structure of the database. If the calculator es set every time a property is
-            evaluated for every structure, then every structure contains this state. Both are
-            undesired behaviors. However, it is not obvious how to get rid of it without
-            modifying ASE. So far we leave it like that, but should be removed in the
-            future.
+                the last state of the calculator (energy, forces) is stored in the last
+                structure of the database. If the calculator es set every time a property is
+                evaluated for every structure, then every structure contains this state. Both are
+                undesired behaviors. However, it is not obvious how to get rid of it without
+                modifying ASE. So far we leave it like that, but should be removed in the
+                future.
 
         """
         from ase.io import write
@@ -554,7 +577,7 @@ class StructuresSet():
                 self._db.update(i+1, folder=self._folders[i])
 
             self._db.metadata = {
-                "folders" : self._folders,
+                "folders" : self._folders, # "folders" must be removed from the metadata, must stay only on the structures, as the properties
                 "db_fname" : self._db_fname,
                 "nstr" : self.get_nstr(),
                 "parent_lattice" : self._parent_lattice.as_dict()
@@ -582,7 +605,7 @@ class StructuresSet():
         """
         return self._db_fname
 
-    def read_energy(i,folder,**kwargs):
+    def read_energy(i,folder,structure=None, **kwargs):
         """Read value stored in ``energy.dat`` file.
 
         This is to be used as the default argument for the ``read_property``
@@ -641,10 +664,12 @@ class StructuresSet():
             Function to extract property value from ab-initio files. Return value
             must be scalar and signature is::
 
-                read_property(i,folder_path, args[0], args[1], ...)
+                read_property(i,folder_path, structure = None, **kwargs)
 
-            where ``i`` is the structure index, and ``folder_path`` is the path
-            of the folder containing the relevant property files.
+            where ``i`` is the structure index, ``folder_path`` is the path
+            of the folder containing the relevant ab-initio files, structure
+            is the structure object for structure index ``i``, and **kwars are
+            any additional keyword arguments.
 
         ``**kwargs``: keyworded argument list, arbitrary length
             You may call this method as::
@@ -662,7 +687,7 @@ class StructuresSet():
         self._props[property_name] = []
         for i,folder in enumerate(self._folders):
             try:
-                pval = read_property(i,folder,**kwargs)
+                pval = read_property(i,folder,structure=self.get_structure(i),**kwargs)
             except:
                 pval = None
 

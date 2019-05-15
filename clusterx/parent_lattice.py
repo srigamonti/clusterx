@@ -50,7 +50,9 @@ class ParentLattice(Atoms):
         sites (see examples below). This is overriden by ``substitutions``
         if set.
     ``json_db_filepath``: string
-        Json database file. Overrides all the above.
+        Path to a Json database file, as created by ``ParentLattice.serialize()``.
+        Overrides all the above. Allows to create a ``ParentLattice`` object
+        from file.
     ``pbc``: three bool
         Periodic boundary conditions flags. Examples:
         (1, 1, 0), (True, False, False). Default value: (1,1,1)
@@ -129,7 +131,7 @@ class ParentLattice(Atoms):
             and get_distances, saving computation time. Care should be paid in cases where
             positions are updated either by relaxation or deformation of the lattice.
         * remove deprecated sites and site_symbols parameters from __init__(), calls around the code,
-        and documentation / tutorials
+            and documentation / tutorials
 
     **Methods:**
     """
@@ -378,10 +380,24 @@ class ParentLattice(Atoms):
             ats.append(pats[i])
         return ats
 
-    def get_n_sub_sites(self):
+    def get_n_sub_sites(self, unique=True):
         """Return total number of substitutional sites
+
+        **Parameters:**
+
+        ``unique``: Boolean (default ``True``)
+            If ``True``, return the number of site-types which may be substituted.
+            If ``False``, return the number of sites which may be substituted.
         """
-        return len(self.get_substitutional_tags())
+        if unique:
+            return len(self.get_substitutional_tags())
+        else:
+            st = []
+            for tag in self.get_tags():
+                if len(self.idx_subs[tag]) > 1:
+                    st.append(tag)
+
+            return len(st)
 
     def get_spectator_sites(self):
         """Return atom indexes which may not be substituted
@@ -524,7 +540,7 @@ class ParentLattice(Atoms):
                 print("|{0:^17s}|{1:^30s}|{2:^19s}|".format(str(slind),str(cs[slsps]),str(slsps)))
             print("+--------------------------------------------------------------------+\n")
 
-
+    # Deprecated, use get_sublattice_types instead
     def get_idx_subs(self):
         return self.get_sublattice_types()
 

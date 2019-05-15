@@ -399,8 +399,7 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
 
     #fig = plt.figure()
     #fig.suptitle("Property vs. concentration")
-    print("REFERS",vl_en)
-
+    
     plt.scatter(frconc,energies-vl_en,marker='o', s=150*scale, edgecolors='green', facecolors='none',label='Calculated')
     if cemodel is not None:
         plt.scatter(frconc,pred_cv-vl_en,marker='x', s=75*scale, edgecolors='none', facecolors='red',label='Predicted-CV')

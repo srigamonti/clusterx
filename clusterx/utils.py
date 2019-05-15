@@ -137,7 +137,7 @@ def list_integer_named_folders(root=".", prefix='', suffix='', containing_files=
         [1,2,5,7,8].
 
     If ``prefix`` is set to some string, then it returns a (sorted)
-    list of strings. For example, if prepend is set to ``"run_"``, then this
+    list of strings. For example, if prefix is set to ``"run_"``, then this
     will return the array::
 
         ["run_2","run_3","run_4","run_5"]
@@ -158,7 +158,7 @@ def list_integer_named_folders(root=".", prefix='', suffix='', containing_files=
         a list of file names that should not be contained in the returned folders.
 
     Returns:
-        array of integers if default value for ``prepend`` is used. Otherwise
+        array of integers if default value for ``prefix`` is used. Otherwise
         returns an array of strings
 
     """
@@ -182,7 +182,15 @@ def list_integer_named_folders(root=".", prefix='', suffix='', containing_files=
             continue
 
         if prefix != '' or suffix != '':
-            d = folder[len(prefix):][:-len(suffix)]
+            if len(prefix) != 0 and len(suffix) != 0:
+                d = folder[len(prefix):][:-len(suffix)]
+            elif len(prefix) != 0 and len(suffix) == 0:
+                d = folder[len(prefix):]
+            elif len(prefix) == 0 and len(suffix) != 0:
+                d = folder[:-len(suffix)]
+            else:
+                d = folder[:]
+
             if _is_integrable(d):
                 flist.append(int(d))
         else:
