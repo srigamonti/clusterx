@@ -145,7 +145,6 @@ class Structure(SuperCell):
         self._fname = fname
 
     def swap_random_binary(self, site_type, sigma_swap = [0,1]):
-        tags=self.get_tags()
 
         if self._mc == True:
             rind1 = np.random.choice(range(self._comps[site_type][sigma_swap[0]]))
@@ -158,16 +157,16 @@ class Structure(SuperCell):
 
             return ridx1,ridx2,site_type,rindices
         else:
+            tags=self.get_tags()
             idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[0] and tags[index] == site_type]
             idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[1] and tags[index] == site_type]
             ridx1 = np.random.choice(idx1)
             ridx2 = np.random.choice(idx2)
-
             self.swap(ridx1,ridx2)
+            
             return ridx1,ridx2
 
     def swap_random(self, site_types):
-
         if len(site_types) == 1:
             site_type = site_types[0]
         else:
@@ -195,9 +194,9 @@ class Structure(SuperCell):
         if site_type is not None:
             self._idxs[site_type][rindices[0][0]][rindices[1][0]] = ridx2
             self._idxs[site_type][rindices[0][1]][rindices[1][1]] = ridx1
-
-            self._idxs[site_type][rindices[0][0]].sort()
-            self._idxs[site_type][rindices[0][1]].sort()
+            
+            #self._idxs[site_type][rindices[0][0]].sort()
+            #self._idxs[site_type][rindices[0][1]].sort()
 
 
     def update_decoration(self, decoration):

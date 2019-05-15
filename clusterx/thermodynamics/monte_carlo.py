@@ -79,11 +79,11 @@ class MonteCarlo():
 
     """
 
-    def __init__(self, energy_model, scell, nsubs, filename = "trajectory.json", last_visited_structure_name = "last-visited-structure-mc.json", sublattice_indices = [], models = [], no_of_swaps = 1, ensemble = "canonical", mc = False, error_reset = False):
+    def __init__(self, energy_model, scell, nsubs, filename = "trajectory.json", last_visited_structure_name = "last-visited-structure-mc.json", sublattice_indices = [], models = [], no_of_swaps = 1, ensemble = "canonical", predict_swap = False, error_reset = False):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
-        print(self._nsubs)
+        #print(self._nsubs)
         self._filename = filename
         self._last_visited_structure_name = last_visited_structure_name
 
@@ -111,8 +111,14 @@ class MonteCarlo():
 
         self._ensemble = ensemble
         self._no_of_swaps = no_of_swaps
-        self._mc = mc
 
+        if self._no_of_swaps > 1:
+            self._control_flag = False
+        elif predict_swap == True:
+            self._control_flag = True
+        else:
+            self._control_flag = False
+            
         self._error_reset = error_reset
 
     def metropolis(self, scale_factor, nmc, initial_decoration = None, write_to_db = False, acceptance_ratio = None):
@@ -165,12 +171,12 @@ class MonteCarlo():
             scale_factor_product *= float(el)
 
         if initial_decoration is not None:
-            struc = Structure(self._scell, initial_decoration, mc = self._mc)
+            struc = Structure(self._scell, initial_decoration, mc = True)
         else:
-            struc = self._scell.gen_random(self._nsubs, mc = self._mc)
+            struc = self._scell.gen_random(self._nsubs, mc = True)
 
+        self._em.corrc.reset_mc(mc = True)
         e = self._em.predict(struc)
-        print(e)
 
         traj = MonteCarloTrajectory(self._scell, filename=self._filename, models = self._models)
 
@@ -188,38 +194,31 @@ class MonteCarlo():
             ar = acceptance_ratio
             hist = np.zeros(nar,dtype=int)
 
-        if self._no_of_swaps > 1:
-            control_flag = False
-        else:
-            control_flag = True
-            if self._error_reset:
-                errorsteps = 50000
-                x = 1
-
-
+        if self._error_reset:
+            error_steps = int(100000)
+            x=1
+            
         for i in range(1,nmc+1):
             indices_list = []
-            for j in range(self._no_of_swaps):
-                if self._mc:
-                    ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
-                    indices_list.append([ind1, ind2, site_type, rindices])
-                else:
-                    ind1,ind2 = struc.swap_random(self._sublattice_indices)
-                    indices_list.append([ind1, ind2])
 
-            if control_flag:
+            for j in range(self._no_of_swaps):
+                ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
+                indices_list.append([ind1, ind2, site_type, rindices])
+
+            if self._control_flag:
                 if self._error_reset:
-                    if (x > errorsteps):
+                    if (x > error_steps):
                         x = 1
                         e1 = self._em.predict(struc)
                     else:
                         x += 1
                         #de = self._em.predict_swap_binary_linear(struc, ind1 = ind1 , ind2 = ind2)
                         de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2)
-                        e1 = e+de
+                        e1 = e + de
                 else:
-                    de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2)
-                    e1 = e+de
+                    de = self._em.predict_swap(struc, ind1 = ind1, ind2 = ind2)
+                    e1 = e + de
+                    
             else:
                 e1 = self._em.predict(struc)
 
@@ -233,7 +232,7 @@ class MonteCarlo():
                     accept_swap = True
                 else:
                     accept_swap = False
-
+            
             if accept_swap:
                 e = e1
 
@@ -251,10 +250,7 @@ class MonteCarlo():
 
             else:
                 for j in range(self._no_of_swaps-1,-1,-1):
-                    if self._mc:
-                        struc.swap(indices_list[j][0],indices_list[j][1], site_type = indices_list[j][2], rindices = indices_list[j][3])
-                    else:
-                        struc.swap(indices_list[j][0],indices_list[j][1])
+                    struc.swap(indices_list[j][1],indices_list[j][0], site_type = indices_list[j][2], rindices = indices_list[j][3])
 
                 if acceptance_ratio:
                     ar = poppush(hist,0)
@@ -334,7 +330,7 @@ class MonteCarloTrajectory():
                 sdict.update({mo.property: mo.predict(sx)})
 
             self._trajectory[t]['key_value_pairs'] = sdict
-        print(sx.decor)
+        #print(sx.decor)
 
     def add_decoration(self, step, energy, indices_list, decoration = None, key_value_pairs = {}):
         """Add decoration of Structure object to the trajectory

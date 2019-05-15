@@ -12,6 +12,7 @@ import json
 import math
 import numpy as np
 from copy import deepcopy
+import sys
 
 class WangLandau():
     """WangLandau class
@@ -64,7 +65,7 @@ class WangLandau():
 
     """
 
-    def __init__(self, energy_model, scell, nsubs, fileprefix = "cdos", sublattice_indices = [], ensemble = "canonical", mc = False, error_reset = False):
+    def __init__(self, energy_model, scell, nsubs, fileprefix = "cdos", sublattice_indices = [], ensemble = "canonical", predict_swap = False, error_reset = False):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
@@ -84,16 +85,19 @@ class WangLandau():
                 raise AttributeError("Index of sublattice is not properly assigned, look at the documentation.")
         else:
             self._sublattice_indices = sublattice_indices
+        print(self._sublattice_indices)
 
         if not self._sublattice_indices:
             import sys
             sys.exit('Indices of sublattice are not correctly assigned, look at the documatation.')
-
+        self._predict_swap = predict_swap
 
         self._ensemble = ensemble
-        self._mc = mc
 
         self._error_reset = error_reset
+        if self._error_reset:
+            self._error_steps = int(100000)
+            self._x = 1
 
     def wang_landau_sampling(self, energy_range=[-2,2], energy_bin_width=0.2, f_range=[math.exp(1), math.exp(1.0e-8)], update_method='square_root', flatness_conditions=[[0.5,math.exp(1e-1)],[0.80,math.exp(1e-3)],[0.90,math.exp(1e-5)],[0.98,math.exp(1e-8)]], initial_decoration = None, write_to_db = False):
         """Perform Wang Landau simulation
@@ -137,53 +141,55 @@ class WangLandau():
         import math
         from clusterx.utils import poppush       
 
-
         if initial_decoration is not None:
-            struc = Structure(self._scell, initial_decoration, mc = self._mc)
+            struc = Structure(self._scell, initial_decoration, mc = True)
+            print(struc.get_atomic_numbers)
         else:
-            struc = self._scell.gen_random(self._nsubs, mc = self._mc)
+            struc = self._scell.gen_random(self._nsubs, mc = True)
 
+        self._em.corrc.reset_mc(mc = True)
         e = self._em.predict(struc)
         print(e)
 
         cdos=[]
-        eb=energy_range[0]
+        eb = energy_range[0]
         while eb < energy_range[1]:
             cdos.append([eb,1,0])
-            eb=eb+energy_bin_width
-        cdos=np.asarray(cdos)
+            eb = eb+energy_bin_width
+        cdos = np.asarray(cdos)
 
         for k,d in enumerate(cdos):
             
             if e < d[0]:
-                diffe1=float(e-cdos[k-1][0])
-                diffe2=float(d[0]-e)
-                if diffe1 < diffe2:
-                    inde=k-1
+                if k == 0:
+                    inde = k
                 else:
-                    inde=k
+                    diffe1 = float(e-cdos[k-1][0])
+                    diffe2 = float(d[0]-e)
+                    if diffe1 < diffe2:
+                        inde = k-1
+                    else:
+                        inde = k
                 break
         
             
-        f=f_range[0]
-        fi=0
-        g=1+math.log(f)
-        histogram_flatness=flatness_conditions[fi][0]
+        f = f_range[0]
+        fi = 0
+        g = 1 + math.log(f)
+        histogram_flatness = flatness_conditions[fi][0]
 
-        cdos[inde][1]=cdos[inde][1]+math.log(f)
-        cdos[inde][2]=cdos[inde][2]+1
+        cdos[inde][1] = cdos[inde][1]+math.log(f)
+        cdos[inde][2] = cdos[inde][2]+1
 
         control_flag = True
         if self._error_reset:
             errorsteps = 50000
             x = 1
-            
 
         while f > f_range[1]:
 
             struc, e, g, inde, cdos = self.flat_histogram(struc, e, g, inde, f, cdos, histogram_flatness)
             print(self._nsubs)
-            logcfile = "cdos_nsub%d_binw%2.8f_flatcond%1.2f_modfac%2.12f.log"%( 16, energy_bin_width, histogram_flatness, f)
 
             filestring=self._fileprefix+"_modificationf-"+str(f)+"_histogram_flatness-"+str(histogram_flatness)+".json"
             cd = ConfigurationalDensityOfStates(filename=filestring,scell=self._scell, modification_factor = f, flatness_condition = histogram_flatness)
@@ -191,18 +197,18 @@ class WangLandau():
             cd.wang_landau_write_to_file()
             
             for m,d in enumerate(cdos):
-                if d[2]>0:
-                    print(d)
-                    cdos[m][2]=0
+                if d[2] > 0:
+                    cdos[m][2] = 0
         
             if update_method == 'square_root':
                 f=math.sqrt(f)
             else:
                 sys.exit('different update method for f required')
+            print(f,flatness_conditions[fi])    
                 
             if f < flatness_conditions[fi][1]:
                 fi += 1
-                if fi < len(flatness_condictions):
+                if fi < len(flatness_conditions):
                     histogram_flatness = float(flatness_conditions[fi][0])
                 else:
                     histogram_flatness = float(0.99)
@@ -212,11 +218,11 @@ class WangLandau():
             
     def flat_histogram(self, struc, e, g, inde, f, cdos, histogram_flatness):
 
-        hist_min=0
-        hist_avg=1
-        lnf=math.log(f)
+        hist_min = 0
+        hist_avg = 1
+        lnf = math.log(f)
 
-        i=0
+        i = 0
         while (hist_min < histogram_flatness*hist_avg) or (i < 10):
             
             for i in range(500):
@@ -226,13 +232,13 @@ class WangLandau():
             i=0
             for d in cdos:
                 if float(d[2])>0:
-                    i=i+1
-                    hist_sum=hist_sum+d[2]
-                    if i==1:
-                        hist_min=d[2]
-                    elif d[2]<hist_min:
-                        hist_min=d[2]
-                        hist_avg=(hist_sum)/(1.0*i)
+                    i += 1
+                    hist_sum = hist_sum+d[2]
+                    if i == 1:
+                        hist_min = d[2]
+                    elif d[2] < hist_min:
+                        hist_min = d[2]
+            hist_avg = (hist_sum)/(1.0*i)
                                 
         print("\n")
         print(f)
@@ -244,21 +250,37 @@ class WangLandau():
                                                                                                                                                                                                                                                     
     def dos_step(self, struc, e, g, inde, lnf, cdos):
     
-        ind1, ind2 = struc.swap_random(self._sublattice_indices)
+        ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
 
-        e1 = self._em.predict(struc)
+        if self._predict_swap:
+            if self._error_reset:
+                if (self._x > self._error_steps):
+                    self._x = 1
+                    e1 = self._em.predict(struc)
+                else:
+                    self._x += 1
+                    de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2)
+                    e1 = e + de
+            else:
+                de = self._em.predict_swap(struc, ind1 = ind1, ind2 = ind2)
+                e1 = e + de
+        else:
+            e1 = self._em.predict(struc)
 
         for k,d in enumerate(cdos):
-
             if e1 < d[0]:
-                diffe1 = float(e1-cdos[k-1][0])
-                diffe2 = float(d[0]-e1)
-                if diffe1 < diffe2:
-                    g1 = cdos[k-1][1]
-                    kinde = k-1
-                else:
+                if k == 0 :
                     g1 = d[1]
-                    kinde = k
+                    kinde = 0
+                else:
+                    diffe1 = float(e1-cdos[k-1][0])
+                    diffe2 = float(d[0]-e1)
+                    if diffe1 < diffe2:
+                        g1 = cdos[k-1][1]
+                        kinde = k-1
+                    else:
+                        g1 = d[1]
+                        kinde = k
                 break
 
         if g >= g1:
@@ -266,26 +288,25 @@ class WangLandau():
             trans_prob = 1
         else:
             trans_prob = math.exp(g-g1)
-            if random.uniform(0,1) <= trans_prob:
+            if np.random.uniform(0,1) <= trans_prob:
                 accept_swap = True
             else:
                 accept_swap = False
 
         if accept_swap:
-            g=g1+lnf
-            e=e1
-            inde=kinde
+            g = g1+lnf
+            e = e1
+            inde = kinde
             
             cdos[kinde][1] = g
             cdos[kinde][2] = cdos[kinde][2]+1
             
         else:
-            g=g+lnf
+            g = g+lnf
             
-            cdos[inde][1]=g
-            cdos[inde][2]=cdos[inde][2]+1
-
-            struc.swap(ind1,ind2)
+            cdos[inde][1] = g
+            cdos[inde][2] = cdos[inde][2]+1
+            struc.swap(ind2, ind1, site_type = site_type, rindices = rindices)
 
         return struc, e, g, inde, cdos
         

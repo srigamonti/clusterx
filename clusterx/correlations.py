@@ -43,6 +43,10 @@ class CorrelationsCalculator():
         if lookup:
             self._lookup_table = self._get_lookup_table()
 
+        self._mc = False
+        self._num_mc_calls = 0
+        self._cluster_orbits_mc = None
+        
     def _get_lookup_table(self):
         idx_subs = self._plat.get_idx_subs()
         max_m = max([len(idx_subs[x]) for x in idx_subs])
@@ -197,7 +201,15 @@ class CorrelationsCalculator():
 
         return cluster_orbits
 
-    def get_cluster_correlations(self, structure, mc = False, multiplicities=None):
+    
+    def reset_mc(self, mc = False):
+        print("reset")
+        self._mc = mc
+        self._num_mc_calls = 0
+        self._cluster_orbits_mc = None
+        
+
+    def get_cluster_correlations(self, structure, multiplicities=None):
         """Get cluster correlations for a structure
         **Parameters:**
 
@@ -217,10 +229,15 @@ class CorrelationsCalculator():
         """
         #from clusterx.utils import get_cl_idx_sc
         cluster_orbits = None
-        if mc and self._cluster_orbits_set != []:
-            cluster_orbits = self._cluster_orbits_set[0]
+
+        if self._mc and self._cluster_orbits_set != [] and self._num_mc_calls != 0:
+            #cluster_orbits = self._cluster_orbits_set[0]
+            cluster_orbits = self._cluster_orbits_mc
         else:
             cluster_orbits = self.get_cluster_orbits_for_scell(structure.get_supercell())
+            if self._mc is True:
+                self._num_mc_calls = 1
+                self._cluster_orbits_mc = cluster_orbits
 
         """
         elif not mc:

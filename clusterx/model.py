@@ -42,12 +42,15 @@ class Model():
             structure object to calculate property to.
         """
         corrs = self.corrc.get_cluster_correlations(structure)
+        
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1,-1))[0]
+
         else:
             pv = 0
             for i in range(len(corrs)):
                 pv = pv + self.ecis[i]*corrs[i]
+            
             return pv
 
     def predict_swap_binary_linear(self,structure, ind1 = None, ind2 = None, correlation = False):
@@ -67,7 +70,7 @@ class Model():
         """
         #corrsx = self.corrc.get_cluster_correlations(structure)
         try:
-            cluster_orbits = self.corrc._cluster_orbits_set[-1]
+            cluster_orbits = self.corrc._cluster_orbits_mc
         except AttributeError:
             raise AttributeError("Cluster_orbit set is not predefined, look at the documentation.")
         corrs = np.zeros(len(cluster_orbits))
@@ -130,7 +133,7 @@ class Model():
         """
         #corrsx = self.corrc.get_cluster_correlations(structure)
         try:
-            cluster_orbits = self.corrc._cluster_orbits_set[-1]
+            cluster_orbits = self.corrc._cluster_orbits_mc
         except AttributeError:
             raise AttributeError("Cluster_orbit set is not predefined, look at the documentation.")
         corrs = np.zeros(len(cluster_orbits))
@@ -191,6 +194,7 @@ class Model():
 
             corrs[icl] /= len(cluster_orbit)
         corrs = np.around(corrs,decimals=12)
+
         if correlation:
             return corrs
 
@@ -384,5 +388,5 @@ class ModelBuilder():
         # Find out the ECIs using an estimator
         self.opt_estimator = EstimatorFactory.create(self.estimator_type, **self.estimator_opts)
         self.opt_estimator.fit(self.opt_comat,self.target)
-
+        
         return Model(self.opt_corrc, prop, estimator = self.opt_estimator)
