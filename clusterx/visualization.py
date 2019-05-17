@@ -327,7 +327,12 @@ def plot_predictions_vs_target(sset,cemodel, prop_name, scale=1.0):
     plt.show()
 
 def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, property_name = None, show_loo_predictions = True, sset_enum=None, sset_gss=None, show_plot = True, refs=None, scale=1.0):
-    """Plot property values versus concentration
+    """Plot property values versus concentration and return dictionary with data
+
+    The call to this functions generates a plot with matplotlib. It also returns a dictionary
+    with the data used to generate the plot. This is useful in the case that the
+    user wants to format the plot in a different way, or to write the data to a file
+    for postprocessing (in the case that only the data is neeed, set ``show_plot`` to ``False``).
 
     **Parameters:**
 
@@ -353,6 +358,7 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     import math
     from matplotlib import rc
     from matplotlib import rc,rcParams
+    data = {}
 
     width=15.0*scale
     fs=int(width*1.8)
@@ -399,14 +405,19 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
 
     #fig = plt.figure()
     #fig.suptitle("Property vs. concentration")
-    
+    data["concentration"] = frconc
+    data["property"] = energies-vl_en
     plt.scatter(frconc,energies-vl_en,marker='o', s=150*scale, edgecolors='green', facecolors='none',label='Calculated')
     if cemodel is not None:
+        data["predicted-property"] = predictions-vl_en
+        data["predicted-property-cv"] = pred_cv-vl_en
         plt.scatter(frconc,pred_cv-vl_en,marker='x', s=75*scale, edgecolors='none', facecolors='red',label='Predicted-CV')
         plt.scatter(frconc,predictions-vl_en,marker='o', s=50*scale, edgecolors='none', facecolors='blue',label='Predicted')
     if sset_enum is not None:
+        data["predicted-property-enumeration"]
         plt.scatter(frconc_enum,pred_enum-vl_en_enum,marker='o', s=30*scale, edgecolors='none', facecolors='gray',label='Enumeration')
     if sset_gss is not None:
+        data["predicted-property-gss"]
         plt.scatter(frconc_gss,pred_gss-vl_en_gss,marker='o', s=40*scale, edgecolors='none', facecolors='red',label='Predicted GS')
 
     plt.xlabel("Concentration",fontsize=fs)
@@ -421,3 +432,4 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
 
     if show_plot:
         plt.show()
+    return data
