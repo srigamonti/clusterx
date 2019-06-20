@@ -642,15 +642,19 @@ class StructuresSet():
 
             [[root] /] [prefix] id [suffix] /
 
-        as created by ``StructureSet.write_files()``. The folders to be searched
-        for energy values are those returned by ``StructureSet.get_folders()``.
+        as created by ``StructureSet.write_input_files()``. The folders to be searched
+        for energy values are those returned by ``StructureSet.get_folders()``. These
+        can be also obtained directly from the ``"metadata":{"folders":[ ... ]}`` elements
+        of the json database file.
 
-        The read property value is stored in the folders' json-database created
-        by ``StructuresSet.write_files()``, under the "key_value_pairs" key. For instance::
+        The read property value is stored in the json-database of the StructuresSet object
+        (i.e., that obtained from ``StructureSet.get_db_fname()``), under the
+        key ``"data": {"properties": { ... }}`` dictionary for every structure. For instance::
 
-            "key_value_pairs": {"folder": "./random_strs-14", [property_name]: 9.266617521975935},
+             "data": {"properties": {"formation_energy_per_site": -0.05788398131602701, "total_energy": -9824740.09590308}},
 
-        where [property_name] represents here the string value of the parameter ``property_name``.
+        where ``"formation_energy_per_site"`` and  ``"total_energy"`` here are the
+        string value of the parameter ``property_name`` in the call to ``read_property_values()``.
 
         Parameters:
 
@@ -697,7 +701,7 @@ class StructuresSet():
             for k,v in self._props.items():
                 ppts[k] = v[i]
 
-            self._db.update(i+1, data={"properties":ppts}) # Writes to the "data" key of the db entry for this Atoms object
+            db.update(i+1, data={"properties":ppts}) # Writes to the "data" key of the db entry for this Atoms object
 
             #db.update(i+1, property_name:pval})
             if write_to_file:
@@ -706,22 +710,6 @@ class StructuresSet():
                 f.close()
 
         db.metadata = {**db.metadata,"properties":self._props}
-
-    def get_property_names(self):
-        """Return list of stored property names.
-        """
-        return list(self._props.keys())
-
-    def get_property_values(self, property_name):
-        """Return list of property values.
-
-        **Parameters:**
-
-        ``property_name``: String
-            Name of the property. If not sure, a list of property names can be
-            obtained ``StructuresSet.get_property_names()``.
-        """
-        return self._props[property_name]
 
     def set_property_values(self, property_name = "total_energy", property_vals = []):
         """Set property values
@@ -743,9 +731,35 @@ class StructuresSet():
         db = self.get_db()
         self._props[property_name] = property_vals
 
-        if db is not None:
-            for i,p in enumerate(property_vals):
-                db.update(i+1, **{property_name:p})
+        for i in range(len(self)):
+            ppts = {}
+            for k,v in self._props.items():
+                ppts[k] = v[i]
+
+            db.update(i+1, data={"properties":ppts}) # Writes to the "data" key of the db entry for this Atoms object
+
+        db.metadata = {**db.metadata,"properties":self._props}
+
+    def get_property_names(self):
+        """Return list of stored property names.
+        """
+        return list(self._props.keys())
+
+    def get_property_values(self, property_name):
+        """Return list of property values.
+
+        **Parameters:**
+
+        ``property_name``: String
+            Name of the property. If not sure, a list of property names can be
+            obtained ``StructuresSet.get_property_names()``.
+
+        **Returns:**
+
+        ``props``: python array
+            A python array with the property values
+        """
+        return self._props[property_name]
 
     def get_predictions(self, cemodel):
         """Get predictions of CE model on structures set
