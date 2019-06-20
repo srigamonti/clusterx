@@ -353,11 +353,32 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
         If not ``None``, the calculated property ``property_name`` will be extracted
         from the ``sset`` and depicted in the plot. If ``cemodel`` is not ``None``
         as well, then both predicted and calculated data are plot.
-     """
+
+    **Returns:**
+
+        Returns a dictionary with the data used to build the plot, with the following
+        elements:
+
+        - ``data["concentration"]``: Array of floats. The x-axis of the plot,
+          containing the concentration of the substitutional species.
+        - ``data["property"]``: Array of floats, same lenght as ``data["concentration"]``.
+          Contains the values returned by ``sset.get_property_values(property_name = property_name)``.
+        - ``data["predicted-property"]``: The prediced properties with ``cemodel``.
+        - ``data["predicted-property-cv"]``: The prediced properties with ``cemodel`` on CV.
+        - ``data["concentration-enum"]``: Concentrations for enumeration.
+        - ``data["predicted-property-enum"]``: Predicted values for enumeration.
+        - ``data["concentration-gss"]``: Concentrations for ground-state search.
+        - ``data["predicted-property-gss"]``: Predicted values for ground-state-search.
+
+        Depending on the arguments to the call to ``plot_property_vs_concentration``, some of the
+        returned dictionary elements may be missing.
+
+    """
+    import matplotlib as mpl
     import matplotlib.pyplot as plt
     import math
-    from matplotlib import rc
     from matplotlib import rc,rcParams
+
     data = {}
 
     width=15.0*scale
@@ -414,10 +435,12 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
         plt.scatter(frconc,pred_cv-vl_en,marker='x', s=75*scale, edgecolors='none', facecolors='red',label='Predicted-CV')
         plt.scatter(frconc,predictions-vl_en,marker='o', s=50*scale, edgecolors='none', facecolors='blue',label='Predicted')
     if sset_enum is not None:
-        data["predicted-property-enumeration"]
+        data["concentration-enum"] = frconc_enum
+        data["predicted-property-enumeration"] = pred_enum-vl_en_enum
         plt.scatter(frconc_enum,pred_enum-vl_en_enum,marker='o', s=30*scale, edgecolors='none', facecolors='gray',label='Enumeration')
     if sset_gss is not None:
-        data["predicted-property-gss"]
+        data["concentration-gss"] = frconc_gss
+        data["predicted-property-gss"] = pred_gss-vl_en_gss
         plt.scatter(frconc_gss,pred_gss-vl_en_gss,marker='o', s=40*scale, edgecolors='none', facecolors='red',label='Predicted GS')
 
     plt.xlabel("Concentration",fontsize=fs)
@@ -432,4 +455,7 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
 
     if show_plot:
         plt.show()
+
+    plt.close()
+    mpl.rcParams.update(mpl.rcParamsDefault)
     return data
