@@ -697,34 +697,14 @@ class ClustersPool():
             internal_trans = np.zeros((3,3))
         else:
             internal_trans = get_internal_translations(self._plat, super_cell) # Scaled to super_cell
-        # Get original cluster cartesian positions (p0)
-        pos = super_cell.get_positions(wrap=True)
-        p0 = np.array([pos[site] for site in cluster_sites])
-        
-         
-        spos1 = super_cell.get_scaled_positions(wrap=True) # Super-cell scaled positions
-        spos = np.around(spos1,8) # Wrapping in ASE doesn't always work. Here a hard external fix by rounding and then applying again ASE's style wrapping.
-        for i, periodic in enumerate(super_cell.get_pbc()):
-            if periodic:
-                spos[:, i] %= 1.0
-                spos[:, i] %= 1.0
 
-        # sp0: scaled cluster positions with respect to parent lattice
-        sp0 = get_scaled_positions(p0, self._plat.get_cell(), pbc = super_cell.get_pbc(), wrap = False)
         _orbit = []
         mult = 0
-
-        for r,t in zip(self.sc_sym['rotations'], self.sc_sym['translations']):
-            ts = np.tile(t,(len(sp0),1)).T # Every column represents the same translation for every cluster site
-            _sp1 = np.add(np.dot(r,sp0.T),ts).T # Apply rotation, then translation
-            # Get cartesian, then scaled to supercell
-            _p1 = np.dot(_sp1, self._plat.get_cell())
-            _sp1 = get_scaled_positions(_p1, super_cell.get_cell(), pbc = super_cell.get_pbc(), wrap = True)
-
-            for itr,tr in enumerate(internal_trans): # Now apply the internal translations
-                __sp1 = np.add(_sp1, tr)
-                __sp1 = wrap_scaled_positions(__sp1,super_cell.get_pbc())
-                _cl = get_cl_idx_sc(__sp1, spos, method=1, tol=tol)
+        for j in range(self.sc_sym['rotations']):
+            for itr,tr in enumerate(internal_trans):
+                indices = [super_cell._sym_table[i,j,itr] for i in cluster_sites]
+                    
+                _cl = np.array(indices)
 
                 include = True
                 if len(_cl)>1:

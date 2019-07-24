@@ -20,8 +20,8 @@ def test_cluster_orbit2():
     """
     tassert = True
     #tassert = False
-    test_cases = [0,1,2,3,4,5]
-    #test_cases = [0]
+    #test_cases = [0,1,2,3,4,5]
+    test_cases = [0]
     orbits = [None,None,None,None,None,None]
     for test_case in test_cases:
         if test_case == 0:
@@ -40,7 +40,10 @@ def test_cluster_orbit2():
 
             cl = ClustersPool(plat)
 
-            orbit,mult = cl.get_cluster_orbit2(scell, [0,2], [11,11])
+            orbit2,mult2 = cl.get_cluster_orbit2(scell, [0,2], [11,11])
+            print("Hi1",orbit2)
+            print("Hi2",mult2)
+            orbit,mult = cl.get_cluster_orbit(scell, [0,2], [11,11])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_clusters_db(orbit, scell, db_name)
             orbits[test_case] = orbit
