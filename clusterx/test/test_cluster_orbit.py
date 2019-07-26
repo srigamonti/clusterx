@@ -386,11 +386,11 @@ def check_result(testnr, orbit):
     if len(orbit) != len(rorbit):
         return False
     print(rorbit)
-    for cl in (orbit_idxs):
+    sorted_rorbit = [sorted(x) for x in rorbit]
+    for cl in sorted(orbit_idxs, key=lambda x: x[0]):
         print('3',cl)
-        if cl not in rorbit:
+        if cl not in sorted_rorbit:
             print('4',False)
-        #if (cl != np.sort(rcl)).any():
             isok = False
             break
 
