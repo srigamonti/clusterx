@@ -36,17 +36,27 @@ def test_cluster_orbit2():
             sub2 = Atoms('Na', positions=positions, cell= cell, pbc= pbc)
 
             plat = ParentLattice(pri, substitutions=[sub,sub2], pbc=pbc)
-            scell = SuperCell(plat,[(5,0,0),(0,2,0),(0,0,1)])
+            scell = SuperCell(plat,[(5,0,0),(0,2,0),(0,0,1)],sym_table=True)
 
             cl = ClustersPool(plat)
 
-            orbit2,mult2 = cl.get_cluster_orbit2(scell, [0,2], [11,11])
-            print("Hi1",orbit2)
-            print("Hi2",mult2)
             orbit,mult = cl.get_cluster_orbit(scell, [0,2], [11,11])
+            #print("Hi1867867867867886",orbit2)
+            #print("Hi2",mult2)
+            #orbit,mult = cl.get_cluster_orbit(scell, [0,2], [11,11])
+            
+            print('Multiplicity',mult)
+            
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_clusters_db(orbit, scell, db_name)
+
             orbits[test_case] = orbit
+            print('here', len(orbit))
+            liste=[]
+            for i,cluster in enumerate(orbit):
+                liste.append(cluster.get_nrs())
+            print(liste)
+
 
         if test_case == 1:
             # FCC lattice
@@ -177,6 +187,8 @@ def check_result(testnr, orbit):
     for cluster in orbit:
         orbit_nrs.append(cluster.get_nrs())
         orbit_idxs.append(cluster.get_idxs())
+    print(orbit_nrs)
+    print(orbit_idxs)
 
     if testnr == 0:
         rorbit = np.array([

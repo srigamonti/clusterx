@@ -44,6 +44,7 @@ def test_cluster_orbit():
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_clusters_db(orbit, scell, db_name)
             orbits[test_case] = orbit
+            print(len(orbit))
 
         if test_case == 1:
             # FCC lattice
@@ -171,10 +172,12 @@ def check_result(testnr, orbit):
     isok = True
     orbit_nrs = []
     orbit_idxs = []
-    for cluster in orbit:
-        orbit_nrs.append(cluster.get_nrs())
-        orbit_idxs.append(cluster.get_idxs())
-
+    for i in range(0,len(orbit)):
+        print('1',orbit[i].get_idxs())
+        orbit_nrs.append(orbit[i].get_nrs())
+        orbit_idxs.append(orbit[i].get_idxs())
+    print('2',orbit_idxs)
+    
     if testnr == 0:
         rorbit = np.array([
             [0,2],
@@ -382,11 +385,20 @@ def check_result(testnr, orbit):
 
     if len(orbit) != len(rorbit):
         return False
-
-    for cl,rcl in zip(orbit_idxs,rorbit):
-        if (cl != np.sort(rcl)).any():
+    print(rorbit)
+    for cl in (orbit_idxs):
+        print('3',cl)
+        if cl not in rorbit:
+            print('4',False)
+        #if (cl != np.sort(rcl)).any():
             isok = False
             break
+
+    #for cl,rcl in zip(orbit_idxs,rorbit):
+    #    print(cl,rcl)
+    #    if (cl != np.sort(rcl)).any():
+    #        isok = False
+    #        break
 
     return isok
 
