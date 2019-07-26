@@ -278,70 +278,54 @@ class SuperCell(ParentLattice):
         return t_lC
 
     def get_symmetry_table(self, symprec=1e-12, tol=1e-3):
-        """
-        Gets a ParentLattice and SuperCell object as parameters and returns the final indices of
-        every atom after the application of every possible symmetry operation as a dictionary, see below:
-        {(index of the atom, index of the rotation) = index of atom after the rotation}
-        """
-        #from clusterx.super_cell import SuperCell
-        #import numpy as np
-        from clusterx.utils import get_cl_idx_sc
+        from ase import Atoms
+        import numpy as np
+        from clusterx.parent_lattice import ParentLattice
         from spglib import get_symmetry
-        from clusterx.symmetry import get_internal_translations, get_scaled_positions, get_spacegroup
+        from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions, get_internal_translations, get_spacegroup
+        from clusterx.utils import get_cl_idx_sc
         
-        table = {}
-        atoms = self._plat.get_pristine()
-        #Get the atom with highest symmetry.
-        cell = atoms.get_cell()
-        #Lattice vectors.
-        positions = atoms.get_scaled_positions()
-        numbers = atoms.get_atomic_numbers()
-        spglib_cell = (cell,positions,numbers)
-        scell_size = self.get_transformation()
-        #Size of the supercell.
-        #scell = SuperCell(self._plat, scell_size, (2,1,0))
-        #Sort the supercell, to make the indices of the positions list also the indices of the supercell for simplicity.
+        table={}
+        #cell = (self._plat.get_cell(),self._plat.get_positions(),self._plat.get_atomic_numbers())
         space_group, symmetry = get_spacegroup(self._plat)
         rotations = symmetry['rotations']
         translations = symmetry['translations']
-        #Get every possible rotation for the lattice from spglib.
-        cart_positions = self.get_positions(wrap = True) 
-        #Get positions in cartesian coordinates. The indices of this list are also the indices of the supercell.
+        internal_trans = get_internal_translations(self._plat, self)
+        pos = self.get_positions(wrap=True)
+        p0 = pos
         
-        t_lc = self.matrix_transformator(cell)
-        t_cl = np.linalg.inv(t_lc)
-        #Transformation matrices, from lattice to cartesion or vice versa.
-        lattice_positions = [np.dot(t_cl,i).tolist() for i in cart_positions] 
-        #Positions in lattice coordinates.   
-        internal_transs = np.dot(get_internal_translations(self._plat, self), np.dot(self.get_cell(),t_cl))
+        spos1 = self.get_scaled_positions(wrap=True) # Super-cell scaled positions
+        spos = np.around(spos1,8) 
+        for i, periodic in enumerate(self.get_pbc()):
+            if periodic:
+                spos[:, i] %= 1.0
+                spos[:, i] %= 1.0
         
+        sp0 = get_scaled_positions(p0, self._plat.get_cell(), pbc = self.get_pbc(), wrap = False)
         
-        count_i = 0
-        count_rot = 0
-        count_intt = 0
-        #Initial indices.
+        atom_index = 0
+        rot_index = 0
+        intt_index = 0
+        for r,t in zip(rotations,translations):
+            ts = np.tile(t,(len(sp0),1)).T # Every column represents the same translation for every cluster site
+            sp1 = np.add(np.dot(r,sp0.T),ts).T # Apply rotation, then translation
+            # Get cartesian, then scaled to supercell
+            p1 = np.dot(sp1, self._plat.get_cell())
+            sp1 = get_scaled_positions(p1, self.get_cell(), pbc = self.get_pbc(), wrap = True)
         
-        for i in lattice_positions:
-            for r,t in zip(rotations, translations):
-                transformed_coordinate = np.add(np.dot(r,i),t)
-                #The coordinate after the symmetry operation.
-                for tr in internal_transs:
-                    si = np.add(transformed_coordinate, tr)
-                    for j in range(3):
-                        si[j] %= scell_size[j][j]
-                        si[j] = np.round(si[j],7)   
-                        #Wrapping and rounding.
-                    
-                    table[count_i,count_rot,count_intt] = int(get_cl_idx_sc(np.array([si]),lattice_positions, method=0))
-                    count_intt += 1
-                count_intt = 0
-                count_rot +=1
-            count_i += 1
-            count_rot = 0
-        """    
-        with open("table.json", 'w+', encoding='utf-8') as outfile:
-                json.dump(table,outfile, indent = 2 , separators = ('',' = '))
-            """
+            for itr,tr in enumerate(internal_trans): # Now apply the internal translations
+                sp2 = np.add(sp1, tr)
+                sp2 = wrap_scaled_positions(sp2,self.get_pbc())
+                new_pos = get_cl_idx_sc(sp2, spos, method=1, tol=1e-3) 
+                for new_idx in new_pos:
+                    table[atom_index, rot_index, intt_index] = new_idx
+                    atom_index += 1
+                atom_index = 0
+                intt_index += 1
+            intt_index = 0
+            rot_index += 1
+            
         return table
+
         
 

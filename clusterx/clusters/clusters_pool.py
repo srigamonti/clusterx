@@ -702,7 +702,7 @@ class ClustersPool():
         mult = 0
         for k in range(len(self.sc_sym['rotations'])):
             for itr,tr in enumerate(internal_trans):
-                indices = [super_cell._sym_table[i,k,itr] for i in cluster_sites]               
+                indices = [super_cell._sym_table[p,k,itr] for p in cluster_sites]               
                 _cl = np.array(indices)
 
                 include = True
