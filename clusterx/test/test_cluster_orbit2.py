@@ -20,8 +20,8 @@ def test_cluster_orbit2():
     """
     tassert = True
     #tassert = False
-    #test_cases = [0,1,2,3,4,5]
-    test_cases = [0]
+    test_cases = [0,1,2,3,4,5]
+    #test_cases = [0]
     orbits = [None,None,None,None,None,None]
     for test_case in test_cases:
         if test_case == 0:
@@ -36,27 +36,14 @@ def test_cluster_orbit2():
             sub2 = Atoms('Na', positions=positions, cell= cell, pbc= pbc)
 
             plat = ParentLattice(pri, substitutions=[sub,sub2], pbc=pbc)
-            scell = SuperCell(plat,[(5,0,0),(0,2,0),(0,0,1)],sym_table=True)
+            scell = SuperCell(plat,[(5,0,0),(0,2,0),(0,0,1)], sym_table = True)
 
             cl = ClustersPool(plat)
 
-            orbit,mult = cl.get_cluster_orbit(scell, [0,2], [11,11])
-            #print("Hi1867867867867886",orbit2)
-            #print("Hi2",mult2)
-            #orbit,mult = cl.get_cluster_orbit(scell, [0,2], [11,11])
-            
-            print('Multiplicity',mult)
-            
+            orbit,mult = cl.get_cluster_orbit2(scell, [0,2], [11,11])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_clusters_db(orbit, scell, db_name)
-
             orbits[test_case] = orbit
-            print('here', len(orbit))
-            liste=[]
-            for i,cluster in enumerate(orbit):
-                liste.append(cluster.get_nrs())
-            print(liste)
-
 
         if test_case == 1:
             # FCC lattice
@@ -64,7 +51,7 @@ def test_cluster_orbit2():
             sub = bulk('Al', 'fcc', a=3.6)
 
             plat = ParentLattice(pri, substitutions=[sub], pbc=pri.get_pbc())
-            scell = SuperCell(plat,np.diag([2,2,2]))
+            scell = SuperCell(plat,np.diag([2,2,2]), sym_table = True)
 
             cl = ClustersPool(plat)
 
@@ -89,7 +76,7 @@ def test_cluster_orbit2():
             sub = crystal(['Al','Al','Al','Ba','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
 
             plat = ParentLattice(atoms=pri,substitutions=[sub])
-            scell = SuperCell(plat,[(2,0,0),(0,1,0),(0,0,1)])
+            scell = SuperCell(plat,[(2,0,0),(0,1,0),(0,0,1)], sym_table = True)
 
             cl = ClustersPool(plat)
             orbit,mult = cl.get_cluster_orbit2(scell, [19,17],[13,13]) # 24k-24k pair cluster
@@ -107,7 +94,7 @@ def test_cluster_orbit2():
                     atom.number = 11
 
             plat = ParentLattice(atoms=pri,substitutions=[sub])
-            scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)])
+            scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)], sym_table = True)
 
             cl = ClustersPool(plat)
             orbit,mult = cl.get_cluster_orbit2(scell, [2,14,5],[11,11,11])
@@ -135,7 +122,7 @@ def test_cluster_orbit2():
                     atom.number = 8
 
             plat = ParentLattice(atoms=pri,substitutions=[sub1,sub2])
-            scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)])
+            scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)], sym_table = True)
 
             cl = ClustersPool(plat)
             orbit,mult = cl.get_cluster_orbit2(scell, [3,18],[8,11])
@@ -155,7 +142,7 @@ def test_cluster_orbit2():
             sub2 = Atoms('Na', positions=positions, cell= cell, pbc= pbc)
 
             plat = ParentLattice(pri, substitutions=[sub,sub2], pbc=pbc)
-            scell = SuperCell(plat,[(5,0,0),(0,2,0),(0,0,1)])
+            scell = SuperCell(plat,[(5,0,0),(0,2,0),(0,0,1)], sym_table = True)
             sites = scell.get_sites()
             cl = ClustersPool(plat)
 
@@ -184,12 +171,10 @@ def check_result(testnr, orbit):
     isok = True
     orbit_nrs = []
     orbit_idxs = []
-    for cluster in orbit:
-        orbit_nrs.append(cluster.get_nrs())
-        orbit_idxs.append(cluster.get_idxs())
-    print(orbit_nrs)
-    print(orbit_idxs)
-
+    for i in range(0,len(orbit)):
+        orbit_nrs.append(orbit[i].get_nrs())
+        orbit_idxs.append(orbit[i].get_idxs())
+    
     if testnr == 0:
         rorbit = np.array([
             [0,2],
@@ -395,14 +380,21 @@ def check_result(testnr, orbit):
     if testnr == 5:
         return True
 
-    if len(orbit) != len(rorbit):
+    if len(orbit_idxs) != len(rorbit):
         return False
-
-    for cl,rcl in zip(orbit_idxs,rorbit):
-        if (cl != np.sort(rcl)).any():
+    
+    sorted_rorbit = [sorted(x) for x in rorbit]
+    
+    for cl in sorted(orbit_idxs, key=lambda x: x[0]):
+        if cl not in sorted_rorbit:
             isok = False
             break
 
+    #for cl,rcl in zip(orbit_idxs,rorbit):
+    #    print(cl,rcl)
+    #    if (cl != np.sort(rcl)).any():
+    #        isok = False
+    #        break
     return isok
 
 

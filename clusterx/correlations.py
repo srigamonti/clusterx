@@ -27,7 +27,7 @@ class CorrelationsCalculator():
     ``lookup``: boolean
         Switches if a lookup table for the single-site basis functions should be used. Default is ``True``. Reduces performance in case of 'binary-linear' basis.
     """
-    def __init__(self, basis, parent_lattice, clusters_pool, lookup = True):
+    def __init__(self, basis, parent_lattice, clusters_pool, lookup = True, use_sym_table = False):
         self.basis = basis
         self._plat = parent_lattice
         # For each supercell (with corresponding transformation matrix) a set of cluster orbit set is created
@@ -36,6 +36,7 @@ class CorrelationsCalculator():
         ####
         self._cpool = clusters_pool
         self._2pi = 2*np.pi
+        self.use_sym_table = use_sym_table
         if self.basis == 'polynomial':
             self.basis_set = PolynomialBasis()
         elif self.basis == 'chebyshev':
@@ -189,9 +190,8 @@ class CorrelationsCalculator():
                 cl_spos = wrap_scaled_positions(get_scaled_positions(positions, scell.get_cell(), pbc=scell.get_pbc(), wrap=True),scell.get_pbc())
                 sc_spos = wrap_scaled_positions(scell.get_scaled_positions(wrap=True),scell.get_pbc())
                 cl_idxs = get_cl_idx_sc(cl_spos,sc_spos,method=0)
-                cluster_orbit, mult = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=True)
+                cluster_orbit, mult = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=True) #add if statement here for get_symmetry_orbit
                 cluster_orbits.append(cluster_orbit)
-
             self._scells.append(scell) # Add supercell to calculator
             self._cluster_orbits_set.append(cluster_orbits) # Add corresponding cluster orbits
 

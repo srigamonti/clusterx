@@ -61,7 +61,6 @@ class SuperCell(ParentLattice):
         self._plat = parent_lattice
         pbc = self._plat.get_pbc()
         self._sort_key = sort_key
-
         if not isinstance(p,int):
             p = np.array(p)
             if p.shape == (1,):
@@ -105,8 +104,11 @@ class SuperCell(ParentLattice):
         self._natoms = len(self)
         self.set_pbc(self._plat.get_pbc())
         
-        if sym_table:
+        if sym_table == True:
             self._sym_table = self.get_symmetry_table()
+        else: 
+            self._sym_table = []
+        
 
     def copy(self):
         #Return a copy.
@@ -183,7 +185,7 @@ class SuperCell(ParentLattice):
 
         decoration, sigmas = self.gen_random_decoration(_nsubs)
 
-        return clusterx.structure.Structure(SuperCell(self._plat,self._p,self._sort_key),sigmas=sigmas, mc = mc)
+        return clusterx.structure.Structure(SuperCell(self._plat,self._p,self._sort_key, bool(self._sym_table)),sigmas=sigmas, mc = mc)
 
     def gen_random_decoration(self,nsubs):
         """Generate a random decoration of the super cell with given number of substitutions.
@@ -262,26 +264,16 @@ class SuperCell(ParentLattice):
             #neigs = Atoms(numbers=chem_num,positions=pos,cell=self.get_cell(),pbc=self.get_pbc())
 
             atoms_db.write(neigs)
-    def matrix_transformator(self,ref_coord):
-        """
-        Takes a reference coordinate/lattice coordinate as parameter.
-        Returns the transformation matrix from lattice to cartesian coordinates.
-        """
-        import numpy as np
-        ref_1 = ref_coord[0]
-        ref_2 = ref_coord[1]
-        ref_3 = ref_coord[2]
-        
-        t_lC = np.array([[ref_1[0],ref_2[0],ref_3[0]],
-                         [ref_1[1],ref_2[1],ref_3[1]],
-                         [ref_1[2],ref_2[2],ref_3[2]]])
-        return t_lC
 
     def get_symmetry_table(self, symprec=1e-12, tol=1e-3):
-        from ase import Atoms
+        '''
+        Takes a SuperCell as a parameter and returns the final indices of every atom 
+        after the every possible symmetry operation, see below:
+        {(index of the atom, index of the symmetry operation): index of the atom after the symmetry operation}
+        '''
+        
         import numpy as np
         from clusterx.parent_lattice import ParentLattice
-        from spglib import get_symmetry
         from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions, get_internal_translations, get_spacegroup
         from clusterx.utils import get_cl_idx_sc
         
@@ -291,6 +283,7 @@ class SuperCell(ParentLattice):
         rotations = symmetry['rotations']
         translations = symmetry['translations']
         internal_trans = get_internal_translations(self._plat, self)
+        #Get rotations and translations
         pos = self.get_positions(wrap=True)
         p0 = pos
         
@@ -316,9 +309,9 @@ class SuperCell(ParentLattice):
             for itr,tr in enumerate(internal_trans): # Now apply the internal translations
                 sp2 = np.add(sp1, tr)
                 sp2 = wrap_scaled_positions(sp2,self.get_pbc())
-                new_pos = get_cl_idx_sc(sp2, spos, method=1, tol=1e-3) 
+                new_pos = get_cl_idx_sc(sp2, spos, method=1, tol=1e-3) #Get indices
                 for new_idx in new_pos:
-                    table[atom_index, rot_index, intt_index] = new_idx
+                    table[atom_index, rot_index, intt_index] = new_idx #Create the table object
                     atom_index += 1
                 atom_index = 0
                 intt_index += 1
@@ -326,6 +319,3 @@ class SuperCell(ParentLattice):
             rot_index += 1
             
         return table
-
-        
-
