@@ -199,9 +199,11 @@ class Structure(SuperCell):
         if site_type is not None:
             self._idxs[site_type][rindices[0][0]][rindices[1][0]] = ridx2
             self._idxs[site_type][rindices[0][1]][rindices[1][1]] = ridx1
-            
-            #self._idxs[site_type][rindices[0][0]].sort()
-            #self._idxs[site_type][rindices[0][1]].sort()
+            #print(self._idxs[site_type])
+
+            a = sorted(self._idxs[site_type][rindices[0][0]])
+            b = sorted(self._idxs[site_type][rindices[0][1]])
+            print(ridx1, ridx2, a, b)
 
 
     def update_decoration(self, decoration):

@@ -232,7 +232,8 @@ class MonteCarlo():
                     accept_swap = True
                 else:
                     accept_swap = False
-            
+            print(e1, accept_swap)
+
             if accept_swap:
                 e = e1
 
