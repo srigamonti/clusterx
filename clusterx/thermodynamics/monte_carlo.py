@@ -420,7 +420,7 @@ class MonteCarloTrajectory():
 
         return sx
 
-    def get_lowest_non_degenerate_structure(self):
+    def get_lowest_energy_structure(self):
         """Get lowest-non-degenerate structure from trajectory
 
         **Returns:**
