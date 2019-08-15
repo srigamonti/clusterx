@@ -153,7 +153,7 @@ def test_metropolis():
     print("Decoration at sampling step", steps[2], "read from atoms object: ", struc1.get_atomic_numbers())
     struc1.serialize(fname="configuration2.json")
 
-    strucmin = traj.get_lowest_non_degenerate_structure()
+    strucmin = traj.get_lowest_energy_structure()
     print("\nDecoration with the lowest energy: ", strucmin.get_atomic_numbers())
     print("Energy of this structure: ", min(energies))
     strucmin.serialize(fname="lowest-non-generate-configuration.json")
