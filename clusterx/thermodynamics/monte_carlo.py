@@ -203,7 +203,7 @@ class MonteCarlo():
 
             for j in range(self._no_of_swaps):
                 ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
-                indices_list.append([ind1, ind2, site_type, rindices])
+                indices_list.append([ind1, ind2, [site_type, rindices]])
 
             if self._control_flag:
                 if self._error_reset:
@@ -240,7 +240,7 @@ class MonteCarlo():
                     key_value_pairs = {}
                     for m, mo in enumerate(self._models):
                         key_value_pairs.update({mo.property: mo.predict(struc)})
-                    traj.add_decoration(i, e, indices_list, key_value_pairs = key_value_pairs)
+                    traj.add_decoration(i, e, [[li[0],li[1]] for li in indices_list], key_value_pairs = key_value_pairs)
 
                 else:
                     traj.add_decoration(i, e, [[li[0],li[1]] for li in indices_list])
@@ -250,7 +250,7 @@ class MonteCarlo():
 
             else:
                 for j in range(self._no_of_swaps-1,-1,-1):
-                    struc.swap(indices_list[j][1],indices_list[j][0], site_type = indices_list[j][2], rindices = indices_list[j][3])
+                    struc.swap(indices_list[j][1],indices_list[j][0], site_type = indices_list[j][2][0], rindices = indices_list[j][2][1])
 
                 if acceptance_ratio:
                     ar = poppush(hist,0)
