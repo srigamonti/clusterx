@@ -127,22 +127,23 @@ def test_metropolis():
     kb = float(3.16681009610757e-6)
     # temperature in K
     temp = 1000
-
+    info_units = {'temp':'K','kb':'Ha/K','energy':'Ha','scale_factor':'None'}
+    
     print("Samplings steps",nmc)
     print("Temperature",temp)
 
-    traj = mc.metropolis([kb,temp], nmc, write_to_db = True)
+    traj = mc.metropolis(nmc, temp, kb, write_to_db = True, info_units = info_units)
 
     steps = traj.get_sampling_step_nos()
-    energies = traj.get_model_total_energies()
+    energies = traj.get_energies()
 
     #traj.write_to_file()
 
     structure = traj.get_structure(0)
     print("Initial structure: ",structure.decor)
 
-    bondskk1 = traj.get_model_properties('bond_kk')
-    bondsii1 = traj.get_model_properties('bond_ii')
+    bondskk1 = traj.get_properties('bond_kk')
+    bondsii1 = traj.get_properties('bond_ii')
     print(bondskk1)
     print(bondsii1)
 
@@ -164,7 +165,7 @@ def test_metropolis():
 
     #rsteps = [0, 1, 2, 3, 4, 6, 10, 11, 16, 17, 18, 26, 27, 34, 37, 38, 44, 45, 47, 48, 50]
     rsteps = [0, 1, 2, 3, 4, 5, 10, 11, 14, 16, 18, 19, 22, 24, 26, 31, 34, 37, 38, 43, 45]
-    print("energies",energies)
+#    print("energies",energies)
     print("steps", steps)
     print("last_structure.decor",last_structure.decor)
     print(last_sampling_entry)
@@ -174,24 +175,32 @@ def test_metropolis():
     #rlast_decoration = np.int8([14, 14, 13, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 56, 56, 56, 56, 56, 56, 56, 56])
     rlast_decoration = np.int8([14, 14, 14, 13, 14, 13, 14, 14, 14, 14, 13, 13, 14, 14, 14, 14, 14, 13, 13, 13, 14, 14, 13, 14, 13, 14, 14, 14, 13, 14, 13, 14, 14, 14, 14, 13, 14, 14, 14, 14, 13, 13, 14, 14, 13, 13, 56, 56, 56, 56, 56, 56, 56, 56])
     #rlast_sampling_entry = {'sampling_step_no': 50, 'model_total_energy': -77652.66622624162, 'swapped_positions': [[5, 43]], 'key_value_pairs': {'bond_kk': 2.49116603472051, 'bond_ii': 2.397621971688995}}
-    rlast_sampling_entry = {'sampling_step_no': 45, 'model_total_energy': -77652.65963884031, 'swapped_positions': [[3, 25]], 'key_value_pairs': {'bond_kk': 2.4897160745744795, 'bond_ii': 2.3909922581598044}}
-    
-    isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and isclose(rlast_decoration,last_structure.decor) and dict_compare(last_sampling_entry, rlast_sampling_entry, tol=float(1e-7) )
+    rlast_sampling_entry = {'sampling_step_no': 45, 'energy': -77652.65963884031, 'swapped_positions': [[3, 25]], 'key_value_pairs': {'bond_kk': 2.4897160745744795, 'bond_ii': 2.3909922581598044}}
+
+    rtraj_info={'number_of_sampling_steps': nmc, 'temperature': temp, 'boltzmann_constant': kb, 'scale_factor': 1.0, 'info_units': info_units }
+    traj_info={}
+    traj_info.update({'number_of_sampling_steps': traj._nmc})
+    traj_info.update({'temperature': traj._temperature})
+    traj_info.update({'boltzmann_constant': traj._boltzmann_constant})
+    traj_info.update({'scale_factor': traj._scale_factor})
+    traj_info.update({'info_units': traj._info_units})
+
+    isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and isclose(rlast_decoration,last_structure.decor) and dict_compare(last_sampling_entry, rlast_sampling_entry, tol=float(1e-7) ) and dict_compare(traj_info,rtraj_info)
     assert(isok1)
     #assert(True)
     
-    print("before set none", traj.get_model_properties('bond_kk'))
-    print("before set none", traj.get_model_properties('bond_ii'))
+    print("before set none", traj.get_properties('bond_kk'))
+    print("before set none", traj.get_properties('bond_ii'))
     traj._models =[]
     for i in range(len(traj._trajectory)):
         traj._trajectory[i]['key_value_pairs']={}
 
-    bondskk2 = traj.get_model_properties('bond_kk')
-    bondsii2 = traj.get_model_properties('bond_ii')
+    bondskk2 = traj.get_properties('bond_kk')
+    bondsii2 = traj.get_properties('bond_ii')
     print(bondskk2)
     print(bondsii2)
 
-    traj.calculate_model_properties([cemodelBkk,cemodelBii])
+    traj.calculate_properties([cemodelBkk,cemodelBii])
 
     print("Cluster expansion models for the properties: ",[mo.property for mo in traj._models])
 
@@ -199,15 +208,15 @@ def test_metropolis():
     print("\nTests of functions in MonteCarloTrajector:")
     ids = traj.get_id_sampling_step(steps[2])
     print(ids)
-    prop_at_id = traj.get_model_property(2,'bond_kk')
+    prop_at_id = traj.get_property(2,'bond_kk')
     print(prop_at_id)
     stepx = traj.get_id('bond_kk',2.4772699399288944)
     print(stepx)
-    stepx = traj.get_id('model_total_energy',-77652.65458138083)
+    stepx = traj.get_id('energy',-77652.65458138083)
     print(stepx)
 
-    bondskk = traj.get_model_properties('bond_kk')
-    bondsii = traj.get_model_properties('bond_ii')
+    bondskk = traj.get_properties('bond_kk')
+    bondsii = traj.get_properties('bond_ii')
     print("2",bondskk,bondsii)
     
 
@@ -219,6 +228,40 @@ def test_metropolis():
     isok2 = isclose(rbondskk,bondskk) and isclose(rbondsii,bondsii)
     assert(isok2)
 
+    cp = traj.calculate_average_property(prop_name = 'C_p', no_of_equilibration_steps = 2)
+    u = traj.calculate_average_property(prop_name = 'U', no_of_equilibration_steps = 2)
+    avg_bond_kk = traj.calculate_average_property(prop_name = 'bond_kk', no_of_equilibration_steps = 2)
+    avg_bond_ii = traj.calculate_average_property(prop_name = 'bond_ii', no_of_equilibration_steps = 2)
+    u2 = traj.calculate_average_property(prop_name = 'energy', no_of_equilibration_steps = 2)
+    averages1 = [cp, u, avg_bond_kk, avg_bond_ii, u2]
+    print("averages1",cp,u, avg_bond_kk, avg_bond_ii, u2)
+    raverages1 = [7.939914262878631, -77652.64031004661, 2.4779505334667857, 2.4035730628525886, -77652.64031004661]
+    
+
+    def test_average(t_info, prop_array, **kwargs):
+        property_names = kwargs.pop("properties",1)
+        
+        prop_arrayt = prop_array.T
+        for i,prop in enumerate(property_names):
+            if prop == 'bond_kk':
+                bondskk = np.average(prop_arrayt[i])
+            elif prop == 'bond_ii':
+                bondsii = np.average(prop_arrayt[i])
+            elif prop == 'energy':
+                energy = np.average(prop_arrayt[i])
+
+        return  bondskk, bondsii, energy, (bondsii+bondskk)/(1.0*2), energy/(1.0*t_info['temperature'])
+
+    
+    avg_bond_kk2, avg_bond_ii2, u3, avg_bond, ut = traj.calculate_average_property(prop_func=test_average, no_of_equilibration_steps = 2, properties=['bond_kk','bond_ii','energy'])
+    averages2 = [avg_bond_kk2, avg_bond_ii2, u3, avg_bond, ut]
+    print("averages2", avg_bond_kk2, avg_bond_ii2, u3, avg_bond, ut)
+    raverages2 = [2.4779505334667884, 2.403573062852589, -77652.64031004666, 2.4407617981596887, -77.65264031004665]
+
+    isok22 = isclose(averages1,raverages1) and isclose(averages2,raverages2)
+    assert(isok22)
+    
+
     trajx = MonteCarloTrajectory()
 
     if os.path.isfile("trajectory.json"):
@@ -226,7 +269,7 @@ def test_metropolis():
         #print(trajx._trajectory[0])
         #print(trajx._scell._plat.get_nsites_per_type())
 
-        energies2 = trajx.get_model_total_energies()
+        energies2 = trajx.get_energies()
         steps2 = trajx.get_sampling_step_nos()
 
         struc2 = trajx.get_structure_at_step(steps2[2])
@@ -293,10 +336,10 @@ def test_metropolis():
     print("Samplings steps ",nmc)
     print("Temperature ",temp)
 
-    traj2 = mc2.metropolis([kb,temp], nmc)
+    traj2 = mc2.metropolis(nmc, temp, kb)
 
     steps2 = traj2.get_sampling_step_nos()
-    energies2 = traj2.get_model_total_energies()
+    energies2 = traj2.get_energies()
     last_entry2 = traj2.get_sampling_step_entry_at_step(steps2[-1])
     last_structure2 = traj2.get_structure_at_step(steps2[-1])
 
@@ -310,7 +353,7 @@ def test_metropolis():
     #renergies2 = [-634734.608306379, -634734.608306379, -634734.608306379, -634734.620985871, -634734.620985871, -634734.620985871, -634734.620985871, -634734.620985871, -634734.620985871, -634734.633665363, -634734.633665363, -634734.6683063792, -634734.6683063792, -634734.680985871, -634734.680985871, -634734.7156268872]
     renergies2 = [-634734.60830638, -634734.60830638, -634734.60830638, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.65562689, -634734.65562689]
     #rlast_entry2={'sampling_step_no': 30, 'model_total_energy': -634734.7156268872, 'swapped_positions': [[351, 4]], 'key_value_pairs': {}}
-    rlast_entry2={'sampling_step_no': 29, 'model_total_energy': -634734.6556268871, 'swapped_positions': [[247, 243]], 'key_value_pairs': {}}
+    rlast_entry2={'sampling_step_no': 29, 'energy': -634734.6556268871, 'swapped_positions': [[247, 243]], 'key_value_pairs': {}}
     #rlast_decoration2 = np.int8([14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 13,  0, 13, 14, 14, 14, 13, 14, 13, 13, 13, 14, 13, 13, 13, 14, 13, 13, 14, 14, 14, 14, 14, 14, 13, 14, 13, 56, 56, 56, 56, 56, 56, 56, 56,
     #                             13, 13, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 13, 14, 13, 13,  0, 13, 13, 14, 14, 13, 14, 13, 14, 13, 13, 14, 13, 14,  0, 14, 14, 14, 14, 13, 14, 13, 14, 14, 13, 13, 14, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
     #                             14, 13, 13, 14, 14, 13, 14,  0, 14, 14, 14, 13, 14,  0, 14, 14, 14, 14, 13, 14, 13, 14, 14,  0, 14, 14, 13, 13, 13, 13, 14, 13, 14, 14, 14, 13, 14, 14, 13, 14,  0, 14, 13, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
@@ -337,10 +380,10 @@ def test_metropolis():
     print("Temperature",temp)
 
     mc3 = MonteCarlo(cemodelE2, scellE2, {0:[112,16],1:[8]}, filename = "trajectory-multi-lattice.json", last_visited_structure_name = "last-visited-structure-mc-multi-lattice.json")
-    traj3 = mc3.metropolis([kb,temp], nmc, write_to_db = True)
+    traj3 = mc3.metropolis(nmc, temp, kb, write_to_db = True)
 
     steps3 = traj3.get_sampling_step_nos()
-    energies3 = traj3.get_model_total_energies()
+    energies3 = traj3.get_energies()
     print(steps3)
     print(energies3)
     #traj3.write_to_file()
