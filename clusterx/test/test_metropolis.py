@@ -211,13 +211,13 @@ def test_metropolis():
 
     #Tests of functions in MonteCarloTrajector
     print("\nTests of functions in MonteCarloTrajector:")
-    ids = traj.get_id_sampling_step(steps[2])
+    ids = traj.get_nid_sampling_step(steps[2])
     print(ids)
     prop_at_id = traj.get_property(2,'bond_kk')
     print(prop_at_id)
-    stepx = traj.get_id('bond_kk',2.4772699399288944)
+    stepx = traj.get_nids('bond_kk',2.4772699399288944)
     print(stepx)
-    stepx = traj.get_id('energy',-77652.65458138083)
+    stepx = traj.get_nids('energy',-77652.65458138083)
     print(stepx)
 
     bondskk = traj.get_properties('bond_kk')
@@ -242,23 +242,14 @@ def test_metropolis():
     print("averages1",cp,u, avg_bond_kk, avg_bond_ii, u2)
     raverages1 = [7.939914262878631, -77652.64031004661, 2.4779505334667857, 2.4035730628525886, -77652.64031004661]
     
-
-    def test_average(t_info, prop_array, **kwargs):
-        property_names = kwargs.pop("properties",1)
-        
-        prop_arrayt = prop_array.T
-        for i,prop in enumerate(property_names):
-            if prop == 'bond_kk':
-                bondskk = np.average(prop_arrayt[i])
-            elif prop == 'bond_ii':
-                bondsii = np.average(prop_arrayt[i])
-            elif prop == 'energy':
-                energy = np.average(prop_arrayt[i])
-
-        return  bondskk, bondsii, energy, (bondsii+bondskk)/(1.0*2), energy/(1.0*t_info['temperature'])
-
+    def test_average(prop_array, **kwargs):
+        bondskk = np.average(prop_array[0])
+        bondsii = np.average(prop_array[1])
+        energy = np.average(prop_array[2])
+        temperature = float(kwargs['temperature'])
+        return  bondskk, bondsii, energy, (bondsii+bondskk)/(1.0*2), energy/(1.0*temperature)
     
-    avg_bond_kk2, avg_bond_ii2, u3, avg_bond, ut = traj.calculate_average_property(prop_func=test_average, no_of_equilibration_steps = 2, properties=['bond_kk','bond_ii','energy'])
+    avg_bond_kk2, avg_bond_ii2, u3, avg_bond, ut = traj.calculate_average_property(average_func=test_average, no_of_equilibration_steps = 2, props_list=['bond_kk','bond_ii','energy'], temperature = traj._temperature )
     averages2 = [avg_bond_kk2, avg_bond_ii2, u3, avg_bond, ut]
     print("averages2", avg_bond_kk2, avg_bond_ii2, u3, avg_bond, ut)
     raverages2 = [2.4779505334667884, 2.403573062852589, -77652.64031004666, 2.4407617981596887, -77.65264031004665]

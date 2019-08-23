@@ -397,7 +397,7 @@ class MonteCarloTrajectory():
         """Return the entry, e.g. the dictionary stored for the n-th samplig step (``nstep``) in trajectory.
 
         """
-        return self.get_sampling_step_entry(self.get_id_sampling_step(nstep))
+        return self.get_sampling_step_entry(self.get_nid_sampling_step(nstep))
     
 
     def get_sampling_step_entry(self, nid):
@@ -411,7 +411,7 @@ class MonteCarloTrajectory():
         """Return structure in form of a Structure object, at the n-th sampling step (``nstep``) in trajectory.
 
         """
-        return self.get_structure(self.get_id_sampling_step(nstep))
+        return self.get_structure(self.get_nid_sampling_step(nstep))
 
     
     def get_structure(self, nid):
@@ -459,12 +459,12 @@ class MonteCarloTrajectory():
         return self._trajectory[nid]['sampling_step_no']
 
 
-    def get_id_sampling_step(self, nstep):
+    def get_nid_sampling_step(self, nstep):
         """Return entry index at the n-th sampling (``nstep``) step in trajectory.
 
         """
         steps = self.get_sampling_step_nos()
-        nid=0
+        nid = 0
         try:
             nid = np.where(steps == nstep)[0][0]
         except:
@@ -640,20 +640,20 @@ class MonteCarloTrajectory():
                 return prop_average
         
 
-    def get_nids(self, prop_name, value):
+    def get_nids(self, prop, value):
         """Return array of integers, that are the indices of the entries in trajectory for which the property 
-           with name ``prop_name`` has the value ``value``.
+           ``prop`` has the value ``value``.
 
         """
         arrayid = []
 
-        if prop_name in ['sampling_step_no','swapped_positions','energy','decoration']:
+        if prop in ['sampling_step_no','swapped_positions','energy','decoration']:
             for i,tr in enumerate(self._trajectory):
                 if tr[prop] == value:
                     arrayid.append(i)
         else:
             for i,tr in enumerate(self._trajectory):
-                if tr['key_value_pairs'][prop_name] == value:
+                if tr['key_value_pairs'][prop] == value:
                     arrayid.append(i)
 
         return np.asarray(arrayid)
