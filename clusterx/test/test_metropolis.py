@@ -127,17 +127,15 @@ def test_metropolis():
     kb = float(3.16681009610757e-6)
     # temperature in K
     temp = 1000
-    info_units = {'temp':'K','kb':'Ha/K','energy':'Ha','scale_factor':'None'}
+    info_units = {'temp':'K','kb':'Ha/K','energy':'Ha','scale_factors':'None'}
     
     print("Samplings steps",nmc)
     print("Temperature",temp)
 
-    traj = mc.metropolis(nmc, temp, kb, write_to_db = True, info_units = info_units)
+    traj = mc.metropolis(nmc, temp, kb, serialize = True, info_units = info_units)
 
     steps = traj.get_sampling_step_nos()
     energies = traj.get_energies()
-
-    #traj.write_to_file()
 
     structure = traj.get_structure(0)
     print("Initial structure: ",structure.decor)
@@ -177,13 +175,20 @@ def test_metropolis():
     #rlast_sampling_entry = {'sampling_step_no': 50, 'model_total_energy': -77652.66622624162, 'swapped_positions': [[5, 43]], 'key_value_pairs': {'bond_kk': 2.49116603472051, 'bond_ii': 2.397621971688995}}
     rlast_sampling_entry = {'sampling_step_no': 45, 'energy': -77652.65963884031, 'swapped_positions': [[3, 25]], 'key_value_pairs': {'bond_kk': 2.4897160745744795, 'bond_ii': 2.3909922581598044}}
 
-    rtraj_info={'number_of_sampling_steps': nmc, 'temperature': temp, 'boltzmann_constant': kb, 'scale_factor': 1.0, 'info_units': info_units }
+    rtraj_info={'number_of_sampling_steps': nmc, 'temperature': temp, 'boltzmann_constant': kb}
+    rtraj_info.update({'info_units':info_units})
+    print(rtraj_info)
     traj_info={}
     traj_info.update({'number_of_sampling_steps': traj._nmc})
     traj_info.update({'temperature': traj._temperature})
     traj_info.update({'boltzmann_constant': traj._boltzmann_constant})
-    traj_info.update({'scale_factor': traj._scale_factor})
-    traj_info.update({'info_units': traj._info_units})
+    if traj._scale_factors is not None:
+        traj_info.update({'scale_factors': traj._scale_factors})
+    if traj._acceptance_ratio is not None:
+        traj_info.update({'scale_factors': traj._acceptance_ratio})
+    for key in traj._keyword_arguments:
+        traj_info.update({key:traj._keyword_arguments[key]})
+    print(traj_info)
 
     isok1 = isclose(rsteps,steps) and isclose(renergies, energies) and isclose(rlast_decoration,last_structure.decor) and dict_compare(last_sampling_entry, rlast_sampling_entry, tol=float(1e-7) ) and dict_compare(traj_info,rtraj_info)
     assert(isok1)
@@ -328,7 +333,7 @@ def test_metropolis():
 
     # Sampling in sublattice with index 0 - ternary sampling
     print("Start sampling in sublattice with index 0:")
-    mc2 = MonteCarlo(cemodelE2, scellE2, {0:[112,16],1:[0]}, sublattice_indices=[0], filename = "trajectory-ternary.json")
+    mc2 = MonteCarlo(cemodelE2, scellE2, {0:[112,16],1:[0]}, filename = "trajectory-ternary.json")
 
     nmc=30
     # temperature in K
@@ -343,7 +348,7 @@ def test_metropolis():
     last_entry2 = traj2.get_sampling_step_entry_at_step(steps2[-1])
     last_structure2 = traj2.get_structure_at_step(steps2[-1])
 
-    traj2.write_to_file()
+    traj2.serialize()
     print(last_structure2.decor)
 
     print("Configurations accepted at steps: ",steps2)
@@ -380,13 +385,12 @@ def test_metropolis():
     print("Temperature",temp)
 
     mc3 = MonteCarlo(cemodelE2, scellE2, {0:[112,16],1:[8]}, filename = "trajectory-multi-lattice.json", last_visited_structure_name = "last-visited-structure-mc-multi-lattice.json")
-    traj3 = mc3.metropolis(nmc, temp, kb, write_to_db = True)
+    traj3 = mc3.metropolis(nmc, temp, kb, serialize = True)
 
     steps3 = traj3.get_sampling_step_nos()
     energies3 = traj3.get_energies()
     print(steps3)
     print(energies3)
-    #traj3.write_to_file()
 
     print("Configurations accepted at steps: ",steps3)
 

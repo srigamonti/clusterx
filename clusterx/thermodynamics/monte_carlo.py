@@ -13,70 +13,81 @@ import numpy as np
 from copy import deepcopy
 
 class MonteCarlo():
-    """MonteCarlo class
+    """Monte Carlo class
 
     **Description**:
-        Perform MonteCarlo samplings
+        Objects of this class are used to perform Monte Carlo samplings.
+        It is initialized with a Model object for calculating the energy, and 
+        the SuperCell object, in which the sampling is performed.
 
     **Parameters**:
 
     ``energy_model``: Model object
         Model used for acceptance and rejection. Usually, the Model enables to
-        calculate the total energy of a given configuration.
+        calculate the total energy. 
 
     ``scell``: SuperCell object
-        Super cell in which the sampling is performed.
+        Simulation cell in which the sampling is performed.
 
     ``nsubs``: dictionary
+        Defines the number of substituted atoms in each sub-lattice of the
+        Supercell in which the sampling is performed.
+
         The format of the dictionary is as follows::
 
             {site_type1:[n11,n12,...], site_type2:[n21,n22,...], ...}
 
         It indicates how many substitutional atoms of every kind (n#1, n#2, ...)
-        may replace the pristine species for sites of site_type#.
+        may replace the pristine species for sites of site_type#
+        (see related documentation in SuperCell object).
 
-        The list of site types can be obtained with the method ``ParentLattice.get_idx_subs()``
-        (see related documentation).
+        For grand-canonical samplings, the number of substitional atoms in the sub-lattice with site_type# is set to -1. 
+        E.g., {site_type1:[-1,-1,...], ...} for a grand canonical sampling in sub-lattice with site_type1.
 
-        Defines the number of substituted atoms in each sublattice
-        Supercell in which the sampling is performed.
+    ``ensemble``: string (default: ``canonical``) 
+        ``canonical`` allows for swaps of atoms that conserve the concentration defined with ``nsubs``.
 
-    ``filename``: string
-        Trajectory can be written to a json file with the name ``filename``.
-        Default string: trajectory.json
+        ``grand_canonical`` allows for replacing atoms in the sub-lattices defined with ``nsubs``. 
 
+    ``chemical_potentials``: dictionary (default: None)
+        Define the chemical potentials used for samplings in the grand canonical ensemble.
+     
+        The format of the dictionary is as follows
 
-    ``last_visited_structure_name``: string
-        The structure visited at the final step of the sampling can be saved to a json file.
-        Default name: last-visited-structure-mc.json
+        {site_type1:[:math:`\Delta \mu_{11}`, :math:`\Delta \mu_{12}`,...], site_type2:[:math:`\Delta \mu_{21}`, :math:`\Delta \mu_{22}`,...],...}
 
-    ``models``: Model object
-        List of Models of structural dependent properties. These properties are additionally 
-        calculated during the sampling and stored in the dictionary ``key_value_pairs`` belonging to 
-        each visited structure during the sampling. 
+        Here, :math:`\Delta \mu_{\#i}` is the chemical potential difference of substitutional species i relative 
+        to the pristine species in sub-lattice with site_type#.
+
+    ``filename``: string (default: ``trajectory.json``)
+        Name of a Json file in which the trajectory can be serialized after the sampling.
+
+    ``last_visited_structure_name``: string (default: ``last_visited_structure_mc.json``)
+        Name of Json file in which the last visited structure of the sampling can be serialized.
+
+    ``models``: List of Model objects
+        The properties returned from these Model objects are additionally 
+        calculated during the sampling and stored with their corresponding ``prop_name`` 
+        to the dictionary ``key_value_pairs`` for each visited structure during the sampling. 
         
-        Models of properties can also be defined and calculated after the sampling is finished
-        by using the Class MonteCarloTrajectory.
+        Properties from Model obejects can also be calculated after the sampling by using the MonteCarloTrajectory class.
 
-    ``no_of_swaps``: int
-        Number of atom swaps per sampling step
+    ``no_of_swaps``: integer (default: 1)
+        Number of atom swaps/replacements per sampling step.
 
-    ``ensemble``: string
-        "canonical" allows only for swapping of atoms inside scell
-        "grandcanonical"  allows for replacing atoms within the given scell
-        (the number of substitutents in each sublattice is not kept)
+    ``predict_swap``: boolean (default: False)
+       If set to **True**, this parameter makes the sampling faster by calculating the correlation difference of the 
+       proposed structure with respect to the previous structure.
+
+    ``error_reset``: integer (default: None)
+       If not **None*  and ``predict_swap`` equal to **True**, the correlations are calculated as usual (no differences) every n-th step.
 
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
 
-        SR: notes from using the class by reading the documentation:
-
-            * ensemble parameter needs more extensive documentation. Is a chemical potential defined at some point to adjust average concentration in grandcanonical?
-
-
     """
 
-    def __init__(self, energy_model, scell, nsubs, filename = "trajectory.json", last_visited_structure_name = "last-visited-structure-mc.json", models = [], no_of_swaps = 1, ensemble = "canonical", predict_swap = False, error_reset = False):
+    def __init__(self, energy_model, scell, nsubs, ensemble = "canonical", chemical_potentials = None, filename = "trajectory.json", last_visited_structure_name = "last_visited_structure_mc.json", models = [], no_of_swaps = 1, predict_swap = False, error_reset = False):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
@@ -115,7 +126,7 @@ class MonteCarlo():
             
         self._error_reset = error_reset
 
-    def metropolis(self, nmc, temperature, boltzmann_constant, scale_factor = [], initial_decoration = None, acceptance_ratio = None, info_units = None, serialize = False):
+    def metropolis(self, no_of_sampling_steps, temperature, boltzmann_constant, scale_factors = None, initial_decoration = None, acceptance_ratio = None, serialize = False, **kwargs):
         """Perform Monte-Carlo Metropolis simulation
 
         **Description**: 
@@ -123,7 +134,8 @@ class MonteCarlo():
 
             During the sampling, a new structure at step i is accepted
             with the probability given by :math:`\min( 1, \exp( - (E_i - E_{i-1})/(k_B T)) )`
-            Here, the energy :math:`E_i` of visited structure at step i is calculated from the Model 
+
+            The energy :math:`E_i` of visited structure at step i is calculated from the Model 
             ``energy_model``. The factor :math:`k_B T` is the product of the temperature :math:`T` 
             and the Boltzmann constant :math:`k_B` (also know as the thermal energy).
 
@@ -136,7 +148,7 @@ class MonteCarlo():
 
         **Parameters**:
 
-        ``nmc``: integer
+        ``no_of_sampling_steps``: integer
             Number of sampling steps
         
         ``temperature``: float
@@ -145,7 +157,7 @@ class MonteCarlo():
         ``boltzmann_constant``: float
             Boltzmann constant 
 
-        ``scale_factor``: list of floats
+        ``scale_factors``: list of floats
             List is used to adjust the factor :math:`k_B T` to the same units as the energy from ``energy_model``.
  
             All floats in list are multiply to the factor :math:`k_B T`.
@@ -155,25 +167,28 @@ class MonteCarlo():
             Atomic numbers of the initial structure, from which the sampling starts.
             If ``None``, sampling starts with a structure randomly generated.
 
-        ``serialize``: boolean (default: False)
-            Serialize the MonteCarloTrajectory object into a JSON file after the sampling. 
-        
         ``acceptance_ratio``: float (default: None)
             Real number between 0 and 100. Represents the percentage of accepted moves.
             If not ``None``, the initial temperature will be adjusted to match the given
             acceptance ratio. The acceptance ratio during the simulation is computed using
             the last 100 moves.
+        
+        ``serialize``: boolean (default: False)
+            Serialize the MonteCarloTrajectory object into a JSON file after the sampling. 
 
+        ``**kwargs``: keyworded argument list, arbitrary length
+            These arguments are added to the MonteCarloTrajectory object initialized in this method.
+        
         **Returns**: MonteCarloTrajectory object
-            Trajectory containing all information of the structures visited during the sampling
+            Trajectory containing the complete information of the structures visited during the sampling.
 
         """
         import math
         from clusterx.utils import poppush
 
         scale_factor_product = float(temperature)*float(boltzmann_constant)
-        if scale_factor is not None:
-            for el in scale_factor:
+        if scale_factors is not None:
+            for el in scale_factors:
                 scale_factor_product *= float(el)
 
         if initial_decoration is not None:
@@ -183,8 +198,8 @@ class MonteCarlo():
 
         self._em.corrc.reset_mc(mc = True)
         e = self._em.predict(struc)
-
-        traj = MonteCarloTrajectory(self._scell, nmc, temperature, boltzmann_constant, scale_factor = scale_factor, filename=self._filename, models = self._models, info_units = info_units)
+        
+        traj = MonteCarloTrajectory(self._scell, filename=self._filename, models = self._models, no_of_sampling_steps = no_of_sampling_steps, temperature = temperature, boltzmann_constant = boltzmann_constant, scale_factors = scale_factors, acceptance_ratio = acceptance_ratio, **kwargs)
 
         if self._models:
             key_value_pairs = {}
@@ -200,11 +215,11 @@ class MonteCarlo():
             ar = acceptance_ratio
             hist = np.zeros(nar,dtype=int)
 
-        if self._error_reset:
-            error_steps = int(100000)
-            x=1
+        if self._error_reset is not None:
+            error_steps = int(self._error_reset)
+            x = 1
             
-        for i in range(1,nmc+1):
+        for i in range(1,no_of_sampling_steps+1):
             indices_list = []
 
             for j in range(self._no_of_swaps):
@@ -279,64 +294,77 @@ class MonteCarloTrajectory():
     """MonteCarloTrajectory class
 
     **Description**:
-        Trajectory of decorations visited during the sampling performed in the supercell scell.
-        For each visited decoration, it is retained the sampling step number (sampling_step_no),
-        the decoration (decor), the total energy predicted from a cluster expansion model (energy_model),
-        and additional properties stored as key-value pair in dictionary key_value_pairs.
+        Objects of this class are used to store and access the complete information of the trajectory generated from  
+        a Monte Carlo sampling performed with the MonteCarlo class. 
+    
+        It is initialized with the SuperCell object. 
+        Alternative: If ``read`` is **True**, it is initalized from a Json file with name ``filename`` that 
+        was created from a MonteCarloTrajectory object before by ``MonteCarloTrajectory.serialize()``.
 
     **Parameters**:
 
-    ``scell``: SuperCell object
+    ``scell``: SuperCell object (default: None)
         Super cell in which the sampling is performed.
 
     ``filename``: string
         The trajectoy can be stored in a json file with the path given by ``filename``.
+    
+    ``read``: boolean (default: False)
+        If **True**, the trajectory is read from the Json file ``filename``.
 
     ``**kwargs``: keyword arguments
 
-        ``save_nsteps``: integer
-            Trajectory is saved after save_nsteps.
-
         ``models``: List of Model objects
+         
+        Further keyword arguments can be used to store additional information belonging to the
+        MonteCarloTrajectory class, and will be later saved in the trajectory Json file under ``sampling_info``.
 
     .. todo::
-        Saving the trajectory after ``save_steps`` is not yet implemented.
 
         Improve appearance of json file - decoration array in one line
 
     """
 
-    def __init__(self, scell = None, nmc = None, temperature = None, boltzmann_constant = None, scale_factor = None, filename="trajectory.json", **kwargs):
+    def __init__(self, scell = None, filename="trajectory.json", read = False, **kwargs):
         self._trajectory = []
 
         self._scell = scell
         self._save_nsteps = kwargs.pop('save_nsteps',10)
         self._write_no = 0
 
-        self._models = kwargs.pop('models',[])
-
         self._filename = filename
 
-        self._nmc = nmc
-        self._temperature = temperature
-        self._boltzmann_constant = boltzmann_constant
-        self._scale_factor = scale_factor
-        self._info_units = kwargs.pop('info_units',None)
+        self._models = kwargs.pop('models',[])
+
+        self._nmc = kwargs.pop('no_of_sampling_steps',None)
+        self._temperature = kwargs.pop('temperature',None)
+        self._boltzmann_constant = kwargs.pop('boltzmann_constant',None)
+        self._scale_factors = kwargs.pop('scale_factors',None)
+        self._acceptance_ratio = kwargs.pop('acceptance_ratio',None)
+        self._keyword_arguments = kwargs
+
         
-    def calculate_properties(self, models = None, prop_func = None, prop_name = None, **kwargs):
-        """Calculate the property for all decoration in the trajectory
-        ``**kwargs``: keyworded argument list, arbitrary length
-            You may call this method as::
+    def calculate_properties(self, models = [], prop_func = None, prop_name = None, **kwargs):
+        """Calculate the property for all decorations in the trajectory. The property can be 
+           calculated by a Model object or an external function ``prop_func``. 
 
-                sset_instance.read_property_values(read_property, arg1=arg1, arg2=arg2, ... argN=argN)
-
-            where ``arg1`` to  ``argN`` are the keyworded arguments to the ``read_property(folder_path,**kwargs)`` function.
+        **Parameters**:
+            ``models``: list (default: empty list)
+        
+            ``prop_func``: function (default: None)
+                This function recieves as arguments the Structure object and the dictionary 
+                of trajectory entry at step i, and additional keyword arguments given by ``**kwargs``.
+        
+            ``prop_name``: string (default: None)
+                Name of property which is calculated by ``prop_func``.
+            
+            ``**kwargs``: keyworded argument list, arbitrary length
+                Additional parameters for the function ``prop_func``   
 
         """
-        if models is not None:
-            for mo in models:
-                if mo not in self._models:
-                    self._models.append(mo)         
+        for mo in models:
+            if mo not in self._models:
+                self._models.append(mo)         
 
         sx = Structure(self._scell, decoration = self._trajectory[0]['decoration'])
 
@@ -346,18 +374,19 @@ class MonteCarloTrajectory():
                 sx.swap(indices_list[j][0],indices_list[j][1])
 
             sdict={}
-            for m,mo in enumerate(self._models):
+            for m,mo in enumerate(models):
                 sdict.update({mo.property: mo.predict(sx)})
 
             if prop_func is not None:
                 sdict.update({prop_name: prop_func(sx,tr,**kwargs)})
 
-            self._trajectory[t]['key_value_pairs'] = sdict
+            self._trajectory[t]['key_value_pairs'].update(sdict)
+            
         
     def add_decoration(self, step, energy, indices_list, decoration = None, key_value_pairs = {}):
-        """Add decoration of Structure object to the trajectory
-        """
+        """Add entry of the structure visited in the sampling to the trajectory.
 
+        """
         if indices_list:
             self._trajectory.append(dict([('sampling_step_no', int(step)), ('energy', energy), ('swapped_positions', indices_list), ('key_value_pairs', key_value_pairs)]))
         else:
@@ -365,48 +394,28 @@ class MonteCarloTrajectory():
 
 
     def get_sampling_step_entry_at_step(self, nstep):
-        """Get the dictionary at the n-th sampling step in the trajectory
-
-        **Parameters:**
-
-        ``nstep``: int
-            sampling step
-
-        **Returns:**
-            Dictionary at the n-th sampling step.
+        """Return the entry, e.g. the dictionary stored for the n-th samplig step (``nstep``) in trajectory.
 
         """
         return self.get_sampling_step_entry(self.get_id_sampling_step(nstep))
+    
 
     def get_sampling_step_entry(self, nid):
-        """Get the dictionary (entry) at index nid in the trajectory
+        """Return the entry, e.g. the dictionary stored at index ``nid`` in trajectory.
+
         """
         return self._trajectory[nid]
+    
 
     def get_structure_at_step(self, nstep):
-        """Get the structure from decoration at the n-th sampling step in the trajectory.
-
-        **Parameters:**
-
-        ``nstep``: integer
-            sampling step
-
-        **Returns:**
-            Structure object at the n-th sampling step.
+        """Return structure in form of a Structure object, at the n-th sampling step (``nstep``) in trajectory.
 
         """
         return self.get_structure(self.get_id_sampling_step(nstep))
 
+    
     def get_structure(self, nid):
-        """Get structure from entry at index nid in the trajectory
-
-        **Parameters:**
-
-        ``nid``: integer
-            index of structure in the trajectory.
-
-        **Returns:**
-            Structure object at index nid.
+        """Return structure in form of a Structure object, at index ``nid`` in trajectory.
 
         """
         decoration = deepcopy(self._trajectory[0]['decoration'])
@@ -420,12 +429,10 @@ class MonteCarloTrajectory():
 
         sx = Structure(self._scell, decoration = decoration)
         return sx
+    
 
     def get_lowest_energy_structure(self):
-        """Get lowest-non-degenerate structure from trajectory
-
-        **Returns:**
-            Structure object.
+        """Return structure in form of a Structure object with the lowest energy in trajectory.
 
         """
         _energies = self.get_energies()
@@ -434,8 +441,10 @@ class MonteCarloTrajectory():
 
         return self.get_structure(_nid)
 
+    
     def get_sampling_step_nos(self):
-        """Get sampling step numbers of all entries in trajectory
+        """Return sampling step numbers of all entries in trajectory as array.
+
         """
         steps=[]
         for tr in self._trajectory:
@@ -444,13 +453,15 @@ class MonteCarloTrajectory():
         return np.int_(steps)
 
     def get_sampling_step_no(self, nid):
-        """Get sampling step number of entry at index nid in trajectory
+        """Return sampling step number of entry at index ``nid`` in trajectory.
+
         """
         return self._trajectory[nid]['sampling_step_no']
 
 
     def get_id_sampling_step(self, nstep):
-        """Get entry index at the n-th sampling step.
+        """Return entry index at the n-th sampling (``nstep``) step in trajectory.
+
         """
         steps = self.get_sampling_step_nos()
         nid=0
@@ -465,83 +476,98 @@ class MonteCarloTrajectory():
                         nid = i-1
                         break
         return nid
+    
 
     def get_energies(self):
-        """Get energies of all entries in trajectory.
+        """Return energies of all entries in trajectory as array.
+
         """
         energies = []
         for tr in self._trajectory:
             energies.append(tr['energy'])
 
         return np.asarray(energies)
+    
 
     def get_energy(self, nid):
-        """Get energy of entry at index nid in trajectory.
+        """Return energy of entry at index ``nid`` in trajectory.
+
         """
         return self._trajectory[nid]['energy']
+    
 
     def get_properties(self, prop):
-        """Get property of all entries in the trajectory.
-        """
-        try:
-            props = []
-            for tr in self._trajectory:
-                props.append(tr['key_value_pairs'][prop])
-            return np.asarray(props)
+        """Return the property ``prop`` from all entries in the trajectory as array.
 
-        except:
-            if prop not in [mo.property for mo in self._models]:
-                print("Model of property is not given, look at the documentation.")
-            else:
-                print("Property not calculated, look at the documentation.")
-
-    def get_property(self, nid, prop):
-        """Get property of entry at index nid in trajectory.
         """
         if prop is 'energy':
-            return self._trajectory[nid]['energy']
+            return self.get_energies()
+        else:
+
+            try:
+                props = []
+                for tr in self._trajectory:
+                    props.append(tr['key_value_pairs'][prop])
+                return np.asarray(props)
+
+            except:
+                if prop not in [mo.property for mo in self._models]:
+                    print("Model of property is not given, look at the documentation.")
+                else:
+                    print("Property is not calculated, look at the documentation.")
+                    
+
+    def get_property(self, nid, prop):
+        """Return property of entry at index ``nid`` in trajectory.
+
+        """
+        if prop is 'energy':
+            return self.get_energy(nid)
         else:
             return self._trajectory[nid]['key_value_pairs'][prop]
+        
 
-    def calculate_average_property(self, prop_name = "U", no_of_equilibration_steps = 0, prop_func = None, **kwargs):
-        """Get average property discarding at the start a given number of equilibration steps.
+    def calculate_average_property(self, prop_name = "U", no_of_equilibration_steps = 0, average_func = None, props_list = None, **kwargs):
+        """Get averaged property of property with name ``prop_name`` after discarding at the start a given number of 
+           equilibration steps. The average can only be obtained from a property that was already calculated before, 
+           e.g. by MonteCarlo.Trajectory.calculate_properties(...). 
+
+           Alternatively, an external function ``average_func`` can be used to calculate the average of one property 
+           or several properties. The function ``average_func`` has as arguments an array containing the properties 
+           used for the average at each sampling index, i.e. [[prob1_1,prop1_2,...,prop1_N], [prop2_1,prop2_2,...,prop2_N],...], 
+           and optional keyword arguments. With ``prop_list``, the property names of prob1, prop_2, ... are defined.            
         
         **Parameters:**
 
-        ``prop_name``: string
-            Name of averaged property.
+        ``prop_name``: string (default: ``U``)
+            Name of property that is averaged.
             If ``C_p``, the isobaric specific heat at zero pressure is calculated.
             If ``U``, the internal energy is calculated.
-            If ``F``, the Free energy is caluclated.
-            If ``S``, the entropy is calculated.
         
         ``no_of_equilibration_steps``: integer
-            Number of equilibration steps at the start of the Monte-Carlo sampling that are discarded 
-            from the average.
+            Number of equilibration steps at the start of the Monte-Carlo sampling that are discarded from the average.
 
-        ``prop_func``: function (default: ``None``)        
-            If not ``None``, the property to be averaged is obtained via this function. It gets as input 
-                the sampling step entry that is a dictionary.
-            If ``None`` and string ``prop`` is not ``C_p``, ``U``, ``F``, or ``S``, it is gives an error.
+        ``average_func``: function (default: ``None``)        
+            If not ``None``, the averaged property is obtained by this function. It gets as arguments an array and 
+            optional keyword arguments. 
+
+        ``**kwargs``: keyword arguments
+           Additional arguments for ``average_func``.
 
         """
-        
         step = 0
         prop_array = []
         prop_sum = 0
-        
+
         if prop_name == "C_p" or prop_name == "U":
             prop_n = 'energy'
         else:
             prop_n = prop_name
 
         factor = 1.0
-        if self._scale_factor is not None:
-            for s in self._scale_factor:
+        if self._scale_factors is not None:
+            for s in self._scale_factors:
                 factor *= float(s)
-
-        if prop_func is not None:
-            function_props = kwargs["properties"]
 
         ind = 0
         maxind = len(self._trajectory)
@@ -550,9 +576,9 @@ class MonteCarloTrajectory():
             if step < no_of_equilibration_steps:
                 if ind < maxind:
                     if step == self._trajectory[ind]['sampling_step_no']:
-                        if prop_func is not None:
+                        if average_func is not None:
                             pv = []
-                            for func_prop in function_props:
+                            for func_prop in props_list:
                                 pv.append(float(self.get_property(ind,func_prop)))
                             prop = pv
                         else:
@@ -563,9 +589,9 @@ class MonteCarloTrajectory():
             else:
                 if ind < maxind:
                     if step == self._trajectory[ind]['sampling_step_no']:
-                        if prop_func is not None:
+                        if average_func is not None:
                             pv = []
-                            for func_prop in function_props:
+                            for func_prop in props_list:
                                 pv.append(float(self.get_property(ind,func_prop)))
                             prop = pv
                         else:
@@ -574,20 +600,25 @@ class MonteCarloTrajectory():
                         ind += 1
                         
                 prop_array.append(prop)
-                if prop_func is None:
+                if average_func is None:
                     prop_sum += prop
-                        
+                                        
             step +=1
 
-        if prop_func is not None:
-            traj_info={}
-            traj_info.update({'number_of_sampling_steps':self._nmc})
-            traj_info.update({'temperature':self._temperature})
-            traj_info.update({'boltzmann_constant':self._boltzmann_constant})
-            traj_info.update({'scale_factor':self._scale_factor})
-            traj_info.update({'info_units':self._info_units})
-
-            return prop_func(traj_info, np.asarray(prop_array), **kwargs)
+        if average_func is not None:
+            #traj_info={}
+            #traj_info.update({'number_of_sampling_steps': self._nmc})
+            #traj_info.update({'temperature': self._temperature})
+            #traj_info.update({'boltzmann_constant': self._boltzmann_constant})
+            #if self._scale_factors is not None:
+            #    traj_info.update({'scale_factors': self._scale_factors})
+            #if self._acceptance_ratio is not None:
+            #    traj_info.update({'acceptance_ratio': self._acceptance_ratio})
+            #    
+            #for key in self._keyword_arguments.keys():
+            #    traj_info.update({key:self._keyword_arguments[key]})
+            prop_array = np.asarray(prop_array)            
+            return average_func(prop_array.T, **kwargs)
         
         else:
             len_prop = len(prop_array)
@@ -609,30 +640,20 @@ class MonteCarloTrajectory():
                 return prop_average
         
 
-    def get_id(self, prop, value):
-        """Get indices of entries in trajectory which contain the key-value pair trajectory.
-
-        **Parameters:**
-
-        ``prop``: string
-            property of interest
-
-        ``value``: float
-            value of the property
-
-        **Returns:**
-            array of int.
+    def get_nids(self, prop_name, value):
+        """Return array of integers, that are the indices of the entries in trajectory for which the property 
+           with name ``prop_name`` has the value ``value``.
 
         """
         arrayid = []
 
-        if prop in ['sampling_step_no','swapped_positions','energy','decoration']:
+        if prop_name in ['sampling_step_no','swapped_positions','energy','decoration']:
             for i,tr in enumerate(self._trajectory):
                 if tr[prop] == value:
                     arrayid.append(i)
         else:
             for i,tr in enumerate(self._trajectory):
-                if tr['key_value_pairs'][prop] == value:
+                if tr['key_value_pairs'][prop_name] == value:
                     arrayid.append(i)
 
         return np.asarray(arrayid)
@@ -642,20 +663,27 @@ class MonteCarloTrajectory():
         self.serialize(filename = filename)
     
     def serialize(self, filename = None):
-        """Write trajectory to file (default filename trajectory.json).
-        """
+        """Write trajectory to Json file with name ``filename``. If ``filename`` is not defined, it uses 
+           trajectory file name defined in the initialization of the MonteCarloTrajectory.
 
+        """
         if filename is not None:
             self._filename = filename
 
         trajdic={}
-
         traj_info={}
         traj_info.update({'number_of_sampling_steps':self._nmc})
         traj_info.update({'temperature':self._temperature})
         traj_info.update({'boltzmann_constant':self._boltzmann_constant})
-        traj_info.update({'scale_factor':self._scale_factor})
-        traj_info.update({'info_units':self._info_units})
+        if self._scale_factors is not None:
+            traj_info.update({'scale_factors':self._scale_factors})
+        print('acceptance_ratio hi', self._acceptance_ratio)
+        if self._acceptance_ratio is not None:
+            traj_info.update({'acceptance_ratio',self._acceptance_ratio})
+            
+        for key in self._keyword_arguments.keys():
+            traj_info.update({key:self._keyword_arguments[key]})
+                         
         trajdic.update({'sampling_info':traj_info})
         #add info about units of the energy, cluster expansion of the energy
 
@@ -667,7 +695,9 @@ class MonteCarloTrajectory():
             json.dump(trajdic,outfile, cls=NumpyEncoder, indent = 2 , separators = (',',':'))
 
     def read(self, filename = None , append = False):
-        """Read trajectory from file (default filename trajectory.json)
+        """Read trajectory from the Json file with name ``filename``. If ``filename`` is not defined, it uses 
+           trajectory file name defined in the initialization of the MonteCarloTrajectory.
+
         """
         if filename is not None:
             trajfile = open(filename,'r')
@@ -682,11 +712,12 @@ class MonteCarloTrajectory():
         traj_info = data.pop('sampling_info',None)
         
         if traj_info is not None:
-            self._nmc = traj_info['number_of_sampling_steps']
-            self._temperature = traj_info['temperature']
-            self._boltzmann_constant = traj_info['boltzmann_constant']
-            self._info_units = traj_info['info_units']
-            self._scale_factor = traj_info['scale_factor']
+            self._nmc = traj_info.pop('number_of_sampling_steps',None)
+            self._temperature = traj_info.pop('temperature',None)
+            self._boltzmann_constant = traj_info.pop('boltzmann_constant',None)
+            self._scale_factors = traj_info.pop('scale_factors',None)
+            self._acceptance_ratio = traj_info.pop('acceptance_ratio',None)
+            self._keyword_arguments = traj_info
             
         data_keys = sorted([int(el) for el in set(data.keys())])
 
