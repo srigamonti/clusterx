@@ -656,7 +656,7 @@ class StructuresSet():
         where ``"formation_energy_per_site"`` and  ``"total_energy"`` here are the
         string value of the parameter ``property_name`` in the call to ``read_property_values()``.
 
-        Parameters:
+        **Parameters:**
 
         ``property_name``: string
             key for the ``self._props`` dictionary of property values
@@ -672,15 +672,17 @@ class StructuresSet():
 
             where ``i`` is the structure index, ``folder_path`` is the path
             of the folder containing the relevant ab-initio files, structure
-            is the structure object for structure index ``i``, and **kwars are
+            is the structure object for structure index ``i``, and ``**kwargs`` are
             any additional keyword arguments.
 
         ``**kwargs``: keyworded argument list, arbitrary length
+            keyword arguments directly passed to read_property function.
             You may call this method as::
 
                 sset_instance.read_property_values(read_property, arg1=arg1, arg2=arg2, ... argN=argN)
 
             where ``arg1`` to  ``argN`` are the keyworded arguments to the ``read_property(folder_path,**kwargs)`` function.
+
         """
         import os
         import glob
@@ -693,6 +695,7 @@ class StructuresSet():
             try:
                 pval = read_property(i,folder,structure=self.get_structure(i),**kwargs)
             except:
+                print("Could not read propery ", property_name, "from folder ",folder )
                 pval = None
 
             self._props[property_name].append(pval)
