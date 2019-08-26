@@ -89,9 +89,11 @@ class ClustersPool():
 
     **Methods:**
     """
-    def __init__(self, parent_lattice=None, npoints=[], radii=[], super_cell=None, method=1, json_db_filepath=None):
+    def __init__(self, parent_lattice=None, npoints=[], radii=[], super_cell=None, method=1, json_db_filepath=None, db = None):
         if json_db_filepath is not None:
             db = connect(json_db_filepath)
+
+        if db is not None:            
             self.nclusters = db.metadata.get("nclusters",0)
             plat_dict = db.metadata.get("parent_lattice",{})
             self._plat = ParentLattice.plat_from_dict(plat_dict)
@@ -117,7 +119,6 @@ class ClustersPool():
                 self._cpool.append(Cluster(idxs,cl_nrs[i],self._cpool_scell,self._distances))
 
             self._multiplicities = db.metadata.get("multiplicities",[])
-
 
         else:
             self._npoints = np.array(npoints)
