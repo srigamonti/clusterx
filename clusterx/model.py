@@ -32,9 +32,8 @@ class Model():
 
             from clusterx.correlations import CorrelationsCalculator
             self.corrc = CorrelationsCalculator(db = db)
-            print("basis read",self.corrc.basis)
+
             modict = db.metadata.get('model_parameters',None)
-            print(modict)
             if modict is None:
                 import sys 
                 sys.exit('Error: Initialization from json_db did not succeed.')
@@ -81,7 +80,6 @@ class Model():
         modict = {}
         modict.update({'property_name':self.property})
         modict.update({'ECIs':self.ecis})
-        print(self.ecis)
         modeldict.update({'model_parameters':modict})
         
         atoms_db.metadata = modeldict
