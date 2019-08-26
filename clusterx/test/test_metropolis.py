@@ -392,3 +392,12 @@ def test_metropolis():
     
     isok5 = isclose(rsteps3,steps3) and isclose(renergies3, energies3)
     assert(isok5)
+
+
+    print ("\n\n========Test writing cluster expansion model========")
+
+    cemodelE.serialize(db_name = "model-clath.json")
+    cemodelEread = Model( json_db_filepath = "model-clath.json")
+    isok6 = isclose(np.multiply(ecisE, multT), cemodelEread.get_ecis()) and (cemodelE.property == 'energy') and (cemodelE.corrc.basis == 'binary-linear')
+    assert(isok6)
+

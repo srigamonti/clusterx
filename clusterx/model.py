@@ -32,7 +32,7 @@ class Model():
 
             from clusterx.correlations import CorrelationsCalculator
             self.corrc = CorrelationsCalculator(db = db)
-            print(self.corrc.basis)
+            print("basis read",self.corrc.basis)
             modict = db.metadata.get('model_parameters',None)
             print(modict)
             if modict is None:
@@ -71,8 +71,8 @@ class Model():
         modeldict = self.corrc._cpool.get_cpool_dict()
 
         corr_dict = {}
-        corr_dict.update({'basis':self.basis})
-        if self._lookup_table is not None:
+        corr_dict.update({'basis':self.corrc.basis})
+        if self.corrc._lookup_table is not None:
             corr_dict.update({'lookup':True})
         else:
             corr_dict.update({'lookup':False})
@@ -81,6 +81,7 @@ class Model():
         modict = {}
         modict.update({'property_name':self.property})
         modict.update({'ECIs':self.ecis})
+        print(self.ecis)
         modeldict.update({'model_parameters':modict})
         
         atoms_db.metadata = modeldict

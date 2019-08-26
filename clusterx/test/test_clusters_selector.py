@@ -143,5 +143,18 @@ def test_clusters_selector():
     """
 
     #isok = isclose(rclset,clset) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs) and isclose(recis, clsel.opt_ecis) and isclose(ropt_rmse, clsel.opt_rmse) and isclose(ropt_mean_cv, clsel.opt_mean_cv).all()
-    isok = isclose(rclset,clset) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs)
-    assert(isok)
+    isok1 = isclose(rclset,clset) and isclose(rnpoints, npoints) and isclose(rradius, radius) and isclose(rrmse, clsel.rmse) and isclose(rcvs, clsel.cvs)
+    assert(isok1)
+
+    opt_cpool = clsel.get_optimal_cpool()
+    opt_cpool.serialize(db_name = "cpool.json")
+
+    opt2_cpool = ClustersPool(json_db_filepath = "cpool.json")
+    dictcpool = opt2_cpool.get_cpool_dict()
+
+    npoints2 = dictcpool.get('npoints')
+    radii2 = dictcpool.get('radii')
+    nclusters2 = dictcpool.get('nclusters')
+    
+    isok2 =  isclose(len(rclset),nclusters2) and isclose(rnpoints, npoints2) and isclose(rradius, radii2)
+    assert(isok2)
