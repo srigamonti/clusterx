@@ -54,7 +54,6 @@ class ClustersPool():
         file containing a serialized ClustersPool object, as generated
         by the ``ClustersPool.serialize()`` method.
 
-
     .. todo:
         Fix multiplicities when ``super_cell`` is used
 
@@ -583,8 +582,10 @@ class ClustersPool():
         for the ``json_db_filepath`` attribute of ClustersPool class.
 
         **Parameters:**
+
         ``db_name``: string (default: "cpool.json")
             Name of the json database file.
+
         """
         if db_name is None:
             db_name = "cpool.json"

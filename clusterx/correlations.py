@@ -44,7 +44,7 @@ class CorrelationsCalculator():
             from clusterx.clusters.clusters_pool import ClustersPool
             self._cpool = ClustersPool(db = db)
             self._plat = self._cpool._plat            
-            lookup =corr_dict.get('lookup',lookup)
+            lookup = corr_dict.get('lookup',lookup)
 
         else:
             self.basis = basis
@@ -72,11 +72,13 @@ class CorrelationsCalculator():
 
         
     def serialize(self, db_name = 'corrcalc.json'):
-        """Write correlations calculator to Atoms JSON database
+        """Write correlations calculator to Atoms Json database
 
         **Parameter**:
-        ``db_name``: string
+
+        ``db_name``: string (default: 'corrcalc.josn')
             Name of the json file containing the database
+
         """
         from ase.db.jsondb import JSONDatabase
         from subprocess import call

@@ -50,11 +50,13 @@ class Model():
 
 
     def serialize(self, db_name = 'model.json'):
-        """Write cluster expansion model to Atoms JSON database
+        """Write cluster expansion model to Atoms Json database
 
-        **Parameter**:
-        ``db_name``: string
-            Name of the json file containing the database
+        **Parameter:**
+
+        ``db_name``: string (default: 'model.json')
+            Name of the Json file containing the database.
+
         """
         from ase.db.jsondb import JSONDatabase
         from subprocess import call
@@ -84,8 +86,8 @@ class Model():
         
         atoms_db.metadata = modeldict
         
-    def get_parent_lattice(self):
-        """ Return parent lattice of the cluster expansion model
+    def get_plat(self):
+        """ Return parent lattice of the cluster expansion model.
 
         """
         return self.corrc._plat
@@ -103,6 +105,7 @@ class Model():
 
         ``structure``: Structure object
             structure object to calculate property to.
+
         """
         corrs = self.corrc.get_cluster_correlations(structure)
         
