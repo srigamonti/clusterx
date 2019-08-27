@@ -60,7 +60,7 @@ class WangLandau():
         may replace the pristine species for sites of site_type#
         (see related documentation in SuperCell object).
 
-    ``sublattice_indices``: list of integers (default = None)
+    ``sublattice_indices``: list of integers (default: None)
         Defines the sublattices for the grand canonical sampling. 
         Furthermore, it can be used to limit the canonical sampling 
         to a reduced number of sublattices. E.g. in the case of nsubs = {0:[4,6], 1:[4]}. Here, sublattices 0 and 1 
@@ -77,14 +77,14 @@ class WangLandau():
        proposed structure with respect to the previous structure.
 
     ``error_reset``: integer (default: None)
-       If not **None*  and ``predict_swap`` equal to **True**, the correlations are calculated as usual (no differences) every n-th step.
+       If not **None**  and ``predict_swap`` equal to **True**, the correlations are calculated as usual (no differences) every n-th step.
 
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
 
     """
 
-    def __init__(self, energy_model, scell, ensemble = "canonical", nsubs = nsubs, sublattice_indices = [], chemical_potentials = Noen. fileprefix = "cdos", predict_swap = False, error_reset = None):
+    def __init__(self, energy_model, scell, ensemble = "canonical", nsubs = None, sublattice_indices = [], chemical_potentials = None, fileprefix = "cdos.json", predict_swap = False, error_reset = None):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
@@ -124,12 +124,32 @@ class WangLandau():
         """Perform Wang Landau simulation
 
         **Description**: 
-            Perfom Wang-Landau algorithm.
-            
+            The Wang-Landau algorithm uses the fact that a random walk in energy space a probability proportional to 
+            :math:`1/g(E)`, with g(E) being the configurational density of states, yields a flat histogram in energy 
+            (details see: F. Wang and D.P. Landau, PRL 86, 2050 (2001)). 
+
             During the sampling, a new structure at step i is accepted with the probability given 
             by :math:`\min( 1, \exp( - g(E_i)/g(E_{i-1}) ) )`
 
-            If a step is accepted, it updates the g(E_i) with a modification factor f.
+            If a step is accepted, :math:`g(E_i)` of energy bin :math:`E_i` is updated with a modification factor :math:`f`.
+            If a step is rejected, :math:`g(E_{i-1})` of the previous energy bin :math:`E_{i-1}` with a modification factor math:`f`.
+
+            The sampling procedure is a nested loop:
+        
+            - Inner loop: Generation of a flat histogram in energy for a fixed **f**
+
+            - Outer loop: Gradual reduction of **f** to increas the accuracy of the :math:`g(E)`.
+
+            The initial modification factor is usually :math:`f=\exp(1)`. Since it is large, it ensures to reach all energy levels quickly. 
+            In the standard procedure, the modification is reduces by :math:`f -> \sqrt(f)` .
+            If the histgram is flat, the resulting density of states is expected to have the accuracy of :math:`\ln(f)`. 
+            In an outer loop, **f** gradually reduced 
+            A histogram is considered as flat, 
+            if the lowest number of counts of all energy bins is above a given percentage of the mean value.
+            The percentage can be set for each modification factor. Usually, the lower the modification factor the larger percentage.
+            following flatness condition:
+        
+
             If the histogram in energy reached the flatness condiction, e.g. 
 
             g(E_i) is the configurational density of states at energy bin E_i. 
@@ -162,6 +182,7 @@ class WangLandau():
 
         .. todo:
             Besides list of floats, give option to set ``scale_factor`` as float too.
+
         """
         import math
         from clusterx.utils import poppush       
@@ -210,7 +231,7 @@ class WangLandau():
             errorsteps = 50000
             x = 1
 
-        cd = ConfigurationalDensityOfStates(filename=self.filename,scell=self._scell)
+        cd = ConfigurationalDensityOfStates(filename=self._fileprefix,scell=self._scell)
         #, modification_factor = f, flatness_condition = histogram_flatness)
 
             
@@ -219,7 +240,7 @@ class WangLandau():
             struc, e, g, inde, cdos = self.flat_histogram(struc, e, g, inde, f, cdos, histogram_flatness)
             print(self._nsubs)
 
-            cd.add_cdos(cdos, f, flatness_condition)
+            cd.add_cdos(cdos, f, histogram_flatness)
             
             cd._cdos = cdos
             cd.wang_landau_write_to_file()
@@ -380,15 +401,17 @@ class ConfigurationalDensityOfStates():
 
     def add_cdos(self, cdos, f, flatness_condition):
 
-        self._stored_cdos.append(dict{[('cdos':cdos), ('modification_factor',f),('flatness_condition':flatness_condition)]})
+        self._stored_cdos.append(dict([('cdos',cdos), ('modification_factor',f),('flatness_condition',flatness_condition)]))
 
     def calculate_thermodynamics(self, quantity):
         """Calculate the thermodynamic for all decoration in the trajectory
+
         """
         pass
     
     def wang_landau_write_to_file(self, filename = None):
         """Write trajectory to file (default filename trajectory.json).
+
         """
 
         if filename is not None:
