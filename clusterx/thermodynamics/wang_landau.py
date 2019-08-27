@@ -2,12 +2,10 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-## packages needed for MonteCarlo
-import random
-#from clusterx.structures_set import StructuresSet
+## packages needed for WangLandau
 from clusterx.structure import Structure
 
-## packages needed for MonteCarloTrajectory
+## packages needed for ConfigurationalDensityOfStates
 import json
 import math
 import numpy as np
@@ -15,57 +13,78 @@ from copy import deepcopy
 import sys
 
 class WangLandau():
-    """WangLandau class
+    """Wang Landau class
 
-    Description:
-        Generate the configurational density of states by using the Wang-Landau method
+    **Description**:
+        Objects of this class are used to obtain the configurational density of states 
+        by performing samplings using the Wang Landau method. For details about the method, 
+        see F. Wang and D.P. Landau, PRL 86, 2050 (2001). 
 
-    Parameters:
+        It is initialized with:
+        
+        - a Model object, that enable to calculate the enrgy of a structure,
+    
+        - a SuperCell object, in which the sampling is performed,
+    
+        - secification of teh thermodynamic ensemble:
+
+            If ``ensemble`` is 'canonical', the composition for the sampling is defined with ``nsubs``. In case               
+            of multilattices, the sublattice for the sampling can be refined with ``sublattice_indices``.
+
+            If ``ensemble`` is 'gandcanonical', the sublattice is defined with ``sublattices_indices``. 
+
+    **Parameters**:
 
     ``energy_model``: Model object
         Model used for acceptance and rejection. Usually, the Model enables to
-        calculate the total energy of a given configuration.
+        calculate the total energy of a structure.
 
     ``scell``: SuperCell object
-        Super cell in which the sampling is performed.
+        Simulation cell in which the sampling is performed.
 
-    ``nsubs``: dictionary
+    ``ensemble``: string (default: ``canonical``) 
+        ``canonical`` allows for swaps of atoms that conserve the concentration defined with ``nsubs``.
+
+        ``grandcanonical`` allows for replacing atoms in the sub-lattices defined with ``sublattice_indices``. 
+        (So far, ``grandcanonical`` is not yet implemented.)
+
+    ``nsubs``: dictionary (default = None)
+        Defines the number of substituted atoms in each sub-lattice of the
+        Supercell in which the sampling is performed.
+
         The format of the dictionary is as follows::
 
             {site_type1:[n11,n12,...], site_type2:[n21,n22,...], ...}
 
         It indicates how many substitutional atoms of every kind (n#1, n#2, ...)
-        may replace the pristine species for sites of site_type#.
+        may replace the pristine species for sites of site_type#
+        (see related documentation in SuperCell object).
 
-        The list of site types can be obtained with the method ``ParentLattice.get_idx_subs()``
-        (see related documentation).
+    ``sublattice_indices``: list of integers (default = None)
+        Defines the sublattices for the grand canonical sampling. 
+        Furthermore, it can be used to limit the canonical sampling 
+        to a reduced number of sublattices. E.g. in the case of nsubs = {0:[4,6], 1:[4]}. Here, sublattices 0 and 1 
+        contain substitutional sites, but only a sampling in sublattice 0 is wanted. Then, put ``sublattice_indices`` = [0].
 
-        Defines the number of substituted atoms in each sublattice
-        Supercell in which the sampling is performed.
+    ``chemical_potentials``: dictionary (default: None)
+        Define the chemical potentials used for samplings in the grand canonical ensemble.
 
-    ``filename``: string
-        Trajectory can be written to a json file with the name ``filename``.
+    ``fileprefix``: string (default: 'cdos')
+        Prefix for files in which the configurational density of states is saved.
 
-    ``last_visited_structure_name``: string
-        The structure visited at the final step of the sampling can be saved to a json file.
-        Default name: last-visited-structure-mc.json
+    ``predict_swap``: boolean (default: False)
+       If set to **True**, this parameter makes the sampling faster by calculating the correlation difference of the 
+       proposed structure with respect to the previous structure.
 
-    ``sublattice_indices``: list of int
-        Sampled sublattices. Each index in the list gives the site_type defining the sublattice.
-        If the list is empty (default), the site_type of the sublattices are read from ``nsubs``
-        Non-substituted sublattices are excluded for canonical samplings.
-
-    ``ensemble``: string
-        "canonical" allows only for swapping of atoms inside scell
-        "grandcanonical"  allows for replacing atoms within the given scell
-        (the number of substitutents in each sublattice is not kept)
+    ``error_reset``: integer (default: None)
+       If not **None*  and ``predict_swap`` equal to **True**, the correlations are calculated as usual (no differences) every n-th step.
 
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
 
     """
 
-    def __init__(self, energy_model, scell, nsubs, fileprefix = "cdos", sublattice_indices = [], ensemble = "canonical", predict_swap = False, error_reset = False):
+    def __init__(self, energy_model, scell, ensemble = "canonical", nsubs = nsubs, sublattice_indices = [], chemical_potentials = Noen. fileprefix = "cdos", predict_swap = False, error_reset = None):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
@@ -95,38 +114,44 @@ class WangLandau():
         self._ensemble = ensemble
 
         self._error_reset = error_reset
-        if self._error_reset:
-            self._error_steps = int(100000)
+
+        if self._error_reset is not None:
+            self._error_steps = int(self._error_reset)
             self._x = 1
 
-    def wang_landau_sampling(self, energy_range=[-2,2], energy_bin_width=0.2, f_range=[math.exp(1), math.exp(1.0e-8)], update_method='square_root', flatness_conditions=[[0.5,math.exp(1e-1)],[0.80,math.exp(1e-3)],[0.90,math.exp(1e-5)],[0.98,math.exp(1e-8)]], initial_decoration = None, write_to_db = False):
+        
+    def wang_landau_sampling(self, energy_range=[-2,2], energy_bin_width=0.2, f_range=[math.exp(1), math.exp(1.0e-8)], update_method='square_root', flatness_conditions=[[0.5,math.exp(1e-1)],[0.80,math.exp(1e-3)],[0.90,math.exp(1e-5)],[0.95,math.exp(1e-7)],[0.98,math.exp(1e-8)]], initial_decoration = None, serialize = False):
         """Perform Wang Landau simulation
 
-        **Description**: Perfom Wang-Landau algorithm for nmc sampling
-             steps at scale factor :math:`k_B T`.  The total energy
-             :math:`E` for visited structures in the sampling is
-             calculated from the Model ``energ_model`` of the total
-             energy. During the sampling, a new structure at step i is accepted
-             with the probability given by :math:`\min( 1, \exp( - (E_i - E_{i-1})/(k_B T)) )`
+        **Description**: 
+            Perfom Wang-Landau algorithm.
+            
+            During the sampling, a new structure at step i is accepted with the probability given 
+            by :math:`\min( 1, \exp( - g(E_i)/g(E_{i-1}) ) )`
+
+            If a step is accepted, it updates the g(E_i) with a modification factor f.
+            If the histogram in energy reached the flatness condiction, e.g. 
+
+            g(E_i) is the configurational density of states at energy bin E_i. 
+            The energy of a new structure is calcualted with ``energy_model``. 
 
         **Parameters**:
 
-        ``scale_factor``: list of floats
-            From the product of the float in the list, the scale factor for the energy :math:`k_B T` is obtained.
+        ``energy_range``: list [E_min, E_max] (default: [-2,2])
+            Defines the energy range starting from energy E_min (center of first energy bin) 
+            until energy E_max.
 
-            E.g. [:math:`k_B`, :math:`T`] with :math:`k_B` as the Boltzmann constant and :math:`T` as the temperature for the Metropolis simulation.
-            The product :math:`k_B T` defines the scale factor in the Boltzmann distribution.
+        ``energy_bin_width``: float (default: 0.2)
+            Bin width w of each energy bin. 
+            
+            I.e., energy bins [E_min, E_min+w, E_min+2*w, ..., E_min+n*w ], if E_min+(n+1)*w is larger than E_max.
 
-            Note: The unit of the product :math:`k_B T` must be the same as for the total energy :math:`E`.
-
-        ``nmc``: integer
-            Number of sampling steps
 
         ``initial_decoration``: Structure object
             Sampling starts with the structure defined by this Structure object.
             If initial_structure = None: Sampling starts with a structure randomly generated.
 
-        ``write_to_db``: boolean (default: False)
+        ``serialize``: boolean (default: False)
             Whether to add the structure to the json database (see ``filename`` parameter for MonteCarloTrajectory initialization)
 
         
@@ -159,7 +184,6 @@ class WangLandau():
         cdos = np.asarray(cdos)
 
         for k,d in enumerate(cdos):
-            
             if e < d[0]:
                 if k == 0:
                     inde = k
@@ -186,13 +210,17 @@ class WangLandau():
             errorsteps = 50000
             x = 1
 
+        cd = ConfigurationalDensityOfStates(filename=self.filename,scell=self._scell)
+        #, modification_factor = f, flatness_condition = histogram_flatness)
+
+            
         while f > f_range[1]:
 
             struc, e, g, inde, cdos = self.flat_histogram(struc, e, g, inde, f, cdos, histogram_flatness)
             print(self._nsubs)
 
-            filestring=self._fileprefix+"_modificationf-"+str(f)+"_histogram_flatness-"+str(histogram_flatness)+".json"
-            cd = ConfigurationalDensityOfStates(filename=filestring,scell=self._scell, modification_factor = f, flatness_condition = histogram_flatness)
+            cd.add_cdos(cdos, f, flatness_condition)
+            
             cd._cdos = cdos
             cd.wang_landau_write_to_file()
             
@@ -336,6 +364,8 @@ class ConfigurationalDensityOfStates():
     def __init__(self, scell = None, filename="cdos.json", **kwargs):
         self._cdos = []
 
+        self._stored_cdos = []
+
         self._scell = scell
         self._save_nsteps = kwargs.pop("save_nsteps",10)
         self._write_no = 0
@@ -348,6 +378,9 @@ class ConfigurationalDensityOfStates():
         self._f = kwargs.pop("modification_factor",math.exp(1))
         self._flatness_condition = kwargs.pop("flatness_condition",0.50)
 
+    def add_cdos(self, cdos, f, flatness_condition):
+
+        self._stored_cdos.append(dict{[('cdos':cdos), ('modification_factor',f),('flatness_condition':flatness_condition)]})
 
     def calculate_thermodynamics(self, quantity):
         """Calculate the thermodynamic for all decoration in the trajectory

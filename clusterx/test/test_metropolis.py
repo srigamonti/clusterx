@@ -120,14 +120,14 @@ def test_metropolis():
     cemodelBkk=Model(corcBonds, 'bond_kk', ecis=np.multiply(ecisBkk, multB))
     cemodelBii=Model(corcBonds, 'bond_ii', ecis=np.multiply(ecisBii, multB))
 
-    mc = MonteCarlo(cemodelE, scellE, nsubs, models = [cemodelBkk, cemodelBii])
+    mc = MonteCarlo(cemodelE, scellE, ensemble = "canonical", nsubs = nsubs, models = [cemodelBkk, cemodelBii])
 
     nmc=50
     # Boltzmann constant in Ha/K
     kb = float(3.16681009610757e-6)
     # temperature in K
     temp = 1000
-    info_units = {'temp':'K','kb':'Ha/K','energy':'Ha','scale_factors':'None'}
+    info_units = {'temp':'K','kb':'Ha/K','energy':'Ha','scale_factor':None}
     
     print("Samplings steps",nmc)
     print("Temperature",temp)
@@ -182,10 +182,10 @@ def test_metropolis():
     traj_info.update({'number_of_sampling_steps': traj._nmc})
     traj_info.update({'temperature': traj._temperature})
     traj_info.update({'boltzmann_constant': traj._boltzmann_constant})
-    if traj._scale_factors is not None:
-        traj_info.update({'scale_factors': traj._scale_factors})
+    if traj._scale_factor is not None:
+        traj_info.update({'scale_factor': traj._scale_factor})
     if traj._acceptance_ratio is not None:
-        traj_info.update({'scale_factors': traj._acceptance_ratio})
+        traj_info.update({'scale_factor': traj._acceptance_ratio})
     for key in traj._keyword_arguments:
         traj_info.update({key:traj._keyword_arguments[key]})
     print(traj_info)
@@ -324,7 +324,7 @@ def test_metropolis():
 
     # Sampling in sublattice with index 0 - ternary sampling
     print("Start sampling in sublattice with index 0:")
-    mc2 = MonteCarlo(cemodelE2, scellE2, {0:[112,16],1:[0]}, filename = "trajectory-ternary.json")
+    mc2 = MonteCarlo(cemodelE2, scellE2, ensemble = "canonical", nsubs = {0:[112,16],1:[0]})
 
     nmc=30
     # temperature in K
@@ -332,7 +332,7 @@ def test_metropolis():
     print("Samplings steps ",nmc)
     print("Temperature ",temp)
 
-    traj2 = mc2.metropolis(nmc, temp, kb)
+    traj2 = mc2.metropolis(nmc, temp, kb, serialize = True, filename = "trajectory-ternary.json")
 
     steps2 = traj2.get_sampling_step_nos()
     energies2 = traj2.get_energies()
@@ -375,8 +375,8 @@ def test_metropolis():
     print("Samplings steps",nmc)
     print("Temperature",temp)
 
-    mc3 = MonteCarlo(cemodelE2, scellE2, {0:[112,16],1:[8]}, filename = "trajectory-multi-lattice.json", last_visited_structure_name = "last-visited-structure-mc-multi-lattice.json")
-    traj3 = mc3.metropolis(nmc, temp, kb, serialize = True)
+    mc3 = MonteCarlo(cemodelE2, scellE2,ensemble = "canonical", nsubs = {0:[112,16],1:[8]})
+    traj3 = mc3.metropolis(nmc, temp, kb, serialize = True, filename = "trajectory-multi-lattice.json")
 
     steps3 = traj3.get_sampling_step_nos()
     energies3 = traj3.get_energies()

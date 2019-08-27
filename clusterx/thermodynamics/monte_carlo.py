@@ -3,7 +3,6 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 ## packages needed for MonteCarlo
-import random
 #from clusterx.structures_set import StructuresSet
 from clusterx.structure import Structure
 
@@ -17,19 +16,36 @@ class MonteCarlo():
 
     **Description**:
         Objects of this class are used to perform Monte Carlo samplings.
-        It is initialized with a Model object for calculating the energy, and 
-        the SuperCell object, in which the sampling is performed.
+
+        It is initialized with:
+
+        - a Model object, that enables to calculate the energy of a structure, 
+
+        - a SuperCell object, in which the sampling is performed, 
+    
+        - specification of the thermodynamic ensemble: 
+
+            If ``ensemble`` is 'canonical', the composition for the sampling is defined with ``nsubs``. In case 
+            of multilattices, the sublattice for the sampling can be refined with ``sublattice_indices``.
+
+            If ``ensemble`` is 'gandcanonical', the sublattice is defined with ``sublattices_indices``.
 
     **Parameters**:
 
     ``energy_model``: Model object
         Model used for acceptance and rejection. Usually, the Model enables to
-        calculate the total energy. 
+        calculate the total energy of a structure. 
 
     ``scell``: SuperCell object
         Simulation cell in which the sampling is performed.
 
-    ``nsubs``: dictionary
+    ``ensemble``: string (default: ``canonical``) 
+        ``canonical`` allows for swaps of atoms that conserve the concentration defined with ``nsubs``.
+
+        ``grandcanonical`` allows for replacing atoms in the sub-lattices defined with ``sublattice_indices``. 
+        (So far, ``grandcanonical`` is not yet implemented.)
+
+    ``nsubs``: dictionary (default = None)
         Defines the number of substituted atoms in each sub-lattice of the
         Supercell in which the sampling is performed.
 
@@ -41,13 +57,11 @@ class MonteCarlo():
         may replace the pristine species for sites of site_type#
         (see related documentation in SuperCell object).
 
-        For grand-canonical samplings, the number of substitional atoms in the sub-lattice with site_type# is set to -1. 
-        E.g., {site_type1:[-1,-1,...], ...} for a grand canonical sampling in sub-lattice with site_type1.
-
-    ``ensemble``: string (default: ``canonical``) 
-        ``canonical`` allows for swaps of atoms that conserve the concentration defined with ``nsubs``.
-
-        ``grand_canonical`` allows for replacing atoms in the sub-lattices defined with ``nsubs``. 
+    ``sublattice_indices``: list of integers (default = None)
+        Defines the sublattices for the grand canonical sampling. 
+        Furthermore, it can be used to limit the canonical sampling 
+        to a reduced number of sublattices. E.g. in the case of nsubs = {0:[4,6], 1:[4]}. Here, sublattices 0 and 1 
+        contain substitutional sites, but only a sampling in sublattice 0 is wanted. Then, put ``sublattice_indices`` = [0].
 
     ``chemical_potentials``: dictionary (default: None)
         Define the chemical potentials used for samplings in the grand canonical ensemble.
@@ -58,12 +72,6 @@ class MonteCarlo():
 
         Here, :math:`\Delta \mu_{\#i}` is the chemical potential difference of substitutional species i relative 
         to the pristine species in sub-lattice with site_type#.
-
-    ``filename``: string (default: ``trajectory.json``)
-        Name of a Json file in which the trajectory can be serialized after the sampling.
-
-    ``last_visited_structure_name``: string (default: ``last_visited_structure_mc.json``)
-        Name of Json file in which the last visited structure of the sampling can be serialized.
 
     ``models``: List of Model objects
         The properties returned from these Model objects are additionally 
@@ -87,25 +95,33 @@ class MonteCarlo():
 
     """
 
-    def __init__(self, energy_model, scell, nsubs, ensemble = "canonical", chemical_potentials = None, filename = "trajectory.json", last_visited_structure_name = "last_visited_structure_mc.json", models = [], no_of_swaps = 1, predict_swap = False, error_reset = False):
+    def __init__(self, energy_model, scell, ensemble = 'canonical', nsubs = None, sublattice_indices = None, chemical_potentials = None, models = [], no_of_swaps = 1, predict_swap = False, error_reset = None):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
         #print(self._nsubs)
-        self._filename = filename
-        self._last_visited_structure_name = last_visited_structure_name
+        #self._filename = filename
+        #self._last_visited_structure_name = last_visited_structure_name
 
-        try:
-            self._sublattice_indices = [k for k in self._nsubs.keys()]
+        if sublattice_indices is None:
+            try:
+                self._sublattice_indices = [k for k in self._nsubs.keys()]
             
-            if ensemble == "canonical":
-                for key in self._nsubs.keys():
-                    if all([ subs == 0 for subs in self._nsubs[key] ]):
-                        self._sublattice_indices.remove(key)
+                if ensemble == 'canonical':
+                    for key in self._nsubs.keys():
+                        if all([ subs == 0 for subs in self._nsubs[key] ]):
+                            self._sublattice_indices.remove(key)
 
-        except AttributeError:
-            raise AttributeError("Sublattice for the sampling is not properly assigned, look at the documentation.")
-
+            except AttributeError:
+                raise AttributeError("Sublattice for the sampling is not properly assigned, look at the documentation.")
+        else:
+            self._sublattice_indices = sublattice_indices
+                        
+            if ensemble == 'canonical':
+                for subind in self._sublattice_indices:
+                    if subind not in self._nsubs.keys():                        
+                        raise AttributeError("Sublattice for the sampling is not properly assigned, look at the documentation.")
+                    
         if not self._sublattice_indices:
             import sys
             sys.exit('Sublattice for the sampling is not correctly assigned, look at the documatation.')
@@ -126,7 +142,7 @@ class MonteCarlo():
             
         self._error_reset = error_reset
 
-    def metropolis(self, no_of_sampling_steps, temperature, boltzmann_constant, scale_factors = None, initial_decoration = None, acceptance_ratio = None, serialize = False, **kwargs):
+    def metropolis(self, no_of_sampling_steps, temperature = None, boltzmann_constant = None, scale_factor = None, initial_decoration = None, acceptance_ratio = None, serialize = False, filename = "trajectory.json", **kwargs):
         """Perform Monte-Carlo Metropolis simulation
 
         **Description**: 
@@ -142,10 +158,6 @@ class MonteCarlo():
             Note: The units of the ``energy`` :math:`E` and the factor :math:`k_B T` must be the same. 
             With ``scale_factor``, :math:`k_B T` can be adjusted to the correct units (see below).
 
-
-        In addition, the factor can be rescale in case 
-            ``energy_model`` does not return the total energy directly. 
-
         **Parameters**:
 
         ``no_of_sampling_steps``: integer
@@ -157,7 +169,7 @@ class MonteCarlo():
         ``boltzmann_constant``: float
             Boltzmann constant 
 
-        ``scale_factors``: list of floats
+        ``scale_factor``: list of floats
             List is used to adjust the factor :math:`k_B T` to the same units as the energy from ``energy_model``.
  
             All floats in list are multiply to the factor :math:`k_B T`.
@@ -175,6 +187,9 @@ class MonteCarlo():
         
         ``serialize``: boolean (default: False)
             Serialize the MonteCarloTrajectory object into a JSON file after the sampling. 
+        
+        ``filename``: string (default: ``trajectory.json``)
+            Name of a Json file in which the trajectory is serialized after the sampling if ``serialize`` is True.
 
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the MonteCarloTrajectory object initialized in this method.
@@ -186,20 +201,50 @@ class MonteCarlo():
         import math
         from clusterx.utils import poppush
 
-        scale_factor_product = float(temperature)*float(boltzmann_constant)
-        if scale_factors is not None:
-            for el in scale_factors:
-                scale_factor_product *= float(el)
+        if (temperature is None) and (boltzmann_constant is None) and (scale_factor is None):
+            import sys
+            sys.exit("Boltzmann factor is not properly defined. See documentation.")
+
+        else:
+            scale_factor_product = float(1)
+            if (temperature is not None):
+                scale_factor_product *= float(temperature)
+
+            if boltzmann_constant is not None:
+                scale_factor_product *= float(boltzmann_constant)
+        
+            if scale_factor is not None:
+                for el in scale_factor:
+                    scale_factor_product *= float(el)
 
         if initial_decoration is not None:
             struc = Structure(self._scell, initial_decoration, mc = True)
+            conc = struc.get_fractional_concentrations()
+            nsites = struc.get_nsites_per_type()
+            check_dict = {}
+            for key in conc.keys():
+                ns = nsites[key]
+                nl = []
+                for cel in conc[key]:
+                    nl.append(int(cel*ns))
+                check_dict.update({key:nl})
+            print(check_dict)
+            from clusterx.utils import compare_dict
+            bol = compare_dict(check_dict,self._nsubs)
+            if not bol:
+                import sys
+                sys.exit("Number of substitutents does not coincides with them from the inital decoration.")
+                              
         else:
-            struc = self._scell.gen_random(self._nsubs, mc = True)
+            if self._nsubs is not None:
+                struc = self._scell.gen_random(self._nsubs, mc = True)
+            else:
+                struc = self._scell.gen_random(mc = True)
 
         self._em.corrc.reset_mc(mc = True)
         e = self._em.predict(struc)
         
-        traj = MonteCarloTrajectory(self._scell, filename=self._filename, models = self._models, no_of_sampling_steps = no_of_sampling_steps, temperature = temperature, boltzmann_constant = boltzmann_constant, scale_factors = scale_factors, acceptance_ratio = acceptance_ratio, **kwargs)
+        traj = MonteCarloTrajectory(self._scell, filename = filename, models = self._models, no_of_sampling_steps = no_of_sampling_steps, temperature = temperature, boltzmann_constant = boltzmann_constant, scale_factor = scale_factor, acceptance_ratio = acceptance_ratio, **kwargs)
 
         if self._models:
             key_value_pairs = {}
@@ -284,7 +329,7 @@ class MonteCarlo():
 
         if serialize:
             traj.serialize()
-            struc.serialize(fname=self._last_visited_structure_name)
+            #struc.serialize(fname=self._last_visited_structure_name)
 
         return traj
 
@@ -339,7 +384,7 @@ class MonteCarloTrajectory():
         self._nmc = kwargs.pop('no_of_sampling_steps',None)
         self._temperature = kwargs.pop('temperature',None)
         self._boltzmann_constant = kwargs.pop('boltzmann_constant',None)
-        self._scale_factors = kwargs.pop('scale_factors',None)
+        self._scale_factor = kwargs.pop('scale_factor',None)
         self._acceptance_ratio = kwargs.pop('acceptance_ratio',None)
         self._keyword_arguments = kwargs
 
@@ -565,8 +610,8 @@ class MonteCarloTrajectory():
             prop_n = prop_name
 
         factor = 1.0
-        if self._scale_factors is not None:
-            for s in self._scale_factors:
+        if self._scale_factor is not None:
+            for s in self._scale_factor:
                 factor *= float(s)
 
         ind = 0
@@ -675,8 +720,8 @@ class MonteCarloTrajectory():
         traj_info.update({'number_of_sampling_steps':self._nmc})
         traj_info.update({'temperature':self._temperature})
         traj_info.update({'boltzmann_constant':self._boltzmann_constant})
-        if self._scale_factors is not None:
-            traj_info.update({'scale_factors':self._scale_factors})
+        if self._scale_factor is not None:
+            traj_info.update({'scale_factor':self._scale_factor})
         print('acceptance_ratio hi', self._acceptance_ratio)
         if self._acceptance_ratio is not None:
             traj_info.update({'acceptance_ratio',self._acceptance_ratio})
@@ -715,7 +760,7 @@ class MonteCarloTrajectory():
             self._nmc = traj_info.pop('number_of_sampling_steps',None)
             self._temperature = traj_info.pop('temperature',None)
             self._boltzmann_constant = traj_info.pop('boltzmann_constant',None)
-            self._scale_factors = traj_info.pop('scale_factors',None)
+            self._scale_factor = traj_info.pop('scale_factor',None)
             self._acceptance_ratio = traj_info.pop('acceptance_ratio',None)
             self._keyword_arguments = traj_info
             
