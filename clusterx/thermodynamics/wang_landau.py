@@ -10,7 +10,6 @@ import json
 import math
 import numpy as np
 from copy import deepcopy
-import sys
 
 class WangLandau():
     """Wang Landau class
@@ -84,12 +83,11 @@ class WangLandau():
 
     """
 
-    def __init__(self, energy_model, scell, ensemble = "canonical", nsubs = None, sublattice_indices = [], chemical_potentials = None, fileprefix = "cdos.json", predict_swap = False, error_reset = None):
+    def __init__(self, energy_model, scell, ensemble = "canonical", nsubs = None, sublattice_indices = [], chemical_potentials = None, predict_swap = False, error_reset = None):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
         print(self._nsubs)
-        self._fileprefix = fileprefix
 
         if not sublattice_indices:
             try:
@@ -120,69 +118,83 @@ class WangLandau():
             self._x = 1
 
         
-    def wang_landau_sampling(self, energy_range=[-2,2], energy_bin_width=0.2, f_range=[math.exp(1), math.exp(1.0e-8)], update_method='square_root', flatness_conditions=[[0.5,math.exp(1e-1)],[0.80,math.exp(1e-3)],[0.90,math.exp(1e-5)],[0.95,math.exp(1e-7)],[0.98,math.exp(1e-8)]], initial_decoration = None, serialize = False):
+    def wang_landau_sampling(self, energy_range=[-2,2], energy_bin_width=0.2, f_range=[np.round(math.exp(1),8), np.round(math.exp(1.0e-4),8)], update_method='square_root', flatness_conditions=[[0.5,np.round(math.exp(1e-1),1)],[0.80,np.round(math.exp(1e-3),3)],[0.90,np.round(math.exp(1e-5),5)],[0.95,np.round(math.exp(1e-7),7)],[0.98,np.round(math.exp(1e-8),8)]], initial_decoration = None, serialize = False, filename = "cdos.json", **kwargs):
         """Perform Wang Landau simulation
 
         **Description**: 
             The Wang-Landau algorithm uses the fact that a random walk in energy space a probability proportional to 
             :math:`1/g(E)`, with g(E) being the configurational density of states, yields a flat histogram in energy 
             (details see: F. Wang and D.P. Landau, PRL 86, 2050 (2001)). 
+            The energy of a visited structure is calcualted with ``energy_model``. 
 
             During the sampling, a new structure at step i is accepted with the probability given 
             by :math:`\min( 1, \exp( - g(E_i)/g(E_{i-1}) ) )`
 
             If a step is accepted, :math:`g(E_i)` of energy bin :math:`E_i` is updated with a modification factor :math:`f`.
-            If a step is rejected, :math:`g(E_{i-1})` of the previous energy bin :math:`E_{i-1}` with a modification factor math:`f`.
+            If a step is rejected, :math:`g(E_{i-1})` of the previous energy bin :math:`E_{i-1}` with a modification factor :math:`f`.
 
             The sampling procedure is a nested loop:
         
-            - Inner loop: Generation of a flat histogram in energy for a fixed **f**
+            - Inner loop: Generation of a flat histogram in energy for a fixed :math:`f`.
 
-            - Outer loop: Gradual reduction of **f** to increas the accuracy of the :math:`g(E)`.
+            - Outer loop: Gradual reduction of :math:`f` to increas the accuracy of the :math:`g(E)`.
 
             The initial modification factor is usually :math:`f=\exp(1)`. Since it is large, it ensures to reach all energy levels quickly. 
-            In the standard procedure, the modification is reduces by :math:`f -> \sqrt(f)` .
-            If the histgram is flat, the resulting density of states is expected to have the accuracy of :math:`\ln(f)`. 
-            In an outer loop, **f** gradually reduced 
+            In the standard procedure, the modification factor is reduces from :math:`f` to  :math:`\sqrt{f} ` for the next inner loop. 
+            :math:`f` is a measure of the accuracy for :math:`g(E)`: The lower the value of :math:`f`, the higher the accuracy. The 
+            sampling stops, if the next :math:`f` is below the threshold :math:`f_{final}`.
+
             A histogram is considered as flat, 
             if the lowest number of counts of all energy bins is above a given percentage of the mean value.
-            The percentage can be set for each modification factor. Usually, the lower the modification factor the larger percentage.
-            following flatness condition:
-        
-
-            If the histogram in energy reached the flatness condiction, e.g. 
-
-            g(E_i) is the configurational density of states at energy bin E_i. 
-            The energy of a new structure is calcualted with ``energy_model``. 
+            The percentage can be set for each :math:`f`. Usually, the lower :math:`f`, the larger the percentage can be set. 
 
         **Parameters**:
 
-        ``energy_range``: list [E_min, E_max] (default: [-2,2])
+        ``energy_range``: list of two floats [E_min, E_max] (default: [-2,2])
             Defines the energy range starting from energy E_min (center of first energy bin) 
             until energy E_max.
 
         ``energy_bin_width``: float (default: 0.2)
             Bin width w of each energy bin. 
             
-            I.e., energy bins [E_min, E_min+w, E_min+2*w, ..., E_min+n*w ], if E_min+(n+1)*w is larger than E_max.
+            I.e., energy bins [E_min, E_min+w, E_min+2*w, ..., E_min+n*w ], if E_min+(n+1)*w would be larger than E_max.
 
-
-        ``initial_decoration``: Structure object
-            Sampling starts with the structure defined by this Structure object.
-            If initial_structure = None: Sampling starts with a structure randomly generated.
-
-        ``serialize``: boolean (default: False)
-            Whether to add the structure to the json database (see ``filename`` parameter for MonteCarloTrajectory initialization)
-
+        ``f_range``: list of two floats (default: [2.71828182, 1.00010000])
+            List defines the initial modification factor :math:`f_1` and the threshold for the last modification factor :math:`f_{final}`. 
+            I.e. [:math:`f_1`, :math:`f_{ final}`]
         
-        **Returns**: Configurational density of states for each f
-            Array with length of the number of energy bins, :math:`E_0,E_1,...E_n`. 
-            For each energy bin :math:`E_i`, the natural logarithm of configurational density at :math:`E_i`, :math:`ln g(E_i)`, 
-            and the number of counts for each modification factor f is output in a file.
+        ``update_method``: string (default: 'square_root')
+            Defines the method of how the modification factor is reduced. (for now: only `square_root` implemented)
 
-        .. todo:
-            Besides list of floats, give option to set ``scale_factor`` as float too.
+        ``flatness_conditions``: list 
+            Defines the flatness condition via the percentage :math:`p` for each modification factor. I.e.
+          
+            [[:math:`p_1`, :math:`f_1`], [:math:`p_2`, :math:`f_2`], [:math:`p_3`, :math:`f_3`], ... , [:math:`p_{final}`, :math:`f_{final}`]]
 
+            That means, the percentage is :math:`p_1` for all f > :math:`f_1`. If :math:`f_1 \geq f > f_2`, the flatness condition is defined via 
+            :math:`p_2`, etc. 
+            
+            The default usually produces reasonable results and is defined as:
+            Default: [[0.5, 1.1], [0.8, 1.001], [0.9, 1.00001],[0.95, 1.0000001], [0.98, 1.00000001]]
+
+        ``initial_decoration``: list of integers
+            Atomic numbers of the initial structure, from which the sampling starts.
+            If **None**, sampling starts with a structure randomly generated.
+        
+        ``serialize``: boolean (default: False)
+            Serialize the ConfigurationalDensityOfStates object into a JSON file after the sampling. 
+
+        ``filename``: string (default: ``cdos.json``)
+            Name of a Json file in which the ConfigurationalDensityOfStates is serialized 
+            after the sampling if ``serialize`` is **True**.
+
+        ``**kwargs``: keyworded argument list, arbitrary length
+            These arguments are added to the ConfigurationalDensityOfStates object that is initialized in this method.
+        
+        **Returns**: ConfigurationalDensityOfStates object
+            Object contains the configurational density of states (CDOS) obtained from the last outer loop plus the CDOSs obtained 
+            from the previous outer loops.
+        
         """
         import math
         from clusterx.utils import poppush       
@@ -231,7 +243,7 @@ class WangLandau():
             errorsteps = 50000
             x = 1
 
-        cd = ConfigurationalDensityOfStates(filename=self._fileprefix,scell=self._scell)
+        cd = ConfigurationalDensityOfStates(filename = filename, scell = self._scell, energy_range = energy_range, energy_bin_width = energy_bin_width, f_range = f_range, update_method = update_method, flatness_conditions = flatness_conditions, **kwargs )
         #, modification_factor = f, flatness_condition = histogram_flatness)
 
             
@@ -242,8 +254,8 @@ class WangLandau():
 
             cd.add_cdos(cdos, f, histogram_flatness)
             
-            cd._cdos = cdos
-            cd.wang_landau_write_to_file()
+            if serialize:
+                cd.serialize()
             
             for m,d in enumerate(cdos):
                 if d[2] > 0:
@@ -252,8 +264,8 @@ class WangLandau():
             if update_method == 'square_root':
                 f=math.sqrt(f)
             else:
-                sys.exit('different update method for f required')
-            print(f,flatness_conditions[fi])    
+                import sys
+                sys.exit('Different update method for f requested. Please see documentation')
                 
             if f < flatness_conditions[fi][1]:
                 fi += 1
@@ -262,7 +274,6 @@ class WangLandau():
                 else:
                     histogram_flatness = float(0.99)
                     
-        print("Loop over modification factor f finished")
         return cd
             
     def flat_histogram(self, struc, e, g, inde, f, cdos, histogram_flatness):
@@ -363,7 +374,10 @@ class ConfigurationalDensityOfStates():
     """ConfigurationalDensityOfStates class
 
     **Description**:
-        Configurational density of states from a sampling performed in the supercell scell.
+        Objects of this class are use to store and access the configurational density of states (CDOS) that 
+        was generated from a Wang-Landau sampling. 
+    
+        Since the Wang-Landau algorithm is iterative, it contains the CDOS for each iteration of the outer loop
         Additional information about the sampling procedure, e.g. the modification factor, is stored.
 
     **Parameters**:
@@ -398,6 +412,9 @@ class ConfigurationalDensityOfStates():
         #Parameter for Wang Landau
         self._f = kwargs.pop("modification_factor",math.exp(1))
         self._flatness_condition = kwargs.pop("flatness_condition",0.50)
+        
+        cd = ConfigurationalDensityOfStates(filename = filename, scell = self._scell, energy_range = energy_range, energy_bin_width = energy_bin_width, f_range = f_range, update_method = update_method, flatness_conditions = flatness_conditions, **kwargs )
+
 
     def add_cdos(self, cdos, f, flatness_condition):
 

@@ -142,7 +142,7 @@ class MonteCarlo():
             
         self._error_reset = error_reset
 
-    def metropolis(self, no_of_sampling_steps, temperature = None, boltzmann_constant = None, scale_factor = None, initial_decoration = None, acceptance_ratio = None, serialize = False, filename = "trajectory.json", **kwargs):
+    def metropolis(self, no_of_sampling_steps, scale_factor = None, temperature = None, boltzmann_constant = None, initial_decoration = None, acceptance_ratio = None, serialize = False, filename = "trajectory.json", **kwargs):
         """Perform Monte-Carlo Metropolis simulation
 
         **Description**: 
@@ -175,7 +175,7 @@ class MonteCarlo():
             All floats in list are multiply to the factor :math:`k_B T`.
             If list is empty, the factor :math:`k_B T` remains changed.
              
-        ``initial_decoration``: list of integer
+        ``initial_decoration``: list of integers
             Atomic numbers of the initial structure, from which the sampling starts.
             If ``None``, sampling starts with a structure randomly generated.
 
@@ -186,16 +186,16 @@ class MonteCarlo():
             the last 100 moves.
         
         ``serialize``: boolean (default: False)
-            Serialize the MonteCarloTrajectory object into a JSON file after the sampling. 
+            Serialize the MonteCarloTrajectory object into a Json file after the sampling. 
         
         ``filename``: string (default: ``trajectory.json``)
-            Name of a Json file in which the trajectory is serialized after the sampling if ``serialize`` is True.
+            Name of a Json file in which the trajectory is serialized after the sampling if ``serialize`` is **True**.
 
         ``**kwargs``: keyworded argument list, arbitrary length
-            These arguments are added to the MonteCarloTrajectory object initialized in this method.
+            These arguments are added to the MonteCarloTrajectory object that is initialized in this method.
         
         **Returns**: MonteCarloTrajectory object
-            Trajectory containing the complete information of the structures visited during the sampling.
+            Trajectory containing the complete information of the sampling trajectory.
 
         """
         import math
@@ -339,7 +339,7 @@ class MonteCarloTrajectory():
     """MonteCarloTrajectory class
 
     **Description**:
-        Objects of this class are used to store and access the complete information of the trajectory generated from  
+        Objects of this class are used to store and access information of the trajectory generated from  
         a Monte Carlo sampling performed with the MonteCarlo class. 
     
         It is initialized with the SuperCell object. 
