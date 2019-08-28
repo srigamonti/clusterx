@@ -229,12 +229,15 @@ class MonteCarlo():
             for key in conc.keys():
                 ns = nsites[key]
                 nl = []
-                for cel in conc[key]:
-                    nl.append(int(cel*ns))
+                for i,cel in enumerate(conc[key]):
+                    if i == 0:
+                        continue
+                    else:
+                        nl.append(int(cel*ns))
                 check_dict.update({key:nl})
-            print(check_dict)
-            from clusterx.utils import compare_dict
-            bol = compare_dict(check_dict,self._nsubs)
+
+            from clusterx.utils import dict_compare
+            bol = dict_compare(check_dict,self._nsubs)
             if not bol:
                 import sys
                 sys.exit("Number of substitutents does not coincides with them from the inital decoration.")
@@ -244,7 +247,7 @@ class MonteCarlo():
                 struc = self._scell.gen_random(self._nsubs, mc = True)
             else:
                 struc = self._scell.gen_random(mc = True)
-
+                
         self._em.corrc.reset_mc(mc = True)
         e = self._em.predict(struc)
 

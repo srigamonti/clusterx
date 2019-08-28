@@ -83,11 +83,11 @@ class WangLandau():
 
     """
 
-    def __init__(self, energy_model, scell, nsubs = None, ensemble = "canonical", sublattice_indices = [], chemical_potentials = None, predict_swap = False, error_reset = None):
+    def __init__(self, energy_model, scell = None, nsubs = None, ensemble = "canonical", sublattice_indices = [], chemical_potentials = None, predict_swap = False, error_reset = None):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
-        print(self._nsubs)
+        #print(self._nsubs)
 
         if not sublattice_indices:
             try:
@@ -102,7 +102,7 @@ class WangLandau():
                 raise AttributeError("Index of sublattice is not properly assigned, look at the documentation.")
         else:
             self._sublattice_indices = sublattice_indices
-        print(self._sublattice_indices)
+        #print(self._sublattice_indices)
 
         if not self._sublattice_indices:
             import sys
@@ -118,7 +118,7 @@ class WangLandau():
             self._x = 1
 
         
-    def wang_landau_sampling(self, energy_range=[-2,2], energy_bin_width=0.2, f_range=[np.round(math.exp(1),8), np.round(math.exp(1.0e-4),8)], update_method='square_root', flatness_conditions=[[0.5,np.round(math.exp(1e-1),1)],[0.80,np.round(math.exp(1e-3),3)],[0.90,np.round(math.exp(1e-5),5)],[0.95,np.round(math.exp(1e-7),7)],[0.98,np.round(math.exp(1e-8),8)]], initial_decoration = None, serialize = False, filename = "cdos.json", serialize_during_sampling = False, **kwargs):
+    def wang_landau_sampling(self, energy_range=[-2,2], energy_bin_width=0.2, f_range=[np.round(math.exp(1),8), np.round(math.exp(1.0e-4),8)], update_method='square_root', flatness_conditions=[[0.5,np.round(math.exp(1e-1),1)],[0.80,np.round(math.exp(1e-3),3)],[0.90,np.round(math.exp(1e-5),5)],[0.95,np.round(math.exp(1e-7),7)],[0.98,np.round(math.exp(1e-8),8)]], initial_decoration = None, serialize = False, filename = "cdos.json", serialize_during_sampling = False, restart_from_file = False, **kwargs):
         """Perform Wang Landau simulation
 
         **Description**: 
@@ -205,20 +205,76 @@ class WangLandau():
 
         if initial_decoration is not None:
             struc = Structure(self._scell, initial_decoration, mc = True)
-            print(struc.get_atomic_numbers)
+            conc = struc.get_fractional_concentrations()
+            nsites = struc.get_nsites_per_type()
+            check_dict = {}
+            for key in conc.keys():
+                ns = nsites[key]
+                nl = []
+                for i,cel in enumerate(conc[key]):
+                    if i == 0:
+                        continue
+                    else:
+                        nl.append(int(cel*ns))
+                check_dict.update({key:nl})
+
+            from clusterx.utils import dict_compare
+            bol = dict_compare(check_dict,self._nsubs)
+            if not bol:
+                import sys
+                sys.exit("Number of substitutents does not coincides with them from the inital decoration.")
+                              
         else:
-            struc = self._scell.gen_random(self._nsubs, mc = True)
+            if self._nsubs is not None:
+                struc = self._scell.gen_random(self._nsubs, mc = True)
+            else:
+                struc = self._scell.gen_random(mc = True)
+
+        control_flag = True
+        if self._error_reset:
+            errorsteps = 50000
+            x = 1
+
+        if restart_from_file:
+            cd = ConfigurationalDensityOfStates(filename = filename, scell = self._scell, read = True, **kwargs )
+
+            cdos = []
+            for l,eb in enumerate(cd._energy_bins):
+                cdos.append([eb,cd._cdos[l],0])
+            cdos = np.asarray(cdos)
+
+            if update_method == 'square_root':
+                f = math.sqrt(cd._f)
+                cd._update_method = update_method
+            else:
+                import sys
+                sys.exit('Different update method for f requested. Please see documentation')
+                
+            fi = 0
+            while f < flatness_conditions[fi][1]:
+                fi += 1
+                if fi < len(flatness_conditions):
+                    histogram_flatness = float(flatness_conditions[fi][0])
+                else:
+                    histogram_flatness = float(0.99)
+
+        else:
+            cd = ConfigurationalDensityOfStates(filename = filename, scell = self._scell, energy_range = energy_range, energy_bin_width = energy_bin_width, f_range = f_range, update_method = update_method, flatness_conditions = flatness_conditions, **kwargs )
+            
+            cdos=[]
+            eb = energy_range[0]
+            while eb < energy_range[1]:
+                cdos.append([eb,1,0])
+                eb = eb+energy_bin_width
+            cdos = np.asarray(cdos)
+
+            f = f_range[0]
+            fi = 0
+            histogram_flatness = flatness_conditions[fi][0]
 
         self._em.corrc.reset_mc(mc = True)
         e = self._em.predict(struc)
-        print(e)
-
-        cdos=[]
-        eb = energy_range[0]
-        while eb < energy_range[1]:
-            cdos.append([eb,1,0])
-            eb = eb+energy_bin_width
-        cdos = np.asarray(cdos)
+        #print(e)
 
         for k,d in enumerate(cdos):
             if e < d[0]:
@@ -232,33 +288,19 @@ class WangLandau():
                     else:
                         inde = k
                 break
-        
-            
-        f = f_range[0]
-        fi = 0
-        g = 1 + math.log(f)
-        histogram_flatness = flatness_conditions[fi][0]
 
         cdos[inde][1] = cdos[inde][1]+math.log(f)
         cdos[inde][2] = cdos[inde][2]+1
-
-        control_flag = True
-        if self._error_reset:
-            errorsteps = 50000
-            x = 1
-
-        cd = ConfigurationalDensityOfStates(filename = filename, scell = self._scell, energy_range = energy_range, energy_bin_width = energy_bin_width, f_range = f_range, update_method = update_method, flatness_conditions = flatness_conditions, **kwargs )
-        #, modification_factor = f, flatness_condition = histogram_flatness)
-
-            
+        g = cdos[inde][1]
+        
         while f > f_range[1]:
 
             struc, e, g, inde, cdos, hist_cond = self.flat_histogram(struc, e, g, inde, f, cdos, histogram_flatness)
-            print(self._nsubs)
+            #print(self._nsubs)
 
-            cd.add_cdos(cdos, f, histogram_flatness, hist_cond, serialize_during_sampling = serialize_during_sampling)
+            cd.add_cdos(cdos, f, histogram_flatness, hist_cond)
             
-            if serialize:
+            if serialize_during_sampling:
                 cd.serialize()
             
             for m,d in enumerate(cdos):
@@ -266,7 +308,7 @@ class WangLandau():
                     cdos[m][2] = 0
         
             if update_method == 'square_root':
-                f=math.sqrt(f)
+                f = math.sqrt(f)
             else:
                 import sys
                 sys.exit('Different update method for f requested. Please see documentation')
@@ -277,8 +319,12 @@ class WangLandau():
                     histogram_flatness = float(flatness_conditions[fi][0])
                 else:
                     histogram_flatness = float(0.99)
+
+        if serialize:
+            cd.serialize()
                     
         return cd
+    
             
     def flat_histogram(self, struc, e, g, inde, f, cdos, histogram_flatness):
 
@@ -407,8 +453,7 @@ class ConfigurationalDensityOfStates():
         self._filename = filename
         self._scell = scell
         
-        if read:
-            
+        if read:        
             self.read()
 
         else:
@@ -438,7 +483,7 @@ class ConfigurationalDensityOfStates():
             self._keyword_arguments = kwargs
         
 
-    def add_cdos(self, cdos, f, flatness_condition, hist_cond, serialize_during_sampling = False):
+    def add_cdos(self, cdos, f, flatness_condition, hist_cond):
         """Add entry of configurational of states that is obtained after a flat histgram reached 
            (corresponding to a fixed modification factor :math:`f`).
 
@@ -456,9 +501,7 @@ class ConfigurationalDensityOfStates():
         
         self._stored_cdos.append(dict([('cdos',self._cdos),('histogram',self._histogram),('modification_factor',f),('flatness_condition',flatness_condition),('histogram_minimum', hist_cond[0]),('histogram_average',hist_cond[1])]))
 
-        if serialize_during_sampling:
-            self.serialize()
-
+        
     def calculate_thermodynamics(self, quantity):
         """Calculate the thermodynamic for all decoration in the trajectory
 
@@ -520,7 +563,6 @@ class ConfigurationalDensityOfStates():
         cdos_info = data.pop('sampling_info',None)
 
         if cdos_info is not None:
-            print(cdos_info)
             self._energy_range = cdos_info.pop('energy_range',None)
             self._energy_bin_width = cdos_info.pop('energy_bin_width',None)
             self._energy_bins = cdos_info.pop('energy_bins',None)
@@ -546,7 +588,6 @@ class ConfigurationalDensityOfStates():
                 _sdict = self._scell.as_dict()
                 from clusterx.utils import dict_compare
                 _testc = dict_compare(_sdict,superdict)
-                #print(testc)
                 if not _testc:
                     import sys
                     sys.exit('SuperCell object given in the initialization is not equivalent to the SuperCell object stored in read file.')
