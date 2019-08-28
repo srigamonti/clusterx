@@ -62,12 +62,21 @@ def dict_compare(d1, d2, tol=None):
     for k in d1_keys:
         try:
             for v1,v2 in zip(d1[k],d2[k]):
-                if tol is None:
-                    if v1 != v2:
-                        return False
+                if (isinstance(v1, list)) or (isinstance(v1,np.ndarray)):
+                    for i,v in enumerate(v1):
+                        if tol is None:
+                            if v != v2[i]:
+                                return False
+                        else:
+                            if not isclose(v ,v2[i], tol):
+                                return False
                 else:
-                    if not isclose(v1,v2,tol):
-                        return False
+                    if tol is None:
+                        if v1 != v2:
+                            return False
+                    else:
+                        if not isclose(v1,v2,tol):
+                            return False
 
         except TypeError:
             try:
