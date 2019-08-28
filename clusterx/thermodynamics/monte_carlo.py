@@ -95,12 +95,12 @@ class MonteCarlo():
 
     """
 
-    def __init__(self, energy_model, scell, ensemble = 'canonical', nsubs = None, sublattice_indices = None, chemical_potentials = None, models = [], no_of_swaps = 1, predict_swap = False, error_reset = None):
+    def __init__(self, energy_model, scell, nsubs = None, ensemble = 'canonical', sublattice_indices = None, chemical_potentials = None, models = [], no_of_swaps = 1, predict_swap = False, error_reset = None, filename = None):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
         #print(self._nsubs)
-        #self._filename = filename
+        self._filename = filename
         #self._last_visited_structure_name = last_visited_structure_name
 
         if sublattice_indices is None:
@@ -142,7 +142,7 @@ class MonteCarlo():
             
         self._error_reset = error_reset
 
-    def metropolis(self, no_of_sampling_steps, scale_factor = None, temperature = None, boltzmann_constant = None, initial_decoration = None, acceptance_ratio = None, serialize = False, filename = "trajectory.json", **kwargs):
+    def metropolis(self, scale_factor = None, no_of_sampling_steps = None, temperature = None, boltzmann_constant = None, initial_decoration = None, acceptance_ratio = None, serialize = False, filename = "trajectory.json", **kwargs):
         """Perform Monte-Carlo Metropolis simulation
 
         **Description**: 
@@ -201,6 +201,10 @@ class MonteCarlo():
         import math
         from clusterx.utils import poppush
 
+        if no_of_sampling_steps is None:
+            import sys
+            sys.exit("The parameter no_of_sampling_steps needs to be defined.")
+        
         if (temperature is None) and (boltzmann_constant is None) and (scale_factor is None):
             import sys
             sys.exit("Boltzmann factor is not properly defined. See documentation.")
@@ -243,6 +247,14 @@ class MonteCarlo():
 
         self._em.corrc.reset_mc(mc = True)
         e = self._em.predict(struc)
+
+        if self._filename is None:
+            self._filename = filename
+        else:
+            if filename == "trajectory.json":
+                filename = self._filename
+            else:
+                self._filename = filename          
         
         traj = MonteCarloTrajectory(self._scell, filename = filename, models = self._models, no_of_sampling_steps = no_of_sampling_steps, temperature = temperature, boltzmann_constant = boltzmann_constant, scale_factor = scale_factor, acceptance_ratio = acceptance_ratio, **kwargs)
 
@@ -351,7 +363,7 @@ class MonteCarloTrajectory():
     ``scell``: SuperCell object (default: None)
         Super cell in which the sampling is performed.
 
-    ``filename``: string
+    ``filename``: string (default: trajectory.json)
         The trajectoy can be stored in a json file with the path given by ``filename``.
     
     ``read``: boolean (default: False)
@@ -361,32 +373,36 @@ class MonteCarloTrajectory():
 
         ``models``: List of Model objects
          
-        Further keyword arguments can be used to store additional information belonging to the
-        MonteCarloTrajectory class, and will be later saved in the trajectory Json file under ``sampling_info``.
-
-    .. todo::
-
-        Improve appearance of json file - decoration array in one line
+        Further keyword arguments can be used to store additional information about the parameters used for 
+        the MonteCarloTrajectory.metropolis rountine. This will be saved in the Json file ``filename`` 
+        under ``sampling_info``, if the object is serialized.
 
     """
 
     def __init__(self, scell = None, filename="trajectory.json", read = False, **kwargs):
-        self._trajectory = []
-
-        self._scell = scell
-        self._save_nsteps = kwargs.pop('save_nsteps',10)
-        self._write_no = 0
-
+        
         self._filename = filename
-
-        self._models = kwargs.pop('models',[])
-
-        self._nmc = kwargs.pop('no_of_sampling_steps',None)
-        self._temperature = kwargs.pop('temperature',None)
-        self._boltzmann_constant = kwargs.pop('boltzmann_constant',None)
-        self._scale_factor = kwargs.pop('scale_factor',None)
-        self._acceptance_ratio = kwargs.pop('acceptance_ratio',None)
-        self._keyword_arguments = kwargs
+        self._scell = scell
+        
+        if read:
+            self.read()
+            
+        else:
+            self._trajectory = []
+            
+            self._scell = scell
+            self._save_nsteps = kwargs.pop('save_nsteps',10)
+            self._write_no = 0
+            
+            
+            self._models = kwargs.pop('models',[])
+            
+            self._nmc = kwargs.pop('no_of_sampling_steps',None)
+            self._temperature = kwargs.pop('temperature',None)
+            self._boltzmann_constant = kwargs.pop('boltzmann_constant',None)
+            self._scale_factor = kwargs.pop('scale_factor',None)
+            self._acceptance_ratio = kwargs.pop('acceptance_ratio',None)
+            self._keyword_arguments = kwargs
 
         
     def calculate_properties(self, models = [], prop_func = None, prop_name = None, **kwargs):
@@ -532,6 +548,11 @@ class MonteCarloTrajectory():
             energies.append(tr['energy'])
 
         return np.asarray(energies)
+
+
+    def get_model_total_energies(self):
+        
+        self.get_energies()
     
 
     def get_energy(self, nid):
@@ -539,7 +560,12 @@ class MonteCarloTrajectory():
 
         """
         return self._trajectory[nid]['energy']
-    
+
+
+    def get_model_total_energy(self, nid):
+        
+        self.get_energy(nid)
+        
 
     def get_properties(self, prop):
         """Return the property ``prop`` from all entries in the trajectory as array.
@@ -709,14 +735,14 @@ class MonteCarloTrajectory():
     
     def serialize(self, filename = None):
         """Write trajectory to Json file with name ``filename``. If ``filename`` is not defined, it uses 
-           trajectory file name defined in the initialization of the MonteCarloTrajectory.
+           trajectory file name defined in the initialization of MonteCarloTrajectory object.
 
         """
         if filename is not None:
             self._filename = filename
 
-        trajdic={}
-        traj_info={}
+        trajdic = {}
+        traj_info = {}
         traj_info.update({'number_of_sampling_steps':self._nmc})
         traj_info.update({'temperature':self._temperature})
         traj_info.update({'boltzmann_constant':self._boltzmann_constant})
@@ -746,6 +772,7 @@ class MonteCarloTrajectory():
         """
         if filename is not None:
             trajfile = open(filename,'r')
+            self._filename = filename
         else:
             trajfile = open(self._filename,'r')
 

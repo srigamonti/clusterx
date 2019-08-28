@@ -83,7 +83,7 @@ class WangLandau():
 
     """
 
-    def __init__(self, energy_model, scell, ensemble = "canonical", nsubs = None, sublattice_indices = [], chemical_potentials = None, predict_swap = False, error_reset = None):
+    def __init__(self, energy_model, scell, nsubs = None, ensemble = "canonical", sublattice_indices = [], chemical_potentials = None, predict_swap = False, error_reset = None):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
@@ -118,7 +118,7 @@ class WangLandau():
             self._x = 1
 
         
-    def wang_landau_sampling(self, energy_range=[-2,2], energy_bin_width=0.2, f_range=[np.round(math.exp(1),8), np.round(math.exp(1.0e-4),8)], update_method='square_root', flatness_conditions=[[0.5,np.round(math.exp(1e-1),1)],[0.80,np.round(math.exp(1e-3),3)],[0.90,np.round(math.exp(1e-5),5)],[0.95,np.round(math.exp(1e-7),7)],[0.98,np.round(math.exp(1e-8),8)]], initial_decoration = None, serialize = False, filename = "cdos.json", **kwargs):
+    def wang_landau_sampling(self, energy_range=[-2,2], energy_bin_width=0.2, f_range=[np.round(math.exp(1),8), np.round(math.exp(1.0e-4),8)], update_method='square_root', flatness_conditions=[[0.5,np.round(math.exp(1e-1),1)],[0.80,np.round(math.exp(1e-3),3)],[0.90,np.round(math.exp(1e-5),5)],[0.95,np.round(math.exp(1e-7),7)],[0.98,np.round(math.exp(1e-8),8)]], initial_decoration = None, serialize = False, filename = "cdos.json", serialize_during_sampling = False, **kwargs):
         """Perform Wang Landau simulation
 
         **Description**: 
@@ -182,11 +182,15 @@ class WangLandau():
             If **None**, sampling starts with a structure randomly generated.
         
         ``serialize``: boolean (default: False)
-            Serialize the ConfigurationalDensityOfStates object into a JSON file after the sampling. 
+            If **True**, the ConfigurationalDensityOfStates object is serialized into a JSON file after the sampling. 
 
         ``filename``: string (default: ``cdos.json``)
             Name of a Json file in which the ConfigurationalDensityOfStates is serialized 
             after the sampling if ``serialize`` is **True**.
+
+        ``serialize_during_sampling``: boolean (default: False)
+            If **True**, the ConfigurationalDensityOfStates object is serialized every time after a flat histogramm is reached 
+            (i.e. the inner loop is completed). This allows for studying the CDOS while the final :math:`f` is not yet reached. 
 
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the ConfigurationalDensityOfStates object that is initialized in this method.
@@ -249,10 +253,10 @@ class WangLandau():
             
         while f > f_range[1]:
 
-            struc, e, g, inde, cdos = self.flat_histogram(struc, e, g, inde, f, cdos, histogram_flatness)
+            struc, e, g, inde, cdos, hist_cond = self.flat_histogram(struc, e, g, inde, f, cdos, histogram_flatness)
             print(self._nsubs)
 
-            cd.add_cdos(cdos, f, histogram_flatness)
+            cd.add_cdos(cdos, f, histogram_flatness, hist_cond, serialize_during_sampling = serialize_during_sampling)
             
             if serialize:
                 cd.serialize()
@@ -300,13 +304,13 @@ class WangLandau():
                         hist_min = d[2]
             hist_avg = (hist_sum)/(1.0*i)
                                 
-        print("\n")
-        print(f)
+        #print("\n")
+        #print(f)
         
-        print(hist_min,hist_avg)
-        print("Flat histogram for f=%2.12f and flatness condition g_min > %1.2f * g_mean finished"%(f,histogram_flatness))
+        #print(hist_min,hist_avg)
+        #print("Flat histogram for f=%2.12f and flatness condition g_min > %1.2f * g_mean finished"%(f,histogram_flatness))
         
-        return struc, e, g, inde, cdos
+        return struc, e, g, inde, cdos, [hist_min, hist_avg]
                                                                                                                                                                                                                                                     
     def dos_step(self, struc, e, g, inde, lnf, cdos):
     
@@ -377,48 +381,83 @@ class ConfigurationalDensityOfStates():
         Objects of this class are use to store and access the configurational density of states (CDOS) that 
         was generated from a Wang-Landau sampling. 
     
-        Since the Wang-Landau algorithm is iterative, it contains the CDOS for each iteration of the outer loop
-        Additional information about the sampling procedure, e.g. the modification factor, is stored.
+        Since the Wang-Landau algorithm is iterative, it contains the CDOS for each iteration of the outer loop. 
 
     **Parameters**:
 
-    ``scell``: SuperCell object
-        Super cell in which the sampling is performed.
+    ``scell``: SuperCell object (default: None)
+        Super cell in which the Wang-Landau sampling is performed.
 
-    ``filename``: string
-        The trajectoy can be stored in a json file with the path given by ``filename``.
+    ``filename``: string (default: cdos.json)
+        The trajectoy can be stored in a json file ``filename``.
+
+    ``read``: boolean (default: False)
+        If **True**, the CDOS is read from the Json file ``filename``.
 
     ``**kwargs``: keyword arguments
 
-        ``modification_factor``: float
-
-        ``flatness_condition``: float
+        Keyword arguments can be used to store additional information about the parameters used for 
+        the WangLandau.wang_landau_sampling rountine. This will be saved in the Json file 
+        ``filename`` under ``sampling_info``, if the object is serialized. 
 
     """
 
-    def __init__(self, scell = None, filename="cdos.json", **kwargs):
-        self._cdos = []
-
-        self._stored_cdos = []
-
-        self._scell = scell
-        self._save_nsteps = kwargs.pop("save_nsteps",10)
-        self._write_no = 0
-
-        self._models = kwargs.pop("models",[])
+    def __init__(self, scell = None, filename="cdos.json", read = False, **kwargs):
 
         self._filename = filename
-
-        #Parameter for Wang Landau
-        self._f = kwargs.pop("modification_factor",math.exp(1))
-        self._flatness_condition = kwargs.pop("flatness_condition",0.50)
+        self._scell = scell
         
-        cd = ConfigurationalDensityOfStates(filename = filename, scell = self._scell, energy_range = energy_range, energy_bin_width = energy_bin_width, f_range = f_range, update_method = update_method, flatness_conditions = flatness_conditions, **kwargs )
+        if read:
+            
+            self.read()
 
+        else:
+            self._energy_bins = []
+            self._cdos = []
+            self._histogram = []
 
-    def add_cdos(self, cdos, f, flatness_condition):
+            self._stored_cdos = []
+        
+            self._scell = scell
+            #self._save_nsteps = kwargs.pop("save_nsteps",10)
+            #self._write_no = 0
 
-        self._stored_cdos.append(dict([('cdos',cdos), ('modification_factor',f),('flatness_condition',flatness_condition)]))
+            self._models = kwargs.pop("models",[])
+            
+            self._f = None
+            self._flatness_condition = None
+            self._histogram_minimum = None
+            self._histogram_average = None
+
+            # Patrameters from WangLandau.wang_landau_sampling routine
+            self._energy_range = kwargs.pop('energy_range',None)
+            self._energy_bin_width = kwargs.pop('energy_bin_width',None)
+            self._f_range = kwargs.pop('f_range',None)
+            self._update_method = kwargs.pop('update_method',None)
+            self._flatness_conditions = kwargs.pop('flatness_conditions',None)
+            self._keyword_arguments = kwargs
+        
+
+    def add_cdos(self, cdos, f, flatness_condition, hist_cond, serialize_during_sampling = False):
+        """Add entry of configurational of states that is obtained after a flat histgram reached 
+           (corresponding to a fixed modification factor :math:`f`).
+
+        """
+        if len(self._energy_bins) == 0:
+            self._energy_bins = [c[0] for c in cdos]
+            
+        self._cdos = [c[1] for c in cdos]
+        self._histogram = [c[2] for c in cdos]
+        self._f = f
+        self._flatness_condition = flatness_condition
+
+        self._histogram_minimum = hist_cond[0]
+        self._histogram_average = hist_cond[1]
+        
+        self._stored_cdos.append(dict([('cdos',self._cdos),('histogram',self._histogram),('modification_factor',f),('flatness_condition',flatness_condition),('histogram_minimum', hist_cond[0]),('histogram_average',hist_cond[1])]))
+
+        if serialize_during_sampling:
+            self.serialize()
 
     def calculate_thermodynamics(self, quantity):
         """Calculate the thermodynamic for all decoration in the trajectory
@@ -427,39 +466,124 @@ class ConfigurationalDensityOfStates():
         pass
     
     def wang_landau_write_to_file(self, filename = None):
-        """Write trajectory to file (default filename trajectory.json).
+        self.serialize(filename = filename)
+
+    def serialize(self, filename = None):
+        """Write ConfigurationalDensityOfStates object containing the configurational density of states to Json file 
+           with name ``filename``. If ``filename`` is not defined, it uses ``filename`` defined in the initialization 
+           of ConfigurationalDensityOfStates object.
 
         """
 
         if filename is not None:
             self._filename = filename
 
-        cdosdict={}
-        #for j,dec in enumerate(self._trajectory):
-        #    trajdic.update({str(j):dec})
-        cdosdict.update({'modification_factor': self._f })
-        cdosdict.update({'flatness_condiction': self._flatness_condition })
-        cdosdict.update({'super_cell_definition': self._scell.as_dict()})
-        cdosdict.update({"cdos": self._cdos})
+        cdosdict = {}
 
+        cdos_info = {}
+        cdos_info.update({'energy_range':self._energy_range})
+        cdos_info.update({'energy_bin_width':self._energy_bin_width})
+        cdos_info.update({'energy_bins':self._energy_bins})
+        cdos_info.update({'f_range':self._f_range})
+        cdos_info.update({'update_method':self._update_method})
+        cdos_info.update({'flat_conditions':self._flatness_conditions})
+        for key in self._keyword_arguments.keys():
+            cdos_info.update({key:self._keyword_arguments[key]})
+
+        cdos_info.update({'super_cell_definition':self._scell.as_dict()})
+
+        cdosdict.update({'sampling_info':cdos_info})
+        
+        for j,st_c_dos in enumerate(self._stored_cdos):
+            cdosdict.update({str(j):st_c_dos})
+
+        from clusterx.thermodynamics.monte_carlo import NumpyEncoder
+        
         with open(self._filename, 'w+', encoding='utf-8') as outfile:
             json.dump(cdosdict, outfile, cls=NumpyEncoder, indent = 2 , separators = (',',':'))
 
+            
+    def read(self, filename = None):
+        """Read ConfigurationalDensityOfStates object from Json file with name ``filename``. 
+           If ``filename`` is not defined, it uses ``filename`` defined in the initialization             
+           of ConfigurationalDensityOfStates object.
+        
+        """
+        if filename is not None:
+            cdosfile = open(filename,'r')
+            self._filename = filename
+        else:
+            cdosfile = open(self._filename,'r')
 
+        data = json.load(cdosfile)
 
-class NumpyEncoder(json.JSONEncoder):
-    """ Special json encoder for numpy types
-    https://stackoverflow.com/questions/26646362/numpy-array-is-not-json-serializable/32850511
+        cdos_info = data.pop('sampling_info',None)
 
-    """
-    def default(self, obj):
-        if isinstance(obj, list):
-            return obj.tolist()
-        elif isinstance(obj, (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64)):
-            return int(obj)
-        elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
-            return float(obj)
-        elif isinstance(obj,(np.ndarray,)):
-            return obj.tolist()
+        if cdos_info is not None:
+            print(cdos_info)
+            self._energy_range = cdos_info.pop('energy_range',None)
+            self._energy_bin_width = cdos_info.pop('energy_bin_width',None)
+            self._energy_bins = cdos_info.pop('energy_bins',None)
+            self._f_range = cdos_info.pop('f_range',None)
+            self._update_method = cdos_info.pop('update_method',None)
+            self._flatness_conditions = cdos_info.pop('flatness_conditions',None)
 
-        return json.JSONEncoder.default(self, obj)
+            superdict = cdos_info.pop('super_cell_definition',None)
+            if self._scell is None:
+                from ase.atoms import Atoms
+                from clusterx.parent_lattice import ParentLattice
+                from clusterx.super_cell import SuperCell
+                if superdict is not None:
+                    nsp = sorted([int(el) for el in set(superdict['parent_lattice']['numbers'])])
+                    species = []
+                    for n in nsp:
+                        species.append(superdict['parent_lattice']['numbers'][str(n)])
+                    
+                    _plat = ParentLattice(atoms = Atoms(positions = superdict['parent_lattice']['positions'], cell = superdict['parent_lattice']['unit_cell'], numbers=np.zeros(len(species)), pbc = np.asarray(superdict['parent_lattice']['pbc'])), sites  = np.asarray(species), pbc = np.asarray(superdict['parent_lattice']['pbc']))
+                    
+                self._scell = SuperCell(_plat, np.asarray(superdict['tmat']))
+            else:
+                _sdict = self._scell.as_dict()
+                from clusterx.utils import dict_compare
+                _testc = dict_compare(_sdict,superdict)
+                #print(testc)
+                if not _testc:
+                    import sys
+                    sys.exit('SuperCell object given in the initialization is not equivalent to the SuperCell object stored in read file.')
+            self._keyword_arguments = cdos_info
+
+        data_keys = sorted([int(el) for el in set(data.keys())])
+
+        self._stored_cdos = []
+        for key in data_keys:
+            cdict = data[str(key)]
+            self._stored_cdos.append(cdict)
+            
+        _last_cdos_entry = self._stored_cdos[-1]
+        self._cdos = _last_cdos_entry['cdos']
+        self._histogram = _last_cdos_entry['histogram']
+
+        self._f = _last_cdos_entry['modification_factor']
+
+        self._flatness_condition = _last_cdos_entry['flatness_condition']
+        self._histogram_minimum = _last_cdos_entry['histogram_minimum']
+        self._histogram_average = _last_cdos_entry['histogram_average']
+            
+
+#Should be in monte_carlo.py already
+#class NumpyEncoder(json.JSONEncoder):
+#    """ Special json encoder for numpy types
+#    https://stackoverflow.com/questions/26646362/numpy-array-is-not-json-serializable/32850511
+#
+#    """
+#    def default(self, obj):
+#        if isinstance(obj, list):
+#            return obj.tolist()
+#        elif isinstance(obj, (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64)):
+#            return int(obj)
+#        elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
+#            return float(obj)
+#        elif isinstance(obj,(np.ndarray,)):
+#            return obj.tolist()
+#
+#        return json.JSONEncoder.default(self, obj)
