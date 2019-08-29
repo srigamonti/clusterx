@@ -131,8 +131,8 @@ def test_metropolis():
     
     print("Samplings steps",nmc)
     print("Temperature",temp)
-
-    traj = mc.metropolis(nmc, temp, kb, serialize = True, info_units = info_units)
+    scale_factor = None
+    traj = mc.metropolis(scale_factor, nmc, temp, kb, serialize = True, info_units = info_units)
 
     steps = traj.get_sampling_step_nos()
     energies = traj.get_energies()
@@ -332,7 +332,7 @@ def test_metropolis():
     print("Samplings steps ",nmc)
     print("Temperature ",temp)
 
-    traj2 = mc2.metropolis(nmc, temp, kb, serialize = True, filename = "trajectory-ternary.json")
+    traj2 = mc2.metropolis(scale_factor, nmc, temp, kb, serialize = True, filename = "trajectory-ternary.json")
 
     steps2 = traj2.get_sampling_step_nos()
     energies2 = traj2.get_energies()
@@ -376,7 +376,7 @@ def test_metropolis():
     print("Temperature",temp)
 
     mc3 = MonteCarlo(cemodelE2, scellE2,ensemble = "canonical", nsubs = {0:[112,16],1:[8]})
-    traj3 = mc3.metropolis(nmc, temp, kb, serialize = True, filename = "trajectory-multi-lattice.json")
+    traj3 = mc3.metropolis(scale_factor, nmc, temp, kb, serialize = True, filename = "trajectory-multi-lattice.json")
 
     steps3 = traj3.get_sampling_step_nos()
     energies3 = traj3.get_energies()
