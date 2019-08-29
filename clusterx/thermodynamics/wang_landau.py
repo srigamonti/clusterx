@@ -601,9 +601,9 @@ class ConfigurationalDensityOfStates():
                 for gi,ge in enumerate(g):
                     if ge > 1.000000001:
                         if not ln:
-                            ge.append(np.exp(ge))
+                            gc.append(np.exp(ge))
                         else:
-                            ge.append(ge)
+                            gc.append(ge)
                         eb.append(self._energy_bins[gi])
                         
                 return eb, gc
