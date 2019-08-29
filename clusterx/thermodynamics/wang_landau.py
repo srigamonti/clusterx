@@ -110,7 +110,7 @@ class WangLandau():
         self._predict_swap = predict_swap
 
         self._ensemble = ensemble
-
+        self._chemical_potentials = chemical_potentials
         self._error_reset = error_reset
 
         if self._error_reset is not None:
@@ -242,14 +242,28 @@ class WangLandau():
             for l,eb in enumerate(cd._energy_bins):
                 cdos.append([eb,cd._cdos[l],0])
             cdos = np.asarray(cdos)
-
+        
             if update_method == 'square_root':
                 f = math.sqrt(cd._f)
                 cd._update_method = update_method
             else:
                 import sys
                 sys.exit('Different update method for f requested. Please see documentation')
-                
+
+            if f_range[1] < cd._f_range[1]:
+                cd._f_range = f_range
+            else:
+                f_range = cd._f_range
+            
+            checkf, indt = self.compare_flatness_conditions(cd._flatness_conditions, flatness_conditions)
+
+            if not checkf:
+                checkff, indtt = self.compare_flatness_conditions(flatness_conditions)
+                if checkff:
+                    flatness_conditions = cd._flatness_conditions
+                else:
+                    self._flatness_conditions = flatness_conditions
+                    print('New flatness conditions are applied.')
             fi = 0
             while f < flatness_conditions[fi][1]:
                 fi += 1
@@ -257,9 +271,10 @@ class WangLandau():
                     histogram_flatness = float(flatness_conditions[fi][0])
                 else:
                     histogram_flatness = float(0.99)
+                    break
 
         else:
-            cd = ConfigurationalDensityOfStates(filename = filename, scell = self._scell, energy_range = energy_range, energy_bin_width = energy_bin_width, f_range = f_range, update_method = update_method, flatness_conditions = flatness_conditions, **kwargs )
+            cd = ConfigurationalDensityOfStates(filename = filename, scell = self._scell, energy_range = energy_range, energy_bin_width = energy_bin_width, f_range = f_range, update_method = update_method, flatness_conditions = flatness_conditions, nsubs = self._nsubs, ensemble = self._ensemble, sublattice_indices = self._sublattice_indices, chemical_potentials = self._chemical_potentials, **kwargs )
             
             cdos=[]
             eb = energy_range[0]
@@ -319,6 +334,7 @@ class WangLandau():
                     histogram_flatness = float(flatness_conditions[fi][0])
                 else:
                     histogram_flatness = float(0.99)
+                    
 
         if serialize:
             cd.serialize()
@@ -419,6 +435,19 @@ class WangLandau():
             struc.swap(ind2, ind1, site_type = site_type, rindices = rindices)
 
         return struc, e, g, inde, cdos
+
+    def compare_flatness_conditions(self,flatness1,flatness2 = [[0.5,np.round(math.exp(1e-1),1)],[0.80,np.round(math.exp(1e-3),3)],[0.90,np.round(math.exp(1e-5),5)],[0.95,np.round(math.exp(1e-7),7)],[0.98,np.round(math.exp(1e-8),8)]]):
+        indt = -1
+        flagcond = True
+        for it,fct in enumerate(flatness1):
+            for ix, fctx in enumerate(fct):
+                if fctx != flatness2[it][ix]:
+                    flagcond = False
+                    indt = it
+                    break
+
+        return flagcond, indt
+
         
 class ConfigurationalDensityOfStates():
     """ConfigurationalDensityOfStates class
@@ -480,8 +509,14 @@ class ConfigurationalDensityOfStates():
             self._f_range = kwargs.pop('f_range',None)
             self._update_method = kwargs.pop('update_method',None)
             self._flatness_conditions = kwargs.pop('flatness_conditions',None)
+            self._nsubs = kwargs.pop('nsubs',None)
+            self._ensemble = kwargs.pop('ensemble',None)
+            self._sublattice_indices = kwargs.pop('sublattice_indices',None)
+            self._chemical_potentials = kwargs.pop('chemical_potentials',None)
             self._keyword_arguments = kwargs
-        
+            
+        self._normalized = False
+        self._cdos_normalized = None
 
     def add_cdos(self, cdos, f, flatness_condition, hist_cond):
         """Add entry of configurational of states that is obtained after a flat histgram reached 
@@ -502,11 +537,85 @@ class ConfigurationalDensityOfStates():
         self._stored_cdos.append(dict([('cdos',self._cdos),('histogram',self._histogram),('modification_factor',f),('flatness_condition',flatness_condition),('histogram_minimum', hist_cond[0]),('histogram_average',hist_cond[1])]))
 
         
-    def calculate_thermodynamics(self, quantity):
+    def calculate_thermodynamic_property(self, quantity):
         """Calculate the thermodynamic for all decoration in the trajectory
 
         """
         pass
+
+    def get_cdos(self, ln = False, normalization = True, discard_empty_bins = True):
+        """Returns the energy_bins and configurational density of states as arrays, respectively.
+           
+        **Parameters**:
+            
+        ``ln``: boolean (default: False)
+            Decides whether the logarithm of configurational density of states is returned.
+        
+        ``normalization``: boolean (default: True)
+            Decides whether the configurational density of states is normalized.
+        
+        ``discard_empty_bins``: boolean (default: True)
+            Decides whether the energy bins that are not visited during the sampling are kept.
+        
+        """
+        
+        g = self._cdos
+                
+        if normalization:
+            eb = []
+
+            _gone = g[0]
+            _gsum = np.sum([math.exp(gel-_gone) for gel in g])
+            _lngsum = math.log(_gsum)
+            _nsites = self._scell.get_nsites_per_type()
+            _nkey = [int(k) for k in self._nsubs.keys()]
+            for _nk in _nkey:
+                _ns = self._nsubs[str(_nk)]
+                _nsite = _nsites[_nk]
+                
+            import scipy.special as scipysp
+            _binomcoeff = scipysp.binom( _nsite, _ns)
+            gc = []
+            for gi, ge in enumerate(g):
+                if ge > 1.000000001:
+                    gt = ge - _gone - _lngsum + math.log(_binomcoeff)
+                    if not ln:
+                        gc.append(np.exp(gt))
+                    else:
+                        gc.append(gt)
+                    eb.append(self._energy_bins[gi])
+                else:
+                    if not discard_empty_bins:
+                        gc.append(float(0))
+                        eb.append(self._energy_bins[gi])
+                
+            self._cdos_normalized = gc
+            self._energy_bins_cdos_normalized = eb
+            
+            return eb, gc
+        
+        else:
+            if discard_empty_bins:
+                gc = []
+                eb = []
+                for gi,ge in enumerate(g):
+                    if ge > 1.000000001:
+                        if not ln:
+                            ge.append(np.exp(ge))
+                        else:
+                            ge.append(ge)
+                        eb.append(self._energy_bins[gi])
+                        
+                return eb, gc
+            
+            else:
+                if not ln:
+                    _expg = [np.exp(ge) for ge in g]
+                    return self._energy_bins_bins, expg
+                else:
+
+                    return self._energy_bins_bins, g
+    
     
     def wang_landau_write_to_file(self, filename = None):
         self.serialize(filename = filename)
@@ -529,7 +638,12 @@ class ConfigurationalDensityOfStates():
         cdos_info.update({'energy_bins':self._energy_bins})
         cdos_info.update({'f_range':self._f_range})
         cdos_info.update({'update_method':self._update_method})
-        cdos_info.update({'flat_conditions':self._flatness_conditions})
+        cdos_info.update({'flatness_conditions':self._flatness_conditions})
+        cdos_info.update({'nsubs':self._nsubs })
+        cdos_info.update({'ensemble':self._ensemble})
+        cdos_info.update({'sublattice_indices':self._sublattice_indices})
+        cdos_info.update({'chemical_potentials':self._chemical_potentials})
+        
         for key in self._keyword_arguments.keys():
             cdos_info.update({key:self._keyword_arguments[key]})
 
@@ -569,6 +683,10 @@ class ConfigurationalDensityOfStates():
             self._f_range = cdos_info.pop('f_range',None)
             self._update_method = cdos_info.pop('update_method',None)
             self._flatness_conditions = cdos_info.pop('flatness_conditions',None)
+            self._nsubs = cdos_info.pop('nsubs',None)
+            self._ensemble = cdos_info.pop('ensemble',None)
+            self._sublattice_indices = cdos_info.pop('sublattice_indices',None)
+            self._chemical_potentials = cdos_info.pop('chemical_potentials',None)
 
             superdict = cdos_info.pop('super_cell_definition',None)
             if self._scell is None:
@@ -610,7 +728,7 @@ class ConfigurationalDensityOfStates():
         self._histogram_minimum = _last_cdos_entry['histogram_minimum']
         self._histogram_average = _last_cdos_entry['histogram_average']
             
-
+        
 #Should be in monte_carlo.py already
 #class NumpyEncoder(json.JSONEncoder):
 #    """ Special json encoder for numpy types
