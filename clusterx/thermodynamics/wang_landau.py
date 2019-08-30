@@ -537,13 +537,13 @@ class ConfigurationalDensityOfStates():
         self._stored_cdos.append(dict([('cdos',self._cdos),('histogram',self._histogram),('modification_factor',f),('flatness_condition',flatness_condition),('histogram_minimum', hist_cond[0]),('histogram_average',hist_cond[1])]))
 
         
-    def get_cdos(self, ln = False, normalization = True, discard_empty_bins = True, set_normalization_ln = None):
-        """Returns the energy_bins and configurational density of states as arrays, respectively.
+    def get_cdos(self, ln = False, normalization = True, discard_empty_bins = True, set_normalization_ln = None, modification_factor = None):
+        """Returns the energy_bins and configurational density of states (CDOS) as arrays, respectively.
            
         **Parameters**:
             
         ``ln``: boolean (default: False)
-            Decides whether the logarithm of configurational density of states is returned.
+            Decides whether the logarithm of CDOS is returned.
         
         ``normalization``: boolean (default: True)
             Decides whether the configurational density of states is normalized.
@@ -554,10 +554,19 @@ class ConfigurationalDensityOfStates():
         ``set_normalization_ln``: float (default: None)
             If not **None**, the normalization is set by the user. The given value is substracted 
             from the logarithm of the CDOS for each bin.
-            
+
+        ``modification_factor``: float (default: None)
+            If **None**, the CDOS from the last iteration is returned. If not **None**, the CDOS 
+            corresponding to the given modification factor is returned.
+                    
         """
-        
-        g = self._cdos
+        if modification_factor is None:
+            g = self._cdos
+        else:
+            from utils import isclose
+            for gj,gstored in enumerate(self._stored_cdos):
+                if isclose(modification_factor,gstored['modification_factor'],tol = 1.0e-8):
+                    g = gstored['cdos']
                 
         if normalization:
             eb = []
@@ -582,7 +591,7 @@ class ConfigurationalDensityOfStates():
                         gt = ge - _gone - _lngsum + math.log(_binomcoeff)
                         
                     if not ln:
-                        gc.append(np.exp(gt))
+                        gc.append(math.exp(gt))
                     else:
                         gc.append(gt)
                     eb.append(self._energy_bins[gi])
@@ -604,7 +613,7 @@ class ConfigurationalDensityOfStates():
                 for gi,ge in enumerate(g):
                     if ge > 1.000000001:
                         if not ln:
-                            gc.append(np.exp(ge))
+                            gc.append(math.exp(ge))
                         else:
                             gc.append(ge)
                         eb.append(self._energy_bins[gi])
@@ -613,20 +622,108 @@ class ConfigurationalDensityOfStates():
             
             else:
                 if not ln:
-                    _expg = [np.exp(ge) for ge in g]
+                    _expg = [math.exp(ge) for ge in g]
                     return self._energy_bins_bins, expg
                 else:
 
                     return self._energy_bins_bins, g
+        
 
+    def calculate_thermodynamic_property(self, temperatures, boltzmann_constant, scale_factor = None, prop_name = "U", modification_factor = None):
+        """Calculate the thermodynamic property with name ``prop_name`` for the temperature list given 
+           with ``temperatures``. 
 
-    def calculate_thermodynamic_property(self, quantity):
-        """Calculate the thermodynamic for all decoration in the trajectory
+        **Parameters**:
+        
+        ``temperatures``: list of floats 
+            Temperatures for which the thermodynamic property is calculated.
+
+        ``boltzmann_constant``: float 
+            Boltzmann constant
+
+        ``scale_factor``: list of floats (default: None)
+            List is used to adjust the factor :math:`k_B T` to the same units as the energiess of the energy bins have.
+        
+        ``prop_name``: string (default: U)
+            Name of thermodynamic property.
+
+            If **Z**, the partition function is calculated.
+
+            If **U**, the internal energy is calculated. Units are the same as for the energy of the energy bins, [E].
+
+            If **C_p**, the isobaric specific heat at zero pressure is calculated. Units :math:`k_B` [scale_factor].
+
+            If **F**, the free energy is calculated. Units are the same as for the energy [E].
+
+            If **S**, the entropy is calculated. Units :math:`k_B` [scale_factor].
+
+        ``modification_factor``: float (default: None)
+            If **None**, the CDOS from the last iteration is used for calculuting teh thermodynamic property. 
+            If not **None**, the CDOS corresponding to the given modification factor is used.
 
         """
-        pass
+        e, g = self.get_cdos(ln = True, normalization = True, discard_empty_bins = True,  modification_factor = modification_factor)
 
-    
+        thermoprop = np.zeros(len(temperatures))
+        e0 = float(e[0])
+        print(e[:10])
+        print(g[:10])
+        scale = 1
+        kb = float(boltzmann_constant)
+        
+        if scale_factor is not None:
+            for scf in scale_factor:
+                scale *= float(scf)
+        scale = np.divide(1,scale)
+        print(scale)
+        for i,t in enumerate(temperatures):
+            u = 0
+            z = 0
+            if prop_name == "C_p":
+                u2 = 0
+                
+            for ic,cc in enumerate(g):
+                boltzf = math.exp(cc)*math.exp((-1)*(e[ic]-e0)*scale/(1.0*kb*t))
+                u += e[ic]*boltzf
+                if prop_name == "C_p":
+                    u2 += e[ic]*e[ic]*boltzf
+                
+                z += boltzf
+
+            u = np.divide(u, z)
+            if prop_name == "U":
+                thermoprop[i] = u
+                
+            elif prop_name == "Z":
+                thermoprop[i] = z
+                
+            elif prop_name == "C_p":
+                u2 += u2/(1.0*z)
+                thermoprop[i] = (u2-u*u)*scale/(1.0*kb*kb*t*t)
+                
+            else:
+                f = (-1)*kb*t*scale*(math.log(z))+e0
+                if i == 0:
+                    f1 = f
+                elif i == 1:
+                    f2 = f
+                    _dt = float(t-temperature[0])
+                    df = (f2-f1)/(1.0*_dt)
+                    f = f - i*df
+                else:
+                    f = f - i * df
+                    
+                if prop_name == "F":
+                    thermoprop[i] = f
+                elif prop_name == "S":
+                    thermoprop = (u-f)/(kb*t)
+                else:
+                    import sys
+                    sys.exit("Thermodynamic property name ``prop_name`` not correctly defined. See Documentation.")
+
+        return thermoprop
+                
+                
     def wang_landau_write_to_file(self, filename = None):
         self.serialize(filename = filename)
 
