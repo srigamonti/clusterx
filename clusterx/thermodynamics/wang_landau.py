@@ -537,13 +537,7 @@ class ConfigurationalDensityOfStates():
         self._stored_cdos.append(dict([('cdos',self._cdos),('histogram',self._histogram),('modification_factor',f),('flatness_condition',flatness_condition),('histogram_minimum', hist_cond[0]),('histogram_average',hist_cond[1])]))
 
         
-    def calculate_thermodynamic_property(self, quantity):
-        """Calculate the thermodynamic for all decoration in the trajectory
-
-        """
-        pass
-
-    def get_cdos(self, ln = False, normalization = True, discard_empty_bins = True):
+    def get_cdos(self, ln = False, normalization = True, discard_empty_bins = True, set_normalization_ln = None):
         """Returns the energy_bins and configurational density of states as arrays, respectively.
            
         **Parameters**:
@@ -556,7 +550,11 @@ class ConfigurationalDensityOfStates():
         
         ``discard_empty_bins``: boolean (default: True)
             Decides whether the energy bins that are not visited during the sampling are kept.
-        
+
+        ``set_normalization_ln``: float (default: None)
+            If not **None**, the normalization is set by the user. The given value is substracted 
+            from the logarithm of the CDOS for each bin.
+            
         """
         
         g = self._cdos
@@ -578,12 +576,17 @@ class ConfigurationalDensityOfStates():
             gc = []
             for gi, ge in enumerate(g):
                 if ge > 1.000000001:
-                    gt = ge - _gone - _lngsum + math.log(_binomcoeff)
+                    if set_normalization_ln is not None:
+                        gt = ge - float(set_normalization_ln)
+                    else:
+                        gt = ge - _gone - _lngsum + math.log(_binomcoeff)
+                        
                     if not ln:
                         gc.append(np.exp(gt))
                     else:
                         gc.append(gt)
                     eb.append(self._energy_bins[gi])
+                    
                 else:
                     if not discard_empty_bins:
                         gc.append(float(0))
@@ -615,7 +618,14 @@ class ConfigurationalDensityOfStates():
                 else:
 
                     return self._energy_bins_bins, g
-    
+
+
+    def calculate_thermodynamic_property(self, quantity):
+        """Calculate the thermodynamic for all decoration in the trajectory
+
+        """
+        pass
+
     
     def wang_landau_write_to_file(self, filename = None):
         self.serialize(filename = filename)
