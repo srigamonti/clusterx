@@ -615,14 +615,14 @@ class MonteCarloTrajectory():
 
         ``prop_name``: string (default: ``U``)
             Name of property that is averaged.
-            If ``C_p``, the isobaric specific heat at zero pressure is calculated.
-            If ``U``, the internal energy is calculated.
+            If **C_p**, the isobaric specific heat at zero pressure is calculated.
+            If **U**, the internal energy is calculated.
         
         ``no_of_equilibration_steps``: integer
             Number of equilibration steps at the start of the Monte-Carlo sampling that are discarded from the average.
 
         ``average_func``: function (default: ``None``)        
-            If not ``None``, the averaged property is obtained by this function. It gets as arguments an array and 
+            If not **None**, the averaged property is obtained by this function. It gets as arguments an array and 
             optional keyword arguments. 
 
         ``**kwargs``: keyword arguments

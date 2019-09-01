@@ -230,11 +230,6 @@ class WangLandau():
             else:
                 struc = self._scell.gen_random(mc = True)
 
-        control_flag = True
-        if self._error_reset:
-            errorsteps = 50000
-            x = 1
-
         if restart_from_file:
             cd = ConfigurationalDensityOfStates(filename = filename, scell = self._scell, read = True, **kwargs )
 
@@ -666,16 +661,14 @@ class ConfigurationalDensityOfStates():
 
         thermoprop = np.zeros(len(temperatures))
         e0 = float(e[0])
-        print(e[:10])
-        print(g[:10])
-        scale = 1
         kb = float(boltzmann_constant)
-        
+
+        scale = 1
         if scale_factor is not None:
             for scf in scale_factor:
                 scale *= float(scf)
         scale = np.divide(1,scale)
-        print(scale)
+
         for i,t in enumerate(temperatures):
             u = 0
             z = 0
@@ -683,14 +676,15 @@ class ConfigurationalDensityOfStates():
                 u2 = 0
                 
             for ic,cc in enumerate(g):
-                boltzf = math.exp(cc)*math.exp((-1)*(e[ic]-e0)*scale/(1.0*kb*t))
-                u += e[ic]*boltzf
+                boltzf = math.exp((-1)*(e[ic]-e0)*scale/(1.0*kb*t))
+                u += e[ic]*math.exp(cc)*boltzf
                 if prop_name == "C_p":
-                    u2 += e[ic]*e[ic]*boltzf
+                    u2 += e[ic]*e[ic]*math.exp(cc)*boltzf
                 
-                z += boltzf
-
+                z += math.exp(cc)*boltzf
+            
             u = np.divide(u, z)
+
             if prop_name == "U":
                 thermoprop[i] = u
                 
@@ -698,16 +692,16 @@ class ConfigurationalDensityOfStates():
                 thermoprop[i] = z
                 
             elif prop_name == "C_p":
-                u2 += u2/(1.0*z)
+                u2 = u2/(1.0*z)
                 thermoprop[i] = (u2-u*u)*scale/(1.0*kb*kb*t*t)
                 
             else:
-                f = (-1)*kb*t*scale*(math.log(z))+e0
+                f = (-1)*kb*t/(1.0*scale)*(math.log(z))+e0
                 if i == 0:
                     f1 = f
                 elif i == 1:
                     f2 = f
-                    _dt = float(t-temperature[0])
+                    _dt = float(t-temperatures[0])
                     df = (f2-f1)/(1.0*_dt)
                     f = f - i*df
                 else:
@@ -716,7 +710,7 @@ class ConfigurationalDensityOfStates():
                 if prop_name == "F":
                     thermoprop[i] = f
                 elif prop_name == "S":
-                    thermoprop = (u-f)/(kb*t)
+                    thermoprop[i] = (u-f)/(kb*t)
                 else:
                     import sys
                     sys.exit("Thermodynamic property name ``prop_name`` not correctly defined. See Documentation.")

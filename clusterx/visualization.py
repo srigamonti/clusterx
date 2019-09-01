@@ -459,3 +459,18 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     plt.close()
     mpl.rcParams.update(mpl.rcParamsDefault)
     return data
+
+def plot_property(xvalues, yvalues, prop_name, show_plot = True):
+    """yvalues versus xvalues 
+    """
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    import math
+    from matplotlib import rc,rcParams
+
+    rcParams["savefig.format"] = 'png'
+    plt.plot(temps,cp,'b-')
+    if show_plot:
+        plt.show()
+    else:
+        plt.savefig(prop_name+"_plot.png")
