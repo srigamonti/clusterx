@@ -485,13 +485,14 @@ def plot_property(xvalues, yvalues, prop_name = None, xaxis_label = None, yaxis_
                    
     rcParams["savefig.format"] = 'png'
     
-    plt.plot(xvalues,yvalues, marker = '.',color = 'b', markersize= 15*scale, markeredgewidth = 2.0*scale, linewidth = 2.2*scale)
+    plt.plot(xvalues,yvalues, marker = '.',color = 'b', markersize= 15*scale, markeredgewidth = 2.0*scale, linewidth = 2.2*scale, label = prop_name)
     if xaxis_label is not None:
         plt.xlabel(xaxis_label,fontsize=fs)
     if yaxis_label is not None:
         plt.ylabel(yaxis_label,fontsize=fs)
+
     if prop_name is not None:
-        plt.legend(prop_name)
+        plt.legend()
         leg=ax.legend(loc='best',borderaxespad=scale,borderpad=scale,labelspacing=1*scale,handlelength=2*scale, handletextpad=scale, fontsize = fs)
         leg.get_frame().set_linewidth(3*scale)
         

@@ -482,15 +482,20 @@ class MonteCarloTrajectory():
         """Return structure in form of a Structure object, at index ``nid`` in trajectory.
 
         """
+        
+        if nid < 0:
+            _trajlength = len(self._trajectory)
+            nid = int(_trajlength+nid)
+            
         decoration = deepcopy(self._trajectory[0]['decoration'])
-
+            
         for t,tr in enumerate(self._trajectory[0:nid+1]):
             indices_list = tr['swapped_positions']
             for j in range(len(indices_list)):
                 idx1 = indices_list[j][0]
                 idx2 = indices_list[j][1]
                 decoration[idx1], decoration[idx2] = decoration[idx2], decoration[idx1]
-
+                
         sx = Structure(self._scell, decoration = decoration)
         return sx
     
@@ -751,7 +756,6 @@ class MonteCarloTrajectory():
         traj_info.update({'boltzmann_constant':self._boltzmann_constant})
         if self._scale_factor is not None:
             traj_info.update({'scale_factor':self._scale_factor})
-        print('acceptance_ratio hi', self._acceptance_ratio)
         if self._acceptance_ratio is not None:
             traj_info.update({'acceptance_ratio',self._acceptance_ratio})
             
