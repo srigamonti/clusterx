@@ -463,3 +463,44 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     plt.close()
     mpl.rcParams.update(mpl.rcParamsDefault)
     return data
+
+def plot_property(xvalues, yvalues, prop_name = None, xaxis_label = None, yaxis_label = None, show_plot = True, scale = 1.0):
+    """yvalues versus xvalues 
+    """
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    import math
+    from matplotlib import rc,rcParams
+    
+    width=12.0*scale
+    fs=int(width*1.8)
+    ticksize = fs
+    golden_ratio = (math.sqrt(5) - 0.9) / 2.0
+    labelsize = fs
+    height = float(width * golden_ratio)
+    
+    rc('axes', linewidth=3*scale)
+    
+    fig = plt.figure(figsize=(width,height))
+    plt.xticks(fontsize=ticksize)
+    plt.yticks(fontsize=ticksize)
+    ax = plt.gca()
+    ax.tick_params(width=3*scale,size=10*scale,pad=10*scale)
+                   
+    rcParams["savefig.format"] = 'png'
+    
+    plt.plot(xvalues,yvalues, marker = '.',color = 'b', markersize= 15*scale, markeredgewidth = 2.0*scale, linewidth = 2.2*scale, label = prop_name)
+    if xaxis_label is not None:
+        plt.xlabel(xaxis_label,fontsize=fs)
+    if yaxis_label is not None:
+        plt.ylabel(yaxis_label,fontsize=fs)
+
+    if prop_name is not None:
+        plt.legend()
+        leg=ax.legend(loc='best',borderaxespad=scale,borderpad=scale,labelspacing=1*scale,handlelength=2*scale, handletextpad=scale, fontsize = fs)
+        leg.get_frame().set_linewidth(3*scale)
+        
+    if show_plot:
+        plt.show()
+    else:
+        plt.savefig(prop_name+"_plot.png")
