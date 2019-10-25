@@ -353,6 +353,10 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
         If not ``None``, the calculated property ``property_name`` will be extracted
         from the ``sset`` and depicted in the plot. If ``cemodel`` is not ``None``
         as well, then both predicted and calculated data are plot.
+    ``show_loo_predictions``: Boolean
+        If true, show predicted properties corresponding to leave-one-out CV.
+        That is, the predictions for the left-out samples in the CV procedure are
+        also plotted.
 
     **Returns:**
 

@@ -35,11 +35,13 @@ class StructuresSet():
 
     ``parent_lattice``: ParentLattice object
         All the structures on a structures set must derive from the same parent
-        lattice given here.
+        lattice given here. This argument can be ommited if parsing from file (see
+        below).
 
     ``db_fname``: String
         if set, the structures set is initialized from a structures_set file, as created
-        by ``StructuresSet.serialize()`` or ``StructuresSet.write_files()``.
+        by ``StructuresSet.serialize()`` or ``StructuresSet.write_files()``. In this case,
+        the ``parent_lattice`` argument can be ommited (if present, it is overriden).
 
     ``calculator``: ASE calculator object (default: None)
 

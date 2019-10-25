@@ -14,6 +14,9 @@ class Model():
 
     ``corrc``: CorrelationsCalculator object
         The correlations calculator corresponding to the optimal model.
+    ``property_name``: String
+        The methods of the ``Model`` class that take a ``StructureSet`` object as
+        argument, will query property values named according to ``property_name``.
     ``estimator``: Estimator object
         An estimator object to predict the property values. Alternatively,
         The effective cluster interactions (ECIs) can be set.
@@ -42,7 +45,7 @@ class Model():
             structure object to calculate property to.
         """
         corrs = self.corrc.get_cluster_correlations(structure)
-        
+
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1,-1))[0]
 
@@ -50,7 +53,7 @@ class Model():
             pv = 0
             for i in range(len(corrs)):
                 pv = pv + self.ecis[i]*corrs[i]
-            
+
             return pv
 
     def predict_swap_binary_linear(self,structure, ind1 = None, ind2 = None, correlation = False):
@@ -210,7 +213,7 @@ class Model():
         """Report fit and CV scores
 
         **Parameters**:
-        
+
         ``sset``: StructuresSet object
             the scores are computed for the give structures set
         """
@@ -388,5 +391,5 @@ class ModelBuilder():
         # Find out the ECIs using an estimator
         self.opt_estimator = EstimatorFactory.create(self.estimator_type, **self.estimator_opts)
         self.opt_estimator.fit(self.opt_comat,self.target)
-        
+
         return Model(self.opt_corrc, prop, estimator = self.opt_estimator)
