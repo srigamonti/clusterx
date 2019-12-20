@@ -572,8 +572,7 @@ class ConfigurationalDensityOfStates():
             _nsites = self._scell.get_nsites_per_type()
             _nkey = [int(k) for k in self._nsubs.keys()]
             for _nk in _nkey:
-                #_ns = self._nsubs[str(_nk)]
-                _ns = self._nsubs[_nk]
+                _ns = self._nsubs[str(_nk)]
                 _nsite = _nsites[_nk]
                 
             import scipy.special as scipysp
