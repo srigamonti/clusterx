@@ -768,7 +768,6 @@ class MonteCarloTrajectory():
         for j,dec in enumerate(self._trajectory):
             trajdic.update({str(j):dec})
 
-
         with open(self._filename, 'w+', encoding='utf-8') as outfile:
             json.dump(trajdic,outfile, cls=NumpyEncoder, indent = 2 , separators = (',',':'))
 

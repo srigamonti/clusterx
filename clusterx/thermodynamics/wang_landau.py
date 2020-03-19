@@ -558,15 +558,23 @@ class ConfigurationalDensityOfStates():
         if modification_factor is None:
             g = self._cdos
         else:
-            from utils import isclose
+            from clusterx.utils import isclose
             for gj,gstored in enumerate(self._stored_cdos):
-                if isclose(modification_factor,gstored['modification_factor'],tol = 1.0e-8):
+                if isclose(modification_factor,gstored['modification_factor'],rtol = 1.0e-8):
                     g = gstored['cdos']
+                    print(gstored['modification_factor'])
+                    
                 
         if normalization:
             eb = []
-
+            
             _gone = g[0]
+            i = 1
+            while _gone == 1.0:
+                print(_gone)
+                _gone=g[i]
+                i+=1
+            
             _gsum = np.sum([math.exp(gel-_gone) for gel in g])
             _lngsum = math.log(_gsum)
             _nsites = self._scell.get_nsites_per_type()
@@ -661,6 +669,7 @@ class ConfigurationalDensityOfStates():
 
         thermoprop = np.zeros(len(temperatures))
         e0 = float(e[0])
+        print("e0",e0)
         kb = float(boltzmann_constant)
 
         scale = 1
@@ -706,7 +715,8 @@ class ConfigurationalDensityOfStates():
                     f = f - i*df
                 else:
                     f = f - i * df
-                    
+                    #print("df",df)
+                
                 if prop_name == "F":
                     thermoprop[i] = f
                 elif prop_name == "S":
@@ -714,7 +724,6 @@ class ConfigurationalDensityOfStates():
                 else:
                     import sys
                     sys.exit("Thermodynamic property name ``prop_name`` not correctly defined. See Documentation.")
-
         return thermoprop
                 
                 
