@@ -233,7 +233,7 @@ class MonteCarlo():
                     if i == 0:
                         continue
                     else:
-                        nl.append(int(cel*ns))
+                        nl.append(int(round(cel*ns,0)))
                 check_dict.update({key:nl})
 
             from clusterx.utils import dict_compare
@@ -560,7 +560,7 @@ class MonteCarloTrajectory():
 
     def get_model_total_energies(self):
         
-        self.get_energies()
+        return self.get_energies()
     
 
     def get_energy(self, nid):
