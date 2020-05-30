@@ -389,6 +389,7 @@ class MonteCarloTrajectory():
         
         if read:
             self.read()
+            self._models = kwargs.pop('models',[])
             
         else:
             self._trajectory = []
