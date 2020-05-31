@@ -429,18 +429,39 @@ class MonteCarloTrajectory():
         """
         for mo in models:
             if mo not in self._models:
-                self._models.append(mo)         
+                self._models.append(mo)
 
-        sx = Structure(self._scell, decoration = self._trajectory[0]['decoration'])
-
+        predict_swap = kwargs.pop('predict_swap',False)
+        print('predict swap ?', predict_swap)
+        
+        sx = Structure(self._scell, decoration = self._trajectory[0]['decoration'], mc = True)            
+        for m,mo in enumerate(models):
+            mo.corrc.reset_mc(mc = True)
+        
         for t,tr in enumerate(self._trajectory):
             indices_list = tr['swapped_positions']
             for j in range(len(indices_list)):
                 sx.swap(indices_list[j][0],indices_list[j][1])
 
             sdict={}
-            for m,mo in enumerate(models):
-                sdict.update({mo.property: mo.predict(sx)})
+            if predict_swap == True:
+
+                if t == 0:
+                    movalue = np.zeros( len(models))
+                    for m,mo in enumerate(models):
+                        movalue[m] = mo.predict(sx)
+                        sdict.update({mo.property: movalue[m]})
+                else:
+                
+                    for m,mo in enumerate(models):
+                        # only works for single swaps
+                        dmo = mo.predict_swap(sx, ind1 = indices_list[0][0] , ind2 = indices_list[0][1])
+                        movalue[m] = movalue[m]+dmo
+                        sdict.update({mo.property: movalue[m]})
+
+            else:
+                for m,mo in enumerate(models):
+                    sdict.update({mo.property: mo.predict(sx)})
 
             if prop_func is not None:
                 sdict.update({prop_name: prop_func(sx,tr,**kwargs)})
