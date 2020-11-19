@@ -84,6 +84,9 @@ class Model():
     
         modict = {}
         modict.update({'property_name':self.property})
+        if self.ecis is None:
+            self.ecis = self.estimator.coef_
+            
         modict.update({'ECIs':self.ecis})
         modeldict.update({'model_parameters':modict})
         
