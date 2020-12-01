@@ -84,10 +84,14 @@ class Model():
     
         modict = {}
         modict.update({'property_name':self.property})
+
         if self.ecis is None:
-            self.ecis = self.estimator.coef_
-            
-        modict.update({'ECIs':self.ecis})
+            eff_inter = np.asarray([el for el in self.estimator.coef_])
+            if (eff_inter[0] < 1.e-15) and (self.estimator.intercept_ > 1.e-15):
+                eff_inter[0] = float(self.estimator.intercept_)
+            modict.update({'ECIs':eff_inter})
+        else:
+            modict.update({'ECIs':self.ecis})
         modeldict.update({'model_parameters':modict})
         
         atoms_db.metadata = modeldict
