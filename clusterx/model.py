@@ -275,7 +275,12 @@ class Model():
             return corrs
 
         if self.estimator is not None:
-            return self.estimator.predict(corrs.reshape(1,-1))[0]
+            if (self.estimator.intercept_ > 1.e-15):
+                inter=self.estimator.intercept_
+                pv = np.subtract(self.estimator.predict(corrs.reshape(1,-1))[0],inter)
+                return pv
+            else:
+                return self.estimator.predict(corrs.reshape(1,-1))[0]
         else:
             pv = 0
             for i in range(len(corrs)):
