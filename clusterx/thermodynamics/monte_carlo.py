@@ -601,7 +601,7 @@ class MonteCarloTrajectory():
         """Return the property ``prop`` from all entries in the trajectory as array.
 
         """
-        if prop is 'energy':
+        if prop == 'energy':
             return self.get_energies()
         else:
 
@@ -622,7 +622,7 @@ class MonteCarloTrajectory():
         """Return property of entry at index ``nid`` in trajectory.
 
         """
-        if prop is 'energy':
+        if prop == 'energy':
             return self.get_energy(nid)
         else:
             return self._trajectory[nid]['key_value_pairs'][prop]
@@ -725,7 +725,7 @@ class MonteCarloTrajectory():
             len_prop = len(prop_array)
             prop_average = np.divide(prop_sum,len_prop)
         
-            if prop_name is "C_p":
+            if prop_name == "C_p":
                 prop_array = np.divide(prop_array,factor)
                 prop_average = np.divide(prop_average,factor)
                         

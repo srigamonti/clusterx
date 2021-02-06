@@ -320,11 +320,11 @@ class ClustersSelector():
                     self.opt_sparsity=sparsity
 
             if self.sparsity_step == 0.0:
-                if self.sparsity_scale is "log":
+                if self.sparsity_scale == "log":
                     step=float(sparsity/(1.0*10))
                     sparsity = sparsity - 3*step
 
-                elif self.sparsity_scale is "piece_log":
+                elif self.sparsity_scale == "piece_log":
                     if idx==10:
                         idx=2
                         step=float(sparsity/(1.0*10))
