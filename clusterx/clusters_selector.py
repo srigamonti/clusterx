@@ -11,18 +11,28 @@ class ClustersSelector():
     """Clusters selector class
 
     Objects of this class are used to select optimal cluster expansion models, i.e.
-    the optimal set of clusters, for given training data and clusters pool.
+    the optimal set of clusters, for given training data and clusters pool. 
+
+    After initializing a ``ClustersSelector`` object, the actual selection of  clusters 
+    is achieved by calling the method ``ClustersSelector.select_clusters()``
+
+    Different optimality criteria can be used.
+
 
     **Parameters:**
 
-    ``basis``: string
-        Cluster basis used for the optimization.
+    ``basis``: *string*, default = ``"trigonometric"``
+        Cluster basis used during the optimization task. For details and allowed values, read the documentation in :py:class:`clusterx.correlations.CorrelationsCalculator`
 
-    ``method``: string
-        can be "lasso" or "linreg". In both cases a cross-validation optimization
+    ``method``: *string*, default = ``"identity"``
+        can be "lasso_cv" or "subsets_cv". In both cases a cross-validation optimization
         is performed. In the case of "lasso", the optimal sparsity parameter is
         searched through cross validation, while in "linreg", cross validation
         is directly used as model selector.
+        Deprecated options: ``"lasso"``, ``"linreg"``.
+        ``"lasso"`` is identical to ``"lasso_cv"``
+        ``"linreg"`` is identical to ``"subsets_cv"``
+
     ``**kwargs``: keyword arguments
         if ``method`` is set to "lasso", the keyword arguments are:
             ``sparsity_max``: positive real, maximal sparsity parameter
@@ -118,13 +128,11 @@ class ClustersSelector():
         ``sset``: StructuresSet object
             The structures set corresponding to the training data.
 
-        ``cpool``:ClustersPool object
+        ``cpool``: ClustersPool object
             the clusters pool from which the optimal model is selected.
 
-        ``x``: 2d matrix of cluster correlations
-            Rows correspond to structures, columns correspond to clusters.
-        ``p``: list of property values
-            Property values for the training structures set.
+        ``prop``: string
+            property label (must be in sset) of property for which the optimal set of clusters is to be selected.
         """
         from sklearn.model_selection import LeaveOneOut
 
@@ -342,9 +350,17 @@ class ClustersSelector():
     def display_info(self):
         """Display in screen information about the optimal model
         """
-        print("{0:<40s}:{1:>10.4f}".format("CV score (LOO) for optimal model",self.opt_mean_cv))
-        print("{0:<40s}:{1:>10.4f}".format("RMSE of the fit for optimal model",self.opt_rmse))
-        print("{0:<40s}:{1:>10d}".format("Size of optimal clusters pool",len(self.optimal_clusters)))
+        try:
+            print("{0:<40s}:{1:>10.4f}".format("CV score (LOO) for optimal model", self.opt_mean_cv))
+            print("{0:<40s}:{1:>10.4f}".format("RMSE of the fit for optimal model", self.opt_rmse))
+            print("{0:<40s}:{1:>10d}".format("Size of optimal clusters pool", len(self.optimal_clusters)))
+        except Exception as e:
+            if self.opt_mean_cv is None:
+                print("ClustersSelector (Error): Calculation of CV score failed.")
+            elif self.opt_rmse is None:
+                print("ClustersSelector (Error): Calculation of RMSE failed.")
+            else:
+                print(type(e), e)
         #print("CV score (LOO) for optimal model: "+str(self.opt_mean_cv))
         #print("RMSE of the fit for optimal model: "+str(self.opt_rmse))
         #print("Size of optimal clusters pool: "+str(len(self.optimal_clusters)))

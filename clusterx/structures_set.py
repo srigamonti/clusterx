@@ -379,7 +379,7 @@ class StructuresSet():
         ``prop_func``: function (default: ``None``)
             If none, the property value is calculated with the calculator object assigned
             to the structures set with  the method ``StructuresSet.set_calculator()``. If not
-            None, it must be a function that recieves a Structure object as argument, and
+            None, it must be a function that takes a Structure object as argument, and
             returns a number.
 
         ``rm_vac``: Boolean (default:``True``)
@@ -588,20 +588,20 @@ class StructuresSet():
 
 
     def get_folders(self):
-        """Get list folders containing structure files for ab-initio calculations
+        """Get list of folders containing structure files for ab-initio calculations
         as created by ``StructureSet.write_files()``
         """
         return self._folders
 
     def get_db(self):
-        """Get json database object corresponding to the list folders
+        """Get json database object corresponding to the list of folders
         containing structure files for ab-initio calculations
-        as created by ``StructureSet.writ_files()``
+        as created by ``StructureSet.write_files()``
         """
         return self._db
 
     def get_db_fname(self):
-        """Get file name of json database corresponding to the list folders
+        """Get file name of json database corresponding to the list of folders
         containing structure files for ab-initio calculations
         as created by ``StructureSet.write_files()``
         """

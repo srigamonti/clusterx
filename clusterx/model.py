@@ -373,7 +373,7 @@ class ModelBuilder():
 
     ``selector_type``: string
         Cluster selector type. For the possible values, look at the
-        documentation for ``ClustersSelector`` class.
+        documentation for attribute ``method`` in the ``ClustersSelector`` class.
 
     ``selector_opts``: dictionary
         Cluster selector options. For the possible values, look at the
