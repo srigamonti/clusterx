@@ -39,7 +39,7 @@ class StructuresSet():
         below).
 
     ``db_fname``: String
-        if set, the structures set is initialized from a structures_set file, as created
+        if provided, the structures set is initialized from a structures_set file, as created
         by ``StructuresSet.serialize()`` or ``StructuresSet.write_files()``. In this case,
         the ``parent_lattice`` argument can be ommited (if present, it is overriden).
 
