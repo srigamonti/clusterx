@@ -11,6 +11,9 @@ import json
 import numpy as np
 from copy import deepcopy
 
+# needed for NumpyEncoder class at the end of this module
+from ase.cell import Cell
+
 class MonteCarlo():
     """Monte Carlo class
 
@@ -862,6 +865,8 @@ class NumpyEncoder(json.JSONEncoder):
             return float(obj)
         elif isinstance(obj,(np.ndarray,)):
             return obj.tolist()
+        elif isinstance(obj,Cell):
+            return obj.array
 
 
         return json.JSONEncoder.default(self, obj)

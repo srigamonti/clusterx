@@ -6,6 +6,8 @@ import numpy as np
 import os
 import copy
 from ase.data import chemical_symbols as cs
+from ase.build.supercells import clean_matrix, lattice_points_in_supercell # needed by make_supercell
+from ase import Atoms # needed by make_supercell
 
 def isclose(r1,r2,rtol=1e-4):
     """Determine whether two vectors are similar
@@ -989,3 +991,74 @@ def remove_vacancies(at):
                  celldisp=at.get_celldisp(),
                  constraint=at.constraints,
                  info=at.info)
+
+
+
+def make_supercell(prim, P, wrap=True, tol=1e-5):
+    """Generate a supercell by applying a general transformation (*P*) to
+    the input configuration (*prim*).
+
+    This function is a modified version of ASEs build/supercells.py. 
+    The modification here fixes a bug in ASEs implementation, introduced in 
+    ASEs version 3.18.0: for certain transformation matrices, the determinant of 
+    the matrix is negative, and the function exits with error, since a negative 
+    number of atoms is obtained. 
+    An example script demonstrating the error is::
+    
+       from ase.build import make_supercell
+       from ase.atoms  import Atoms
+
+       prim = Atoms(symbols='Cu',
+             pbc=True,
+             cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]])
+
+       sc = make_supercell(prim, P = [[ 2,  2, -2],[ 2, -2,  2],[-2,  2,  2]], wrap = True, tol = 1e-05)
+
+    The release 3.22.0 of ASE still contains the bug.
+    It was informed to ASEs developers on the 3.7.2021
+
+    The transformation is described by a 3x3 integer matrix
+    `\mathbf{P}`. Specifically, the new cell metric
+    `\mathbf{h}` is given in terms of the metric of the input
+    configuration `\mathbf{h}_p` by `\mathbf{P h}_p =
+    \mathbf{h}`.
+
+    Parameters:
+
+    prim: ASE Atoms object
+        Input configuration.
+    P: 3x3 integer matrix
+        Transformation matrix `\mathbf{P}`.
+    wrap: bool
+        wrap in the end
+    tol: float
+        tolerance for wrapping
+    """
+
+    supercell_matrix = P
+    supercell = clean_matrix(supercell_matrix @ prim.cell)
+
+    # cartesian lattice points
+    lattice_points_frac = lattice_points_in_supercell(supercell_matrix)
+    lattice_points = np.dot(lattice_points_frac, supercell)
+
+    superatoms = Atoms(cell=supercell, pbc=prim.pbc)
+
+    for lp in lattice_points:
+        shifted_atoms = prim.copy()
+        shifted_atoms.positions += lp
+        superatoms.extend(shifted_atoms)
+
+    # check number of atoms is correct
+    n_target = np.abs(int(np.round(np.linalg.det(supercell_matrix) * len(prim))))
+    if n_target != len(superatoms):
+        msg = "Number of atoms in supercell: {}, expected: {}".format(
+            n_target, len(superatoms)
+        )
+        raise SupercellError(msg)
+
+    if wrap:
+        superatoms.wrap(eps=tol)
+
+    return superatoms
+

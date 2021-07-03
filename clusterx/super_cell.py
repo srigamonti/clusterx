@@ -7,7 +7,8 @@ import clusterx as c
 import numpy as np
 import sys
 from ase.visualize import view
-from ase.build import make_supercell
+#from ase.build import make_supercell
+from clusterx.utils import make_supercell
 from clusterx.parent_lattice import ParentLattice
 import clusterx
 from ase.db import connect
