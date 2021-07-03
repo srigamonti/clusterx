@@ -255,6 +255,12 @@ class ParentLattice(Atoms):
         """Get the total number of atoms."""
         return len(self._atoms)
 
+    def get_positions(self, wrap=False, **wrap_kw):
+        return super(ParentLattice, self).get_positions(wrap, **wrap_kw)
+    
+    def get_cell(self, complete = False):
+        return super(ParentLattice, self).get_cell(complete)
+
     def _set_substitutions(self,substitutions=[]):
         if len(substitutions) != 0:
             for atoms in substitutions:

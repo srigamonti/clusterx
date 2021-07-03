@@ -357,12 +357,28 @@ class StructuresSet():
                 structure.set_calculator(self._calculator)
 
     def get_calculator(self):
+        """Get Calculator object associated to the structures set.
+        """
         return self._calculator
 
     def get_property(self):
+        """Get property dictionary of StructuresSet object
+
+        All the properties in a StructuresSet object, are stored in a dictionary with the following structure::
+        
+           {"prop_name_1": [p10, p11, ...], "prop_name_2": [p20,p21, ..], ...}
+
+        where ``"prop_name_i"`` is the name of the property ``i``, and ``pij`` is the value of property ``i`` for structure ``j``.  
+
+        This dictionary is returned by this method.
+        """
         return self._props
 
     def get_parent_lattice(self):
+        """Get ParentLattice object of structures set.
+
+        Returns the ParentLattice object from which all the structures in the StructuresSet object derive.
+        """
         return self._parent_lattice
 
     def calculate_property(self, prop_name="energy", prop_func=None, rm_vac=True):

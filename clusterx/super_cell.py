@@ -16,12 +16,17 @@ class SuperCell(ParentLattice):
     """
     **Build a super cell**
 
-    A SuperCell object acts as a blue-print for the creation of structures
-    with arbitrary decorations.
+    A :class:`SuperCell <clusterx.super_cell.SuperCell>` object acts as a blue-print for the creation of structures
+    with arbitrary decorations. 
+
+    The :class:`SuperCell <clusterx.super_cell.SuperCell>` class inherits from the :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` class. Therefore,
+    all methods available to the :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` class are available to the
+    :class:`SuperCell <clusterx.super_cell.SuperCell>` class. Refer to the documentation of :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` for more
+    methods.
 
     **Parameters:**
 
-    ``parent_lattice``: ParentLattice object
+    ``parent_lattice``: :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` object
         In **CELL**, a super cell is a periodic repetition of a parent lattice
         object. This parameter defines such a parent lattice for the created
         super cell.
@@ -31,7 +36,7 @@ class SuperCell(ParentLattice):
         the matrix :math:`S` defined by :math:`S = PV` where the rows of
         :math:`V` are the cartesian coordinates of the lattice
         vectors of the ParentLattice object. That is, the value of
-        `parent_lattice.get_cell()`. The given matrix ``p`` must be compatible
+        :py:meth:`ParentLattice.get_cell() <clusterx.parent_lattice.ParentLattice.get_cell()>`. The given matrix ``p`` must be compatible
         with the periodic boundary conditions of the parent lattice, i.e. the
         resulting super cell must not contain translations along the
         non-periodic directions.
@@ -165,6 +170,9 @@ class SuperCell(ParentLattice):
         defining parent lattice.
         """
         return self._p
+
+    def get_positions(self, wrap=False, **wrap_kw):
+        return super(SuperCell, self).get_positions(wrap, **wrap_kw)
 
     def plot(self):
         """

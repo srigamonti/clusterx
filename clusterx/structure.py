@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2019, CELL Developers.
+# Copyright (c) 2015-2021, CELL Developers.
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
@@ -10,26 +10,38 @@ from ase.data import atomic_numbers as an
 class Structure(SuperCell):
     """Structure class
 
-    The structure class inherits from the SuperCell class. A structure is
-    a super cell with a unique decoration on the sublattices that can be
-    substituted.
+    A ``Structure`` object is a :class:`SuperCell <clusterx.super_cell.SuperCell>` object augmented by an array of species numbers (or symbols). This array
+    indicates a particular configuration of the :class:`SuperCell <clusterx.super_cell.SuperCell>` (a *"decoration"*), in a way which is compatible with
+    the sublattices defined in the :class:`SuperCell <clusterx.super_cell.SuperCell>` object. 
 
+    The ``Structure`` class inherits from the :class:`SuperCell <clusterx.super_cell.SuperCell>` class. Therefore, all methods available to the
+    :class:`SuperCell <clusterx.super_cell.SuperCell>` class (and to the :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` 
+    class, from which :class:`SuperCell <clusterx.super_cell.SuperCell>` inherits) are available
+    to the ``Structure`` class. Therefore, look at the documentation of the classes :class:`SuperCell <clusterx.super_cell.SuperCell>` 
+    and :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` for additional methods for the ``Structure`` class.
+   
     **Parameters:**
 
     ``super_cell``: SuperCell object
-        Super cell.
-    ``decoration``: list of int
-        Atomic numbers of the structure. Overriden by ``sigma`` and ``atomic_symbols``.
-    ``decoration_symbols``: list of strings
-        Atomic symbols of the structure. Overriden by ``sigma``.
-    ``sigmas``: list of int
+         :class:`SuperCell <clusterx.super_cell.SuperCell>` object.
+    ``decoration``: list of int (default: ``None``)
+        Atomic numbers of the structure. Overriden by ``sigmas`` and ``atomic_symbols`` if not ``None``.
+    ``decoration_symbols``: list of strings (default: ``None``)
+        Atomic symbols of the structure. Overriden by ``sigmas`` if not ``None``.
+    ``sigmas``: list of int (default: ``None``)
         Every site in a supercell is represented by an array of the species that
         can occupy the site. Thus, *taking as reference these arrays*, a possible
-        representation of a decoration is by indicating the ordinal number of the
-        corresponding species. For instance, if the "sites" representation of the SuperCell
-        is ``[[10,11],[25],[12,25]]``, then same decoration can be represented
-        with the ``decoration`` parameter as ``[10,25,25]`` and with the ``sigmas``
-        parameter as ``[0,0,1]``. If not ``None``, ``sigmas`` overrides ``decoration`` and ``decoration_symbols``.
+        representation of a *decoration* is by indicating the ordinal number of the
+        corresponding species. For instance, if the "sites"-based representation of the SuperCell
+        is ``{0: [10,11], 1: [25], 2: [12,25]}`` (*), then equivalent structures are obtained with
+        ``decoration = [10,25,25]`` or ``decoration_symbols = ["Ne","Mn","Mn"]`` or ``sigmas = [0,0,1]``. 
+        If not ``None``, ``sigmas`` overrides ``decoration`` and ``decoration_symbols``.
+    ``mc``: Boolean (default: ``False``)
+        whether the initialization of the ``Structure`` object is in the context of a Monte Carlo (MC) run. Setting it to ``True``
+        affects the behavior of the method :py:meth:`Structure.swap_random_binary() <clusterx.structure.Structure.swap_random_binary>`
+
+        (*) This means, crystal site ``0`` can host any of the species ``10`` (Neon) or ``11`` (Sodium), etc. 
+        See, e.g., :py:meth:`ParentLattice.get_sites() <clusterx.parent_lattice.ParentLattice.get_sites()>`.
 
     .. todo::
         * check input. If a structure is initialized with a non-allowed substitutional species, and error should be raised.
@@ -92,9 +104,14 @@ class Structure(SuperCell):
                 self._comps.update({key:lens})
 
     def set_calculator(self, calculator):
+        """Set Calculator object for structure.
+        """
         #super(Structure,self).set_calculator(calculator)
         self._calc = calculator
         self.atoms.set_calculator(calculator)
+
+    def get_positions(self, wrap=False, **wrap_kw):
+        return super(Structure, self).get_positions(wrap, **wrap_kw)
 
     def get_sigmas(self):
         """Return decoration array in terms of sigma variables.
@@ -150,7 +167,20 @@ class Structure(SuperCell):
         self._fname = fname
 
     def swap_random_binary(self, site_type, sigma_swap = [0,1]):
+        """Swap two randomly selected atoms in given sub-lattice.
 
+        **Parameters:**
+
+        ``site_type``: integer (required)
+            Indicate index of sub-lattice where atoms are to be swapped.
+
+        ``sigma_swap``: two-component integer array (default: ``[0,1]``)
+            Indicate which atomic species (represented by sigma variables) in the sublattice
+            are swapped. E.g., in the case of a binary, this can only be ``[0,1]``, while 
+            for a ternary, this can be ``[0,1]``, ``[0,2]``, ``[1,2]`` (and, obviously, the exchanged ones, e.g. ``[1,0]``).
+
+        **Return:**
+        """
         if self._mc == True:
             rind1 = np.random.choice(range(self._comps[site_type][sigma_swap[0]]))
             rind2 = np.random.choice(range(self._comps[site_type][sigma_swap[1]]))
@@ -172,6 +202,20 @@ class Structure(SuperCell):
             return ridx1,ridx2
 
     def swap_random(self, site_types):
+        """Swap two randomly selected atoms in randomly selected sub-lattice.
+
+        First, a sublattice from the site_types array is picked at random. Second,
+        a pair of species from the selected sublattice are swapped.
+
+        Structure object is modified by the swap. The swapped Structure object is also returned.
+
+        See also :py:meth:`Structure.swap_random_binary() <clusterx.structure.Structure.swap_random_binary>`
+
+        **Parameters:**
+
+        ``site_types``: integer array (required)
+            Indicate indices of sub-lattices to be considered in the random sub-lattice selection.
+        """
         if len(site_types) == 1:
             site_type = site_types[0]
         else:
@@ -206,6 +250,10 @@ class Structure(SuperCell):
 
     def update_decoration(self, decoration):
         """Update decoration of the structure object
+
+        **Parameters:**
+
+        ``decoration``:
         """
         self.decor = decoration
         self.sigmas = np.zeros(len(decoration),dtype=np.int8)
