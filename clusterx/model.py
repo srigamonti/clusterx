@@ -400,7 +400,6 @@ class ModelBuilder():
         self.estimator_type = estimator_type
         self.estimator_opts = estimator_opts
 
-        self.opt_estimator = None
         self.opt_cpool = None
         self.opt_corrc = None
         self.opt_comat = None
@@ -462,7 +461,7 @@ class ModelBuilder():
 
         # Select optimal clusters using the clusters_selector module
         self.selector = ClustersSelector(basis=self.basis, method=self.selector_type, **self.selector_opts)
-        self.opt_cpool = self.selector.select_clusters(sset, cpool, prop)
+        self.opt_cpool = self.selector.select_clusters(sset, cpool, prop, comat = self.ini_comat)
         self.opt_corrc = CorrelationsCalculator(self.basis, self.plat, self.opt_cpool)
         self.opt_comat = self.opt_corrc.get_correlation_matrix(self.sset)
 
