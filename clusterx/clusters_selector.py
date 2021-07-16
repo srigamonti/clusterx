@@ -117,7 +117,7 @@ class ClustersSelector():
     def get_rmse(self):
         return self.rmse
 
-    def select_clusters(self, sset, cpool, prop):
+    def select_clusters(self, sset, cpool, prop, comat = None):
         """Select clusters
 
         Returns a subpool containing
@@ -142,7 +142,11 @@ class ClustersSelector():
         self.prop = prop
 
         corrc = CorrelationsCalculator(self.basis, self.plat, self.cpool)
-        self.ini_comat = corrc.get_correlation_matrix(self.sset)
+        if comat is None:
+            self.ini_comat = corrc.get_correlation_matrix(self.sset)
+        else:
+            self.ini_comat = comat
+            
         self.target = self.sset.get_property_values(property_name = self.prop)
 
         x = self.ini_comat
@@ -154,6 +158,34 @@ class ClustersSelector():
             if self.fit_intercept == True:
                 if 0 not in opt:
                     self.fit_intercept = False
+
+        elif self.method == "lasso-on-residual":
+            nb = int(self.set0[0])
+            r = float(self.set0[1])
+
+            clset0 = []
+            for icl, cl in enumerate(self.cpool):
+                if cl.npoints <= nb and cl.radius <= r + 1e-4:
+                    clset0.append(icl)
+                    
+            from sklearn import linear_model
+            from sklearn.metrics import mean_squared_error
+
+            lre = linear_model.LinearRegression(fit_intercept=False, normalize=False, n_jobs = -1)
+            rows = np.arange(len(p))
+            cols = np.arange(len(cpool))
+            comat0 = x[np.ix_(rows,clset0)]
+            lre.fit(comat0,p)
+            pred0 = lre.predict(comat0)
+            rmse0 = np.sqrt(mean_squared_error(pred0, p))
+
+            pres = p - pred0
+            #clset1 = self._select_clusters_lasso_cv(x, pres)
+            clset1 = self._select_clusters_lasso_on_residual_cv(x, pres, clset0)
+            #comat1 = x[np.ix_(rows,np.delete(cols,clset0))]
+            #clset1 = self._select_clusters_lasso_cv(comat1, pres)
+
+            opt = np.union1d(clset0, clset1)
 
         elif self.method == "linreg":
             if self.clusters_sets == "size":
@@ -199,7 +231,7 @@ class ClustersSelector():
         from sklearn.metrics import make_scorer, r2_score, mean_squared_error
 
         #if self.method == "linreg":
-        self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept, normalize=False)
+        self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept, normalize=False, n_jobs = -1)
 
         rows = np.arange(len(p))
         ecis = []
@@ -214,7 +246,8 @@ class ClustersSelector():
         for iset, clset in enumerate(clsets):
             _comat = x[np.ix_(rows,clset)]
 
-            _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
+            #_cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error', n_jobs = -1)
+            _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=10, scoring = 'neg_mean_squared_error', n_jobs = -1)
             mean_cv=np.sqrt(-np.mean(_cvs))
             self.cvs.append(mean_cv)
             self.fitter_cv.fit(_comat,p)
@@ -277,25 +310,24 @@ class ClustersSelector():
         sparsity = self.sparsity_max
 
         if self.sparsity_step == 0.0:
-            step=float(sparsity/(1.0*10))
+            step = float(sparsity/(1.0*10))
             idpot = 1
         else:
-            step=sparsity_step
+            step = sparsity_step
 
-        opt_cv=-1
-        opt_clset=[]
+        opt_cv = -1
+        opt_clset = []
         rows = np.arange(len(p))
 
-        idx=1
+        idx = 1
         while sparsity.__ge__(self.sparsity_min):
 
             if self.fit_intercept:
-
                 _comat = np.delete(x, (0), axis=1)
             else:
-
                 _comat = x
-            fitter_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, normalize=False, max_iter = self.max_iter, tol = self.tol)
+                
+            fitter_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, normalize = False, max_iter = self.max_iter, tol = self.tol)
             fitter_cv.fit(_comat,p)
 
             ecimult = []
@@ -306,10 +338,11 @@ class ClustersSelector():
                 ecimult.append(coef)
 
             if self.cv_splits is None:
-                _cvs = cross_val_score(fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
+                _cvs = cross_val_score(fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error', n_jobs = -1)
             else:
-                _cvs = cross_val_score(fitter_cv, _comat, p, cv=self.cv_splits, scoring = 'neg_mean_squared_error')
-            mean_cv=np.sqrt(-np.mean(_cvs))
+                _cvs = cross_val_score(fitter_cv, _comat, p, cv=self.cv_splits, scoring = 'neg_mean_squared_error', n_jobs = -1)
+                
+            mean_cv = np.sqrt(-np.mean(_cvs))
 
             self.cvs.append(mean_cv)
             self.rmse.append(np.sqrt(mean_squared_error(fitter_cv.predict(_comat),p)))
@@ -318,9 +351,9 @@ class ClustersSelector():
             self.lasso_sparsities.append(sparsity)
 
             if opt_cv <= 0:
-                opt_cv=mean_cv
-                opt_clset=[i for i, e in enumerate(ecimult) if e != 0]
-                self.opt_sparsity=sparsity
+                opt_cv = mean_cv
+                opt_clset = [i for i, e in enumerate(ecimult) if e != 0]
+                self.opt_sparsity = sparsity
             else:
                 if opt_cv > mean_cv:
                     opt_cv = mean_cv
@@ -329,13 +362,13 @@ class ClustersSelector():
 
             if self.sparsity_step == 0.0:
                 if self.sparsity_scale == "log":
-                    step=float(sparsity/(1.0*10))
+                    step = float(sparsity/(1.0*10))
                     sparsity = sparsity - 3*step
 
                 elif self.sparsity_scale == "piece_log":
                     if idx==10:
-                        idx=2
-                        step=float(sparsity/(1.0*10))
+                        idx = 2
+                        step = float(sparsity/(1.0*10))
                         sparsity = sparsity - step
                     else:
                         idx=idx+1
@@ -346,6 +379,83 @@ class ClustersSelector():
 
         return opt_clset
 
+    def _select_clusters_lasso_on_residual_cv(self,x,p,clset0):
+        from sklearn.model_selection import LeaveOneOut
+        from sklearn.model_selection import cross_val_score
+        from sklearn import linear_model
+        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
+
+        sparsity = self.sparsity_max
+
+        if self.sparsity_step == 0.0:
+            step = float(sparsity/(1.0*10))
+            idpot = 1
+        else:
+            step = sparsity_step
+
+        opt_cv = -1
+        opt_clset = []
+        rows = np.arange(len(p))
+
+        idx = 1
+        while sparsity.__ge__(self.sparsity_min):
+
+            if self.fit_intercept:
+                _comat = np.delete(x, (0), axis=1)
+            else:
+                _comat = x
+                
+            fitter_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, normalize = False, max_iter = self.max_iter, tol = self.tol)
+            fitter_cv.fit(_comat,p)
+            
+            fitter_lr = linear_model.LinearRegression(fit_intercept=False, normalize=False)
+            
+            cluster_list_lasso = []
+            for i,coef in enumerate(fitter_cv.coef_):
+                if coef != 0:
+                    cluster_list_lasso.append(i)
+
+            clset = np.union1d(clset0,cluster_list_lasso)
+            _comat_model = x[np.ix_(rows,clset)]
+
+            _cvs = cross_val_score(fitter_lr, _comat_model, p, cv=10, scoring = 'neg_mean_squared_error', n_jobs = -1)
+                
+            mean_cv = np.sqrt(-np.mean(_cvs))
+
+            self.cvs.append(mean_cv)
+            self.rmse.append(np.sqrt(mean_squared_error(fitter_cv.predict(_comat),p)))
+
+            self.set_sizes.append(np.count_nonzero(clset))
+            self.lasso_sparsities.append(sparsity)
+
+            if opt_cv <= 0:
+                opt_cv = mean_cv
+                opt_clset = clset
+                self.opt_sparsity = sparsity
+            else:
+                if opt_cv > mean_cv:
+                    opt_cv = mean_cv
+                    opt_clset = clset
+                    self.opt_sparsity=sparsity
+
+            if self.sparsity_step == 0.0:
+                if self.sparsity_scale == "log":
+                    step = float(sparsity/(1.0*10))
+                    sparsity = sparsity - 3*step
+
+                elif self.sparsity_scale == "piece_log":
+                    if idx==10:
+                        idx = 2
+                        step = float(sparsity/(1.0*10))
+                        sparsity = sparsity - step
+                    else:
+                        idx=idx+1
+                        sparsity = sparsity - step
+
+            else:
+                sparsity = sparsity - step
+
+        return opt_clset
 
     def display_info(self):
         """Display in screen information about the optimal model
