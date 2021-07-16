@@ -38,30 +38,40 @@ class Cluster():
 
     **Methods:**
     """
+    """
     def __new__(cls, atom_indexes, atom_numbers, super_cell=None, distances=None):
         n = len(atom_indexes)
-        ai = atom_indexes
-        an = atom_numbers
-        for i in range(n):
-            for j in range(i,n):
-                if ai[i] == ai[j] and an[i] != an[j]:
-                    raise ValueError("Cluster may not have different species on the same site.")
+        try:
+            ai,an = list(zip(*sorted(zip(np.array(atom_indexes),np.array(atom_numbers)))))
+        except:
+            raise ValueError("Cluster initialization failed")
 
-        if len(atom_indexes) != len(atom_numbers):
-            raise ValueError("Initialization error, number of sites in cluster different from number of species.")
+        #ai = atom_indexes
+        #an = atom_numbers
+        #for i in range(n):
+        #    for j in range(i,n):
+        #        if ai[i] == ai[j] and an[i] != an[j]:
+        #            raise ValueError("Cluster may not have different species on the same site.")
+        #
+        #if len(atom_indexes) != len(atom_numbers):
+        #    raise ValueError("Initialization error, number of sites in cluster different from number of species.")
 
         cl = super(Cluster,cls).__new__(cls)
         cl.__init__(atom_indexes, atom_numbers, super_cell, distances)
         return cl
-
+    """
     def __init__(self, atom_indexes, atom_numbers, super_cell=None, distances=None):
         #self.ais = np.array(atom_indexes)
         #self.ans = np.array(atom_numbers)
         if len(atom_indexes)!=0:
-            self.ais, self.ans = (list(t) for t in zip(*sorted(zip(atom_indexes, atom_numbers))))
+            try:
+                self.ais,self.ans = list(zip(*sorted(zip(np.array(atom_indexes),np.array(atom_numbers)))))
+            except:
+                raise ValueError("Cluster initialization failed")
         else:
             self.ais = np.array(atom_indexes)
             self.ans = np.array(atom_numbers)
+
         self.npoints = len(atom_numbers)
         self.positions_cartesian = None
         self.alphas = None
@@ -78,11 +88,13 @@ class Cluster():
             self.positions_cartesian = np.zeros((self.npoints,3))
             #self.positions_scaled = np.zeros((self.npoints,3))
             for ip, idx in enumerate(atom_indexes):
-                self.positions_cartesian[ip] = super_cell.get_positions(wrap=True)[idx]
+                #self.positions_cartesian[ip] = super_cell.get_positions(wrap=True)[idx]
+                self.positions_cartesian[ip] = super_cell.get_positions()[idx]
                 #self.positions_scaled[ip] = super_cell.get_scaled_positions(wrap=True)[idx]
                 self.site_type[ip] = tags[idx]
                 self.alphas[ip] = np.argwhere(sites[idx] == self.ans[ip])
 
+            """
             # Set radius
             r = 0.0
             if self.npoints > 1:
@@ -94,6 +106,24 @@ class Cluster():
                             d = super_cell.get_distance(idx1,idx2,mic=False,vector=False)
                         if r < d:
                             r = d
+            self.radius = r
+            """
+            
+            # Set radius
+            r = 0.0
+            if self.npoints > 1:
+                if distances is not None:
+                    for i1, idx1 in enumerate(self.ais):
+                        for idx2 in self.ais[i1+1:]:
+                            d = distances[idx1,idx2]
+                            if r < d:
+                                r = d
+                else:
+                    for i1 in range(self.npoints-1):
+                        for i2 in range(i1+1, self.npoints):
+                            d = np.linalg.norm(self.positions_cartesian[i1]-self.positions_cartesian[i2])
+                            if r < d:
+                                r = d
             self.radius = r
 
     """
@@ -109,7 +139,7 @@ class Cluster():
         """
         return self.alphas
 
-    def set_radius(self,distances):
+    def _compute_radius(self,distances):
         r = 0.0
         if self.npoints > 1:
             for i1, idx1 in enumerate(self.ais):
@@ -120,10 +150,13 @@ class Cluster():
         self.radius = r
 
     def get_radius(self,distances=None):
+        """Return cluster radius
+        The radius of a cluster is the maximum distance between any pair of its points.
+        """
         if self.radius is not None:
             return self.radius
         elif distances is not None:
-            self.set_radius(distances)
+            self._compute_radius(distances)
             return self.radius
 
     def _get_idxs_norm(self):
@@ -139,49 +172,14 @@ class Cluster():
         else:
             return self.npoints < other.npoints
 
+    def __repr__(self):
+        return "Cluster["+str(list(zip(self.ais,self.ans)))+"]"
+        
+    def __hash__(self):
+        return hash(str(list(zip(self.ais,self.ans))))
+        
     def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            try:
-                ais,ans = list(zip(*sorted(zip(self.ais,self.ans))))
-            except:
-                if len(other.ais) == 0 and len(self.ais)==0:
-                    return True
-                else:
-                    return False
-
-            try:
-                oais,oans = list(zip(*sorted(zip(other.ais,other.ans))))
-            except:
-                if len(other.ais) == 0 and len(self.ais)==0:
-                    return True
-                else:
-                    return False
-
-            npoints = self.npoints
-
-            ns = len(ais)
-            no = len(oais)
-            if ns != no:
-                return False
-
-            for i in range(len(ais)):
-                if ais[i] != oais[i]:
-                    return False
-
-            for i in range(len(ais)):
-                for j in range(i,len(ais)):
-                    if ais[i] == oais[j] and  ans[i] != oans[j]:
-                        return False
-
-            """
-            for i in range(ns):
-                if ais[i] != oais[i] or ans[i] != oans[i]:
-                    return False
-            """
-            return True
-        else:
-
-            return False
+        return self.__class__ == other.__class__ and np.array_equal(self.ais,other.ais) and np.array_equal(self.ans,other.ans)
 
     def __len__(self):
         return len(self.ais)

@@ -790,6 +790,9 @@ class ClustersPool():
             internal_trans = get_internal_translations(self._plat, super_cell) # Scaled to super_cell
         # Get original cluster cartesian positions (p0)
         pos = super_cell.get_positions(wrap=True)
+        if distances == None:
+            distances = super_cell.get_all_distances(mic=False)
+        
         p0 = np.array([pos[site] for site in cluster_sites])
 
         spos1 = super_cell.get_scaled_positions(wrap=True) # Super-cell scaled positions
@@ -802,6 +805,7 @@ class ClustersPool():
         # sp0: scaled cluster positions with respect to parent lattice
         sp0 = get_scaled_positions(p0, self._plat.get_cell(), pbc = super_cell.get_pbc(), wrap = False)
         _orbit = []
+        clset = set()
         mult = 0
 
         for r,t in zip(self.sc_sym['rotations'], self.sc_sym['translations']):
@@ -825,12 +829,19 @@ class ClustersPool():
                     continue
 
                 ocl = Cluster(_cl,cluster_species)
+                if ocl not in clset:
+                    _orbit.append(ocl)
+                    clset.add(ocl)
+                    if itr == 0:
+                        mult = mult + 1
+                """
                 if ocl in _orbit:
                     continue
                 else:
                     _orbit.append(ocl)
                     if itr == 0:
                         mult = mult + 1
+                """
 
         orbit = []
         for cl in _orbit:
