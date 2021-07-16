@@ -7,6 +7,7 @@ import numpy as np
 import sys
 from clusterx.symmetry import get_scaled_positions
 from clusterx.utils import PolynomialBasis
+from functools import lru_cache
 
 class CorrelationsCalculator():
     """
@@ -115,6 +116,21 @@ class CorrelationsCalculator():
                     lookup_table[m][alpha][sigma] = self.site_basis_function(alpha, sigma, m+1)
         return lookup_table
 
+    @lru_cache(maxsize=None)
+    def _trigo_basis_function(self,alpha,sigma,m):
+        # Axel van de Walle, CALPHAD 33, 266 (2009)
+        
+        if alpha == 0:
+            return 1
+
+        elif alpha%2 != 0:
+            return -np.cos(self._2pi*np.ceil(alpha/2.0)*sigma/m)
+
+        else:
+            return -np.sin(self._2pi*np.ceil(alpha/2.0)*sigma/m)
+
+        
+    #@profile
     def site_basis_function(self, alpha, sigma, m):
         """
         Calculates the site basis function.
@@ -132,12 +148,14 @@ class CorrelationsCalculator():
 
         """
 
-        if hasattr(self, "_lookup_table") and self.basis != "binary-linear":
-            return self._lookup_table[m-1][alpha][sigma]
+        #if hasattr(self, "_lookup_table") and self.basis != "binary-linear":
+        #if hasattr(self, "_lookup_table"):
+        #    return self._lookup_table[m-1][alpha][sigma]
 
         if self.basis == "trigonometric":
+        
+            """
             # Axel van de Walle, CALPHAD 33, 266 (2009)
-
             if alpha == 0:
                 return 1
 
@@ -146,6 +164,9 @@ class CorrelationsCalculator():
 
             else:
                 return -np.sin(self._2pi*np.ceil(alpha/2.0)*sigma/m)
+            """
+            return self._trigo_basis_function(alpha,sigma,m)
+        
 
         if self.basis == "binary-linear":
             # Only for binary alloys. Allows for simple interpretation of cluster interactions.
@@ -264,7 +285,6 @@ class CorrelationsCalculator():
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
         
-
     def get_cluster_correlations(self, structure, multiplicities=None):
         """Get cluster correlations for a structure
         **Parameters:**
