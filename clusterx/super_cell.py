@@ -181,7 +181,7 @@ class SuperCell(ParentLattice):
         """
         view(self)
 
-    def gen_random(self, nsubs=None, mc = False):
+    def gen_random(self, nsubs = None, mc = False):
         """
         Generate a random Structure with given number of substitutions.
 
@@ -204,8 +204,8 @@ class SuperCell(ParentLattice):
 
         if nsubs is None:
             import numpy as np
-            slts = self.get_sublattice_types()
-            tags = self.get_tags()
+            slts = self.get_sublattice_types() #  e.g.  {0: [14,13], 1: [56,0,38], 2:[11]}
+            tags = self.get_tags()  # tags[atom_index] = site_type
             _nsubs = {}
             for k,v in slts.items():
                 if len(v) != 1:

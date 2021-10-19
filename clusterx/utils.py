@@ -24,7 +24,12 @@ def isclose(r1,r2,rtol=1e-4):
     Boolean: if the euclidean distance between ``r1`` and ``r2`` is smaller than
     ``rtol``, ``True`` is returned, otherwise ``False`` is returned.
     """
-    return np.linalg.norm(np.subtract(r1,r2)) < rtol
+    try:
+        if len(r1) != len(r2):
+            return False
+        return np.linalg.norm(np.subtract(r1,r2)) < rtol
+    except:
+        return np.linalg.norm(np.subtract(r1,r2)) < rtol
 
 
 def dict_compare(d1, d2, tol=None):

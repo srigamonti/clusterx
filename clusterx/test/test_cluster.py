@@ -10,9 +10,9 @@ def test_cluster():
     """
     try:
         c1 = Cluster([0,1,2,1],[13,14,15,13])
-        is_multiple_species_in_site = False
+        repeated_atom_index_detected = False
     except:
-        is_multiple_species_in_site = True
+        repeated_atom_index_detected = True
 
     try:
         c1 = Cluster([0,1,2,1],[13,14,15])
@@ -46,11 +46,15 @@ def test_cluster():
     c1 = Cluster([0,1,2,1],[13,14,15,14])
     c2 = Cluster([1,1,0,2],[14,14,13,15])
     eq5 = c1==c2
-    
+
     c1 = Cluster([0,1,2],[13,14,15])
     c2 = Cluster([0,1,2,3],[13,14,15,16])
     eq6 = c1!=c2
 
+    c1 = Cluster([0,1,2,1],[13,14,15,14])
+    c2 = Cluster([1,0,2],[14,13,15])
+    eq7 = c1!=c2
+    
     c3 = Cluster([0,1,2],[13,14,15]) 
     c4 = Cluster([0,1,3],[13,14,15]) 
     clusters = [c1,c2]
@@ -64,8 +68,8 @@ def test_cluster():
 
     print ("========Asserts========")
 
-    print("test is_multiple_species_in_site: ",is_multiple_species_in_site)
-    assert is_multiple_species_in_site
+    print("test is_multiple_species_in_site: ",repeated_atom_index_detected)
+    assert repeated_atom_index_detected
     print("test is_consistent_length: ",is_consistent_length)
     assert is_consistent_length
     print("test can_create_empty: ",can_create_empty)
@@ -77,6 +81,7 @@ def test_cluster():
     assert eq4
     assert eq5
     assert eq6
+    assert eq7
     print("test array inclusion:", in1,in2)
     assert in1
     assert in2

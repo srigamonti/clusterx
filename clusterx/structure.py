@@ -51,6 +51,7 @@ class Structure(SuperCell):
     def __init__(self, super_cell, decoration = None, decoration_symbols=None, sigmas = None, mc = False):
         self.scell = super_cell
         self.sites = super_cell.get_sites()
+        self._pbc = super_cell.get_pbc()
 
         if sigmas is None:
             if decoration_symbols is None:
@@ -102,6 +103,49 @@ class Structure(SuperCell):
                     lens.append(l)
                 self._idxs.update({key:idxs})
                 self._comps.update({key:lens})
+                
+        self.precision_positions = 5
+
+    def _get_roundpos(self):
+        return np.around(self.get_positions(),decimals=self.precision_positions)
+
+    def _get_roundcell(self):
+        return np.around(self.get_cell(),decimals=self.precision_positions)
+
+    def __repr__(self):
+        tokens = []
+
+        tokens.append('pbc={0}'.format(self._pbc))
+        
+        cell = self._get_roundcell()
+        tokens.append('cell={0}'.format(cell.tolist()))
+
+        pos = self._get_roundpos()
+        tokens.append('pos_car={0}'.format(pos.tolist()))
+
+        decor = self.decor
+        tokens.append('at_nrs={0}'.format(decor))
+        
+        return '{0}({1})'.format(self.__class__.__name__, ', '.join(tokens))
+        
+    def __hash__(self):
+        #sp = self._get_roundpos()
+        #fingerprint = str(list(zip(sp,self.decor)))
+        return hash(self.__repr__())
+    
+    def __eq__(self, other):
+        spbc = self.pbc
+        opbc = other.pbc
+        scell = self._get_roundcell()
+        ocell = other._get_roundcell()
+        spos = self._get_roundpos()
+        opos = other._get_roundpos()
+        
+        return (self.__class__ == other.__class__ and
+                np.array_equal(spbc,opbc) and
+                np.array_equal(scell,ocell) and
+                np.array_equal(spos,opos) and
+                np.array_equal(self.decor,other.decor))
 
     def set_calculator(self, calculator):
         """Set Calculator object for structure.

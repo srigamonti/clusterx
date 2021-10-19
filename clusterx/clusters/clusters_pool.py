@@ -790,7 +790,7 @@ class ClustersPool():
             internal_trans = get_internal_translations(self._plat, super_cell) # Scaled to super_cell
         # Get original cluster cartesian positions (p0)
         pos = super_cell.get_positions(wrap=True)
-        if distances == None:
+        if distances is None:
             distances = super_cell.get_all_distances(mic=False)
         
         p0 = np.array([pos[site] for site in cluster_sites])

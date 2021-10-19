@@ -117,7 +117,7 @@ class ClustersSelector():
     def get_rmse(self):
         return self.rmse
 
-    def select_clusters(self, sset, cpool, prop, comat = None):
+    def select_clusters(self, sset, cpool, prop, comat = None, cvtype = "loo"):
         """Select clusters
 
         Returns a subpool containing
@@ -133,6 +133,12 @@ class ClustersSelector():
 
         ``prop``: string
             property label (must be in sset) of property for which the optimal set of clusters is to be selected.
+
+        ``comat``: 2D numpy array (default "None")
+            if the correlation matrix was precalculated, you can give it here
+
+        ``cvtype``: string (default "loo")
+            can be "loo" for Leave One Out cross validation or "l10po" for leave 10 percent out cross validation
         """
         from sklearn.model_selection import LeaveOneOut
 
@@ -171,7 +177,7 @@ class ClustersSelector():
             from sklearn import linear_model
             from sklearn.metrics import mean_squared_error
 
-            lre = linear_model.LinearRegression(fit_intercept=False, normalize=False, n_jobs = -1)
+            lre = linear_model.LinearRegression(fit_intercept=False, n_jobs = -1)
             rows = np.arange(len(p))
             cols = np.arange(len(cpool))
             comat0 = x[np.ix_(rows,clset0)]
@@ -224,15 +230,15 @@ class ClustersSelector():
         return self.optimal_clusters._cpool
 
 
-    def _linear_regression_cv(self,x,p,clsets):
+    def _linear_regression_cv(self, x, p, clsets, cvtype = "loo"):
         from sklearn.model_selection import LeaveOneOut
         from sklearn.model_selection import cross_val_score
         from sklearn import linear_model
         from sklearn.metrics import make_scorer, r2_score, mean_squared_error
 
         #if self.method == "linreg":
-        self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept, normalize=False, n_jobs = -1)
-
+        self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept, n_jobs = -1)
+        
         rows = np.arange(len(p))
         ecis = []
         ranks = []
@@ -246,8 +252,11 @@ class ClustersSelector():
         for iset, clset in enumerate(clsets):
             _comat = x[np.ix_(rows,clset)]
 
-            #_cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error', n_jobs = -1)
-            _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=10, scoring = 'neg_mean_squared_error', n_jobs = -1)
+            if cvtype is "loo":
+                _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error', n_jobs = -1)
+            if cvtype is "l10po":
+                _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=10, scoring = 'neg_mean_squared_error', n_jobs = -1)
+                
             mean_cv=np.sqrt(-np.mean(_cvs))
             self.cvs.append(mean_cv)
             self.fitter_cv.fit(_comat,p)
@@ -405,10 +414,10 @@ class ClustersSelector():
             else:
                 _comat = x
                 
-            fitter_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, normalize = False, max_iter = self.max_iter, tol = self.tol)
+            fitter_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, max_iter = self.max_iter, tol = self.tol)
             fitter_cv.fit(_comat,p)
             
-            fitter_lr = linear_model.LinearRegression(fit_intercept=False, normalize=False)
+            fitter_lr = linear_model.LinearRegression(fit_intercept=False)
             
             cluster_list_lasso = []
             for i,coef in enumerate(fitter_cv.coef_):

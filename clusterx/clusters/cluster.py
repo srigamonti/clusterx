@@ -38,36 +38,21 @@ class Cluster():
 
     **Methods:**
     """
-    """
-    def __new__(cls, atom_indexes, atom_numbers, super_cell=None, distances=None):
-        n = len(atom_indexes)
-        try:
-            ai,an = list(zip(*sorted(zip(np.array(atom_indexes),np.array(atom_numbers)))))
-        except:
-            raise ValueError("Cluster initialization failed")
 
-        #ai = atom_indexes
-        #an = atom_numbers
-        #for i in range(n):
-        #    for j in range(i,n):
-        #        if ai[i] == ai[j] and an[i] != an[j]:
-        #            raise ValueError("Cluster may not have different species on the same site.")
-        #
-        #if len(atom_indexes) != len(atom_numbers):
-        #    raise ValueError("Initialization error, number of sites in cluster different from number of species.")
-
-        cl = super(Cluster,cls).__new__(cls)
-        cl.__init__(atom_indexes, atom_numbers, super_cell, distances)
-        return cl
-    """
     def __init__(self, atom_indexes, atom_numbers, super_cell=None, distances=None):
-        #self.ais = np.array(atom_indexes)
-        #self.ans = np.array(atom_numbers)
+
+        if len(atom_indexes) != len(atom_numbers):
+            raise ValueError("Initialization error, number of sites in cluster different from number of species.")
+
         if len(atom_indexes)!=0:
             try:
                 self.ais,self.ans = list(zip(*sorted(zip(np.array(atom_indexes),np.array(atom_numbers)))))
             except:
                 raise ValueError("Cluster initialization failed")
+
+            for i in range(len(self.ais)-1):
+                if self.ais[i] == self.ais[i+1] and self.ans[i] != self.ans[i+1]:
+                    raise ValueError("Cluster initialization failed: different basis functions assigned to the same site")
         else:
             self.ais = np.array(atom_indexes)
             self.ans = np.array(atom_numbers)
