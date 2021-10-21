@@ -85,7 +85,7 @@ def _juview_applystyle(view):
     view.add_spacefill(radius_type='vdw',scale=0.3)
 
 
-def plot_optimization_vs_number_of_clusters(clsel,nclmin=0,scale=1.0):
+def plot_optimization_vs_number_of_clusters(clsel, nclmin=0, scale=1.0, yaxis_label = "Energy [arb. units]"):
     """Plot cluster optimization with matplotlib
 
     The plot shows the prediction and fitting errors as a function of the clusters
@@ -183,7 +183,7 @@ def plot_optimization_vs_number_of_clusters(clsel,nclmin=0,scale=1.0):
         plt.plot(set_sizes, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='-',label='training-RMSE', linewidth=4*scale)
         plt.plot(set_sizes, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='-',label='cv-RMSE',linewidth=4*scale)
 
-    plt.ylabel("Energy [arb. units]",fontsize=fs)
+    plt.ylabel(yaxis_label ,fontsize=fs)
     plt.xlabel('Number of clusters',fontsize=fs)
     plt.legend()
     leg=ax.legend(loc='best',borderaxespad=2*scale,borderpad=2*scale,labelspacing=1*scale,handlelength=3*scale, handletextpad=2*scale)
@@ -196,7 +196,7 @@ def plot_optimization_vs_number_of_clusters(clsel,nclmin=0,scale=1.0):
     plt.show()
 
 
-def plot_optimization_vs_sparsity(clsel,scale=1.0):
+def plot_optimization_vs_sparsity(clsel, scale=1.0, xaxis_label = 'Sparsity', yaxis_label = "Energy [arb. units]"):
     """Plot cluster optimization with matplotlib
 
     The plot shows the prediction and fitting errors as a function of the
@@ -254,8 +254,8 @@ def plot_optimization_vs_sparsity(clsel,scale=1.0):
     plt.semilogx(set_sparsity, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='-',label='training-RMSE', linewidth=4*scale)
     plt.semilogx(set_sparsity, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='-',label='cv-RMSE',linewidth=4*scale)
 
-    plt.ylabel("Energy [arb. units]",fontsize=fs)
-    plt.xlabel('Sparsity',fontsize=fs)
+    plt.ylabel(yaxis_label ,fontsize=fs)
+    plt.xlabel(xaxis_label ,fontsize=fs)
     plt.legend()
     leg=ax.legend(loc='best',borderaxespad=2*scale,borderpad=2*scale,labelspacing=1*scale,handlelength=3*scale, handletextpad=2*scale)
     leg.get_frame().set_linewidth(3*scale)
@@ -267,7 +267,7 @@ def plot_optimization_vs_sparsity(clsel,scale=1.0):
     plt.show()
 
 
-def plot_predictions_vs_target(sset,cemodel, prop_name, scale=1.0):
+def plot_predictions_vs_target(sset, cemodel, prop_name, scale=1.0, xaxis_label = 'Calculated energy [arb. units]', yaxis_label = "Predicted energy [arb. units]"):
     """Plot predictions versus target with matplotlib
 
     The plot shows the prediction versus the target
@@ -314,8 +314,8 @@ def plot_predictions_vs_target(sset,cemodel, prop_name, scale=1.0):
     plt.plot(energies,predictions, 'o', markersize=15*scale,  markeredgewidth=2*scale,markeredgecolor='b', markerfacecolor='None' , label="structures")
     #scatter([ncl_opt],[min(cv)], s=400,facecolors='none', edgecolors='r',)
 
-    plt.ylabel("Predicted energy [arb. units]",fontsize=fs)
-    plt.xlabel('Calculated energy [arb. units]',fontsize=fs)
+    plt.ylabel(yaxis_label ,fontsize=fs)
+    plt.xlabel(xaxis_label ,fontsize=fs)
     plt.legend()
     leg=ax.legend(loc='best',borderaxespad=2*scale,borderpad=2*scale,labelspacing=1*scale,handlelength=3*scale, handletextpad=2*scale)
     leg.get_frame().set_linewidth(3*scale)
