@@ -85,16 +85,32 @@ def _juview_applystyle(view):
     view.add_spacefill(radius_type='vdw',scale=0.3)
 
 
-def plot_optimization_vs_number_of_clusters(clsel, nclmin=0, scale=1.0, yaxis_label = "Energy [arb. units]"):
+def plot_optimization_vs_number_of_clusters(clsel, xmin = None, xmax = None, scale = 1.0, yaxis_label = "Errors"):
     """Plot cluster optimization with matplotlib
 
     The plot shows the prediction and fitting errors as a function of the clusters
-    pool size.
+    pool size resulting from a cluster optimization done with a ClustersSelector object.
+
+    The range of cluster pool sizes in the x-axis is determined by nclmin (minimum size)
+    and nclmax (maximum size)
 
     **Parameters:**
 
     ``clsel``: ClustersSelector object
-        The ClustersSelector oject which was used for the optimization to be plotted.
+        The ClustersSelector oject which was used for the cluster optimization.
+
+    ``xmin``: integer (Default: None)
+        Minimum cluster size in x-axis.
+        
+    ``xmax``: integer (Default: None)
+        Maximum cluster size in x-axis.
+
+    ``scale``: float (Default: 1.0)
+        Adjust this parameter to change font size, axes line width, and other details of the plot.
+
+    ``yaxis_label``: string (Default: "Errors")
+        Label for the y-axis of the plot
+        
     """
     import matplotlib.pyplot as plt
     from matplotlib import rc
@@ -102,24 +118,31 @@ def plot_optimization_vs_number_of_clusters(clsel, nclmin=0, scale=1.0, yaxis_la
     import math
 
 
-    set_sizes=sorted(clsel.set_sizes)
-    indizes=[i[0] for i in sorted(enumerate(clsel.set_sizes), key=lambda x:x[1])]
+    set_sizes = sorted(clsel.set_sizes)
+    indizes = [i[0] for i in sorted(enumerate(clsel.set_sizes), key=lambda x:x[1])]
 
-    rmse=[clsel.rmse[ind] for ind in indizes]
-    cvs=[clsel.cvs[ind] for ind in indizes]
+    rmse = [clsel.rmse[ind] for ind in indizes]
+    cvs = [clsel.cvs[ind] for ind in indizes]
 
-    nclmax=max(set_sizes)
-    nclmin=min(set_sizes)
-    ncl_range=nclmax-nclmin
+    nclmax = max(set_sizes)
+    nclmin = min(set_sizes)
 
-    e_min=min([min(rmse),min(cvs)])
-    e_max=max([max(rmse),max(cvs)])
-    e_range=e_max - e_min
+    if xmin is None:
+        xmin = nclmin
 
-    ncl_opt=set_sizes[clsel.cvs.index(min(cvs))]
+    if xmax is None:
+        xmax = nclmax
+         
+    ncl_range = xmax-xmin
 
-    width=15.0*scale
-    fs=int(width*1.8)
+    e_min = min([min(rmse),min(cvs)])
+    e_max = max([max(rmse),max(cvs)])
+    e_range = e_max - e_min
+
+    ncl_opt = set_sizes[clsel.cvs.index(min(cvs))]
+
+    width = 15.0*scale
+    fs = int(width*1.8)
     ticksize = fs
     golden_ratio = (math.sqrt(5) - 0.9) / 2.0
     labelsize = fs
@@ -129,8 +152,8 @@ def plot_optimization_vs_number_of_clusters(clsel, nclmin=0, scale=1.0, yaxis_la
 
     rc('axes', linewidth=3*scale)
 
-    plt.ylim(e_min-e_range/8,e_max+e_range/10)
-    plt.xlim(nclmin-ncl_range/10,nclmax+ncl_range/10)
+    #plt.ylim(e_min - e_range / 8.0, e_max + e_range / 10.0)
+    plt.xlim(xmin - ncl_range / 10.0, xmax + ncl_range / 10.0)
 
     plt.xticks(fontsize=ticksize)
     plt.yticks(fontsize=ticksize)

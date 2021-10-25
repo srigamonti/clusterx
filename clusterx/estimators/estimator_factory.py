@@ -11,18 +11,68 @@ class EstimatorFactory(object):
     """
 
     @staticmethod
-    def create(estimator_type, **kwargs):
-        """Create an estimator object compatible with scikit learn library
+    def create(estimator_type, **estimator_opts):
+        """Create an estimator object from (or compatible with) the `scikit-learn <https://scikit-learn.org/stable/index.html>`_ library.
+            
+            So far no compatible estimators are implemented, so this class acts as 
+            a factory of scikit-learn estimators.
+
+        **Parameters:**
+
+        ``estimator_type``: string
+            If the string starts with ``"skl_"``, and the full string is ``"skl_EstimatorName"``, 
+            then an instance of the ``"EstimatorName"`` estimator of the
+            `scikit-learn <https://scikit-learn.org/stable/index.html>`_ library is created.
+          
+        ``estimator_opts``: dictionary
+            The estimator ``"EstimatorName"`` is initialized with the parameters given by the 
+            dictionary ``estimator_opts``
+
+
+        **Examples:**
+        
+        In both examples below, ``X`` is the input matrix, ``y`` is the vector of propery values, and ``X0`` is the input
+        vector for a sample for which we want to predict the property value.
+        
+        The precise meaning and the complete list of parameters in the ``estimator_opts`` dictionary is to be taken from the 
+        documentation for the input parameters of the corresponding sklearn class (see example links below).
+ 
+        Create a linear regression estimator object from the scikit-learn class 
+        `sklearn.linear_model.LinearRegression <https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html>`_::
+        
+            from clusterx.estimator_factory import EstimatorFactory
+
+            linreg = EstimatorFactory.create("skl_LinearRegression", {"fit_intercept": True})
+
+            linreg.fit(X,y)
+            
+            prediction0 = linreg.predict(X0)
+            ...
+            
+        Create a LASSO estimator object from the scikit-learn class 
+        `sklearn.linear_model.Lasso <https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Lasso.html>`_::
+        
+            from clusterx.estimator_factory import EstimatorFactory
+
+            lasso = EstimatorFactory.create("skl_LinearRegression", {"fit_intercept": True, "alpha": 0.1})
+
+            lasso.fit(X,y)
+
+            prediction0 = lasso.predict(X0)
+            ...
+            
+        
         """
+        
         if estimator_type.startswith("skl_"):
             class_name = estimator_type[4:]
             _module = import_module(".linear_model", package="sklearn")
         else:
             class_name = estimator_type
             if class_name == "SplitBregman":
-                _module = import_module(".estimators.split_bregman", package="clusterx")
+                raise NotImplementedError
 
         _class = getattr(_module, class_name)
-        estimator = _class(**kwargs)
+        estimator = _class(**estimator_opts)
 
         return estimator

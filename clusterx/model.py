@@ -368,24 +368,26 @@ class ModelBuilder():
 
     **Parameters:**
 
-    ``basis``: string
-        Basis set used to calculate structure-cluster correlations.
+    ``basis``: string (Default: ``"trigonometric"``)
+        Basis set used to calculate the matrix of cluster correlations. For a detailed 
+        description and possible values of this parameter, look at the documentation
+        for parameter ``basis`` in :class:`CorrelationsCalculator <clusterx.correlations.CorrelationsCalculator>`
 
     ``selector_type``: string
         Cluster selector type. For the possible values, look at the
-        documentation for attribute ``method`` in the ``ClustersSelector`` class.
+        documentation for attribute ``selector_type`` in the :class:`ClustersSelector <clusterx.clusters_selector.ClustersSelector>` class.
 
     ``selector_opts``: dictionary
         Cluster selector options. For the possible values, look at the
-        documentation for ``ClustersSelector`` class.
+        documentation for attribute ``selector_opts``:class:`ClustersSelector <clusterx.clusters_selector.ClustersSelector>` class.
 
     ``estimator_type``: string
         Estimator type. For the possible values, look at the documentation
-        for ``EstimatorFactory`` class.
+        for :class:`EstimatorFactory <clusterx.estimators.estimator_factory.EstimatorFactory>` class.
 
     ``estimator_opts``: dictionary
         Estimator options. For the possible values, look at the documentation
-        for ``EstimatorFactory`` class.
+        for :class:`EstimatorFactory <clusterx.estimators.estimator_factory.EstimatorFactory>` class.
     """
     def __init__(self,
                  basis="trigonometric",

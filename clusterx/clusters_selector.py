@@ -24,27 +24,31 @@ class ClustersSelector():
     ``basis``: *string*, default = ``"trigonometric"``
         Cluster basis used during the optimization task. For details and allowed values, read the documentation in :py:class:`clusterx.correlations.CorrelationsCalculator`
 
-    ``method``: *string*, default = ``"identity"``
-        can be "lasso_cv" or "subsets_cv". In both cases a cross-validation optimization
-        is performed. In the case of "lasso", the optimal sparsity parameter is
-        searched through cross validation, while in "linreg", cross validation
-        is directly used as model selector.
+    ``selector_type``: *string*, default = ``"identity"``
+        can be ``"identity"``, ``"lasso_cv"`` or ``"subsets_cv"``. If set to ``"identity"``, no slection is performed 
+        and the optimal clusters pool is the same as the argument ``"cpool"`` in the 
+        :py:meth:`select_clusters() <clusterx.clusters_selector.ClustersSelector.select_clusters>`
+        method.
+        In the cases ``"lasso_cv"`` and ``"subsets_cv"`` a cross-validation optimization
+        is performed. In the case of ``"lasso_cv"``, the optimal sparsity parameter is
+        searched through cross validation, while in ``"subsets_cv"``, cross validation
+        is performed on models defined by subsets of the clusters pool.
         Deprecated options: ``"lasso"``, ``"linreg"``.
         ``"lasso"`` is identical to ``"lasso_cv"``
         ``"linreg"`` is identical to ``"subsets_cv"``
 
-    ``**kwargs``: keyword arguments
-        if ``method`` is set to "lasso", the keyword arguments are:
-            ``sparsity_max``: positive real, maximal sparsity parameter
-            ``sparsity_min``: positive real, minimal sparsity parameter
+    ``**selector_opts``: dictionary of selector options
+        if ``selector_type`` is set to "lasso_cv", the selector_opts dict keys are:
+            ``sparsity_max``: positive real, maximal sparsity parameter (default: 1)
+            ``sparsity_min``: positive real, minimal sparsity parameter (default: 0.01)
             ``sparsity_step``: positive real, optional, if set to 0.0, a logarithmic
             grid from sparsity_max to sparsity_min is automatically created.
             ``max_iter``: integer, maximum number of iterations for LASSO algorithm.
             ``tol``: small positive real, tolerance of LASSO solution.
-            ``sparsity_scale``: either "log" or "piece_log".
+            ``sparsity_scale``: either ``"log"`` or ``"piece_log"``.
             ``cv_splits``: None or integer, default 3, number of splits for CV. If None, LeaveOneOut is performed
-        if ``method`` is set to "linreg", the keyword arguments are:
-            ``clusters_sets``: one of "size", "combinations", and "size+combinations".
+        if ``selector_type`` is set to ``"subsets_cv"``, the selector_opts dict keys are:
+            ``clusters_sets``: one of ``"size"``, ``"combinations"``, and ``"size+combinations"``.
             In the first case, clusters sub_pools of increasing size are extracted from
             the initial pool, and cross validation selects the optimal sub-pool.
             In the second case, all possible combinations of clusters from the pool
@@ -54,37 +58,42 @@ class ClustersSelector():
             for subsets of ``nclmax`` (see below) clusters.
 
             ``set0``: array with two elements ``[int,float]``
-                if ``clusters_sets`` is set to "size+combinations", this indicates
+                if ``clusters_sets`` is set to ``"size+combinations"``, this indicates
                 the size of the fixed pool of clusters, above which a combinatorial
                 search is performed. The first element of the array indicates the
                 maximum number of cluster points and the second element the maximum radius,
                 for the fixed subpool.
 
             ``nclmax``: integer
-                if ``clusters_sets`` is set to "size+combinations", this indicates
+                if ``clusters_sets`` is set to ``"size+combinations"``, this indicates
                 the maximum number of clusters in the combinatorial subsets of clusters
                 to be searched for (on top of the fixed subpool, see above).
+
+            Besides the indicated keys above, the selector_opts dict may contain the key ``"method"``(deprecated), 
+            which overrides the argument ``selector_type``
 
     .. todo::
 
         * make ``optimal_ecis`` private
     """
-    def __init__(self, basis="trigonometric", method="identity", **kwargs):
-        self.method = method
+    def __init__(self, basis="trigonometric", selector_type = "identity", **selector_opts):
 
-        # additional arguments for lasso
-        self.sparsity_max = kwargs.pop("sparsity_max",1)
-        self.sparsity_min = kwargs.pop("sparsity_min",0.01)
-        self.sparsity_step = kwargs.pop("sparsity_step",0.0)
-        self.sparsity_scale = kwargs.pop("sparsity_scale","log")
-        self.cv_splits = kwargs.pop("cv_splits",3)
-        self.max_iter = kwargs.pop("max_iter",10000)
-        self.tol = kwargs.pop("tol",1e-5)
+        self.method = selector_opts.pop("method", selector_type) # selector_type argument replaces old method argument. This ensures backward compatibility.
+        
+        # additional arguments for lasso_cv
+        
+        self.sparsity_max = selector_opts.pop("sparsity_max",1)
+        self.sparsity_min = selector_opts.pop("sparsity_min",0.01)
+        self.sparsity_step = selector_opts.pop("sparsity_step",0.0)
+        self.sparsity_scale = selector_opts.pop("sparsity_scale","log")
+        self.cv_splits = selector_opts.pop("cv_splits",3)
+        self.max_iter = selector_opts.pop("max_iter",10000)
+        self.tol = selector_opts.pop("tol",1e-5)
 
-        # additional arguments for linear regression
-        self.clusters_sets = kwargs.pop("clusters_sets","size")
-        self.nclmax = kwargs.pop("nclmax", 0)
-        self.set0 = kwargs.pop("set0",[0, 0])
+        # additional arguments for subset_cv
+        self.clusters_sets = selector_opts.pop("clusters_sets","size")
+        self.nclmax = selector_opts.pop("nclmax", 0)
+        self.set0 = selector_opts.pop("set0",[0, 0])
 
         self.fit_intercept=False
         #for c in self.cpool._cpool:
@@ -252,9 +261,9 @@ class ClustersSelector():
         for iset, clset in enumerate(clsets):
             _comat = x[np.ix_(rows,clset)]
 
-            if cvtype is "loo":
+            if cvtype == "loo":
                 _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error', n_jobs = -1)
-            if cvtype is "l10po":
+            if cvtype == "l10po":
                 _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=10, scoring = 'neg_mean_squared_error', n_jobs = -1)
                 
             mean_cv=np.sqrt(-np.mean(_cvs))
@@ -280,13 +289,13 @@ class ClustersSelector():
         from sklearn.metrics import make_scorer, r2_score, mean_squared_error
 
         #if self.method == "linreg":
-        self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept, normalize=False)
+        self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept)
 
         if self.fit_intercept:
             if int(x.shape[1]) > 1:
                 _comat = np.delete(x, (0), axis=1)
             else:
-                self.fitter_cv = linear_model.LinearRegression(fit_intercept=False, normalize=False)
+                self.fitter_cv = linear_model.LinearRegression(fit_intercept=False)
                 _comat = x
         else:
             _comat = x
@@ -336,7 +345,7 @@ class ClustersSelector():
             else:
                 _comat = x
                 
-            fitter_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, normalize = False, max_iter = self.max_iter, tol = self.tol)
+            fitter_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, max_iter = self.max_iter, tol = self.tol)
             fitter_cv.fit(_comat,p)
 
             ecimult = []
