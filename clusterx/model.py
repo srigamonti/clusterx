@@ -53,7 +53,7 @@ class Model():
 
 
     def serialize(self, db_name = 'model.json'):
-        """Write cluster expansion model to Atoms Json database
+        """Write cluster expansion model to Json database
 
         **Parameter:**
 
@@ -103,6 +103,8 @@ class Model():
         return self.corrc._plat
 
     def get_ecis(self):
+        """ Return array of effective cluster interactions (ECIs) of the model
+        """
         if self.ecis is not None:
             return self.ecis
         else:
@@ -375,19 +377,23 @@ class ModelBuilder():
 
     ``selector_type``: string
         Cluster selector type. For the possible values, look at the
-        documentation for attribute ``selector_type`` in the :class:`ClustersSelector <clusterx.clusters_selector.ClustersSelector>` class.
+        documentation for the parameter ``selector_type`` in the 
+        :class:`ClustersSelector <clusterx.clusters_selector.ClustersSelector>` class.
 
     ``selector_opts``: dictionary
         Cluster selector options. For the possible values, look at the
-        documentation for attribute ``selector_opts``:class:`ClustersSelector <clusterx.clusters_selector.ClustersSelector>` class.
+        documentation for the parameter ``selector_opts`` in the 
+        :class:`ClustersSelector <clusterx.clusters_selector.ClustersSelector>` class.
 
     ``estimator_type``: string
         Estimator type. For the possible values, look at the documentation
-        for :class:`EstimatorFactory <clusterx.estimators.estimator_factory.EstimatorFactory>` class.
+        for the parameter ``estimator_type`` in the
+        :class:`EstimatorFactory <clusterx.estimators.estimator_factory.EstimatorFactory>` class.
 
     ``estimator_opts``: dictionary
         Estimator options. For the possible values, look at the documentation
-        for :class:`EstimatorFactory <clusterx.estimators.estimator_factory.EstimatorFactory>` class.
+        for the parameter ``estimator_opts`` in the
+        :class:`EstimatorFactory <clusterx.estimators.estimator_factory.EstimatorFactory>` class.
     """
     def __init__(self,
                  basis="trigonometric",

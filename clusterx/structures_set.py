@@ -38,7 +38,7 @@ class StructuresSet():
         lattice given here. This argument can be ommited if parsing from file (see
         below).
 
-    ``db_fname``: String
+    ``json_db_filepath``: String
         if provided, the structures set is initialized from a structures_set file, as created
         by ``StructuresSet.serialize()`` or ``StructuresSet.write_files()``. In this case,
         the ``parent_lattice`` argument can be ommited (if present, it is overriden).
@@ -55,6 +55,10 @@ class StructuresSet():
     ``folders_db_fname``: String (deprecated)
         same as ``db_name``. Use ``db_name`` instead. If set overrides ``db_name``.
 
+    **Deprecated parameters:**
+    
+    ``db_fname``: replaced by ``json_db_filepath``
+
     **Examples:**
 
     .. todo::
@@ -62,8 +66,8 @@ class StructuresSet():
 
     **Methods:**
     """
-    def __init__(self, parent_lattice=None, db_fname=None, calculator = None, folders_db_fname=None, quick_parse=False):
-
+    def __init__(self, parent_lattice = None, json_db_filepath = None, calculator = None, folders_db_fname = None, quick_parse = False, **sset_opts):
+        
         self._iter = 0
         self._parent_lattice = parent_lattice
         self._nstructures = 0
@@ -73,7 +77,7 @@ class StructuresSet():
         self._folders = []
         self._ids = []
         #########################
-        self._db_fname = db_fname
+        self._db_fname = sset_opts.pop("db_fname", json_db_filepath)
         if folders_db_fname is not None:
             self._db_fname = folders_db_fname
 

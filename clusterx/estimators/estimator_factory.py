@@ -31,7 +31,7 @@ class EstimatorFactory(object):
 
         **Examples:**
         
-        In both examples below, ``X`` is the input matrix, ``y`` is the vector of propery values, and ``X0`` is the input
+        In both examples below, ``X`` is the input matrix, ``y`` is the vector of property values, and ``X0`` is the input
         vector for a sample for which we want to predict the property value.
         
         The precise meaning and the complete list of parameters in the ``estimator_opts`` dictionary is to be taken from the 
@@ -54,7 +54,7 @@ class EstimatorFactory(object):
         
             from clusterx.estimator_factory import EstimatorFactory
 
-            lasso = EstimatorFactory.create("skl_LinearRegression", {"fit_intercept": True, "alpha": 0.1})
+            lasso = EstimatorFactory.create("skl_Lasso", {"fit_intercept": True, "alpha": 0.1})
 
             lasso.fit(X,y)
 
