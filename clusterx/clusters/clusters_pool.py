@@ -573,7 +573,7 @@ class ClustersPool():
 
         return np.array(atom_idxs), np.array(atom_nrs)
 
-    def serialize(self,db_name="cpool.json"):
+    def serialize(self, db_name="cpool.json"):
         """Serialize clusters pool object to json database file
 
         The generated json file is compatible with ASE's GUI, so you can
@@ -642,15 +642,19 @@ class ClustersPool():
 
         **Parameters:**
 
-        ``orbit``:
+        ``orbit``: python list (default: ``None``)
+            list of ``Cluster`` objects. If ``None``, just the clusters in the ``ClustersPool`` object are written.
 
-        ``super_cell``: ``SuperCell`` object
+        ``super_cell``: ``SuperCell`` object (default: ``None``)
+            The supercell in which the clusters are supported. 
+            If ``None``, the ``SuperCell`` object of ``self`` (output of method ``get_cpool_scell()``) is used.
 
         ``db_name``: string
             Name of the json file containing the database
         """
         from ase.db.jsondb import JSONDatabase
         from subprocess import call
+        
         call(["rm","-f",db_name])
         atoms_db = JSONDatabase(filename=db_name)
 

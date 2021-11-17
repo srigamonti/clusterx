@@ -110,6 +110,11 @@ class Model():
         else:
             return self.estimator.coef_
 
+    def get_correlations_calculator(self):
+        """ Return correlations calculator of the Model object
+        """
+        return self.corrc
+
     def predict(self,structure):
         """Predict property with the optimal cluster expansion model.
 

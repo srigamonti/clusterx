@@ -193,7 +193,7 @@ class CorrelationsCalculator():
             return self.basis_set.evaluate(alpha, sigma, m)
 
 
-    def cluster_function(self, cluster, structure_sigmas,ems):
+    def cluster_function(self, cluster, structure_sigmas, ems):
         cluster_atomic_idxs = np.array(cluster.get_idxs())
         cluster_alphas = cluster.alphas
         cf = 1.0
@@ -241,6 +241,8 @@ class CorrelationsCalculator():
         """
         #if isinstance(scell,Structure):
         from clusterx.utils import get_cl_idx_sc
+        from clusterx.clusters.clusters_pool import ClustersPool
+                
         cluster_orbits = None
 
         for i, _scell in enumerate(self._scells):
@@ -264,19 +266,62 @@ class CorrelationsCalculator():
             elif isinstance(scell,ParentLattice):
                 scell = SuperCell(scell,[1,1,1])
 
+            cpool = ClustersPool(scell.get_parent_lattice(),super_cell=scell)
+
             for icl,cluster in enumerate(self._cpool.get_cpool()):
                 positions = cluster.get_positions()
 
                 cl_spos = wrap_scaled_positions(get_scaled_positions(positions, scell.get_cell(), pbc=scell.get_pbc(), wrap=True),scell.get_pbc())
                 sc_spos = wrap_scaled_positions(scell.get_scaled_positions(wrap=True),scell.get_pbc())
                 cl_idxs = get_cl_idx_sc(cl_spos,sc_spos,method=0)
-                cluster_orbit, mult = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=True)
+                #cluster_orbit, mult = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=True)
+                cluster_orbit, mult = cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=True)
                 cluster_orbits.append(cluster_orbit)
 
             self._scells.append(scell) # Add supercell to calculator
             self._cluster_orbits_set.append(cluster_orbits) # Add corresponding cluster orbits
 
         return cluster_orbits
+
+    def get_cluster_orbit_pools_for_scell(self,scell):
+        """Return array of cluster_pool objects, containing cluster orbits for a given supercell
+
+        **Parameters**
+
+        ``scell``: ParentLattice, SuperCell, or Structure object
+            Object containing the lattice definition to determine the orbit
+            of the clusters in the CorrelationsCalculator.
+        """
+        from clusterx.utils import get_cl_idx_sc
+        from clusterx.super_cell import SuperCell
+        from clusterx.structure import Structure
+        from clusterx.symmetry import wrap_scaled_positions
+        from clusterx.clusters.clusters_pool import ClustersPool
+        
+        cluster_orbit_pools = []
+
+        if isinstance(scell,Structure):
+            scell = scell.get_supercell()
+        elif isinstance(scell,SuperCell):
+            pass
+        elif isinstance(scell,ParentLattice):
+            scell = SuperCell(scell,[1,1,1])
+
+        cpool = ClustersPool(scell.get_parent_lattice(),super_cell=scell)
+        
+        for icl,cluster in enumerate(self._cpool.get_cpool()):
+            positions = cluster.get_positions()
+
+            cl_spos = wrap_scaled_positions(get_scaled_positions(positions, scell.get_cell(), pbc=scell.get_pbc(), wrap=True),scell.get_pbc())
+            sc_spos = wrap_scaled_positions(scell.get_scaled_positions(wrap=True),scell.get_pbc())
+            cl_idxs = get_cl_idx_sc(cl_spos,sc_spos,method=0)
+
+            #cluster_orbit_pool, mult = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=False)
+            cluster_orbit_pool, mult = cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=False)
+
+            cluster_orbit_pools.append(cluster_orbit_pool)
+
+        return cluster_orbit_pools
 
     
     def reset_mc(self, mc = False):

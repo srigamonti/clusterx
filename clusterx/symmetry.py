@@ -7,7 +7,11 @@ import spglib
 
 def get_spacegroup(parent_lattice):
     """
-    Get space symmetry of a ParentLattice object. Sites allowing different substitutional species are treated as symetrically distinct.
+    Get space symmetry of a ParentLattice object. 
+    
+    Sites allowing different substitutional species are treated as symetrically distinct.
+
+    Uses ``spglib`` library.
     """
 
     atoms = parent_lattice.get_pristine().copy()
