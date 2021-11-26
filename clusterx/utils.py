@@ -1028,15 +1028,15 @@ def make_supercell(prim, P, wrap=True, tol=1e-5):
     configuration `\mathbf{h}_p` by `\mathbf{P h}_p =
     \mathbf{h}`.
 
-    Parameters:
+    **Parameters:**
 
-    prim: ASE Atoms object
+    ``prim``: ASE Atoms object
         Input configuration.
-    P: 3x3 integer matrix
+    ``P``: 3x3 integer matrix
         Transformation matrix `\mathbf{P}`.
-    wrap: bool
+    ``wrap``: bool
         wrap in the end
-    tol: float
+    ``tol``: float
         tolerance for wrapping
     """
 
@@ -1066,4 +1066,50 @@ def make_supercell(prim, P, wrap=True, tol=1e-5):
         superatoms.wrap(eps=tol)
 
     return superatoms
+
+def decorate_supercell(scell, atoms):
+    """ Create a Structure instance by decorating a SuperCell with an Atoms object from ASE.
+    """
+    from clusterx.structure import Structure
+
+    ans = []
+    for i1, p1 in enumerate(scell.get_positions()):
+        for i2, p2 in enumerate(atoms.get_positions()):
+            if np.linalg.norm(p1-p2) < 1e-5:
+                ans.append(atoms.get_atomic_numbers()[i2])
+                
+    return Structure(scell, ans)
+
+def super_structure(struc0, d):
+    """ Create a super structure 
+
+    This function takes a ``Structure`` instance (``struc0``) and creates a new structure 
+    which is obtained as the periodic repetition of the original structure 
+    along its unit cell vectors. The number of repetitions along each cell vector is given
+    by the three components of the input integer vector ``d``.
+
+    **Parameters:**
+
+    ``struc0``: Structure object
+        Original structure for the superstructure.
+    ``d``: three-component integer array
+        The super structure is obtained by repeating the original structure
+        ``d[i]`` times along unit cell vector ``i``.
+    """
+    from clusterx.structure import Structure
+    from clusterx.super_cell import SuperCell
+    from ase.build import make_supercell
+
+    n = np.zeros((3,3), int)
+    np.fill_diagonal(n, d)
+
+    p0 = struc0.get_supercell().get_transformation()
+    p1 = n @ p0
+
+    atoms0 = struc0.get_atoms()
+    atoms1 = make_supercell(atoms0, n)
+        
+    scell1 = SuperCell(struc0.get_parent_lattice(), p1) 
+
+    return decorate_supercell(scell1, atoms1)
 
