@@ -32,8 +32,13 @@ def get_spacegroup(parent_lattice):
     # become inequivalent if those sites can be occupied by different species.
     atoms.set_atomic_numbers(parent_lattice.get_tags() + 1)
 
-    sg = spglib.get_spacegroup(atoms)
-    sym = spglib.get_symmetry(atoms)
+    lattice = atoms.get_cell()
+    positions = atoms.get_scaled_positions()
+    numbers = atoms.get_atomic_numbers()
+    spglib_input = (lattice, positions, numbers)
+    
+    sg = spglib.get_spacegroup(spglib_input)
+    sym = spglib.get_symmetry(spglib_input)
 
     # After finding symmetries, undo the previous re-scaling done to break
     # symmetries
@@ -71,7 +76,18 @@ def wrap_scaled_positions(s, pbc):
 def get_internal_translations(parent_lattice, super_cell):
     """
     Return the internal translations of a parent lattice with respect to a super cell.
+
     Translations are expressed in scaled coordinates with respect to the super cell.
+
+    The function returns a numpy array containing three-dimensional vectors representing the 
+    internal translation symmetries of the super cell.
+
+    **Parameters:**
+    ``parent_lattice``: ParentLattice instance
+        The ParentLattice object
+    
+    ``super_cell``: SuperCell instance
+        The SuperCell object. Must be a supercell of the parent lattice given as first argument. 
     """
     from ase import Atoms
     from clusterx.super_cell import SuperCell
