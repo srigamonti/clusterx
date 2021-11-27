@@ -258,7 +258,7 @@ def test_clusters_generation():
         print(repr(radii))
         print(repr(npoints))
 
-        mult_ref = np.array([1, 1, 2, 2, 2, 4, 2, 2, 2, 2, 1, 4, 2, 4, 1])
+        mult_ref = np.array([1, 1, 2, 2, 2, 4, 2, 2, 4, 4, 2, 4, 2, 4, 1])
         radii_ref = np.array([0.        , 0.        , 2.        , 2.82842712, 4.        ,
            4.47213595, 5.65685425, 6.        , 6.32455532, 7.21110255,
            8.48528137, 2.82842712, 4.        , 4.        , 2.82842712])
