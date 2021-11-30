@@ -274,8 +274,9 @@ class CorrelationsCalculator():
                 cl_spos = wrap_scaled_positions(get_scaled_positions(positions, scell.get_cell(), pbc=scell.get_pbc(), wrap=True),scell.get_pbc())
                 sc_spos = wrap_scaled_positions(scell.get_scaled_positions(wrap=True),scell.get_pbc())
                 cl_idxs = get_cl_idx_sc(cl_spos,sc_spos,method=0)
-                #cluster_orbit, mult = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=True)
-                cluster_orbit, mult = cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=True)
+                _cluster_orbit = cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs())
+                cluster_orbit = _cluster_orbit.as_array()
+                mult = _cluster_orbit.get_multiplicity_in_parent_lattice()
                 cluster_orbits.append(cluster_orbit)
 
             self._scells.append(scell) # Add supercell to calculator
@@ -316,8 +317,9 @@ class CorrelationsCalculator():
             sc_spos = wrap_scaled_positions(scell.get_scaled_positions(wrap=True),scell.get_pbc())
             cl_idxs = get_cl_idx_sc(cl_spos,sc_spos,method=0)
 
-            #cluster_orbit_pool, mult = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=False)
-            cluster_orbit_pool, mult = cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=False)
+            _cluster_orbit_pool = cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs())
+            cluster_orbit_pool = _cluster_orbit_pool.as_array()
+            mult = _cluster_orbit_pool.get_multiplicity_in_parent_lattice()
 
             cluster_orbit_pools.append(cluster_orbit_pool)
 
@@ -360,31 +362,6 @@ class CorrelationsCalculator():
                 self._num_mc_calls = 1
                 self._cluster_orbits_mc = cluster_orbits
 
-        """
-        elif not mc:
-            for i, scell in enumerate(self._scells):
-                if cluster_orbits is None:
-                    if len(structure.get_positions()) == len(scell.get_positions()):
-                        if np.allclose(structure.get_positions(),scell.get_positions(),atol=1e-3):
-                            cluster_orbits = self._cluster_orbits_set[i]
-                            break
-
-        if cluster_orbits is None:
-            # Add new super cell and calculate cluster orbits for it.
-            cluster_orbits = []
-            scell = structure.get_supercell()
-            for icl,cluster in enumerate(self._cpool.get_cpool()):
-                positions = cluster.get_positions()
-                cl_spos = get_scaled_positions(positions, scell.get_cell(), pbc=scell.get_pbc(), wrap=True)
-                sc_spos = structure.get_scaled_positions(wrap=True)
-                cl_idxs = get_cl_idx_sc(cl_spos,sc_spos,method=1)
-
-                cluster_orbit, mult = self._cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs(), as_array=True)
-                cluster_orbits.append(cluster_orbit)
-
-            self._scells.append(scell) # Add supercell to calculator
-            self._cluster_orbits_set.append(cluster_orbits) # Add corresponding cluster orbits
-        """
         correlations = np.zeros(len(self._cpool))
         for icl, cluster in enumerate(self._cpool.get_cpool()):
             cluster_orbit = cluster_orbits[icl]

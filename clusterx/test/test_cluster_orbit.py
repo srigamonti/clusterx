@@ -23,6 +23,10 @@ def test_cluster_orbit():
     test_cases = [0,1,2,3,4,5]
     #test_cases = [0]
     orbits = [None,None,None,None,None,None]
+    weights_ = [None,None,None,None,None,None]
+    mults = [None,None,None,None,None,None]
+    rmults = [None,None,None,None,None,None]
+    
     for test_case in test_cases:
         if test_case == 0:
             # Perfect cubic lattice. The tested cluster is such that many interactions
@@ -40,11 +44,10 @@ def test_cluster_orbit():
 
             cl = ClustersPool(plat)
 
-            orbit,mult = cl.get_cluster_orbit(scell, [0,2], [11,11])
+            orbit = cl.get_cluster_orbit(scell, [0,2], [11,11])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_clusters_db(orbit, scell, db_name)
-            orbits[test_case] = orbit
-
+            
         if test_case == 1:
             # FCC lattice
             pri = bulk('Cu', 'fcc', a=3.6)
@@ -55,10 +58,9 @@ def test_cluster_orbit():
 
             cl = ClustersPool(plat)
 
-            orbit,mult = cl.get_cluster_orbit(scell, [0,2],[13,13])
+            orbit = cl.get_cluster_orbit(scell, [0,2],[13,13])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_clusters_db(orbit, scell, db_name)
-            orbits[test_case] = orbit
 
         if test_case == 2:
             # Clathrate 2x1x1 supercell. This contains spectator atoms.
@@ -79,10 +81,9 @@ def test_cluster_orbit():
             scell = SuperCell(plat,[(2,0,0),(0,1,0),(0,0,1)])
 
             cl = ClustersPool(plat)
-            orbit,mult = cl.get_cluster_orbit(scell, [19,17],[13,13]) # 24k-24k pair cluster
+            orbit = cl.get_cluster_orbit(scell, [19,17],[13,13]) # 24k-24k pair cluster
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_clusters_db(orbit, scell, db_name)
-            orbits[test_case] = orbit
 
         if test_case == 3:
             # Al(111) surface with Na substitution on the first layer. Test a 3-point cluster.
@@ -97,10 +98,9 @@ def test_cluster_orbit():
             scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)])
 
             cl = ClustersPool(plat)
-            orbit,mult = cl.get_cluster_orbit(scell, [2,14,5],[11,11,11])
+            orbit = cl.get_cluster_orbit(scell, [2,14,5],[11,11,11])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_clusters_db(orbit, scell, db_name)
-            orbits[test_case] = orbit
 
         if test_case == 4:
             # Al(111) surface with Na substitution on the first layer and on-top Oxygen adsorption.
@@ -125,10 +125,9 @@ def test_cluster_orbit():
             scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)])
 
             cl = ClustersPool(plat)
-            orbit,mult = cl.get_cluster_orbit(scell, [3,18],[8,11])
+            orbit = cl.get_cluster_orbit(scell, [3,18],[8,11])
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_clusters_db(orbit, scell, db_name)
-            orbits[test_case] = orbit
 
         if test_case == 5:
             # Perfect cubic lattice. The tested cluster is such that many interactions
@@ -148,11 +147,38 @@ def test_cluster_orbit():
 
             atom_idxs = [0,2]
             atom_species = [sites[0][1],sites[2][2]]
-            orbit,mult = cl.get_cluster_orbit(scell, atom_idxs, atom_species)
+            orbit = cl.get_cluster_orbit(scell, atom_idxs, atom_species)
             db_name = "test_cluster_orbit_%s.json"%(test_case)
             cl.write_clusters_db(orbit, scell, db_name)
-            orbits[test_case] = orbit
 
+
+        weights = orbit.get_weights()
+        mult = orbit.get_multiplicity_in_parent_lattice()
+        rmult = orbit.get_reduced_multiplicity()
+        
+        orbits[test_case] = orbit
+        weights_[test_case] = weights
+        mults[test_case] = mult
+        rmults[test_case] = rmult
+        #rel1 = scell.get_n_sub_sites(unique = False)
+        rel1 = scell.get_index()
+        rel2 = np.sum(weights)
+        rel = (rel1 * rmult == rel2)
+
+        gen_ref = False
+        if gen_ref:
+            print("********++++++++   test_case = "+str(test_case)+"   ++++++++*********")
+            _orbit_nrs = []
+            _orbit_idxs = []
+            for i in range(len(orbit)):
+                _orbit_nrs.append(orbit[i].get_nrs())
+                _orbit_idxs.append(orbit[i].get_idxs())
+            print(np.array2string(np.array(_orbit_idxs),separator=","))
+            print(np.array2string(np.array(weights),separator=","))
+            print(mult)
+            print(rmult)
+            print(rel, rel1, rel2)
+            
 
     print ("\n\n========Test writes========")
     print (test_cluster_orbit.__doc__)
@@ -164,100 +190,112 @@ def test_cluster_orbit():
     if tassert:
         for test_case in test_cases:
             print("test orbit: ",test_case)
-            assert check_result(test_case, orbits[test_case])
+            assert check_result(test_case, orbits[test_case], weights_[test_case], mults[test_case], rmults[test_case], rel)
 
 
-def check_result(testnr, orbit):
+def check_result(testnr, orbit, weights, mult, red_mult, rel):
     isok = True
     orbit_nrs = []
     orbit_idxs = []
-    for cluster in orbit:
+    
+    for i in range(len(orbit)):
+        cluster = orbit[i]
         orbit_nrs.append(cluster.get_nrs())
         orbit_idxs.append(cluster.get_idxs())
 
     if testnr == 0:
-        rorbit = np.array([
-            [0,2],
-            [1,3],
-            [2,4],
-            [3,5],
-            [4,6],
-            [5,7],
-            [6,8],
-            [7,9],
-            [8,0],
-            [9,1],
-            [0,1],
-            [2,3],
-            [4,5],
-            [6,7],
-            [8,9],
-            [0,0],
-            [1,1],
-            [2,2],
-            [3,3],
-            [4,4],
-            [5,5],
-            [6,6],
-            [7,7],
-            [8,8],
-            [9,9]])
-
+        rorbit = np.array(
+            [[0,2],
+             [1,3],
+             [2,4],
+             [3,5],
+             [4,6],
+             [5,7],
+             [6,8],
+             [7,9],
+             [0,8],
+             [1,9],
+             [0,1],
+             [2,3],
+             [4,5],
+             [6,7],
+             [8,9],
+             [0,0],
+             [1,1],
+             [2,2],
+             [3,3],
+             [4,4],
+             [5,5],
+             [6,6],
+             [7,7],
+             [8,8],
+             [9,9]])
+        
+        rweights = np.array([1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1])
+        rmult = 3
+        rrmult = 3
 
     if testnr == 1:
-        rorbit = np.array([
-            [0,2],
-            [1,3],
-            [4,6],
-            [5,7],
-            [0,5],
-            [1,4],
-            [2,7],
-            [3,6],
-            [0,4],
-            [1,5],
-            [2,6],
-            [3,7],
-            [0,3],
-            [1,2],
-            [4,7],
-            [5,6],
-            [0,6],
-            [1,7],
-            [2,4],
-            [3,5],
-            [0,1],
-            [2,3],
-            [4,5],
-            [6,7]])
+        rorbit = np.array(
+            [[0,2],
+             [1,3],
+             [4,6],
+             [5,7],
+             [0,4],
+             [1,5],
+             [2,6],
+             [3,7],
+             [0,5],
+             [1,4],
+             [2,7],
+             [3,6],
+             [0,3],
+             [1,2],
+             [4,7],
+             [5,6],
+             [0,1],
+             [2,3],
+             [4,5],
+             [6,7],
+             [0,6],
+             [1,7],
+             [2,4],
+             [3,5]])
+        
+        rweights = np.array([2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2])
+        rmult = 6
+        rrmult = 6
 
     if testnr == 2:
         rorbit = np.array(
-            [[19,17],
-             [73,71],
+            [[17,19],
+             [71,73],
              [70,72],
              [16,18],
              [ 4,60],
-             [58, 6],
+             [ 6,58],
              [ 7,59],
-             [61, 5],
+             [ 5,61],
              [12,14],
              [66,68],
-             [69,67],
-             [15,13],
+             [67,69],
+             [13,15],
              [62,64],
              [ 8,10],
-             [65,63],
-             [11, 9],
-             [22,20],
-             [76,74],
+             [63,65],
+             [ 9,11],
+             [20,22],
+             [74,76],
              [75,77],
              [21,23],
              [54,56],
              [ 0, 2],
-             [ 3, 1],
-             [57,55]]
-        )
+             [ 1, 3],
+             [55,57]])
+
+        rweights = np.array([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1])
+        rmult = 12
+        rrmult = 12
 
     if testnr == 3:
         rorbit = np.array(
@@ -277,6 +315,9 @@ def check_result(testnr, orbit):
              [41,  5, 44],
              [44,  8, 47],
              [47, 11, 38]])
+        rweights = np.array([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1])
+        rmult = 1
+        rrmult = 1
 
     if testnr == 4:
         rorbit = np.array(
@@ -377,18 +418,74 @@ def check_result(testnr, orbit):
              [59, 62],
              [63, 50]])
 
-    if testnr == 5:
-        return True
+        rweights = np.array([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+ 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+ 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1])
+        rmult = 6
+        rrmult = 6
 
+    if testnr == 5:
+        rorbit = np.array([[0,2],
+                           [1,3],
+                           [2,4],
+                           [3,5],
+                           [4,6],
+                           [5,7],
+                           [6,8],
+                           [7,9],
+                           [0,8],
+                           [1,9],
+                           [0,8],
+                           [1,9],
+                           [0,2],
+                           [1,3],
+                           [2,4],
+                           [3,5],
+                           [4,6],
+                           [5,7],
+                           [6,8],
+                           [7,9],
+                           [0,1],
+                           [0,1],
+                           [2,3],
+                           [2,3],
+                           [4,5],
+                           [4,5],
+                           [6,7],
+                           [6,7],
+                           [8,9],
+                           [8,9]])
+        rweights = np.array([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2])
+        rmult = 6
+        rrmult = 4
+        
+        
+    if testnr == 2:
+        print('A',orbit_idxs)
+        print('B',rorbit)
+        print('C', weights)
+        print('D', mult)
+
+    if not rel:
+        return False
+        
     if len(orbit) != len(rorbit):
         return False
 
+    if mult != rmult:
+        return False
+
+    if red_mult != rrmult:
+        return False
+
+    if (weights != rweights).any():
+        return False
+    
     for cl,rcl in zip(orbit_idxs,rorbit):
         if (cl != np.sort(rcl)).any():
-            isok = False
-            break
-
-    return isok
+            return False
+ 
+    return True
 
 
 #if __name__ == "__main__":
