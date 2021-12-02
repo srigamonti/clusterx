@@ -275,9 +275,9 @@ class CorrelationsCalculator():
                 sc_spos = wrap_scaled_positions(scell.get_scaled_positions(wrap=True),scell.get_pbc())
                 cl_idxs = get_cl_idx_sc(cl_spos,sc_spos,method=0)
                 _cluster_orbit = cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs())
-                cluster_orbit = _cluster_orbit.as_array()
+                #cluster_orbit = _cluster_orbit.as_array()
                 mult = _cluster_orbit.get_multiplicity_in_parent_lattice()
-                cluster_orbits.append(cluster_orbit)
+                cluster_orbits.append(_cluster_orbit)
 
             self._scells.append(scell) # Add supercell to calculator
             self._cluster_orbits_set.append(cluster_orbits) # Add corresponding cluster orbits
@@ -318,10 +318,10 @@ class CorrelationsCalculator():
             cl_idxs = get_cl_idx_sc(cl_spos,sc_spos,method=0)
 
             _cluster_orbit_pool = cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs())
-            cluster_orbit_pool = _cluster_orbit_pool.as_array()
+            #cluster_orbit_pool = _cluster_orbit_pool.as_array()
             mult = _cluster_orbit_pool.get_multiplicity_in_parent_lattice()
 
-            cluster_orbit_pools.append(cluster_orbit_pool)
+            cluster_orbit_pools.append(_cluster_orbit_pool)
 
         return cluster_orbit_pools
 
@@ -365,12 +365,14 @@ class CorrelationsCalculator():
         correlations = np.zeros(len(self._cpool))
         for icl, cluster in enumerate(self._cpool.get_cpool()):
             cluster_orbit = cluster_orbits[icl]
-            for cluster in cluster_orbit:
+            cluster_orbit_arr = cluster_orbit.as_array()
+            weights = cluster_orbit.get_weights()
+            for weight, cluster in zip(weights, cluster_orbit_arr):
                 cf = self.cluster_function(cluster, structure.sigmas, structure.ems)
-                correlations[icl] += cf
+                correlations[icl] += weight * cf
 
             if multiplicities is None:
-                correlations[icl] /= len(cluster_orbit)
+                correlations[icl] /= np.sum(weights)
             else:
                 correlations[icl] /= multiplicities[icl]
         return np.around(correlations,decimals=12)

@@ -428,6 +428,7 @@ class ClustersPool():
         tags = scell.get_tags()
         distances = self._distances
         radii = self._radii
+        
         for npts,radius in zip(npoints,radii):
             clrs_full = []
             for idxs in combinations(satoms,npts):
@@ -442,7 +443,7 @@ class ClustersPool():
 
             clrs_full.sort()
 
-            while len(clrs_full)!=0:
+            while len(clrs_full) != 0:
                 _cl=clrs_full[0]
                 _orbit = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),distances=distances)
                 mult = _orbit.get_multiplicity_in_parent_lattice()
@@ -555,7 +556,7 @@ class ClustersPool():
             self._cpool, self._multiplicities = (list(t) for t in zip(*sorted(zip(self._cpool, self._multiplicities))))
         #print("finished sorting\n")
 
-    def gen_clusters3(self):
+    def gen_clusters3(self): # Experimental
         from clusterx.super_cell import SuperCell
         from itertools import product, combinations
 
@@ -1084,7 +1085,7 @@ class ClusterOrbit(ClustersPool):
         if len(cluster_sites) == 0:
             
             self.add_cluster(Cluster([],[],super_cell))
-            self.weights = np.array(1, int)
+            self.weights = np.array([1], int)
             self.multiplicity = 1
             self.reduced_multiplicity = 1
             return

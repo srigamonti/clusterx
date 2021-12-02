@@ -458,13 +458,6 @@ def check_result(testnr, orbit, weights, mult, red_mult, rel):
         rweights = np.array([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2])
         rmult = 6
         rrmult = 4
-        
-        
-    if testnr == 2:
-        print('A',orbit_idxs)
-        print('B',rorbit)
-        print('C', weights)
-        print('D', mult)
 
     if not rel:
         return False
