@@ -322,6 +322,31 @@ class StructuresSet():
 
         return images
 
+    def get_subset(self, structure_indices = []):
+        """Return structures set instance containing a subset of structures of the original structures set
+        """
+        folders = self.get_folders()
+        property_dict = self.get_property()
+        calculator = self.get_calculator()
+
+        subset = StructuresSet(self.get_parent_lattice())
+
+        for s in structure_indices:
+            if folders is not None:
+                subset.add_structure(self.get_structure(s), folder = folders[s])
+            else:
+                subset.add_structure(self.get_structure(s))
+                
+            
+        subset.set_calculator(calculator)
+        for pn, pv in property_dict.items():
+            _pv = []
+            for i in structure_indices:
+                _pv.append(pv[i])
+            subset.set_property_values(property_name = pn, property_vals = _pv)
+
+        return subset
+            
     def get_json_string(self, super_cell):
         fn = self.filename
 
@@ -753,17 +778,19 @@ class StructuresSet():
             Array of property values
 
         """
-        db = self.get_db()
         self._props[property_name] = property_vals
 
-        for i in range(len(self)):
-            ppts = {}
-            for k,v in self._props.items():
-                ppts[k] = v[i]
+        db = self.get_db()
+        
+        if db is not None:
+            for i in range(len(self)):
+                ppts = {}
+                for k,v in self._props.items():
+                    ppts[k] = v[i]
 
-            db.update(i+1, data={"properties":ppts}) # Writes to the "data" key of the db entry for this Atoms object
+                db.update(i+1, data={"properties":ppts}) # Writes to the "data" key of the db entry for this Atoms object
 
-        db.metadata = {**db.metadata,"properties":self._props}
+            db.metadata = {**db.metadata,"properties":self._props}
 
     def get_property_names(self):
         """Return list of stored property names.
