@@ -413,6 +413,8 @@ class ModelBuilder():
         self.estimator_type = estimator_type
         self.estimator_opts = estimator_opts
 
+        self.ini_comat = None
+        
         self.opt_cpool = None
         self.opt_corrc = None
         self.opt_comat = None
@@ -429,6 +431,14 @@ class ModelBuilder():
         """
         return self.selector
 
+    def get_initial_comat(self):
+        """Return initial correlation matrix
+
+        Return the initial correlation matrix, i.e. the full correlation matrix before 
+        cluster selection is performed.
+        """
+        return self.ini_comat
+
     def get_opt_cpool(self):
         """
         Return optimal clusters pool found in build.
@@ -444,7 +454,7 @@ class ModelBuilder():
         """
         return self.opt_estimator
 
-    def build(self, sset, cpool, prop):
+    def build(self, sset, cpool, prop, verbose = False):
         """Build optimal cluster expansion model
 
         Acts as a Model factory.
@@ -468,15 +478,22 @@ class ModelBuilder():
         self.plat = self.cpool.get_plat()
         self.prop = prop
 
+        if verbose: print("ModelBuilder: initialize correlations calculator")
         corrc = CorrelationsCalculator(self.basis, self.plat, self.cpool)
-        self.ini_comat = corrc.get_correlation_matrix(self.sset)
+        
+        if verbose: print("ModelBuilder: Build correlations matrix")
+        self.ini_comat = corrc.get_correlation_matrix(self.sset, verbose=verbose)
+        
         self.target = self.sset.get_property_values(property_name = self.prop)
 
         # Select optimal clusters using the clusters_selector module
         self.selector = ClustersSelector(basis=self.basis, method=self.selector_type, **self.selector_opts)
         self.opt_cpool = self.selector.select_clusters(sset, cpool, prop, comat = self.ini_comat)
+        self.opt_comat = self.selector.optimal_comat
+        
         self.opt_corrc = CorrelationsCalculator(self.basis, self.plat, self.opt_cpool)
-        self.opt_comat = self.opt_corrc.get_correlation_matrix(self.sset)
+        #if verbose: print("ModelBuilder: Build optimal correlations matrix")
+        #self.opt_comat = self.opt_corrc.get_correlation_matrix(self.sset, verbose=verbose)
 
         # Find out the ECIs using an estimator
         self.opt_estimator = EstimatorFactory.create(self.estimator_type, **self.estimator_opts)

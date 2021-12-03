@@ -114,6 +114,7 @@ class ClustersPool():
                     idxs = []
                 else:
                     idxs = get_cl_idx_sc(cl_positions[i],sc_positions, method=1, tol=1e-3)
+
                 self._cpool.append(Cluster(idxs,cl_nrs[i],self._cpool_scell,self._distances))
 
             self._multiplicities = db.metadata.get("multiplicities",[])

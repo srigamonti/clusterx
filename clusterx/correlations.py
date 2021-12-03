@@ -377,7 +377,7 @@ class CorrelationsCalculator():
                 correlations[icl] /= multiplicities[icl]
         return np.around(correlations,decimals=12)
 
-    def get_correlation_matrix(self, structures_set, outfile = None):
+    def get_correlation_matrix(self, structures_set, outfile = None, verbose = False):
         """Return correlation matrix for a structures set.
 
         **Parameters:**
@@ -387,7 +387,9 @@ class CorrelationsCalculator():
             a structure in the ``StructuresSet`` object.
         """
         corrs = np.empty((len(structures_set),len(self._cpool)))
+        if verbose: nstr = len(structures_set)
         for i,st in enumerate(structures_set):
+            if verbose: print(f'CorrelationsCalculator: computing correlations for structure {i} from {nstr}')
             corrs[i] = self.get_cluster_correlations(st)
 
         if outfile is not None:

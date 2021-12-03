@@ -408,8 +408,8 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
 
     data = {}
 
-    width=15.0*scale
-    fs=int(width*1.8)
+    width = 15.0*scale
+    fs = int(width*1.8)
     ticksize = fs
     golden_ratio = (math.sqrt(5) - 0.9) / 2.0
     labelsize = fs
@@ -421,7 +421,7 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     plt.xticks(fontsize=ticksize)
     plt.yticks(fontsize=ticksize)
     ax = plt.gca()
-    ax.tick_params(width=3*scale,size=10*scale,pad=10*scale)
+    ax.tick_params(width = 3*scale, size = 10*scale, pad = 10*scale)
 
     if refs is None:
         refs = [0.0,0.0]
@@ -436,6 +436,7 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     if sset_gss is not None:
         pred_gss = sset_gss.get_predictions(cemodel)
 
+    pred_cv = None
     if show_loo_predictions and cemodel is not None:
         cvs = cemodel.get_cv_score(sset)
         pred_cv = cvs["Predictions-CV"]
@@ -456,10 +457,13 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     data["concentration"] = frconc
     data["property"] = energies-vl_en
     plt.scatter(frconc,energies-vl_en,marker='o', s=150*scale, edgecolors='green', facecolors='none',label='Calculated')
-    if cemodel is not None:
+    if cemodel is not None and pred_cv is not None:
         data["predicted-property"] = predictions-vl_en
         data["predicted-property-cv"] = pred_cv-vl_en
         plt.scatter(frconc,pred_cv-vl_en,marker='x', s=75*scale, edgecolors='none', facecolors='red',label='Predicted-CV')
+        plt.scatter(frconc,predictions-vl_en,marker='o', s=50*scale, edgecolors='none', facecolors='blue',label='Predicted')
+    if cemodel is not None and pred_cv is None:
+        data["predicted-property"] = predictions-vl_en
         plt.scatter(frconc,predictions-vl_en,marker='o', s=50*scale, edgecolors='none', facecolors='blue',label='Predicted')
     if sset_enum is not None:
         data["concentration-enum"] = frconc_enum

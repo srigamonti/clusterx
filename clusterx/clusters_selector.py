@@ -95,6 +95,8 @@ class ClustersSelector():
         self.predictions = []
         self.opt_ecis = []
         self.optimal_clusters = None
+        self.optimal_cluster_indices = None
+        self.optimal_comat = None
         self.opt_rmse = None
         self.opt_mean_cv = None
         self.opt_sparsity = None
@@ -208,6 +210,9 @@ class ClustersSelector():
             opt = np.arange(len(self.cpool),dtype=int)
 
 
+        self.optimal_cluster_indices = opt
+        self.optimal_comat = self.ini_comat[np.ix_(np.arange(len(p)), opt)]
+        
         self.optimal_clusters = self.cpool.get_subpool(opt)
 
         return self.optimal_clusters
