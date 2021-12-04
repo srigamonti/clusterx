@@ -69,7 +69,7 @@ class SuperCell(ParentLattice):
     **Methods:**
     """
 
-    def __init__(self, parent_lattice=None, p=None, sort_key=None, json_db_filepath=None):
+    def __init__(self, parent_lattice=None, p=None, sort_key=None, json_db_filepath=None, sym_table=False):
 
         if json_db_filepath is not None:
             db = connect(json_db_filepath)
@@ -124,6 +124,12 @@ class SuperCell(ParentLattice):
         super(SuperCell,self).__init__(atoms = prist, substitutions = subs)
         self._natoms = len(self)
         self.set_pbc(self._plat.get_pbc())
+        
+        if sym_table == True:
+            self._sym_table = self.get_symmetry_table()
+        else: 
+            self._sym_table = []
+        
 
     def copy(self):
         """Return a copy
@@ -226,7 +232,7 @@ class SuperCell(ParentLattice):
 
         decoration, sigmas = self.gen_random_decoration(_nsubs)
 
-        return clusterx.structure.Structure(SuperCell(self._plat,self._p,self._sort_key),sigmas=sigmas, mc = mc)
+        return clusterx.structure.Structure(SuperCell(self._plat,self._p,self._sort_key, bool(self._sym_table)),sigmas=sigmas, mc = mc)
 
     def gen_random_decoration(self,nsubs):
         """Generate a random decoration of the super cell with given number of substitutions.
@@ -323,3 +329,57 @@ class SuperCell(ParentLattice):
             Output file name.
         """
         super(SuperCell,self).serialize(fname = fname)
+    def get_symmetry_table(self, symprec=1e-12, tol=1e-3):
+        '''
+        Takes a SuperCell as a parameter and returns the final indices of every atom 
+        after the every possible symmetry operation, see below:
+        {(index of the atom, index of the symmetry operation): index of the atom after the symmetry operation}
+        '''
+        
+        import numpy as np
+        from clusterx.parent_lattice import ParentLattice
+        from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions, get_internal_translations, get_spacegroup
+        from clusterx.utils import get_cl_idx_sc
+        
+        table={}
+        #cell = (self._plat.get_cell(),self._plat.get_positions(),self._plat.get_atomic_numbers())
+        space_group, symmetry = get_spacegroup(self._plat)
+        rotations = symmetry['rotations']
+        translations = symmetry['translations']
+        internal_trans = get_internal_translations(self._plat, self)
+        #Get rotations and translations
+        pos = self.get_positions(wrap=True)
+        p0 = pos
+        
+        spos1 = self.get_scaled_positions(wrap=True) # Super-cell scaled positions
+        spos = np.around(spos1,8) 
+        for i, periodic in enumerate(self.get_pbc()):
+            if periodic:
+                spos[:, i] %= 1.0
+                spos[:, i] %= 1.0
+        
+        sp0 = get_scaled_positions(p0, self._plat.get_cell(), pbc = self.get_pbc(), wrap = False)
+        
+        atom_index = 0
+        rot_index = 0
+        intt_index = 0
+        for r,t in zip(rotations,translations):
+            ts = np.tile(t,(len(sp0),1)).T # Every column represents the same translation for every cluster site
+            sp1 = np.add(np.dot(r,sp0.T),ts).T # Apply rotation, then translation
+            # Get cartesian, then scaled to supercell
+            p1 = np.dot(sp1, self._plat.get_cell())
+            sp1 = get_scaled_positions(p1, self.get_cell(), pbc = self.get_pbc(), wrap = True)
+        
+            for itr,tr in enumerate(internal_trans): # Now apply the internal translations
+                sp2 = np.add(sp1, tr)
+                sp2 = wrap_scaled_positions(sp2,self.get_pbc())
+                new_pos = get_cl_idx_sc(sp2, spos, method=1, tol=1e-3) #Get indices
+                for new_idx in new_pos:
+                    table[atom_index, rot_index, intt_index] = new_idx #Create the table object
+                    atom_index += 1
+                atom_index = 0
+                intt_index += 1
+            intt_index = 0
+            rot_index += 1
+            
+        return table
