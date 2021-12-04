@@ -826,6 +826,9 @@ class ClustersPool():
         import sys
         from collections import Counter
 
+        sc_sg, sc_sym = get_spacegroup(self._plat) # Scaled to parent_lattice          
+
+
         if cluster_index is not None:
             super_cell = self.get_cpool_scell()
             atom_idxs, atom_nrs = self.get_cpool_arrays()
@@ -850,7 +853,7 @@ class ClustersPool():
 
         _orbit = []
         mult = 0
-        for k in range(len(self.sc_sym['rotations'])):
+        for k in range(len(sc_sym['rotations'])):
             for itr,tr in enumerate(internal_trans):
                 indices = [super_cell._sym_table[p,k,itr] for p in cluster_sites]               
                 _cl = np.array(indices)

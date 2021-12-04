@@ -23,6 +23,7 @@ def test_cluster_orbit2():
     test_cases = [0,1,2,3,4,5]
     #test_cases = [0]
     orbits = [None,None,None,None,None,None]
+    mults = [None,None,None,None,None,None]
     for test_case in test_cases:
         if test_case == 0:
             # Perfect cubic lattice. The tested cluster is such that many interactions
@@ -153,6 +154,20 @@ def test_cluster_orbit2():
             cl.write_clusters_db(orbit, scell, db_name)
             orbits[test_case] = orbit
 
+        
+        orbits[test_case] = orbit
+        mults[test_case] = mult
+
+        gen_ref = False
+        if gen_ref:
+            print("********++++++++   test_case = "+str(test_case)+"   ++++++++*********")
+            _orbit_nrs = []
+            _orbit_idxs = []
+            for i in range(len(orbit)):
+                _orbit_nrs.append(orbit[i].get_nrs())
+                _orbit_idxs.append(orbit[i].get_idxs())
+            print(np.array2string(np.array(_orbit_idxs),separator=","))
+            print(mult)
 
     print ("\n\n========Test writes========")
     print (test_cluster_orbit2.__doc__)
@@ -205,31 +220,30 @@ def check_result(testnr, orbit):
 
 
     if testnr == 1:
-        rorbit = np.array([
-            [0,2],
-            [1,3],
-            [4,6],
-            [5,7],
-            [0,5],
-            [1,4],
-            [2,7],
-            [3,6],
-            [0,4],
-            [1,5],
-            [2,6],
-            [3,7],
-            [0,3],
-            [1,2],
-            [4,7],
-            [5,6],
-            [0,6],
-            [1,7],
-            [2,4],
-            [3,5],
-            [0,1],
-            [2,3],
-            [4,5],
-            [6,7]])
+        rorbit = np.array([[0,2],
+                           [1,3],
+                           [4,6],
+                           [5,7],
+                           [0,4],
+                           [1,5],
+                           [2,6],
+                           [3,7],
+                           [0,5],
+                           [1,4],
+                           [2,7],
+                           [3,6],
+                           [0,3],
+                           [1,2],
+                           [4,7],
+                           [5,6],
+                           [0,1],
+                           [2,3],
+                           [4,5],
+                           [6,7],
+                           [0,6],
+                           [1,7],
+                           [2,4],
+                           [3,5]])
 
     if testnr == 2:
         rorbit = np.array(
@@ -383,12 +397,16 @@ def check_result(testnr, orbit):
     if len(orbit_idxs) != len(rorbit):
         return False
     
-    sorted_rorbit = [sorted(x) for x in rorbit]
+    #sorted_rorbit = [sorted(x) for x in rorbit]
     
-    for cl in sorted(orbit_idxs, key=lambda x: x[0]):
-        if cl not in sorted_rorbit:
-            isok = False
-            break
+    #for cl in sorted(orbit_idxs, key=lambda x: x[0]):
+    #    if cl not in sorted_rorbit:
+    #        isok = False
+    #        break
+        
+    for cl,rcl in zip(orbit_idxs,rorbit):
+        if (cl != np.sort(rcl)).any():
+            return False
 
     #for cl,rcl in zip(orbit_idxs,rorbit):
     #    print(cl,rcl)
