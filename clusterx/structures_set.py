@@ -792,6 +792,42 @@ class StructuresSet():
 
             db.metadata = {**db.metadata,"properties":self._props}
 
+    def set_property_values_from_files(self, property_name = "property", property_file_name = "property.dat", cwd = "./"):
+        """Set property values read from files
+
+        Consider a ``StructuresSet`` oject named ``sset``.
+
+        The list of folders ``sset.get_folders()`` is iterated and the value stored in the file named
+        ``property_file_name`` is parsed and assigned to the corresponding sample in the ``sset``. 
+        The name of the property is ``property_name`` and can be recovered by calling
+        ``sset.get_property_values(property_name)``.
+
+        If an associated json database exists, it is updated with the new property.
+
+        **Parameters:**
+        ``property_name``: string
+            The name used to label the property in the structures set. This label is then listed
+            in ``sset.get_property_names()`` and the property values for this label can be obtained
+            by calling ``sset.get_property_values(property_name)``
+
+        ``property_file_name``: string
+            In every folder of the list ``sset.get_folders()`` there must be a file named 
+            ``property_file_name`` containing a real number with the value of the property
+        """
+        import os
+        fl = self.get_folders()
+
+        props = []
+        
+        for folder in fl:
+            fpath = os.path.join(cwd, str(folder), property_file_name)
+            with open(fpath) as f:
+                props.append(float(f.readline().strip()))
+                
+        self.set_property_values(property_name = property_name, property_vals = props)
+                
+        return props
+ 
     def get_property_names(self):
         """Return list of stored property names.
         """
