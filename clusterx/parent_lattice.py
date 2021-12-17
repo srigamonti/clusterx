@@ -600,6 +600,32 @@ class ParentLattice(Atoms):
         """
         return np.where(self.get_tags() == site_type)
 
+    def round_coords(self, decimals = 12):
+        """ Round cell vectors and lattice positions coordinates.
+            
+        Uses ``numpy.around()`` method.
+            
+        **Parameters:**
+        ``decimals``: integer
+            Number of decimal places to round to (default: 0). If decimals is negative, 
+            it specifies the number of positions to the left of the decimal point.
+        
+        **Return:**
+            Returns a new ParentLattice object with rounded coordinates.
+        """
+
+        atomss = self.get_all_atoms()
+        cell0 = np.around(self.get_cell(), decimals)
+        pbc0 = self.get_pbc()
+        
+        atomss0 = []
+        for at in atomss:
+            pos0 = np.around(at.get_positions(), decimals)
+            ans0 = at.get_atomic_numbers()
+            atomss0.append(Atoms(positions = pos0, numbers = ans0, cell = cell0, pbc = pbc0))
+            
+        return ParentLattice(atoms = atomss0[0], substitutions = atomss0[1:], pbc = pbc0)
+		
     def serialize(self,fname="plat.json"):
         """
         Serialize a ParentLattice object
