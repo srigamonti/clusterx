@@ -316,23 +316,62 @@ class Model():
         print("+-----------------------------------------------------------+\n")
 
     def get_errors(self,sset):
-        """Compute RMSE, MAE and MaxAE for model in structure set.
+        """Compute RMSE, MAE and MaxAE for model in structures set.
         """
         calc_vals = sset.get_property_values(property_name = self.property)
         predictions = sset.get_predictions(self)
         rmse = 0
         mae = 0
         maxae = 0
+        i_sample = 0
+        i_sample_max = 0
         for e,p in zip(calc_vals,predictions):
             rmse += (e-p)*(e-p)
             mae += np.abs(e-p)
             if np.abs(e-p) > maxae:
+                i_sample_max = i_sample
                 maxae = np.abs(e-p)
-
+                
+            i_sample += 1
+                
         rmse = np.sqrt(rmse/len(calc_vals))
         mae = mae/len(calc_vals)
 
-        return {"RMSE":rmse, "MAE": mae, "MaxAE":maxae}
+        return {"RMSE":rmse, "MAE": mae, "MaxAE":maxae, "sample_index_max":i_sample_max}
+
+    def get_all_errors(self, sset, srtd = False):
+        """Return absolute errors of every structure in a structures set.
+
+        **Parameters:**
+        ``sset``: StructuresSet objec
+            the errors are calculated for every structure in the structures set
+        ``srtd``: Boolean (default: ``False``)
+            if ``True`` the output errors are sorted from smallest to largest. 
+
+        **Returns:**
+        structured numpy array with fields::
+            
+            [('index','<i4'), ('error','<f4')]
+
+        i.e., every element of the array contains a tuple with an integer, the structure index
+        and a float, the absolute error
+        """
+        calc_vals = sset.get_property_values(property_name = self.property)
+        predictions = sset.get_predictions(self)
+
+        aes = []
+        i_sample = 0
+        for e,p in zip(calc_vals,predictions):
+            aes.append((i_sample, np.abs(e-p)))
+            i_sample += 1
+
+        straes = np.array(aes, dtype=[('index','<i4'), ('error','<f4')])
+        
+        if srtd:
+            saes = np.sort(straes, order='error')
+            return saes
+        else:
+            return straes
 
     def get_cv_score(self,sset,fit_params=None):
         """Get leave-one-out cross-validation score over structures set.
