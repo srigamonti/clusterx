@@ -1113,3 +1113,163 @@ def super_structure(struc0, d):
 
     return decorate_supercell(scell1, atoms1)
 
+def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "trigonometric", comat = None, pretty_print = False):
+    """Find equivalent structures in a StructuresSet object 
+ 
+    Equivalence is determined *i)* in terms of symmetry between structures
+    or *ii)* in terms of cluster basis representation (if a ClustersPool object 
+    or a correlation matrix is given).
+
+    In the first case, the `SymmetryEquivalenceCheck tool of ASE <https://wiki.fysik.dtu.dk/ase/ase/utils.html#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_ is used.
+    
+    **Parameters:**
+
+    ``sset``: StructuresSet object
+        The structures set object to be analyzed. 
+
+    ``to_primitive``: Boolean (default: ``True``)
+        If ``True`` the structures are reduced to their primitive cells. 
+        This feature requires ``spglib`` to installed 
+        (*cf.* `ASE's SymmetryEquivalenceCheck <https://wiki.fysik.dtu.dk/ase/ase/utils.html?highlight=to_primitive#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_)
+
+    ``cpool``: ClustersPool object (default: ``None``)
+        This parameter is optional. If given, the equivalence of a pair of structures
+        is determined according to their cluster basis representation: two
+        structures with the same cluster correlations for the clusters in ``cpool``
+        are considered equivalent. 
+
+    ``basis``: string (default: ``"trigonometric"``)
+        Only used if ``cpool`` is not ``None``. Site basis functions used in the determination
+        of cluster correlations.
+
+    ``comat``: 2D array of floats (default: ``None``)
+        It overrides ``cpool`` and ``basis``. If a correlation matrix for the
+        structures set sset was pre-computed, the equivalence in terms of cluster
+        basis representation is performed by comparing the rows of this matrix (each
+        row must correspond to a structure in the structures set).
+
+
+    **Returns:**
+    Returns a dictionary. The keys (k) are structure indices of unique representative structures, 
+    and the values (v) are arrays of integer, indicating all structure indices equivalent to k
+    (containing k itself too). For instance, the dictionary::
+
+        {"0": [0, 1, 3, 8, 9], 
+         "2": [2, 5, 6],
+         "4": [4, 7]}
+
+    | indicates that in the structures set with indices [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] there are
+      just three distinct structures. These can be represented by strucutres 0, 2 and 4.
+      The structures [0, 1, 3, 8, 9] are all equivalent, etc. 
+    | Notice that here equivalence is used in the sense explained above: It is symmetrical 
+      equivalence only if ``cpool`` and ``comat`` are None.
+    """
+    import numpy as np
+
+    comp = None
+    
+    if cpool is None and comat is None:
+        from ase.utils.structure_comparator import SymmetryEquivalenceCheck
+        comp = SymmetryEquivalenceCheck(to_primitive = to_primitive)
+    elif comat is None:
+        from clusterx.correlations import CorrelationsCalculator
+        from clusterx.utils import isclose
+        ccalc = CorrelationsCalculator(basis = basis, parent_lattice = sset.get_parent_lattice(), clusters_pool = cpool)
+        comat = ccalc.get_correlation_matrix(sset)
+    
+    
+    nstr = len(sset)
+
+    crossedout = []
+    id_str_list = {}
+    for i in range(nstr):
+        if i not in crossedout:
+            crossedout.append(i)
+            subset = [i]
+            
+            if comat is not None:
+                corr_i = comat[i,:]
+            else:
+                atoms_i = sset[i].get_atoms()
+                
+            for j in range(i+1, nstr):
+                
+                if comat is not None:
+                    corr_j = comat[j,:]
+                    check = isclose(corr_i, corr_j)
+                else:
+                    atoms_j = sset[j].get_atoms()
+                    check = comp.compare(atoms_i, atoms_j)
+                    
+                if check:
+                    crossedout.append(j)
+                    subset.append(j)
+
+            id_str_list[i] = np.array(subset, dtype='i4')
+
+    if pretty_print:
+        print(id_str_list)
+        
+    return id_str_list
+
+
+def report_sset_equivalence_check(sset, sset_equivalence_check_output, property_name = None, tol = 0.0):
+    """Generate report of equivalent structures
+    """
+    import operator
+
+    folders = sset.get_folders()
+
+    id_str_list = sset_equivalence_check_output
+
+    unique = []
+    for k, v in id_str_list.items():
+        unique.append(v[0])
+    
+    sset_unique = sset.get_subset(unique)
+    sset_unique.serialize("sset_unique_sym.json", overwrite = True)
+    
+    unique_gss = [] # Collect the lowest energy structure from each subset
+    pvals = sset.get_property_values(property_name)
+    for k, v in id_str_list.items():
+        if len(v) > 1:
+            pvals_subset = operator.itemgetter(*v)(pvals)
+            i_min = np.argmin(pvals_subset)
+            #unique_gss.append(i_min)
+            unique_gss.append(v[i_min])
+        else:
+            unique_gss.append(v[0])
+
+    sset_unique_gss = sset.get_subset(unique_gss)
+    sset_unique_gss.serialize("sset_unique_gss.json", overwrite = True)
+        
+    decim = 5
+    tol = tol
+    print("Structure indices start from 1 (corresponding to sset[0]).")
+    print(f'floats shown below are rounded to {decim} decimals.')
+    print(f'Show only sets where maximum energy variation is larger than {tol}.')
+    for k, v in id_str_list.items():
+        subset = sset.get_subset(v)
+        pvals = subset.get_property_values(property_name)
+        ediff = round(np.amax(pvals)-np.amin(pvals),decim)
+        if len(v) > 1 and ediff>=tol:
+            print("\n========================================================")
+            #subset = sset.get_subset(v)
+            subset.serialize(f'repetitions-{k}.json')
+            #pvals = subset.get_property_values('energy_mixing_atom')
+            #print(k, pvals)
+            #print(k, round(np.amax(pvals)-np.amin(pvals),5), np.around(pvals, decimals = 5))
+            print(f'Found {len(pvals)} structures possibly equivalent to structure:')
+            print(k+1)
+            print("List of str indices:")
+            print(np.array(id_str_list[k])+1)
+            print("Energies for these structures:")
+            print(np.around(pvals, decimals = decim))
+            print("Difference between maximum and minimum energies:")
+            #print(round(np.amax(pvals)-np.amin(pvals),decim))
+            print(ediff)
+            print("Folders:")
+            print(operator.itemgetter(*id_str_list[k])(folders))
+            #print(folders)
+            #print(map(folders.__getitem__, np.array(id_str_list[k]).tolist()))
+
