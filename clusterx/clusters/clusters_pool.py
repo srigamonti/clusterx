@@ -189,6 +189,7 @@ class ClustersPool():
             self._radii = radii
 
     def __iter__(self):
+        self.current = 0
         return self
 
     def __next__(self):
