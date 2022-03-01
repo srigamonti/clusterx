@@ -1215,6 +1215,16 @@ def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "tri
 
 def report_sset_equivalence_check(sset, sset_equivalence_check_output, property_name = None, tol = 0.0):
     """Generate report of equivalent structures
+
+    Writes to files: ``sset_unique_sym.json`` and ``sset_unique_gss.json``. 
+
+    The first contains the structures whose index are given by the keys of the dictionary
+    returned by ``sset_equivalence_check()``.
+
+    The second contains the structures of every equivalence subset where the value of 
+    ``property_name`` is minimal. So, if the property is an energy, the final set will contain all
+    lowest energy structures of every equivalence subset.
+
     """
     import operator
 
