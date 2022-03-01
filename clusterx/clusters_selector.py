@@ -327,7 +327,7 @@ class ClustersSelector():
             step = float(sparsity/(1.0*10))
             idpot = 1
         else:
-            step = sparsity_step
+            step = self.sparsity_step
 
         opt_cv = -1
         opt_clset = []
@@ -405,7 +405,7 @@ class ClustersSelector():
             step = float(sparsity/(1.0*10))
             idpot = 1
         else:
-            step = sparsity_step
+            step = self.sparsity_step
 
         opt_cv = -1
         opt_clset = []
@@ -429,7 +429,10 @@ class ClustersSelector():
                 if coef != 0:
                     cluster_list_lasso.append(i)
 
-            clset = np.union1d(clset0,cluster_list_lasso)
+            if len(cluster_list_lasso) == 0:
+                clset = clset0
+            else:
+                clset = np.union1d(clset0, cluster_list_lasso)
             _comat_model = x[np.ix_(rows,clset)]
 
             _cvs = cross_val_score(fitter_lr, _comat_model, p, cv=10, scoring = 'neg_mean_squared_error', n_jobs = -1)
