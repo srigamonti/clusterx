@@ -415,6 +415,8 @@ class ClustersPool():
             self.gen_clusters2()
         if method == 3:
             self.gen_clusters3()
+        if method == 4:
+            self.gen_clusters4()
 
     def gen_clusters1(self):
         from clusterx.super_cell import SuperCell
