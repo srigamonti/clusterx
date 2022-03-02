@@ -609,6 +609,93 @@ class ClustersPool():
         else:
             self._cpool, self._multiplicities = (list(t) for t in zip(*sorted(zip(self._cpool, self._multiplicities))))
 
+    def gen_clusters4(self): # Like gen_clusters1 but faster for system with a single atom in the parent lattice
+        from clusterx.super_cell import SuperCell
+        from itertools import product, combinations
+
+        npoints = self._npoints
+        scell = self._cpool_scell
+        natoms = scell.get_natoms()
+        sites = scell.get_sites()
+        satoms = scell.get_substitutional_sites()
+        nsatoms = len(satoms)
+        idx_subs = scell.get_idx_subs()
+        tags = scell.get_tags()
+        distances = self._distances
+        radii = self._radii
+
+        npl = len(self._plat)
+            
+        
+        for npts,radius in zip(npoints,radii):
+            print('**** LOOP 1:  #of points: ',npts,', max radius: ',radius)
+            clrs_full2 = []
+            for idxs in combinations(satoms,npts):
+                if npl == 1 and 0 not in idxs and npts != 0:
+                    continue
+                sites_arrays = []
+                for idx in idxs:
+                    sites_arrays.append(sites[idx][1:])
+                for ss in product(*sites_arrays):
+                    #_cl = Cluster(idxs, ss, scell, distances=distances) # This slows down the routine considerably
+                    _cl = Cluster(idxs, ss)
+                    if _cl.get_radius(distances) <= radius:
+                        clrs_full2.append(_cl)
+
+                
+            radii = []
+            for cl in clrs_full2:
+                radii.append(cl.get_radius())
+
+            if npl == 1:
+                clrs_full = [x for _, x in sorted(zip(radii, clrs_full2))]
+            else:
+                clrs_full2.sort()
+                clrs_full = clrs_full2
+
+            print('**** Start removal of symetrically equivalent clusters')
+            while len(clrs_full) != 0:
+                print('**** LOOP 2:  remaning clusters',len(clrs_full))
+
+                _cl = clrs_full[0]
+                if npl == 1:
+                    _orbit = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),distances=distances, no_trans = True)
+                else:
+                    _orbit = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),distances=distances)
+                mult = _orbit.get_multiplicity_in_parent_lattice()
+                orbit = _orbit.as_array()
+                orbit.sort()
+
+                delids = []
+                for __cl1 in orbit[:]:
+                    for i,__cl2 in enumerate(clrs_full):
+                        if __cl1 == __cl2:
+                            delids.append(i)
+                clrs_full = [c for i,c in enumerate(clrs_full) if i not in delids]
+
+                new = True
+                """
+
+                for __cl1 in orbit:
+                    for __cl2 in self._cpool:
+                        if __cl1 == __cl2:
+                            new = False
+                            break
+                    if not new:
+                        break
+                if _cl in self._cpool:
+                    new = False
+                """
+                if new:
+                    #self._cpool.append(_cl)
+                    self._cpool.append(Cluster(_cl.get_idxs(),_cl.get_nrs(),self._cpool_scell,self._distances))
+                    #self._cpool.append(orbit[0])
+                    self._multiplicities.append(mult)
+
+        if len(self._cpool) == 0:
+            return [],0
+        else:
+            self._cpool, self._multiplicities = (list(t) for t in zip(*sorted(zip(self._cpool, self._multiplicities))))
     
         
     def get_cpool_scell(self):
