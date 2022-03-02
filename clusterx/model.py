@@ -493,7 +493,7 @@ class ModelBuilder():
         """
         return self.opt_estimator
 
-    def build(self, sset, cpool, prop, verbose = False):
+    def build(self, sset, cpool, prop, corrc = None, verbose = False):
         """Build optimal cluster expansion model
 
         Acts as a Model factory.
@@ -511,14 +511,22 @@ class ModelBuilder():
             Property name. Must be a valid name as stored in ``sset``. The list of names
             can be obtained using ``sset.get_property_names()``.
 
+        ``corrc``: CorrelationsCalculator object (default: None)
+            If not None, cpool and basis are overriden
+
         """
         self.sset = sset
-        self.cpool = cpool
-        self.plat = self.cpool.get_plat()
+        self.plat = cpool.get_plat()
         self.prop = prop
 
         if verbose: print("ModelBuilder: initialize correlations calculator")
-        corrc = CorrelationsCalculator(self.basis, self.plat, self.cpool)
+
+        if corrc is None:
+            self.cpool = cpool
+            corrc = CorrelationsCalculator(self.basis, self.plat, self.cpool)
+        else:
+            self.cpool = corrc._cpool
+            self.basis = corrc.basis
         
         if verbose: print("ModelBuilder: Build correlations matrix")
         self.ini_comat = corrc.get_correlation_matrix(self.sset, verbose=verbose)

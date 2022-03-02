@@ -242,7 +242,8 @@ class ClustersSelector():
         from sklearn.metrics import make_scorer, r2_score, mean_squared_error
 
         #if self.method == "linreg":
-        self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept, n_jobs = -1)
+        # self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept, n_jobs = -1)
+        self.fitter_cv = linear_model.Ridge(alpha = 1.0e-6, fit_intercept=False)
         
         rows = np.arange(len(p))
         ecis = []

@@ -614,24 +614,39 @@ class ClustersPool():
     def gen_clusters4(self): # Like gen_clusters1 but faster for system with a single atom in the parent lattice
         from clusterx.super_cell import SuperCell
         from itertools import product, combinations
+        from clusterx.utils import atoms_equivalence_check
 
         npoints = self._npoints
         scell = self._cpool_scell
         natoms = scell.get_natoms()
         sites = scell.get_sites()
-        satoms = scell.get_substitutional_sites()
-        nsatoms = len(satoms)
+        satoms0 = scell.get_substitutional_sites()
+        nsatoms = len(satoms0)
         idx_subs = scell.get_idx_subs()
         tags = scell.get_tags()
         distances = self._distances
         radii = self._radii
 
         npl = len(self._plat)
-            
+
+        _cpool = []
+        _multiplicities = []
+        
         
         for npts,radius in zip(npoints,radii):
+            __cpool = []
+            __multiplicities = []
             print('**** LOOP 1:  #of points: ',npts,', max radius: ',radius)
             clrs_full2 = []
+            satoms = []
+            
+            if npts > 1:
+                for i in satoms0:
+                    if distances[0,i]<=radius:
+                        satoms.append(i)
+            else:
+                satoms = satoms0
+            
             for idxs in combinations(satoms,npts):
                 if npl == 1 and 0 not in idxs and npts != 0:
                     continue
@@ -690,10 +705,32 @@ class ClustersPool():
                 """
                 if new:
                     #self._cpool.append(_cl)
-                    self._cpool.append(Cluster(_cl.get_idxs(),_cl.get_nrs(),self._cpool_scell,self._distances))
+                    #_cpool.append(Cluster(_cl.get_idxs(),_cl.get_nrs(),self._cpool_scell,self._distances))
                     #self._cpool.append(orbit[0])
-                    self._multiplicities.append(mult)
+                    #_multiplicities.append(mult)
 
+                    __cpool.append(Cluster(_cl.get_idxs(),_cl.get_nrs(),self._cpool_scell,self._distances))
+                    __multiplicities.append(mult)
+
+            if npl == 1 and npts > 1:
+                cpool_atoms = self.get_cpool_atoms(orbit=__cpool, super_cell=self._cpool_scell)        
+
+                eq_clusters = atoms_equivalence_check(cpool_atoms)
+
+                for k,v in eq_clusters.items():
+                    idx = v[0]
+                    _cpool.append(__cpool[idx])
+                    _multiplicities.append(__multiplicities[idx])
+                
+                print(eq_clusters)
+            else:
+                for i in range(len(__cpool)):
+                    _cpool.append(__cpool[i])
+                    _multiplicities.append(__multiplicities[i])
+        
+        self._cpool = _cpool
+        self._multiplicities = _multiplicities
+                    
         if len(self._cpool) == 0:
             return [],0
         else:

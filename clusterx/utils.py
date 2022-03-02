@@ -1167,16 +1167,15 @@ def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "tri
     import numpy as np
 
     comp = None
+    from clusterx.utils import isclose
     
     if cpool is None and comat is None:
         from ase.utils.structure_comparator import SymmetryEquivalenceCheck
         comp = SymmetryEquivalenceCheck(to_primitive = to_primitive)
     elif comat is None:
         from clusterx.correlations import CorrelationsCalculator
-        from clusterx.utils import isclose
         ccalc = CorrelationsCalculator(basis = basis, parent_lattice = sset.get_parent_lattice(), clusters_pool = cpool)
         comat = ccalc.get_correlation_matrix(sset)
-    
     
     nstr = len(sset)
 
@@ -1200,6 +1199,73 @@ def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "tri
                 else:
                     atoms_j = sset[j].get_atoms()
                     check = comp.compare(atoms_i, atoms_j)
+                    
+                if check:
+                    crossedout.append(j)
+                    subset.append(j)
+
+            id_str_list[i] = np.array(subset, dtype='i4')
+
+    if pretty_print:
+        print(id_str_list)
+        
+    return id_str_list
+
+def atoms_equivalence_check(atoms, to_primitive = True, pretty_print = False):
+    """Find equivalent structures in an array of Atoms objects
+ 
+    Equivalence is determined in terms of symmetry between structures
+    
+    The `SymmetryEquivalenceCheck tool of ASE <https://wiki.fysik.dtu.dk/ase/ase/utils.html#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_ is used.
+    
+    **Parameters:**
+
+    ``atoms``: array of Atoms objects
+        The structures to be analyzed. 
+
+    ``to_primitive``: Boolean (default: ``True``)
+        If ``True`` the structures are reduced to their primitive cells. 
+        This feature requires ``spglib`` to installed 
+        (*cf.* `ASE's SymmetryEquivalenceCheck <https://wiki.fysik.dtu.dk/ase/ase/utils.html?highlight=to_primitive#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_)
+
+
+    **Returns:**
+    Returns a dictionary. The keys (k) are structure indices of unique representative structures, 
+    and the values (v) are arrays of integer, indicating all structure indices equivalent to k
+    (containing k itself too). For instance, the dictionary::
+
+        {"0": [0, 1, 3, 8, 9], 
+         "2": [2, 5, 6],
+         "4": [4, 7]}
+
+    | indicates that in the structures set with indices [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] there are
+      just three distinct structures. These can be represented by strucutres 0, 2 and 4.
+      The structures [0, 1, 3, 8, 9] are all equivalent, etc. 
+    | Notice that here equivalence is used in the sense explained above: It is symmetrical 
+      equivalence only if ``cpool`` and ``comat`` are None.
+    """
+    import numpy as np
+
+    from clusterx.utils import isclose
+    
+    from ase.utils.structure_comparator import SymmetryEquivalenceCheck
+    comp = SymmetryEquivalenceCheck(to_primitive = to_primitive)
+    
+    nstr = len(atoms)
+
+    crossedout = []
+    id_str_list = {}
+    for i in range(nstr):
+        if i not in crossedout:
+            crossedout.append(i)
+            subset = [i]
+            
+            atoms_i = atoms[i]
+                
+            for j in range(i+1, nstr):
+                
+                atoms_j = atoms[j]
+                check = comp.compare(atoms_i, atoms_j)
                     
                 if check:
                     crossedout.append(j)

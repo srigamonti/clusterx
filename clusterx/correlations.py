@@ -72,6 +72,10 @@ class CorrelationsCalculator():
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
 
+    def get_cpool(self):
+        """Return ClustersPool object of the calculator
+        """
+        return self._cpool
         
     def serialize(self, db_name = 'corrcalc.json'):
         """Write correlations calculator to Atoms Json database
@@ -231,7 +235,7 @@ class CorrelationsCalculator():
             lengths[i] = len(orbit)
         return lengths
 
-    def get_cluster_orbits_for_scell(self,scell):
+    def get_cluster_orbits_for_scell(self, scell, verbose = False):
         """Return array of cluster orbits for a given supercell
 
         **Parameters**
@@ -254,6 +258,7 @@ class CorrelationsCalculator():
                         break
 
         if cluster_orbits is None:
+            if verbose: print("Calculating cluster orbits from scratch for scell")
             from clusterx.structure import Structure
             from clusterx.symmetry import wrap_scaled_positions
             # Add new super cell and calculate cluster orbits for it.
@@ -333,7 +338,7 @@ class CorrelationsCalculator():
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
         
-    def get_cluster_correlations(self, structure, multiplicities=None):
+    def get_cluster_correlations(self, structure, multiplicities=None, verbose=False):
         """Get cluster correlations for a structure
         **Parameters:**
 
@@ -358,7 +363,7 @@ class CorrelationsCalculator():
             #cluster_orbits = self._cluster_orbits_set[0]
             cluster_orbits = self._cluster_orbits_mc
         else:
-            cluster_orbits = self.get_cluster_orbits_for_scell(structure.get_supercell())
+            cluster_orbits = self.get_cluster_orbits_for_scell(structure.get_supercell(),verbose=verbose)
             if self._mc is True:
                 self._num_mc_calls = 1
                 self._cluster_orbits_mc = cluster_orbits
@@ -391,7 +396,7 @@ class CorrelationsCalculator():
         if verbose: nstr = len(structures_set)
         for i,st in enumerate(structures_set):
             if verbose: print(f'CorrelationsCalculator: computing correlations for structure {i} from {nstr}')
-            corrs[i] = self.get_cluster_correlations(st)
+            corrs[i] = self.get_cluster_correlations(st, verbose=verbose)
 
         if outfile is not None:
             f  = open(outfile,"w+")
