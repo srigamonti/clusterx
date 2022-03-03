@@ -224,6 +224,25 @@ class ClustersPool():
         return np.array(m)
     """
 
+    def add(self, other):
+        """Add other ClustersPool object to this one
+
+        - The actual ClustersPool object gets modified
+        - self._cpool_scell need be the same for both summands (at the moment not checked by the function)
+        """
+
+        m = []
+        for icl, cl in enumerate(self):
+            m.append(self._multiplicities[icl])
+            
+            
+        for icl, cl in enumerate(other):
+           self._cpool.append(cl) 
+           m.append(other._multiplicities[icl])
+
+        self._multiplicities = np.array(m)
+        self.get_cpool_dict()
+           
     def get_plat(self):
         """Return parent lattice for the clusters pool
         """
