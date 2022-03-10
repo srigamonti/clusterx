@@ -240,7 +240,8 @@ class ClustersPool():
            self._cpool.append(cl) 
            m.append(other._multiplicities[icl])
 
-        self._multiplicities = np.array(m)
+        self._multiplicities = np.array(m,dtype=int)
+        self.nclusters = len(self._cpool)
         self.get_cpool_dict()
            
     def get_plat(self):
@@ -1263,8 +1264,10 @@ class ClusterOrbit(ClustersPool):
             self._gen_orbit(super_cell, cluster_sites, cluster_species, tol, distances, no_trans)
 
 
-
     def _gen_orbit(self, super_cell, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans=False):
+        self.gen_orbit(super_cell, cluster_sites=cluster_sites, cluster_species=cluster_species, tol = tol, distances=distances, no_trans=no_trans)
+        
+    def gen_orbit(self, super_cell, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans=False):
         """
         Generate cluster orbit inside a supercell.
 
