@@ -70,9 +70,12 @@ class ClustersSelector():
     def __init__(self, basis="trigonometric", selector_type = "identity", **selector_opts):
 
         self.method = selector_opts.pop("method", selector_type) # selector_type argument replaces old method argument. This ensures backward compatibility.
+
+        # additional arguments for estimator in CV
+        self.estimator_for_selector = selector_opts.pop("estimator","skl_LinearRegression")
+        self.estimator_opts_for_selector = selector_opts.pop("estimator_opts",{})
         
         # additional arguments for lasso_cv
-        
         self.sparsity_max = selector_opts.pop("sparsity_max",1)
         self.sparsity_min = selector_opts.pop("sparsity_min",0.01)
         self.sparsity_step = selector_opts.pop("sparsity_step",0.0)
@@ -167,6 +170,9 @@ class ClustersSelector():
                 if 0 not in opt:
                     self.fit_intercept = False
 
+        elif self.method == "skl_lasso_cv":
+            opt = self._select_clusters_skl_lasso_cv(x, p)
+        
         elif self.method == "lasso_on_residual" or self.method == "lasso-on-residual": #  "lasso-on-residual" deprecated, preferred with "_"s
             nb = int(self.set0[0])
             r = float(self.set0[1])
@@ -392,6 +398,42 @@ class ClustersSelector():
             else:
                 sparsity = sparsity - step
 
+        return opt_clset
+
+    def _select_clusters_skl_lasso_cv(self,x,p):
+        from sklearn.model_selection import LeaveOneOut
+        from sklearn.model_selection import cross_val_score
+        from sklearn import linear_model
+        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
+        from sklearn.linear_model import LassoCV
+
+        opt_cv = -1
+        opt_clset = []
+        rows = np.arange(len(p))
+
+        idx = 1
+
+        est = LassoCV(eps=1e-5, n_alphas=50, fit_intercept=True, n_jobs=-1, verbose = True)
+
+        x_ = x[:,1:]
+        mod = est.fit(x_,p)
+
+        
+        ecimult = []
+        ecimult.append(mod.intercept_)
+        for coef in mod.coef_:
+            ecimult.append(coef)
+    
+        self.cvs = np.mean(est.mse_path_)
+        self.rmse = np.mean(est.mse_path_)
+
+        self.set_sizes = np.ones(len(est.alphas_))
+        self.lasso_sparsities = est.alphas_
+
+        opt_cv = np.amin(self.cvs)
+        opt_clset = [i for i, e in enumerate(ecimult) if e != 0]
+        self.opt_sparsity = est.alpha_
+        
         return opt_clset
 
     def _select_clusters_lasso_on_residual_cv(self,x,p,clset0):
