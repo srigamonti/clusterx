@@ -187,11 +187,40 @@ class SuperCell(ParentLattice):
         """
         view(self)
 
+    def gen_structure(self, sigmas = None, mc = False):
+        """
+        Generate a Structure with given configuration.
+
+        **Parameters:**
+
+        ``sigmas``: array of integers
+            sigmas[idx] must be the ocupation variable for crystal site idx.
+            For instance, supose that::
+                
+                ThisObject.get_sublattice_types()
+
+            returns ``{0:[14,13], 1:[56,47,38]}``, and that::
+                
+                ThisObject.get_tags()
+
+            returns ``[0,0,1,1,0]``, meaning that for atom idx=0,1,4 the sublattice types are 0
+            and for idx=2,3 the sublattice types is 1.
+            Then, the argument ``sigmas=[0,1,0,2,1]`` will produce the configuration::
+
+                [14,13,56,38,13]
+        
+        """
+
+        return clusterx.structure.Structure(SuperCell(self._plat, self._p, self._sort_key, sym_table = bool(self._sym_table)), sigmas=sigmas, mc = mc)
+        
     def gen_random(self, nsubs = None, mc = False):
+        return self.gen_random_structure(nsubs = nsubs, mc = mc)
+        
+    def gen_random_structure(self, nsubs = None, mc = False):
         """
         Generate a random Structure with given number of substitutions.
 
-        Parameters:
+        **Parameters:**
 
         ``nsubs``: None, int or dictionary (default: None)
             If dictionary, the ``nsubs`` argument must have the format ``{site_type0:[nsub01,nsub02,...], site_type1: ...}``
@@ -205,6 +234,11 @@ class SuperCell(ParentLattice):
 
             If ``None``, the number of substitutions in each sublattice is
             generated at random.
+
+        **Notes:**
+
+        This function can be also called with the method ``gen_random``, with the same signature. 
+        Use ``gen_random_structure``, since ``gen_random`` is deprecated.
         """
         import clusterx.structure
 
