@@ -54,21 +54,29 @@ class CorrelationsCalculator():
             if fext == "pickle":
                 with open(filepath,"rb") as f:
                     inst = pickle.load(f)
+                    inst.pickle_file = filepath
                     return inst
                 
                 if not isinstance(inst, cls):
                     raise TypeError('Unpickled object is not of type {}'.format(cls))
         else:
-            inst = super(CorrelationsCalculator,cls).__new__(cls, *args, **kwargs)
+            inst = super(CorrelationsCalculator,cls).__new__(cls)
+            inst.pickle_file = None
             inst.initialize(*args,**kwargs)
             return inst
     
-    def __init__(self, filepath = None, json_db_filepath = None, basis = None, parent_lattice = None, clusters_pool = None, db = None, lookup = True, use_sym_table = False):
+    def __init__(self, basis = None, parent_lattice = None, clusters_pool = None, db = None, lookup = True, use_sym_table = False, filepath = None, json_db_filepath = None):
+        # Initialization passed to __new__ method through initialize(), to allow dummy init from unpickling. See
+        # https://stackoverflow.com/questions/36458221/unpickling-object-of-type-x-in-the-new-method-of-class-x-calls-init-on-r
         pass
-    def initialize(self, filepath = None, json_db_filepath = None, basis = None, parent_lattice = None, clusters_pool = None, db = None, lookup = True, use_sym_table = False):
+    
+    def initialize(self, basis = None, parent_lattice = None, clusters_pool = None, db = None, lookup = True, use_sym_table = False, filepath = None, json_db_filepath = None):
         if filepath is not None:
             fext = os.path.splitext(filepath)[1][1:]
             
+            if fext == "pickle":
+                self.pickle_file = filepath
+                
             if fext == "json":
                 json_db_filepath = filepath
                 
@@ -96,6 +104,7 @@ class CorrelationsCalculator():
         ####
         self._2pi = 2*np.pi
         self.use_sym_table = use_sym_table
+        
         if self.basis == 'polynomial':
             self.basis_set = PolynomialBasis()
         elif self.basis == 'chebyshev':
@@ -122,7 +131,7 @@ class CorrelationsCalculator():
 
         ``filepath``: string 
             Name of the file to store the correlations_calculator object. It can contain the relative or absolute path.
-            If not given, and if db_name (deprecated) is None, filepathh is set to "ccalc.pickle" and fmt is overriden (set to pickle).
+            If not given, and if db_name (deprecated) is None, filepathh is set to "CCALC.pickle" and fmt is overriden (set to pickle).
         ``fmt``: string
             It can take the values ``"pickle"`` or ``"json"``. 
             So far, object can only be re-initiated from a ``"pickle"`` file, therefore this is the preferred format. 
@@ -133,7 +142,7 @@ class CorrelationsCalculator():
         """
 
         if filepath is None and db_name is None:
-            filepath = "ccalc.pickle"
+            filepath = "CCALC.pickle"
 
         if db_name is not None:
             filepath = db_name
@@ -148,12 +157,10 @@ class CorrelationsCalculator():
                 fmt = "json_db"
 
         if fmt == "pickle":
+            self.pickle_file = filepath
+
             with open(filepath,"wb") as f:
                 pickle.dump(self,f)
-            #ccalcf = open(filepath,"wb")
-            #pickle.dump(self, ccalcf)
-            #ccalcf.close()
-
                 
         if fmt == "json_db":
             from ase.db.jsondb import JSONDatabase
@@ -180,11 +187,11 @@ class CorrelationsCalculator():
             atoms_db.metadata = cpooldict
 
     def _get_lookup_table(self):
-        idx_subs = self._plat.get_idx_subs()
+        idx_subs = self._plat.get_sublattice_types()
         max_m = max([len(idx_subs[x]) for x in idx_subs])
         if max_m < 2:
             raise ValueError("No substitutional sites.")
-        lookup_table = np.empty((max_m,max_m,max_m))
+        lookup_table = np.zeros((max_m,max_m,max_m))
         for m in range(max_m):
             for alpha in range(m+1):
                 for sigma in range(m+1):
@@ -345,18 +352,14 @@ class CorrelationsCalculator():
             cpool = ClustersPool(scell.get_parent_lattice(),super_cell=scell)
 
             for icl,cluster in enumerate(self._cpool.get_cpool()):
-                positions = cluster.get_positions()
-
-                cl_spos = wrap_scaled_positions(get_scaled_positions(positions, scell.get_cell(), pbc=scell.get_pbc(), wrap=True),scell.get_pbc())
-                sc_spos = wrap_scaled_positions(scell.get_scaled_positions(wrap=True),scell.get_pbc())
-                cl_idxs = get_cl_idx_sc(cl_spos,sc_spos,method=0)
-                _cluster_orbit = cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs())
-                #cluster_orbit = _cluster_orbit.as_array()
-                mult = _cluster_orbit.get_multiplicity_in_parent_lattice()
+            #for icl,cluster in enumerate(self._cpool):
+                _cluster_orbit = cpool.get_cluster_orbit(scell, cluster_positions = cluster.get_positions(), cluster_species=cluster.get_nrs())
                 cluster_orbits.append(_cluster_orbit)
 
             self._scells.append(scell) # Add supercell to calculator
             self._cluster_orbits_set.append(cluster_orbits) # Add corresponding cluster orbits
+            if self.pickle_file is not None:
+                self.serialize(self.pickle_file)
 
         return cluster_orbits
 
@@ -428,7 +431,7 @@ class CorrelationsCalculator():
         """
         #from clusterx.utils import get_cl_idx_sc
         cluster_orbits = None
-
+        
         if self._mc and self._cluster_orbits_set != [] and self._num_mc_calls != 0:
             #cluster_orbits = self._cluster_orbits_set[0]
             cluster_orbits = self._cluster_orbits_mc
@@ -438,8 +441,10 @@ class CorrelationsCalculator():
                 self._num_mc_calls = 1
                 self._cluster_orbits_mc = cluster_orbits
 
-        correlations = np.zeros(len(self._cpool))
-        for icl, cluster in enumerate(self._cpool.get_cpool()):
+        cpool_list = self._cpool.get_cpool_list()
+        
+        correlations = np.zeros(len(cpool_list))
+        for icl, cluster in enumerate(cpool_list):
             cluster_orbit = cluster_orbits[icl]
             cluster_orbit_arr = cluster_orbit.as_array()
             weights = cluster_orbit.get_weights()
