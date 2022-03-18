@@ -1092,17 +1092,25 @@ def super_structure(struc0, d):
 
     ``struc0``: Structure object
         Original structure for the superstructure.
-    ``d``: three-component integer array
-        The super structure is obtained by repeating the original structure
-        ``d[i]`` times along unit cell vector ``i``.
+    ``d``: int, three-component integer array, or 3x3 integer array
+        The super structure is obtained by the transformation d S, with d a
+        3x3 matrix of integer and S the supercell cell vectors.
     """
     from clusterx.structure import Structure
     from clusterx.super_cell import SuperCell
     from ase.build import make_supercell
 
-    n = np.zeros((3,3), int)
-    np.fill_diagonal(n, d)
-
+    if np.shape(d) == ():
+        n = np.zeros((3,3), int)
+        np.fill_diagonal(n, [d,d,d])
+    elif np.shape(d) == (3,):
+        n = np.zeros((3,3), int)
+        np.fill_diagonal(n, d)
+    elif np.shape(d) == (3,3):
+        n = np.array(d)
+    else:
+        print("ERROR (clusterx.utils.super_structure()): ")
+    
     p0 = struc0.get_supercell().get_transformation()
     p1 = n @ p0
 
