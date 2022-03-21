@@ -218,7 +218,11 @@ class ParentLattice(Atoms):
         self._subs = []
         self._set_substitutions(substitutions)
         
-        self.sc_sg, self.sc_sym = get_spacegroup(self)
+        self.sc_sg, self.sc_sym = self._compute_sym()
+
+    def _compute_sym(self):
+        return get_spacegroup(self)
+
 
     def __eq__(self, other):
         """Check identity of two ParentLattice objects
@@ -256,8 +260,11 @@ class ParentLattice(Atoms):
 
     def get_sym(self):
         """Get space symmetry of a ParentLattice object.
-        """ 
-        return self.sc_sg, self.sc_sym
+        """
+        try:
+            return self.sc_sg, self.sc_sym
+        except:
+            return self._compute_sym()
         
     def get_natoms(self):
         """Get the total number of atoms."""
