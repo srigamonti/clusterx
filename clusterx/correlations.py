@@ -330,7 +330,7 @@ class CorrelationsCalculator():
         for i, _scell in enumerate(self._scells):
             if cluster_orbits is None:
                 if len(scell.get_positions()) == len(_scell.get_positions()):
-                    if np.allclose(scell.get_positions(),_scell.get_positions(),atol=1e-3):
+                    if np.allclose(scell._p,_scell._p):
                         cluster_orbits = self._cluster_orbits_set[i]
                         break
 
@@ -351,8 +351,7 @@ class CorrelationsCalculator():
 
             cpool = ClustersPool(scell.get_parent_lattice(),super_cell=scell)
 
-            for icl,cluster in enumerate(self._cpool.get_cpool()):
-            #for icl,cluster in enumerate(self._cpool):
+            for icl,cluster in enumerate(self._cpool.get_cpool_list()):
                 _cluster_orbit = cpool.get_cluster_orbit(scell, cluster_positions = cluster.get_positions(), cluster_species=cluster.get_nrs())
                 cluster_orbits.append(_cluster_orbit)
 
