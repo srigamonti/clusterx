@@ -8,7 +8,7 @@ import clusterx as c
 from clusterx.clusters.cluster import Cluster
 from clusterx.super_cell import SuperCell
 from clusterx.parent_lattice import ParentLattice
-from clusterx.symmetry import get_spacegroup, get_scaled_positions, get_internal_translations, wrap_scaled_positions
+from clusterx.symmetry import get_scaled_positions, get_internal_translations, wrap_scaled_positions
 import os
 import sys
 import subprocess
@@ -147,6 +147,7 @@ class ClustersPool():
 
             self.nclusters = len(self._cpool)
 
+        self.sc_sg, self.sc_sym = self._plat.get_sym()
         self.current = 0
         self.high = self.nclusters - 1
         self._cpool_atoms = []
@@ -209,20 +210,6 @@ class ClustersPool():
         """Sort clusters pool
         """
         self._cpool.sort()
-
-    """
-    def get_cluster_multiplicities(self):
-        from clusterx.symmetry import get_spacegroup, get_scaled_positions, get_internal_translations, wrap_scaled_positions
-        self.sc_sg, sc_sym = get_spacegroup(self._plat) # Scaled to parent_lattice
-        m = []
-        for cl in self._cpool:
-            if cl.npoints == 0:
-                m.append(1)
-            else:
-                m.append(cl.get_multiplicity(sc_sym["rotations"],sc_sym["translations"],self._plat.get_cell(),self._plat.get_pbc()))
-
-        return np.array(m)
-    """
 
     def add(self, other):
         """Add other ClustersPool object to this one
@@ -943,109 +930,6 @@ class ClustersPool():
 
         return strs
     
-    def get_cluster_orbit2(self, super_cell=None, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans = False, cluster_index=None, as_array=False):
-        """
-        Get cluster orbit inside a supercell.
-
-        Returns a pool of clusters representing a cluster orbit.
-
-        **Parameters:**
-
-        ``super_cell``: SuperCell object
-            The super cell in which the orbit is calculated.
-        ``cluster_sites``: Array of integer
-            the atom indices of the cluster as referred to the SuperCell object
-            given in ``super_cell``, or the ``ClustersPool.get_cpool_scell()`` superCell
-            object (see ``cluster_index``).
-        ``cluster_species``: array of integer
-            Decoration (with species numbers) of the cluster for which the orbit is calculated. The species
-            numbers serve as index for the site cluster basis functions. Thus, for  instance
-            if in a given site, say, ``i=12``, the possible species to put are ``14``,
-            ``15`` and ``16`` (``14`` for the pristine), then ``15`` represents the site
-            basis function with label ``1`` and ``16`` the basis function with label ``2``.
-        ``tol``: float
-            tolerance to determine whether cluster and atom positions are the same.
-        ``distances``: 2D array of floats
-             distances of all of the atoms with all of the atoms. Can be used to achieve larger efficiency.
-        ``no_trans``: Boolean
-            set to True to ignore translations of the parent_lattice inside the SuperCell. Thus
-            a reduced orbit is obtained which only contains the symmetry operations of the parent lattice.
-        ``cluster_index``: integer
-            Index of a cluster in the pool. Overrides ``super_cell``, and the
-            orbit is calculated on the supercell of the ``ClustersPool.get_cpool_scell()`` object.
-        ``as_array``: Boolean (default: ``False``)
-            If true, instead of returning a clusters pool, it returns an array of cluster objects
-            and the multiplicities, i.e. call it in this way::
-            
-                cluster_array, multiplicities = cpool.get_cluster_orbit(as_array=True)
-        """
-        from scipy.spatial.distance import cdist
-        from sympy.utilities.iterables import multiset_permutations
-        from clusterx.utils import get_cl_idx_sc
-        import sys
-        from collections import Counter
-
-        sc_sg, sc_sym = get_spacegroup(self._plat) # Scaled to parent_lattice          
-
-
-        if cluster_index is not None:
-            super_cell = self.get_cpool_scell()
-            atom_idxs, atom_nrs = self.get_cpool_arrays()
-            cluster_sites = atom_idxs[cluster_index]
-            cluster_species = atom_nrs[cluster_index]
-
-        # empty cluster
-        if len(cluster_sites) == 0:
-            return np.array([Cluster([],[],super_cell)]), 1
-
-        substitutional_sites = super_cell.get_substitutional_sites()
-        for _icl in cluster_sites:
-            if _icl not in substitutional_sites:
-                return None
-
-        cluster_species = np.array(cluster_species)
-        # Get symmetry operations of the parent lattice
-        if no_trans:
-            internal_trans = np.zeros((3,3))
-        else:
-            internal_trans = get_internal_translations(self._plat, super_cell) # Scaled to super_cell
-
-        _orbit = []
-        mult = 0
-        for k in range(len(sc_sym['rotations'])):
-            for itr,tr in enumerate(internal_trans):
-                indices = [super_cell._sym_table[p,k,itr] for p in cluster_sites]               
-                _cl = np.array(indices)
-
-                include = True
-                if len(_cl)>1:
-                    for i in range(len(_cl)):
-                        for j in range(i+1,len(_cl)):
-                            if _cl[i] == _cl[j] and cluster_species[i] != cluster_species[j]:
-                                include = False
-                if not include:
-                    continue
-
-                ocl = Cluster(_cl,cluster_species)
-        
-                if ocl in _orbit:
-                    continue
-                else:
-                    _orbit.append(ocl)
-                    if itr == 0:
-                        mult = mult + 1
-
-        orbit = []
-        for cl in _orbit:
-            orbit.append(Cluster(cl.get_idxs(),cl.get_nrs(),super_cell,distances))
-
-        if as_array:
-            return np.array(orbit), mult
-        else:
-            subpool = ClustersPool(self._plat, super_cell = self._cpool_scell)
-            for cl in orbit:
-                subpool.add_cluster(cl)
-            return subpool, mult
 
     def get_equiv_clusters(self, cluster):
         ids = cluster.get_idxs()
@@ -1274,11 +1158,9 @@ class ClusterOrbit(ClustersPool):
             self.weights = db.metadata.get("weights",np.array([],int))
             self.multiplicity = db.metadata.get("multiplicity",0)
             self.reduced_multiplicity = db.metadata.get("reduced_multiplicity",0)
-            self.sc_sg, self.sc_sym = get_spacegroup(self._plat) # Scaled to parent_lattice          
         else:
             platt = super_cell.get_parent_lattice()
             super(ClusterOrbit,self).__init__(parent_lattice = platt, super_cell = super_cell)
-            self.sc_sg, self.sc_sym = get_spacegroup(self._plat) # Scaled to parent_lattice
             self._gen_orbit(super_cell, cluster_sites, cluster_species, tol, distances, no_trans, cluster_positions)
 
 

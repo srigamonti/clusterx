@@ -363,21 +363,21 @@ class SuperCell(ParentLattice):
             Output file name.
         """
         super(SuperCell,self).serialize(fname = fname)
+        
     def get_symmetry_table(self, symprec=1e-12, tol=1e-3):
         '''
         Takes a SuperCell as a parameter and returns the final indices of every atom 
-        after the every possible symmetry operation, see below:
+        after all symmetry operations have been applied, see below:
         {(index of the atom, index of the symmetry operation): index of the atom after the symmetry operation}
         '''
         
         import numpy as np
         from clusterx.parent_lattice import ParentLattice
-        from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions, get_internal_translations, get_spacegroup
+        from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions, get_internal_translations
         from clusterx.utils import get_cl_idx_sc
         
-        table={}
-        #cell = (self._plat.get_cell(),self._plat.get_positions(),self._plat.get_atomic_numbers())
-        space_group, symmetry = get_spacegroup(self._plat)
+        table = {}
+        space_group, symmetry = self._plat.get_sym()
         rotations = symmetry['rotations']
         translations = symmetry['translations']
         internal_trans = get_internal_translations(self._plat, self)

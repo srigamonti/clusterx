@@ -483,7 +483,6 @@ def get_unique_supercells(n,parent_lattice):
     Computational Materials Science 59 (2012) 101–107
 
     """
-    from clusterx.symmetry import get_spacegroup
     pl_cell = parent_lattice.get_cell()
 
     hnfs = get_all_HNF(n,pbc=parent_lattice.get_pbc())
@@ -495,7 +494,7 @@ def get_unique_supercells(n,parent_lattice):
     n_scs = len(all_scs)
     unique_scs = []
     unique_trafos = []
-    sc_sg, sc_sym = get_spacegroup(parent_lattice) # Scaled to parent_lattice
+    sc_sg, sc_sym = parent_lattice.get_sym() # Scaled to parent_lattice
     nexts = np.asarray(np.arange(n_scs))
     unique_scs.append(all_scs[0])
     unique_trafos.append(hnfs[0])

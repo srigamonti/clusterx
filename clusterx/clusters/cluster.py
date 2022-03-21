@@ -203,18 +203,8 @@ class Cluster():
             The symmetry operations ``rr`` and ``tt`` refer to scaled coordinates.
             The parameter ``cell`` contains row-wise the corresponding cartesian
             coordinates of the cell vectors.
-
-        **Example:**
-        Getting the multiplicities of clusters in a clusters pool::
-
-            from clusterx.symmetry import get_spacegroup
-            sc_sg, sc_sym = get_spacegroup(parent_lattice) # Scaled to parent_lattice
-            m = []
-            for cl in clusters_pool.get_cpool():
-                m.append(cl.get_multiplicity(sc_sym["rotations"],sc_sym["translations"]))
-
         """
-        from clusterx.symmetry import get_spacegroup, get_scaled_positions, get_internal_translations, wrap_scaled_positions
+        from clusterx.symmetry import get_scaled_positions, get_internal_translations, wrap_scaled_positions
 
         orbit = []
         for r,t in zip(rr,tt):

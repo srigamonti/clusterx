@@ -10,8 +10,8 @@ import io
 import tempfile
 import copy
 from clusterx.utils import _is_integrable
-#from ase.db.core import connect
 from ase.db import connect
+from clusterx.symmetry import get_spacegroup
 
 def unique_non_sorted(a):
     _, idx = np.unique(a, return_index=True)
@@ -212,10 +212,13 @@ class ParentLattice(Atoms):
 
                     substitutions.append(Atoms(positions=self.get_positions(),cell=self.get_cell(),pbc=self.get_pbc(),numbers=numbers))
 
+
         if substitutions is None:
             substitutions = []
         self._subs = []
         self._set_substitutions(substitutions)
+        
+        self.sc_sg, self.sc_sym = get_spacegroup(self)
 
     def __eq__(self, other):
         """Check identity of two ParentLattice objects
@@ -251,6 +254,11 @@ class ParentLattice(Atoms):
         return self._atoms.copy()
     """
 
+    def get_sym(self):
+        """Get space symmetry of a ParentLattice object.
+        """ 
+        return self.sc_sg, self.sc_sym
+        
     def get_natoms(self):
         """Get the total number of atoms."""
         return len(self._atoms)
