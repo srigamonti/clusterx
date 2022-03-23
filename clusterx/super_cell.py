@@ -10,8 +10,12 @@ from ase.visualize import view
 #from ase.build import make_supercell
 from clusterx.utils import make_supercell
 from clusterx.parent_lattice import ParentLattice
+from clusterx.symmetry import get_internal_translations, get_scaled_positions, wrap_scaled_positions, get_spacegroup
+
+from clusterx.utils import get_cl_idx_sc
 import clusterx
 from ase.db import connect
+
 
 class SuperCell(ParentLattice):
     """
@@ -83,7 +87,7 @@ class SuperCell(ParentLattice):
             self._sort_key = sort_key
 
         pbc = self._plat.get_pbc()
-
+        
         if not isinstance(p,int):
             p = np.array(p)
             if p.shape == (1,):
@@ -130,7 +134,107 @@ class SuperCell(ParentLattice):
         else: 
             self._sym_table = []
         
+        self.sc_sg, self.sc_sym = self.get_sym()
+        #self.internal_trans = get_internal_translations(self._plat, self) # Scaled to super_cell
+        self.internal_trans = None # Scaled to super_cell
+        #self.all_distances_mic = None
+        #self.all_distances_nomic = None
+        #self.scaled_positions = None
+        self.sym_perm = None
 
+    def compute_sym_perm(self):
+        self.sym_perm = []
+
+        tol = 1e-3/np.cbrt(self.get_natoms())
+        internal_trans = self.get_internal_translations() # Scaled to super_cell
+        spos1 = get_scaled_positions(self.get_positions(wrap = True), self.get_cell(), pbc = self.get_pbc(), wrap = True) # Super-cell scaled positions
+        spos = np.around(spos1,6) # Wrapping in ASE doesn't always work. Here a hard external fix by rounding and then applying again ASE's style wrapping.
+
+        for i, periodic in enumerate(self.get_pbc()):
+            if periodic:
+                spos[:, i] %= 1.0
+                spos[:, i] %= 1.0
+
+        sg, sym = self.get_sym()
+        rot = sym["rotations"]
+        tra = sym["translations"]
+
+        _sym_perm = []
+        #for r,t_ in zip(rot,internal_trans):
+        for r,t_ in zip(rot,tra):
+            t = np.round(t_, decimals=8)
+            ts = np.tile(t,(len(spos),1)).T # Every column represents the same translation for every cluster site
+            spos_rt = np.add(np.dot(r,spos.T),ts).T # Apply rotation, then translation
+
+            _sp1_ = wrap_scaled_positions(spos_rt, self.get_pbc())
+
+            _sp1 = np.around(_sp1_,5) # Wrapping in ASE doesn't always work. Here a hard external fix by rounding and then applying again ASE's style wrapping.
+                        
+            for i, periodic in enumerate(self.get_pbc()):
+                if periodic:
+                    _sp1[:, i] %= 1.0
+                    _sp1[:, i] %= 1.0
+
+            _cl = get_cl_idx_sc(_sp1, spos, method=1, tol=tol)
+            _sym_perm.append(_cl)
+
+        self.sym_perm = np.unique(_sym_perm, axis = 0)
+        #self.sym_perm = _sym_perm
+
+    def get_sym_perm(self):
+        if self.sym_perm is None:
+            self.compute_sym_perm()
+            return self.sym_perm
+        else:
+            return self.sym_perm
+
+    def get_sym(self):
+        """Get space symmetry of a ParentLattice object.
+        """
+        try:
+            return self.sc_sg, self.sc_sym
+        except:
+            self.sc_sg, self.sc_sym = self._compute_sym()
+            return self.sc_sg, self.sc_sym
+
+    def _compute_sym(self):
+        return get_spacegroup(self)
+
+    """
+    def get_scaled_positions():
+        if self.scaled_positions == None:
+            self.scaled_positions = get_scaled_positions(wrap = True)
+            return self.scaled_positions
+        else:
+            return self.scaled_positions
+    
+    def get_all_distances(self, mic=False):
+        vector = False
+        if mic:
+            if self.all_distances_mic == None:
+                self.all_distances_mic = super(ParentLattice, self).get_all_distances(mic, vector)
+                return self.all_distances_mic
+            else:
+                return self.all_distances_mic
+
+        if not mic:
+            if self.all_distances_nomic == None:
+                self.all_distances_nomic = super(ParentLattice, self).get_all_distances(mic, vector)
+                return self.all_distances_nomic
+            else:
+                return self.all_distances_nomic
+    """
+
+    def get_internal_translations(self):
+        """Get internal translations of parent lattice in supercell, scaled to supercell
+        """
+        if self.internal_trans is None:
+            self.internal_trans = get_internal_translations(self._plat, self)
+            return self.internal_trans
+        else:
+            return self.internal_trans
+        
+        
     def copy(self):
         """Return a copy
         """
@@ -363,7 +467,7 @@ class SuperCell(ParentLattice):
             Output file name.
         """
         super(SuperCell,self).serialize(fname = fname)
-        
+    
     def get_symmetry_table(self, symprec=1e-12, tol=1e-3):
         '''
         Takes a SuperCell as a parameter and returns the final indices of every atom 
@@ -385,7 +489,7 @@ class SuperCell(ParentLattice):
         pos = self.get_positions(wrap=True)
         p0 = pos
         
-        spos1 = self.get_scaled_positions(wrap=True) # Super-cell scaled positions
+        spos1 = self.get_scaled_positions() # Super-cell scaled positions
         spos = np.around(spos1,8) 
         for i, periodic in enumerate(self.get_pbc()):
             if periodic:
