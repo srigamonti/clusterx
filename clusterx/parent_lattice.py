@@ -159,6 +159,7 @@ class ParentLattice(Atoms):
 
         if pbc is None:
             pbc = atoms.get_pbc()
+            
         super(ParentLattice,self).__init__(symbols=atoms,pbc=pbc)
 
         if atoms is not None:
@@ -217,12 +218,6 @@ class ParentLattice(Atoms):
             substitutions = []
         self._subs = []
         self._set_substitutions(substitutions)
-        
-        self.sc_sg, self.sc_sym = self._compute_sym()
-
-    def _compute_sym(self):
-        return get_spacegroup(self)
-
 
     def __eq__(self, other):
         """Check identity of two ParentLattice objects
@@ -264,8 +259,12 @@ class ParentLattice(Atoms):
         try:
             return self.sc_sg, self.sc_sym
         except:
-            return self._compute_sym()
-        
+            self.sc_sg, self.sc_sym = self._compute_sym()
+            return self.sc_sg, self.sc_sym
+
+    def _compute_sym(self):
+        return get_spacegroup(self)
+
     def get_natoms(self):
         """Get the total number of atoms."""
         return len(self._atoms)
