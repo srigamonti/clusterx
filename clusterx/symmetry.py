@@ -101,8 +101,8 @@ def get_internal_translations(parent_lattice, super_cell):
     tra1 = []
     for tr in tra0:
         include_tr = True
-        for id, bd in enumerate(parent_lattice.get_pbc()):
-            if tr[id] != 0 and not bd: # exclude translation vectors along non-periodic directions
+        for id_, bd in enumerate(parent_lattice.get_pbc()):
+            if tr[id_] != 0 and not bd: # exclude translation vectors along non-periodic directions
                 include_tr = False
                 break
 
