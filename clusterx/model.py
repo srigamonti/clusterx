@@ -44,8 +44,8 @@ class Model():
                 with open(filepath,"rb") as f:
                     inst = pickle.load(f)
                     
-                with open(inst._filepath_corrc,"rb") as f:
-                    inst.corrc = pickle.load(f)
+                #with open(inst._filepath_corrc,"rb") as f:
+                #    inst.corrc = pickle.load(f)
                     
                 return inst
         else:
@@ -204,7 +204,6 @@ class Model():
 
         """
         corrs = self.corrc.get_cluster_correlations(structure)
-
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1,-1))[0]
 
@@ -674,8 +673,8 @@ class ModelBuilder():
         ``filepath``: string (default: "MODELBDR.pickle")
             file path of the pickle file to serialize the model builder object
         """
-        from pathlib import Path
-        import os
+        #from pathlib import Path
+        #import os
         
         with open(filepath,"wb") as f:
             pickle.dump(self,f)
