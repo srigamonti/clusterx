@@ -1264,7 +1264,7 @@ class ClusterOrbit(ClustersPool):
         if no_trans:
             internal_trans = np.zeros((3,3))
         else:
-            internal_trans = get_internal_translations(self._plat, super_cell) # Scaled to super_cell
+            internal_trans = super_cell.get_internal_translations() # Scaled to super_cell
 
         if distances is None:
             distances = super_cell.get_all_distances(mic=False)
