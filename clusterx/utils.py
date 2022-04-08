@@ -2,12 +2,16 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+from joblib import parallel_backend
 import numpy as np
 import os
 import copy
 from ase.data import chemical_symbols as cs
 from ase.build.supercells import clean_matrix, lattice_points_in_supercell # needed by make_supercell
-from ase import Atoms # needed by make_supercell
+from ase import Atoms
+
+class SupercellError(Exception):
+    pass
 
 def isclose(r1,r2,rtol=1e-4):
     """Determine whether two vectors are similar
@@ -523,6 +527,71 @@ def get_unique_supercells(n,parent_lattice):
             unique_trafos.append(hnfs[nexts[0]])
 
     return unique_scs, unique_trafos
+
+def _get_normalized_scalar_products(s: np.ndarray):
+    """
+    For a matrix of column vectors, return the normalized scalar products.
+    
+    **Parameters:**
+    
+    ``s``: numpy.ndarray
+        matrix of transformed cell vectors as columns
+        
+    **Returns:**
+    
+    Normalized scalar products between unique vector pairs
+    """
+    p_ij = []
+    for i, j in [(0,1), (0,2), (1,2)]:
+        S_i = s.T[i]
+        S_j = s.T[j]
+        denominator = np.linalg.norm(S_i) * np.linalg.norm(S_j)
+        nominator = abs(np.dot(S_i, S_j))
+        p_ij.append(nominator/denominator)
+    p_ij = np.array(p_ij)
+    return p_ij
+
+def _get_minimal_trafo(h, all_matrices = None, cell = None):
+
+    def minimum_key(x):
+        return max(_get_normalized_scalar_products(np.dot(x, cell)))
+
+    trafos = [np.dot(np.reshape(mat, (3,3)), h) for mat in all_matrices]
+    minimal = min(trafos, key = minimum_key)
+    return minimal
+
+
+def get_unique_supercells_large_angles(n, parent_lattice: object, elements: list):
+    """
+    Return all unique supercells with large angles. 
+    Transformation of those supercells is done by unimodal matrices with matrix elements given by the paramter ``elements``   
+
+    **Parameters:**
+    
+    ``elements``: list[int]
+        transformation vector elements 
+
+        example: [-3,-2,-1,0,1,2,3]
+
+        The algorithm will search all combinations of 3x3 matrices composed of those ``elements``.
+
+    """
+
+    from itertools import product
+    import multiprocessing
+    from clusterx.super_cell import SuperCell # needed by make_supercell
+    from functools import partial
+
+    _, harray = get_unique_supercells(n, parent_lattice)
+
+    parent_lattice_cell = parent_lattice.get_cell().array.T
+
+    all_matrices = list(filter(lambda x: abs(np.linalg.det(np.reshape(x, (3,3)))) == 1, product(elements, repeat = 9)))
+
+    with multiprocessing.Pool() as pool:
+        small_angle_trafos = pool.map(partial(_get_minimal_trafo, all_matrices = all_matrices, cell = parent_lattice_cell), harray)
+
+    return [SuperCell(parent_lattice, p) for p in small_angle_trafos], small_angle_trafos
 
 def _is_integer_matrix(m,rnd=5):
     mi = np.around(m,rnd)
