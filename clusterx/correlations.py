@@ -452,6 +452,9 @@ class CorrelationsCalculator():
                 correlations[icl] += weight * cf
 
             if multiplicities is None:
+                if np.sum(weights) == 0:
+                    print(f"0 weight for cluster nr. {icl}, which is {cluster}, with weights: {weights}")
+                    continue # in this case, the correlations will be 0 - the weights were empty in our specific example
                 correlations[icl] /= np.sum(weights)
             else:
                 correlations[icl] /= multiplicities[icl]
