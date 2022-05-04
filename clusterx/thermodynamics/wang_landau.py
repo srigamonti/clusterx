@@ -203,6 +203,7 @@ class WangLandau():
         import math
         from clusterx.utils import poppush       
 
+        print("hello")
         if initial_decoration is not None:
             struc = Structure(self._scell, initial_decoration, mc = True)
             conc = struc.get_fractional_concentrations()
@@ -345,7 +346,7 @@ class WangLandau():
 
         i = 0
         while (hist_min < histogram_flatness*hist_avg) or (i < 10):
-            
+            print(hist_min, histogram_flatness*hist_avg, histogram_flatness,hist_avg)
             for i in range(500):
                 struc, e, g, inde, cdos = self.dos_step(struc, e, g, inde, lnf, cdos)
                     
@@ -373,6 +374,8 @@ class WangLandau():
     
         ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
 
+        print(ind1, ind2, site_type, rindices )
+        
         if self._predict_swap:
             if self._error_reset:
                 if (self._x > self._error_steps):
@@ -388,6 +391,8 @@ class WangLandau():
         else:
             e1 = self._em.predict(struc)
 
+        g1 = np.amin(cdos)
+        kinde = np.where(cdos == np.amin(cdos))[0]
         for k,d in enumerate(cdos):
             if e1 < d[0]:
                 if k == 0 :
@@ -418,7 +423,8 @@ class WangLandau():
             g = g1+lnf
             e = e1
             inde = kinde
-            
+
+            print("KINDE:  ", kinde)
             cdos[kinde][1] = g
             cdos[kinde][2] = cdos[kinde][2]+1
             
