@@ -1252,7 +1252,7 @@ class ClusterOrbit(ClustersPool):
 
         cluster_species = np.array(cluster_species)
         
-        # Get symmetry operations of the parent lattice
+        # Get internal translation of the parent lattice in the super cell
         if no_trans:
             internal_trans = np.zeros((3,3))
         else:
@@ -1269,35 +1269,28 @@ class ClusterOrbit(ClustersPool):
             if periodic:
                 spos[:, i] %= 1.0
                 spos[:, i] %= 1.0
+                
 
-        # sp0: scaled cluster positions with respect to parent lattice
-        sp0 = get_scaled_positions(p0, self._plat.get_cell(), pbc = super_cell.get_pbc(), wrap = False)
+        # Get cluster orbit for the point symmetry operations of the parent lattice only (small cluster orbit)
+        sp0 = get_scaled_positions(p0, self._plat.get_cell(), pbc = super_cell.get_pbc(), wrap = False) # sp0: scaled cluster positions with respect to parent lattice
         
         _orbit = []
         clset = set()
 
         orbit0 = self._get_small_cluster_orbit(sp0, cluster_species)
         
-        mult = len(orbit0) # Multiplicity of the cluster with respect to the point symmetries of the parent lattice (not the supercell)
+        mult = len(orbit0) # Multiplicity of the cluster with respect to the point symmetries of the parent lattice (not the supercell). This is the standard cluster multiplicity used in literature.
 
         reduced_orbit0 = []
+
         for _sp1 in orbit0:
             # Get cartesian, then scaled to supercell
             _p1 = np.dot(_sp1, self._plat.get_cell())
-            _sp1 = get_scaled_positions(_p1, super_cell.get_cell(), pbc = super_cell.get_pbc(), wrap = True)
-
-            _cl = get_cl_idx_sc(_sp1, spos, method=1, tol=tol)
-            include = True
-            if len(_cl)>1:
-                for i in range(len(_cl)):
-                    for j in range(i+1,len(_cl)):
-                        if _cl[i] == _cl[j] and cluster_species[i] != cluster_species[j]:
-                            include = False
-            if include:
-                reduced_orbit0.append(_sp1)
-
-        reduced_mult = len(reduced_orbit0) # Multiplicity, excluding cluster realizations incompatible with supercell 
-
+            __sp1 = get_scaled_positions(_p1, super_cell.get_cell(), pbc = super_cell.get_pbc(), wrap = True)
+            reduced_orbit0.append(__sp1)
+            
+        reduced_mult = mult
+        
         for _sp1 in reduced_orbit0:
             for itr,tr in enumerate(internal_trans): # Now apply the internal translations
                 __sp1 = np.add(_sp1, tr)
@@ -1314,7 +1307,6 @@ class ClusterOrbit(ClustersPool):
         ncl = len(_orbit)
         cnt = 0
         for i in range(ncl):
-
             if i not in crossedout:
                 cl_i = _orbit[i]
                 weights.append(1)
@@ -1349,6 +1341,13 @@ class ClusterOrbit(ClustersPool):
     def _get_small_cluster_orbit(self, cluster_scaled_positions=None, cluster_species=None, tol = 1e-3):
         """ For a given cluster, return the set of distinct clusters obtained by applying the point
         symmetries of the parent lattice.
+
+        **Returns:**
+            2D array of shape (nc, np), where nc is the number of clusters of the small cluster orbit and np is the number of points of the cluster.
+            E.g. the element [i,:] will be a vector of length np contaning the scaled poisitions of the points of cluster i.
+
+        **Note:**
+           This operation does not rely on a supercell. It just uses information from the parent lattice and the cluster. 
         """
 
         sp0 = cluster_scaled_positions
