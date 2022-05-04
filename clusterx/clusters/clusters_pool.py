@@ -1244,20 +1244,12 @@ class ClusterOrbit(ClustersPool):
             
         # empty cluster
         if len(p0) == 0:
-            
             self.add_cluster(Cluster([],[],super_cell))
             self.weights = np.array([1], int)
             self.multiplicity = 1
             self.reduced_multiplicity = 1
             return
 
-        """
-        substitutional_sites = super_cell.get_substitutional_sites()
-        for _icl in cluster_sites:
-            if _icl not in substitutional_sites:
-                return None
-        """
-        
         cluster_species = np.array(cluster_species)
         
         # Get symmetry operations of the parent lattice
