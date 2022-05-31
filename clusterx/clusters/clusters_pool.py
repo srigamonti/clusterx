@@ -775,7 +775,7 @@ class ClustersPool():
             atom_idxs.append(cl.get_idxs())
             atom_nrs.append(cl.get_nrs())
 
-        return np.array(atom_idxs), np.array(atom_nrs)
+        return np.array(atom_idxs, dtype=object), np.array(atom_nrs, dtype=object)
 
     def serialize(self, db_name="cpool.json"):
         """Serialize clusters pool object to json database file
@@ -1012,6 +1012,7 @@ class ClustersPool():
             atom_idxs, atom_nrs = self.get_cpool_arrays()
             cluster_sites = atom_idxs[cluster_index]
             cluster_species = atom_nrs[cluster_index]
+            return ClusterOrbit(super_cell, cluster_sites, cluster_species, tol, distances, no_trans)
 
         if cluster_sites is not None and cluster_positions is not None:
             print("ERROR (clusterx.clusters.clusters_pool.gen_cluster_orbit): One of cluster_sites or cluster_positions must be None")
