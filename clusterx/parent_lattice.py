@@ -3,11 +3,7 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 from ase import Atoms
-import clusterx as c
 import numpy as np
-import sys
-import io
-import tempfile
 import copy
 from clusterx.utils import _is_integrable
 from ase.db import connect
