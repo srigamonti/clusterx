@@ -435,7 +435,7 @@ class ClustersPool():
         sites = scell.get_sites()
         satoms = scell.get_substitutional_sites()
         nsatoms = len(satoms)
-        idx_subs = scell.get_idx_subs()
+        idx_subs = scell.get_sublattice_types()
         tags = scell.get_tags()
         distances = self._distances
         radii = self._radii
@@ -504,7 +504,7 @@ class ClustersPool():
         sites = scell.get_sites()
         satoms = scell.get_substitutional_sites()
         nsatoms = len(satoms)
-        idx_subs = scell.get_idx_subs()
+        idx_subs = scell.get_sublattice_types()
         tags = scell.get_tags()
         distances = self._distances
         radii = self._radii
@@ -577,7 +577,7 @@ class ClustersPool():
         sites = scell.get_sites()
         satoms = scell.get_substitutional_sites()
         nsatoms = len(satoms)
-        idx_subs = scell.get_idx_subs()
+        idx_subs = scell.get_sublattice_types()
         tags = scell.get_tags()
         distances = self._distances
         radii = self._radii
@@ -629,7 +629,7 @@ class ClustersPool():
         sites = scell.get_sites()
         satoms0 = scell.get_substitutional_sites()
         nsatoms = len(satoms0)
-        idx_subs = scell.get_idx_subs()
+        idx_subs = scell.get_sublattice_types()
         tags = scell.get_tags()
         distances = self._distances
         radii = self._radii
