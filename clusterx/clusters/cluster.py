@@ -50,9 +50,6 @@ class Cluster():
             except:
                 raise ValueError("Cluster initialization failed")
 
-            for i in range(len(self.ais)-1):
-                if self.ais[i] == self.ais[i+1] and self.ans[i] != self.ans[i+1]:
-                    raise ValueError("Cluster initialization failed: different basis functions assigned to the same site")
         else:
             self.ais = np.array(atom_indexes)
             self.ans = np.array(atom_numbers)
@@ -95,6 +92,7 @@ class Cluster():
             """
             
             # Set radius
+            # FIX this! Radius cannot be based on distance in supercell, as it will fail for small supercells and large clusters wrapped into it.
             r = 0.0
             if self.npoints > 1:
                 if distances is not None:
