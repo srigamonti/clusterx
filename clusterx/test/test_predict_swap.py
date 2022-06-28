@@ -12,8 +12,6 @@ from ase.build import bulk
 import numpy as np
 import random
 
-import pytest
-
 def seed_rnd_generator(seed = 0):
     random.seed(seed)
     np.random.seed(seed)
@@ -34,8 +32,7 @@ def test_predict_swap_energy_model():
             sset.add_structure(structure)
     sset.calculate_property()
     cpool = ClustersPool(pl, npoints=[1,2], radii=[0,3])
-    mb = ModelBuilder()
-    mb.initialize()
+    mb = ModelBuilder(basis = "trigonometric")
     model = mb.build(sset=sset, cpool=cpool, prop="energy")
 
     # This is a horrible workaround. The behavior of the CorrelationsCalculator is different 
