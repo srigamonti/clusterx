@@ -1163,6 +1163,9 @@ class ClusterOrbit(ClustersPool):
             platt = super_cell.get_parent_lattice()
             super(ClusterOrbit,self).__init__(parent_lattice = platt, super_cell = super_cell)
             self._gen_orbit(super_cell, cluster_sites, cluster_species, tol, distances, no_trans, cluster_positions)
+        # The iteration variable "high" was not set, because the clusters are not calculated by super().__init__().
+        # Therefore we set it here explicitly.
+        self.high = self.nclusters - 1
 
 
     def _gen_orbit(self, super_cell, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans=False, cluster_positions=None):
