@@ -487,7 +487,6 @@ def get_unique_supercells(n,parent_lattice):
     Computational Materials Science 59 (2012) 101–107
 
     """
-    from clusterx.symmetry import get_spacegroup
     pl_cell = parent_lattice.get_cell()
 
     hnfs = get_all_HNF(n,pbc=parent_lattice.get_pbc())
@@ -499,7 +498,7 @@ def get_unique_supercells(n,parent_lattice):
     n_scs = len(all_scs)
     unique_scs = []
     unique_trafos = []
-    sc_sg, sc_sym = get_spacegroup(parent_lattice) # Scaled to parent_lattice
+    sc_sg, sc_sym = parent_lattice.get_sym() # Scaled to parent_lattice
     nexts = np.asarray(np.arange(n_scs))
     unique_scs.append(all_scs[0])
     unique_trafos.append(hnfs[0])
@@ -1161,17 +1160,25 @@ def super_structure(struc0, d):
 
     ``struc0``: Structure object
         Original structure for the superstructure.
-    ``d``: three-component integer array
-        The super structure is obtained by repeating the original structure
-        ``d[i]`` times along unit cell vector ``i``.
+    ``d``: int, three-component integer array, or 3x3 integer array
+        The super structure is obtained by the transformation d S, with d a
+        3x3 matrix of integer and S the supercell cell vectors.
     """
     from clusterx.structure import Structure
     from clusterx.super_cell import SuperCell
     from ase.build import make_supercell
 
-    n = np.zeros((3,3), int)
-    np.fill_diagonal(n, d)
-
+    if np.shape(d) == ():
+        n = np.zeros((3,3), int)
+        np.fill_diagonal(n, [d,d,d])
+    elif np.shape(d) == (3,):
+        n = np.zeros((3,3), int)
+        np.fill_diagonal(n, d)
+    elif np.shape(d) == (3,3):
+        n = np.array(d)
+    else:
+        print("ERROR (clusterx.utils.super_structure()): ")
+    
     p0 = struc0.get_supercell().get_transformation()
     p1 = n @ p0
 
@@ -1236,16 +1243,15 @@ def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "tri
     import numpy as np
 
     comp = None
+    from clusterx.utils import isclose
     
     if cpool is None and comat is None:
         from ase.utils.structure_comparator import SymmetryEquivalenceCheck
         comp = SymmetryEquivalenceCheck(to_primitive = to_primitive)
     elif comat is None:
         from clusterx.correlations import CorrelationsCalculator
-        from clusterx.utils import isclose
         ccalc = CorrelationsCalculator(basis = basis, parent_lattice = sset.get_parent_lattice(), clusters_pool = cpool)
         comat = ccalc.get_correlation_matrix(sset)
-    
     
     nstr = len(sset)
 
@@ -1269,6 +1275,73 @@ def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "tri
                 else:
                     atoms_j = sset[j].get_atoms()
                     check = comp.compare(atoms_i, atoms_j)
+                    
+                if check:
+                    crossedout.append(j)
+                    subset.append(j)
+
+            id_str_list[i] = np.array(subset, dtype='i4')
+
+    if pretty_print:
+        print(id_str_list)
+        
+    return id_str_list
+
+def atoms_equivalence_check(atoms, to_primitive = True, pretty_print = False):
+    """Find equivalent structures in an array of Atoms objects
+ 
+    Equivalence is determined in terms of symmetry between structures
+    
+    The `SymmetryEquivalenceCheck tool of ASE <https://wiki.fysik.dtu.dk/ase/ase/utils.html#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_ is used.
+    
+    **Parameters:**
+
+    ``atoms``: array of Atoms objects
+        The structures to be analyzed. 
+
+    ``to_primitive``: Boolean (default: ``True``)
+        If ``True`` the structures are reduced to their primitive cells. 
+        This feature requires ``spglib`` to installed 
+        (*cf.* `ASE's SymmetryEquivalenceCheck <https://wiki.fysik.dtu.dk/ase/ase/utils.html?highlight=to_primitive#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_)
+
+
+    **Returns:**
+    Returns a dictionary. The keys (k) are structure indices of unique representative structures, 
+    and the values (v) are arrays of integer, indicating all structure indices equivalent to k
+    (containing k itself too). For instance, the dictionary::
+
+        {"0": [0, 1, 3, 8, 9], 
+         "2": [2, 5, 6],
+         "4": [4, 7]}
+
+    | indicates that in the structures set with indices [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] there are
+      just three distinct structures. These can be represented by strucutres 0, 2 and 4.
+      The structures [0, 1, 3, 8, 9] are all equivalent, etc. 
+    | Notice that here equivalence is used in the sense explained above: It is symmetrical 
+      equivalence only if ``cpool`` and ``comat`` are None.
+    """
+    import numpy as np
+
+    from clusterx.utils import isclose
+    
+    from ase.utils.structure_comparator import SymmetryEquivalenceCheck
+    comp = SymmetryEquivalenceCheck(to_primitive = to_primitive)
+    
+    nstr = len(atoms)
+
+    crossedout = []
+    id_str_list = {}
+    for i in range(nstr):
+        if i not in crossedout:
+            crossedout.append(i)
+            subset = [i]
+            
+            atoms_i = atoms[i]
+                
+            for j in range(i+1, nstr):
+                
+                atoms_j = atoms[j]
+                check = comp.compare(atoms_i, atoms_j)
                     
                 if check:
                     crossedout.append(j)

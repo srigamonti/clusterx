@@ -171,6 +171,16 @@ class StructuresSet():
             indices[i] = ni//nplat
         return indices
 
+    def get_natoms(self):
+        """Return array of number of atoms of every strucure in the structures set.
+
+        """
+        natoms = np.zeros(self.get_nstr(),dtype=int)
+        for i in range(self.get_nstr()):
+            ni = len(self.get_structure(i))
+            natoms[i] = ni
+        return natoms
+
     def add_structure(self, structure, folder="", **props):
         """Add a structure to the StructuresSet object
 

@@ -70,9 +70,15 @@ class ClustersSelector():
     def __init__(self, basis="trigonometric", selector_type = "identity", **selector_opts):
 
         self.method = selector_opts.pop("method", selector_type) # selector_type argument replaces old method argument. This ensures backward compatibility.
+
+        # general options
+        self.fit_intercept = selector_opts.pop("fit_intercept",False)
+        
+        # additional arguments for estimator in CV
+        self.estimator_for_selector = selector_opts.pop("estimator","skl_LinearRegression")
+        self.estimator_opts_for_selector = selector_opts.pop("estimator_opts",{})
         
         # additional arguments for lasso_cv
-        
         self.sparsity_max = selector_opts.pop("sparsity_max",1)
         self.sparsity_min = selector_opts.pop("sparsity_min",0.01)
         self.sparsity_step = selector_opts.pop("sparsity_step",0.0)
@@ -85,12 +91,6 @@ class ClustersSelector():
         self.clusters_sets = selector_opts.pop("clusters_sets","size")
         self.nclmax = selector_opts.pop("nclmax", 0)
         self.set0 = selector_opts.pop("set0",[0, 0])
-
-        self.fit_intercept=False
-        #for c in self.cpool._cpool:
-        #    if c.npoints == 0:
-        #        self.fit_intercept=True
-        #        break
 
         self.predictions = []
         self.opt_ecis = []
@@ -163,10 +163,9 @@ class ClustersSelector():
         if self.method == "lasso_cv" or self.method == "lasso": # "lasso" deprecated
             opt = self._select_clusters_lasso_cv(x, p)
 
-            if self.fit_intercept == True:
-                if 0 not in opt:
-                    self.fit_intercept = False
-
+        elif self.method == "skl_lasso_cv":
+            opt = self._select_clusters_skl_lasso_cv(x, p)
+        
         elif self.method == "lasso_on_residual" or self.method == "lasso-on-residual": #  "lasso-on-residual" deprecated, preferred with "_"s
             nb = int(self.set0[0])
             r = float(self.set0[1])
@@ -179,7 +178,7 @@ class ClustersSelector():
             from sklearn import linear_model
             from sklearn.metrics import mean_squared_error
 
-            lre = linear_model.LinearRegression(fit_intercept=False, n_jobs = -1)
+            lre = linear_model.LinearRegression(fit_intercept=self.fit_intercept, n_jobs = -1)
             rows = np.arange(len(p))
             cols = np.arange(len(cpool))
             comat0 = x[np.ix_(rows,clset0)]
@@ -188,11 +187,8 @@ class ClustersSelector():
             rmse0 = np.sqrt(mean_squared_error(pred0, p))
 
             pres = p - pred0
-            #clset1 = self._select_clusters_lasso_cv(x, pres)
             clset1 = self._select_clusters_lasso_on_residual_cv(x, pres, clset0)
-            #comat1 = x[np.ix_(rows,np.delete(cols,clset0))]
-            #clset1 = self._select_clusters_lasso_cv(comat1, pres)
-
+ 
             opt = np.union1d(clset0, clset1)
 
         elif self.method == "subsets_cv" or self.method == "linreg": # "linreg" is deprecated
@@ -277,6 +273,7 @@ class ClustersSelector():
 
         return opt_clset
 
+    """
     def optimal_ecis(self, x, p):
         from sklearn.model_selection import LeaveOneOut
         from sklearn.model_selection import cross_val_score
@@ -313,7 +310,8 @@ class ClustersSelector():
         _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
         self.opt_mean_cv=np.sqrt(-np.mean(_cvs))
 
-
+    """
+    
     def _select_clusters_lasso_cv(self,x,p):
         from sklearn.model_selection import LeaveOneOut
         from sklearn.model_selection import cross_val_score
@@ -334,31 +332,22 @@ class ClustersSelector():
 
         idx = 1
         while sparsity.__ge__(self.sparsity_min):
-
-            if self.fit_intercept:
-                _comat = np.delete(x, (0), axis=1)
-            else:
-                _comat = x
-                
             fitter_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, max_iter = self.max_iter, tol = self.tol)
-            fitter_cv.fit(_comat,p)
+            fitter_cv.fit(x,p)
 
             ecimult = []
-            if self.fit_intercept:
-                ecimult.append(fitter_cv.intercept_)
-
             for coef in fitter_cv.coef_:
                 ecimult.append(coef)
 
             if self.cv_splits is None:
-                _cvs = cross_val_score(fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error', n_jobs = -1)
+                _cvs = cross_val_score(fitter_cv, x, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error', n_jobs = -1)
             else:
-                _cvs = cross_val_score(fitter_cv, _comat, p, cv=self.cv_splits, scoring = 'neg_mean_squared_error', n_jobs = -1)
+                _cvs = cross_val_score(fitter_cv, x, p, cv=self.cv_splits, scoring = 'neg_mean_squared_error', n_jobs = -1)
                 
             mean_cv = np.sqrt(-np.mean(_cvs))
 
             self.cvs.append(mean_cv)
-            self.rmse.append(np.sqrt(mean_squared_error(fitter_cv.predict(_comat),p)))
+            self.rmse.append(np.sqrt(mean_squared_error(fitter_cv.predict(x),p)))
 
             self.set_sizes.append(np.count_nonzero(ecimult))
             self.lasso_sparsities.append(sparsity)
@@ -392,6 +381,42 @@ class ClustersSelector():
 
         return opt_clset
 
+    def _select_clusters_skl_lasso_cv(self,x,p):
+        from sklearn.model_selection import LeaveOneOut
+        from sklearn.model_selection import cross_val_score
+        from sklearn import linear_model
+        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
+        from sklearn.linear_model import LassoCV
+
+        opt_cv = -1
+        opt_clset = []
+        rows = np.arange(len(p))
+
+        idx = 1
+
+        est = LassoCV(eps=1e-5, n_alphas=50, fit_intercept=self.fit_intercept, n_jobs=-1, verbose = True)
+
+        x_ = x[:,1:]
+        mod = est.fit(x_,p)
+
+        
+        ecimult = []
+        ecimult.append(mod.intercept_)
+        for coef in mod.coef_:
+            ecimult.append(coef)
+    
+        self.cvs = np.mean(est.mse_path_)
+        self.rmse = np.mean(est.mse_path_)
+
+        self.set_sizes = np.ones(len(est.alphas_))
+        self.lasso_sparsities = est.alphas_
+
+        opt_cv = np.amin(self.cvs)
+        opt_clset = [i for i, e in enumerate(ecimult) if e != 0]
+        self.opt_sparsity = est.alpha_
+        
+        return opt_clset
+
     def _select_clusters_lasso_on_residual_cv(self,x,p,clset0):
         from sklearn.model_selection import LeaveOneOut
         from sklearn.model_selection import cross_val_score
@@ -413,13 +438,8 @@ class ClustersSelector():
         idx = 1
         while sparsity.__ge__(self.sparsity_min):
 
-            if self.fit_intercept:
-                _comat = np.delete(x, (0), axis=1)
-            else:
-                _comat = x
-                
             fitter_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, max_iter = self.max_iter, tol = self.tol)
-            fitter_cv.fit(_comat,p)
+            fitter_cv.fit(x,p)
             
             fitter_lr = linear_model.LinearRegression(fit_intercept=False)
             
@@ -439,7 +459,7 @@ class ClustersSelector():
             mean_cv = np.sqrt(-np.mean(_cvs))
 
             self.cvs.append(mean_cv)
-            self.rmse.append(np.sqrt(mean_squared_error(fitter_cv.predict(_comat),p)))
+            self.rmse.append(np.sqrt(mean_squared_error(fitter_cv.predict(x),p)))
 
             self.set_sizes.append(np.count_nonzero(clset))
             self.lasso_sparsities.append(sparsity)

@@ -5,7 +5,9 @@
 from ase import Atoms
 import numpy as np
 import copy
+from clusterx.utils import _is_integrable
 from ase.db import connect
+from clusterx.symmetry import get_spacegroup
 
 def unique_non_sorted(a):
     _, idx = np.unique(a, return_index=True)
@@ -153,6 +155,7 @@ class ParentLattice(Atoms):
 
         if pbc is None:
             pbc = atoms.get_pbc()
+            
         super(ParentLattice,self).__init__(symbols=atoms,pbc=pbc)
 
         if atoms is not None:
@@ -206,6 +209,7 @@ class ParentLattice(Atoms):
 
                     substitutions.append(Atoms(positions=self.get_positions(),cell=self.get_cell(),pbc=self.get_pbc(),numbers=numbers))
 
+
         if substitutions is None:
             substitutions = []
         self._subs = []
@@ -244,6 +248,18 @@ class ParentLattice(Atoms):
         "Get a copy of the Atoms object representing the pristine parent lattice."
         return self._atoms.copy()
     """
+
+    def get_sym(self):
+        """Get space symmetry of a ParentLattice object.
+        """
+        try:
+            return self.sc_sg, self.sc_sym
+        except:
+            self.sc_sg, self.sc_sym = self._compute_sym()
+            return self.sc_sg, self.sc_sym
+
+    def _compute_sym(self):
+        return get_spacegroup(self)
 
     def get_natoms(self):
         """Get the total number of atoms."""
