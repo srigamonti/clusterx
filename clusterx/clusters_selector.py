@@ -241,18 +241,17 @@ class ClustersSelector():
         from sklearn import linear_model
         from sklearn.metrics import make_scorer, r2_score, mean_squared_error
 
-        #if self.method == "linreg":
-        self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept, n_jobs = -1)
+        self.fitter_cv = linear_model.Ridge(alpha=1.0e-6, fit_intercept=self.fit_intercept)
         
         rows = np.arange(len(p))
         ecis = []
         ranks = []
         sizes = []
 
-        opt_cv=-1
-        opt_clset=[]
+        opt_cv = -1
+        opt_clset = []
 
-        el=True
+        el = True
 
         for iset, clset in enumerate(clsets):
             _comat = x[np.ix_(rows,clset)]
