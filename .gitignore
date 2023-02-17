@@ -3,6 +3,7 @@
 clusterX.egg-info
 __pycache__
 .*
+!.gitlab-ci.yml
 *#
 build
 dist
