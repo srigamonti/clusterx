@@ -26,5 +26,7 @@ def test(testslist=False, name=""):
         else:
             path = os.path.dirname(tm.__file__)
 
-        pytest.main([path,"-v","--cache-clear","--capture=no","--disable-warnings","--junit-xml=testlog.xml","--html=testlog.html"])
+        exit_code = pytest.main([path,"-v","--cache-clear","--capture=no","--disable-warnings","--junit-xml=testlog.xml","--html=testlog.html"])
+        if not exit_code == pytest.ExitCode.OK:
+            raise AssertionError(f"Tests have failed! pytest exit code: {exit_code}")
         return ()
