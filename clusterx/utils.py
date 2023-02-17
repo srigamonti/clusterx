@@ -398,7 +398,7 @@ def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_latti
         for ip,p in enumerate(r):
             nr = species[ip][0]
             for i2,p2 in enumerate(pos):
-                if isclose(p,p2):
+                if isclose(np.asarray(p).reshape(-1),p2):
                     new_nrs[i2] = nr
 
         struc = Structure(scell,decoration=new_nrs)
@@ -1071,13 +1071,13 @@ def make_supercell(prim, P, wrap=True, tol=1e-5):
     """Generate a supercell by applying a general transformation (*P*) to
     the input configuration (*prim*).
 
-    This function is a modified version of ASEs build/supercells.py. 
-    The modification here fixes a bug in ASEs implementation, introduced in 
-    ASEs version 3.18.0: for certain transformation matrices, the determinant of 
-    the matrix is negative, and the function exits with error, since a negative 
-    number of atoms is obtained. 
+    This function is a modified version of ASEs build/supercells.py.
+    The modification here fixes a bug in ASEs implementation, introduced in
+    ASEs version 3.18.0: for certain transformation matrices, the determinant of
+    the matrix is negative, and the function exits with error, since a negative
+    number of atoms is obtained.
     An example script demonstrating the error is::
-    
+
        from ase.build import make_supercell
        from ase.atoms  import Atoms
 
@@ -1145,14 +1145,14 @@ def decorate_supercell(scell, atoms):
         for i2, p2 in enumerate(atoms.get_positions()):
             if np.linalg.norm(p1-p2) < 1e-5:
                 ans.append(atoms.get_atomic_numbers()[i2])
-                
+
     return Structure(scell, ans)
 
 def super_structure(struc0, d):
-    """ Create a super structure 
+    """ Create a super structure
 
-    This function takes a ``Structure`` instance (``struc0``) and creates a new structure 
-    which is obtained as the periodic repetition of the original structure 
+    This function takes a ``Structure`` instance (``struc0``) and creates a new structure
+    which is obtained as the periodic repetition of the original structure
     along its unit cell vectors. The number of repetitions along each cell vector is given
     by the three components of the input integer vector ``d``.
 
@@ -1178,41 +1178,41 @@ def super_structure(struc0, d):
         n = np.array(d)
     else:
         print("ERROR (clusterx.utils.super_structure()): ")
-    
+
     p0 = struc0.get_supercell().get_transformation()
     p1 = n @ p0
 
     atoms0 = struc0.get_atoms()
     atoms1 = make_supercell(atoms0, n)
-        
-    scell1 = SuperCell(struc0.get_parent_lattice(), p1) 
+
+    scell1 = SuperCell(struc0.get_parent_lattice(), p1)
 
     return decorate_supercell(scell1, atoms1)
 
 def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "trigonometric", comat = None, pretty_print = False):
-    """Find equivalent structures in a StructuresSet object 
- 
+    """Find equivalent structures in a StructuresSet object
+
     Equivalence is determined *i)* in terms of symmetry between structures
-    or *ii)* in terms of cluster basis representation (if a ClustersPool object 
+    or *ii)* in terms of cluster basis representation (if a ClustersPool object
     or a correlation matrix is given).
 
     In the first case, the `SymmetryEquivalenceCheck tool of ASE <https://wiki.fysik.dtu.dk/ase/ase/utils.html#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_ is used.
-    
+
     **Parameters:**
 
     ``sset``: StructuresSet object
-        The structures set object to be analyzed. 
+        The structures set object to be analyzed.
 
     ``to_primitive``: Boolean (default: ``True``)
-        If ``True`` the structures are reduced to their primitive cells. 
-        This feature requires ``spglib`` to installed 
+        If ``True`` the structures are reduced to their primitive cells.
+        This feature requires ``spglib`` to installed
         (*cf.* `ASE's SymmetryEquivalenceCheck <https://wiki.fysik.dtu.dk/ase/ase/utils.html?highlight=to_primitive#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_)
 
     ``cpool``: ClustersPool object (default: ``None``)
         This parameter is optional. If given, the equivalence of a pair of structures
         is determined according to their cluster basis representation: two
         structures with the same cluster correlations for the clusters in ``cpool``
-        are considered equivalent. 
+        are considered equivalent.
 
     ``basis``: string (default: ``"trigonometric"``)
         Only used if ``cpool`` is not ``None``. Site basis functions used in the determination
@@ -1226,25 +1226,25 @@ def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "tri
 
 
     **Returns:**
-    Returns a dictionary. The keys (k) are structure indices of unique representative structures, 
+    Returns a dictionary. The keys (k) are structure indices of unique representative structures,
     and the values (v) are arrays of integer, indicating all structure indices equivalent to k
     (containing k itself too). For instance, the dictionary::
 
-        {"0": [0, 1, 3, 8, 9], 
+        {"0": [0, 1, 3, 8, 9],
          "2": [2, 5, 6],
          "4": [4, 7]}
 
     | indicates that in the structures set with indices [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] there are
       just three distinct structures. These can be represented by strucutres 0, 2 and 4.
-      The structures [0, 1, 3, 8, 9] are all equivalent, etc. 
-    | Notice that here equivalence is used in the sense explained above: It is symmetrical 
+      The structures [0, 1, 3, 8, 9] are all equivalent, etc.
+    | Notice that here equivalence is used in the sense explained above: It is symmetrical
       equivalence only if ``cpool`` and ``comat`` are None.
     """
     import numpy as np
 
     comp = None
     from clusterx.utils import isclose
-    
+
     if cpool is None and comat is None:
         from ase.utils.structure_comparator import SymmetryEquivalenceCheck
         comp = SymmetryEquivalenceCheck(to_primitive = to_primitive)
@@ -1252,7 +1252,7 @@ def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "tri
         from clusterx.correlations import CorrelationsCalculator
         ccalc = CorrelationsCalculator(basis = basis, parent_lattice = sset.get_parent_lattice(), clusters_pool = cpool)
         comat = ccalc.get_correlation_matrix(sset)
-    
+
     nstr = len(sset)
 
     crossedout = []
@@ -1261,21 +1261,21 @@ def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "tri
         if i not in crossedout:
             crossedout.append(i)
             subset = [i]
-            
+
             if comat is not None:
                 corr_i = comat[i,:]
             else:
                 atoms_i = sset[i].get_atoms()
-                
+
             for j in range(i+1, nstr):
-                
+
                 if comat is not None:
                     corr_j = comat[j,:]
                     check = isclose(corr_i, corr_j)
                 else:
                     atoms_j = sset[j].get_atoms()
                     check = comp.compare(atoms_i, atoms_j)
-                    
+
                 if check:
                     crossedout.append(j)
                     subset.append(j)
@@ -1284,49 +1284,49 @@ def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "tri
 
     if pretty_print:
         print(id_str_list)
-        
+
     return id_str_list
 
 def atoms_equivalence_check(atoms, to_primitive = True, pretty_print = False):
     """Find equivalent structures in an array of Atoms objects
- 
+
     Equivalence is determined in terms of symmetry between structures
-    
+
     The `SymmetryEquivalenceCheck tool of ASE <https://wiki.fysik.dtu.dk/ase/ase/utils.html#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_ is used.
-    
+
     **Parameters:**
 
     ``atoms``: array of Atoms objects
-        The structures to be analyzed. 
+        The structures to be analyzed.
 
     ``to_primitive``: Boolean (default: ``True``)
-        If ``True`` the structures are reduced to their primitive cells. 
-        This feature requires ``spglib`` to installed 
+        If ``True`` the structures are reduced to their primitive cells.
+        This feature requires ``spglib`` to installed
         (*cf.* `ASE's SymmetryEquivalenceCheck <https://wiki.fysik.dtu.dk/ase/ase/utils.html?highlight=to_primitive#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_)
 
 
     **Returns:**
-    Returns a dictionary. The keys (k) are structure indices of unique representative structures, 
+    Returns a dictionary. The keys (k) are structure indices of unique representative structures,
     and the values (v) are arrays of integer, indicating all structure indices equivalent to k
     (containing k itself too). For instance, the dictionary::
 
-        {"0": [0, 1, 3, 8, 9], 
+        {"0": [0, 1, 3, 8, 9],
          "2": [2, 5, 6],
          "4": [4, 7]}
 
     | indicates that in the structures set with indices [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] there are
       just three distinct structures. These can be represented by strucutres 0, 2 and 4.
-      The structures [0, 1, 3, 8, 9] are all equivalent, etc. 
-    | Notice that here equivalence is used in the sense explained above: It is symmetrical 
+      The structures [0, 1, 3, 8, 9] are all equivalent, etc.
+    | Notice that here equivalence is used in the sense explained above: It is symmetrical
       equivalence only if ``cpool`` and ``comat`` are None.
     """
     import numpy as np
 
     from clusterx.utils import isclose
-    
+
     from ase.utils.structure_comparator import SymmetryEquivalenceCheck
     comp = SymmetryEquivalenceCheck(to_primitive = to_primitive)
-    
+
     nstr = len(atoms)
 
     crossedout = []
@@ -1335,14 +1335,14 @@ def atoms_equivalence_check(atoms, to_primitive = True, pretty_print = False):
         if i not in crossedout:
             crossedout.append(i)
             subset = [i]
-            
+
             atoms_i = atoms[i]
-                
+
             for j in range(i+1, nstr):
-                
+
                 atoms_j = atoms[j]
                 check = comp.compare(atoms_i, atoms_j)
-                    
+
                 if check:
                     crossedout.append(j)
                     subset.append(j)
@@ -1351,19 +1351,19 @@ def atoms_equivalence_check(atoms, to_primitive = True, pretty_print = False):
 
     if pretty_print:
         print(id_str_list)
-        
+
     return id_str_list
 
 
 def report_sset_equivalence_check(sset, sset_equivalence_check_output, property_name = None, tol = 0.0):
     """Generate report of equivalent structures
 
-    Writes to files: ``sset_unique_sym.json`` and ``sset_unique_gss.json``. 
+    Writes to files: ``sset_unique_sym.json`` and ``sset_unique_gss.json``.
 
     The first contains the structures whose index are given by the keys of the dictionary
     returned by ``sset_equivalence_check()``.
 
-    The second contains the structures of every equivalence subset where the value of 
+    The second contains the structures of every equivalence subset where the value of
     ``property_name`` is minimal. So, if the property is an energy, the final set will contain all
     lowest energy structures of every equivalence subset.
 
@@ -1377,10 +1377,10 @@ def report_sset_equivalence_check(sset, sset_equivalence_check_output, property_
     unique = []
     for k, v in id_str_list.items():
         unique.append(v[0])
-    
+
     sset_unique = sset.get_subset(unique)
     sset_unique.serialize("sset_unique_sym.json", overwrite = True)
-    
+
     unique_gss = [] # Collect the lowest energy structure from each subset
     pvals = sset.get_property_values(property_name)
     for k, v in id_str_list.items():
@@ -1394,7 +1394,7 @@ def report_sset_equivalence_check(sset, sset_equivalence_check_output, property_
 
     sset_unique_gss = sset.get_subset(unique_gss)
     sset_unique_gss.serialize("sset_unique_gss.json", overwrite = True)
-        
+
     decim = 5
     tol = tol
     print("Structure indices start from 1 (corresponding to sset[0]).")
@@ -1424,4 +1424,3 @@ def report_sset_equivalence_check(sset, sset_equivalence_check_output, property_
             print(operator.itemgetter(*id_str_list[k])(folders))
             #print(folders)
             #print(map(folders.__getitem__, np.array(id_str_list[k]).tolist()))
-
