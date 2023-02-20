@@ -8,6 +8,8 @@ import copy
 from clusterx.utils import _is_integrable
 from ase.db import connect
 from clusterx.symmetry import get_spacegroup
+import warnings
+warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning) 
 
 def unique_non_sorted(a):
     _, idx = np.unique(a, return_index=True)
