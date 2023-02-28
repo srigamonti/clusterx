@@ -270,14 +270,12 @@ class SuperCell(ParentLattice):
         return self.index
 
     def get_parent_lattice(self):
-        """
-        Return the parent lattice object which defines the supercell.
+        """Return the parent lattice object which defines the supercell.
         """
         return self._plat
 
     def get_transformation(self):
-        """
-        Return the transformation matrix that defines the supercell from the
+        """Return the transformation matrix that defines the supercell from the
         defining parent lattice.
         """
         return self._p
@@ -286,10 +284,15 @@ class SuperCell(ParentLattice):
         return super(SuperCell, self).get_positions(wrap, **wrap_kw)
 
     def plot(self):
-        """
-        Plot the pristine supercell object.
+        """Plot the pristine supercell object.
         """
         view(self)
+
+    def get_pristine_structure(self):
+        """Return Structure object corresponding to pristine structure.
+        """
+        return self.gen_structure(sigmas=np.zeros(len(self.get_tags()),dtype=np.int8))
+
 
     def gen_structure(self, sigmas = None, mc = False):
         """
@@ -314,7 +317,6 @@ class SuperCell(ParentLattice):
                 [14,13,56,38,13]
         
         """
-
         return clusterx.structure.Structure(SuperCell(self._plat, self._p, self._sort_key, sym_table = bool(self._sym_table)), sigmas=sigmas, mc = mc)
         
     def gen_random(self, nsubs = None, mc = False):
