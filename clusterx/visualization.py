@@ -218,7 +218,7 @@ def plot_optimization_vs_number_of_clusters(clsel, xmin = None, xmax = None, sca
     #plt.savefig("plot_optimization.png")
     plt.show()
 
-
+    
 def plot_optimization_vs_sparsity(clsel, scale=1.0, xaxis_label = 'Sparsity', yaxis_label = "Energy [arb. units]"):
     """Plot cluster optimization with matplotlib
 
@@ -301,7 +301,6 @@ def plot_predictions_vs_target(sset, cemodel, prop_name, scale=1.0, xaxis_label 
     ``cemodel``: Model object
     ``prop_name``: string
     """
-
     import matplotlib.pyplot as plt
     from matplotlib import rc
     from matplotlib import rc,rcParams
@@ -348,8 +347,53 @@ def plot_predictions_vs_target(sset, cemodel, prop_name, scale=1.0, xaxis_label 
 
     #plt.savefig("plot_optimization.png")
     plt.show()
+    
+def _set_rc_params():
+    from matplotlib import rc,rcParams
+    
+    rcParams['axes.linewidth'] = 1.5
+    rcParams['figure.figsize'] = (4.0,3.0)
+    rcParams['figure.dpi'] = 300
+    rcParams['savefig.format'] = 'png'
+    rcParams['xtick.major.size'] =    3.5     # major tick size in points
+    rcParams['xtick.minor.size'] =    1.1       # minor tick size in points
+    rcParams['xtick.major.width'] =   1.5     # major tick width in points
+    rcParams['xtick.minor.width'] =   0.6     # minor tick width in points
+    rcParams['ytick.major.size'] =    3.5     # major tick size in points
+    rcParams['ytick.minor.size'] =    1.1       # minor tick size in points
+    rcParams['ytick.major.width'] =   1.5     # major tick width in points
+    rcParams['ytick.minor.width'] =   0.6     # minor tick width in points
+    rcParams['lines.linewidth'] = 1.3
+    rcParams['lines.markersize'] = 6
+    rcParams['xtick.labelsize'] = 12
+    rcParams['ytick.labelsize'] = 12
+    
+    rcParams['axes.titlesize'] = 24
+    rcParams['axes.labelsize'] = 12
+    rcParams['axes.linewidth'] = 1.5
+    
+    rcParams['legend.handletextpad'] = 0.15
+    rcParams['legend.labelspacing'] = 0.15
+    rcParams['legend.borderpad'] = 0.25
+    rcParams['legend.edgecolor'] = '0.3'
 
-def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, property_name = None, show_loo_predictions = True, sset_enum=None, sset_gss=None, show_plot = True, refs=None, scale=1.0):
+    # Color blind palette below
+    #axes.prop_cycle: cycler('color', ['377eb8', 'ff7f00', '4daf4a', 'f781bf', 'a65628', '984ea3', '999999', 'e41a1c', 'dede00'])
+
+
+
+def plot_property_vs_concentration(sset,
+                                   site_type=0,
+                                   sigma=1,
+                                   cemodel=None,
+                                   property_name=None,
+                                   show_loo_predictions=True,
+                                   sset_enum=None,
+                                   sset_gss=None,
+                                   show_plot = True,
+                                   refs=None,
+                                   scale=1.0,
+                                   fname="PLOT_property_vs_concentration.png"):
     """Plot property values versus concentration and return dictionary with data
 
     The call to this functions generates a plot with matplotlib. It also returns a dictionary
@@ -405,23 +449,27 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     import matplotlib.pyplot as plt
     import math
     from matplotlib import rc,rcParams
+    
+    _set_rc_params()
+
 
     data = {}
 
-    width = 15.0*scale
-    fs = int(width*1.8)
-    ticksize = fs
-    golden_ratio = (math.sqrt(5) - 0.9) / 2.0
-    labelsize = fs
-    height = float(width * golden_ratio)
+    #width = 15.0*scale
+    #fs = width*2.5
+    #ticksize = fs*0.8
+    #golden_ratio = (math.sqrt(5) - 0.9) / 2.0
+    #labelsize = fs
+    #height = float(width * golden_ratio)
 
-    rc('axes', linewidth=3*scale)
+    #rc('axes', linewidth=5*scale)
+    
+    #fig = plt.figure(figsize=(width,height))
+    fig = plt.figure()
 
-    fig = plt.figure(figsize=(width,height))
-    plt.xticks(fontsize=ticksize)
-    plt.yticks(fontsize=ticksize)
-    ax = plt.gca()
-    ax.tick_params(width = 3*scale, size = 10*scale, pad = 10*scale)
+    ax = fig.add_axes([0.19, 0.16, 0.78, 0.80])
+    
+    #ax.tick_params(width = 5*scale, size = 10*scale, pad = 10*scale, direction="in",labelsize=ticksize)
 
     if refs is None:
         refs = [0.0,0.0]
@@ -456,36 +504,52 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     #fig.suptitle("Property vs. concentration")
     data["concentration"] = frconc
     data["property"] = energies-vl_en
-    plt.scatter(frconc,energies-vl_en,marker='o', s=150*scale, edgecolors='green', facecolors='none',label='Calculated')
+    #ax.scatter(frconc,energies-vl_en,marker='o', s=200*scale, edgecolors='k', linewidth=3*scale, facecolors='none',label='Calculated')
+    ax.scatter(frconc,energies-vl_en,marker='o', edgecolors='k', facecolors='none',label='Calculated')
     if cemodel is not None and pred_cv is not None:
         data["predicted-property"] = predictions-vl_en
         data["predicted-property-cv"] = pred_cv-vl_en
-        plt.scatter(frconc,pred_cv-vl_en,marker='x', s=75*scale, edgecolors='none', facecolors='red',label='Predicted-CV')
-        plt.scatter(frconc,predictions-vl_en,marker='o', s=50*scale, edgecolors='none', facecolors='blue',label='Predicted')
+        #plt.scatter(frconc,pred_cv-vl_en,marker='x', s=75*scale, edgecolors='none', facecolors='red',label='Predicted-CV')
+        #plt.scatter(frconc,predictions-vl_en,marker='o', s=50*scale, edgecolors='none', facecolors='blue',label='Predicted')
+        plt.scatter(frconc,pred_cv-vl_en,marker='x', edgecolors='none', facecolors='red',label='Predicted-CV')
+        plt.scatter(frconc,predictions-vl_en,marker='o', edgecolors='none', facecolors='blue',label='Predicted')
     if cemodel is not None and pred_cv is None:
         data["predicted-property"] = predictions-vl_en
-        plt.scatter(frconc,predictions-vl_en,marker='o', s=50*scale, edgecolors='none', facecolors='blue',label='Predicted')
+        #plt.scatter(frconc,predictions-vl_en,marker='o', s=50*scale, edgecolors='none', facecolors='blue',label='Predicted')
+        plt.scatter(frconc,predictions-vl_en,marker='o', edgecolors='none', facecolors='blue',label='Predicted')
     if sset_enum is not None:
         data["concentration-enum"] = frconc_enum
         data["predicted-property-enumeration"] = pred_enum-vl_en_enum
-        plt.scatter(frconc_enum,pred_enum-vl_en_enum,marker='o', s=30*scale, edgecolors='none', facecolors='gray',label='Enumeration')
+        #plt.scatter(frconc_enum,pred_enum-vl_en_enum,marker='o', s=30*scale, edgecolors='none', facecolors='gray',label='Enumeration')
+        plt.scatter(frconc_enum,pred_enum-vl_en_enum,marker='o', edgecolors='none', facecolors='gray',label='Enumeration')
     if sset_gss is not None:
         data["concentration-gss"] = frconc_gss
         data["predicted-property-gss"] = pred_gss-vl_en_gss
-        plt.scatter(frconc_gss,pred_gss-vl_en_gss,marker='o', s=40*scale, edgecolors='none', facecolors='red',label='Predicted GS')
+        #plt.scatter(frconc_gss,pred_gss-vl_en_gss,marker='o', s=40*scale, edgecolors='none', facecolors='red',label='Predicted GS')
+        plt.scatter(frconc_gss,pred_gss-vl_en_gss,marker='o', edgecolors='none', facecolors='red',label='Predicted GS')
 
-    plt.xlabel("Concentration",fontsize=fs)
-    plt.ylabel(property_name,fontsize=fs)
+    from ase.data import chemical_symbols as cs
+    cs = np.array(cs)
+    sublattice_types = sset.get_parent_lattice().get_sublattice_types()
+    species_name = sublattice_types[site_type][sigma]
+    xlabel = "Concentration of "+cs[species_name]
+    plt.xlabel(xlabel)
+    plt.ylabel(property_name)
 
+    data["xlabel"] = xlabel
+    
     plt.legend()
-    leg=ax.legend(loc='best',borderaxespad=2*scale,borderpad=2*scale,labelspacing=1*scale,handlelength=3*scale, handletextpad=2*scale)
-    leg.get_frame().set_linewidth(3*scale)
+    #leg=ax.legend(loc='best',borderaxespad=2*scale,borderpad=2*scale,labelspacing=1*scale,handlelength=3*scale, handletextpad=2*scale)
+    leg=ax.legend(loc='best')
+    #leg.get_frame().set_linewidth(3*scale)
 
-    for l in leg.get_texts():
-        l.set_fontsize(fs)
+    #for l in leg.get_texts():
+    #    l.set_fontsize(fs)
 
     if show_plot:
         plt.show()
+
+    plt.savefig(fname) 
 
     plt.close()
     mpl.rcParams.update(mpl.rcParamsDefault)
@@ -499,7 +563,7 @@ def plot_property(xvalues, yvalues, prop_name = None, xaxis_label = None, yaxis_
     import math
     from matplotlib import rc,rcParams
     
-    width=12.0*scale
+    width=15.0*scale
     fs=int(width*1.8)
     ticksize = fs
     golden_ratio = (math.sqrt(5) - 0.9) / 2.0
