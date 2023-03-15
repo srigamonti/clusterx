@@ -463,26 +463,19 @@ class Model():
         from sklearn.model_selection import LeaveOneOut
         from sklearn.metrics import mean_squared_error
         from sklearn import linear_model
-
+        
         X = self.corrc.get_correlation_matrix(sset)
         y = sset.get_property_values(self.property)
 
         # cross_val_score internally clones the estimator, so the optimal one in Model is not changed.
-        cvs = cross_val_score(self.estimator, X, y, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
+        cvs = cross_val_score(self.estimator, X, y, fit_params=fit_params, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
         pred_cv = cross_val_predict(self.estimator, X, y, fit_params=fit_params, cv=LeaveOneOut())
-        #cv_results = cross_validate(self.estimator, X, y, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
-        #cvs = cv_results['test_score']
-
-        aes = np.sqrt(-cvs)
+        
+        absolute_errors = np.sqrt(-cvs)
         cv = np.sqrt(-np.mean(cvs))
-        maxae = 0
-        for ae in aes:
-            if ae > maxae:
-                maxae = ae
-        mae = 0
-        for ae in aes:
-            mae += ae
-        mae /= len(aes)
+        maxae = np.amax(absolute_errors)
+        mae = np.mean(absolute_errors)
+        
         return {"RMSE-CV": cv, "MAE-CV": mae, "MaxAE-CV": maxae, "Predictions-CV":pred_cv}
 
 class ModelBuilder():
