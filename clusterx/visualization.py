@@ -85,7 +85,17 @@ def _juview_applystyle(view):
     view.add_spacefill(radius_type='vdw',scale=0.3)
 
 
-def plot_optimization_vs_number_of_clusters(clsel, xmin = None, xmax = None, scale = 1.0, yaxis_label = "Errors"):
+def plot_optimization_vs_number_of_clusters(
+        clsel,
+        xmin = None,
+        xmax = None,
+        ymin = None,
+        ymax = None,
+        scale = 1.0,
+        show_yzero_axis = True,
+        show_plot = True,
+        yaxis_label = "Errors",
+        fname="PLOT_property_vs_concentration.png"):
     """Plot cluster optimization with matplotlib
 
     The plot shows the prediction and fitting errors as a function of the clusters
@@ -137,7 +147,14 @@ def plot_optimization_vs_number_of_clusters(clsel, xmin = None, xmax = None, sca
 
     e_min = min([min(rmse),min(cvs)])
     e_max = max([max(rmse),max(cvs)])
-    e_range = e_max - e_min
+    
+    if ymin is None:
+        ymin = e_min
+
+    if ymax is None:
+        ymax = e_max
+
+    e_range = ymax - ymin
 
     ncl_opt = set_sizes[clsel.cvs.index(min(cvs))]
 
@@ -152,8 +169,8 @@ def plot_optimization_vs_number_of_clusters(clsel, xmin = None, xmax = None, sca
 
     rc('axes', linewidth=3*scale)
 
-    #plt.ylim(e_min - e_range / 8.0, e_max + e_range / 10.0)
-    plt.xlim(xmin - ncl_range / 10.0, xmax + ncl_range / 10.0)
+    plt.ylim(ymin - e_range * 0.02, ymax + e_range * 0.02)
+    plt.xlim(xmin - ncl_range * 0.02, xmax + ncl_range * 0.02)
 
     plt.xticks(fontsize=ticksize)
     plt.yticks(fontsize=ticksize)
@@ -214,12 +231,22 @@ def plot_optimization_vs_number_of_clusters(clsel, xmin = None, xmax = None, sca
 
     for l in leg.get_texts():
         l.set_fontsize(fs)
+        
+    if show_yzero_axis:
+        ax.axhline(y=0, color='k', linewidth=0.5)
 
-    #plt.savefig("plot_optimization.png")
-    plt.show()
+    plt.savefig(fname)
+    if show_plot:
+        plt.show()
 
     
-def plot_optimization_vs_sparsity(clsel, scale=1.0, xaxis_label = 'Sparsity', yaxis_label = "Energy [arb. units]"):
+def plot_optimization_vs_sparsity(
+        clsel,
+        scale=1.0,
+        xaxis_label = 'Sparsity',
+        yaxis_label = "Energy [arb. units]",
+        show_plot = True,
+        fname = "plot_optimization_vs_sparsity"):
     """Plot cluster optimization with matplotlib
 
     The plot shows the prediction and fitting errors as a function of the
@@ -286,8 +313,9 @@ def plot_optimization_vs_sparsity(clsel, scale=1.0, xaxis_label = 'Sparsity', ya
     for l in leg.get_texts():
         l.set_fontsize(fs)
 
-    #plt.savefig("plot_optimization.png")
-    plt.show()
+    plt.savefig(fname)
+    if show_plot:
+        plt.show()
 
 
 def plot_predictions_vs_target(sset, cemodel, prop_name, scale=1.0, xaxis_label = 'Calculated energy [arb. units]', yaxis_label = "Predicted energy [arb. units]"):
@@ -377,6 +405,9 @@ def _set_rc_params():
     rcParams['legend.borderpad'] = 0.25
     rcParams['legend.edgecolor'] = '0.3'
 
+    rcParams['text.usetex'] = True
+    rcParams['text.latex.preamble']=r"\usepackage{bm}"
+    
     # Color blind palette below
     #axes.prop_cycle: cycler('color', ['377eb8', 'ff7f00', '4daf4a', 'f781bf', 'a65628', '984ea3', '999999', 'e41a1c', 'dede00'])
 
@@ -393,6 +424,8 @@ def plot_property_vs_concentration(sset,
                                    show_plot = True,
                                    refs=None,
                                    scale=1.0,
+                                   yaxis_label = None,
+                                   show_yzero_axis = True,
                                    fname="PLOT_property_vs_concentration.png"):
     """Plot property values versus concentration and return dictionary with data
 
@@ -449,6 +482,7 @@ def plot_property_vs_concentration(sset,
     import matplotlib.pyplot as plt
     import math
     from matplotlib import rc,rcParams
+    from clusterx.utils import findmax, findmin
     
     _set_rc_params()
 
@@ -473,7 +507,7 @@ def plot_property_vs_concentration(sset,
 
     if refs is None:
         refs = [0.0,0.0]
-
+        
     energies = sset.get_property_values(property_name = property_name)
     if cemodel is not None:
         predictions = sset.get_predictions(cemodel)
@@ -504,6 +538,8 @@ def plot_property_vs_concentration(sset,
     #fig.suptitle("Property vs. concentration")
     data["concentration"] = frconc
     data["property"] = energies-vl_en
+    ymax = np.amax(data["property"])
+    ymin = np.amin(data["property"])
     #ax.scatter(frconc,energies-vl_en,marker='o', s=200*scale, edgecolors='k', linewidth=3*scale, facecolors='none',label='Calculated')
     ax.scatter(frconc,energies-vl_en,marker='o', edgecolors='k', facecolors='none',label='Calculated')
     if cemodel is not None and pred_cv is not None:
@@ -511,22 +547,30 @@ def plot_property_vs_concentration(sset,
         data["predicted-property-cv"] = pred_cv-vl_en
         #plt.scatter(frconc,pred_cv-vl_en,marker='x', s=75*scale, edgecolors='none', facecolors='red',label='Predicted-CV')
         #plt.scatter(frconc,predictions-vl_en,marker='o', s=50*scale, edgecolors='none', facecolors='blue',label='Predicted')
-        plt.scatter(frconc,pred_cv-vl_en,marker='x', edgecolors='none', facecolors='red',label='Predicted-CV')
-        plt.scatter(frconc,predictions-vl_en,marker='o', edgecolors='none', facecolors='blue',label='Predicted')
+        plt.scatter(frconc,predictions-vl_en,marker='o', s=25, edgecolors='none', facecolors='black',label='Predicted')
+        plt.scatter(frconc,pred_cv-vl_en,marker='o', s=10, edgecolors='none', facecolors='red',label='Predicted-CV')
+        ymax = findmax(ymax,data["predicted-property"],data["predicted-property-cv"])
+        ymin = findmin(ymin,data["predicted-property"],data["predicted-property-cv"])
     if cemodel is not None and pred_cv is None:
         data["predicted-property"] = predictions-vl_en
         #plt.scatter(frconc,predictions-vl_en,marker='o', s=50*scale, edgecolors='none', facecolors='blue',label='Predicted')
         plt.scatter(frconc,predictions-vl_en,marker='o', edgecolors='none', facecolors='blue',label='Predicted')
+        ymax = findmax(ymax,data["predicted-property"])
+        ymin = findmin(ymin,data["predicted-property"])
     if sset_enum is not None:
         data["concentration-enum"] = frconc_enum
         data["predicted-property-enumeration"] = pred_enum-vl_en_enum
         #plt.scatter(frconc_enum,pred_enum-vl_en_enum,marker='o', s=30*scale, edgecolors='none', facecolors='gray',label='Enumeration')
         plt.scatter(frconc_enum,pred_enum-vl_en_enum,marker='o', edgecolors='none', facecolors='gray',label='Enumeration')
+        ymax = findmax(ymax,data["predicted-property-enumeration"])
+        ymin = findmin(ymin,data["predicted-property-enumeration"])
     if sset_gss is not None:
         data["concentration-gss"] = frconc_gss
         data["predicted-property-gss"] = pred_gss-vl_en_gss
         #plt.scatter(frconc_gss,pred_gss-vl_en_gss,marker='o', s=40*scale, edgecolors='none', facecolors='red',label='Predicted GS')
         plt.scatter(frconc_gss,pred_gss-vl_en_gss,marker='o', edgecolors='none', facecolors='red',label='Predicted GS')
+        ymax = findmax(ymax,data["predicted-property-gss"])
+        ymin = findmin(ymin,data["predicted-property-gss"])
 
     from ase.data import chemical_symbols as cs
     cs = np.array(cs)
@@ -534,9 +578,20 @@ def plot_property_vs_concentration(sset,
     species_name = sublattice_types[site_type][sigma]
     xlabel = "Concentration of "+cs[species_name]
     plt.xlabel(xlabel)
-    plt.ylabel(property_name)
+    if yaxis_label is not None:
+        plt.ylabel(yaxis_label)
+        #ax.set_ylabel(yaxis_label)
+        #ax.set_ylabel('')
+    else:
+        plt.ylabel(property_name)
 
     data["xlabel"] = xlabel
+
+    dy = ymax-ymin
+    ax.set_ylim([ymin + 0.02 * dy, ymax + 0.30 * dy])
+    
+    if show_yzero_axis:
+        ax.axhline(y=0, color='k', linewidth=0.5)
     
     plt.legend()
     #leg=ax.legend(loc='best',borderaxespad=2*scale,borderpad=2*scale,labelspacing=1*scale,handlelength=3*scale, handletextpad=2*scale)
