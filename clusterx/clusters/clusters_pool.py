@@ -1302,10 +1302,10 @@ class ClusterOrbit(ClustersPool):
 
 
     def _gen_orbit(self, super_cell, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans=False, cluster_positions=None):
-        self.gen_orbit_new(super_cell, cluster_sites=cluster_sites, cluster_species=cluster_species, tol = tol, distances=distances, no_trans=no_trans, cluster_positions=cluster_positions)
+        self.gen_orbit(super_cell, cluster_sites=cluster_sites, cluster_species=cluster_species, tol = tol, distances=distances, no_trans=no_trans, cluster_positions=cluster_positions)
 
 
-    def gen_orbit_new(self, super_cell, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans=False, cluster_positions=None):
+    def gen_orbit(self, super_cell, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans=False, cluster_positions=None):
         """
         Generate cluster orbit inside a supercell.
 
@@ -1374,9 +1374,15 @@ class ClusterOrbit(ClustersPool):
         from collections import Counter
 
         natoms = super_cell.get_natoms()
+        sites = super_cell.get_sites()
         
         sigmas = np.zeros(natoms, dtype = "int")
-        np.put(sigmas, cluster_sites, cluster_species) # CHANGE SPECIES BY TAG!
+
+        cluster_tags = []
+        for idx, sp in zip(cluster_sites, cluster_species):
+            cluster_tags.append(np.where(sites[idx] == sp)[0][0])
+            
+        np.put(sigmas, cluster_sites, cluster_tags)
 
         small_orbit = set()
         for per in super_cell.get_sym_perm(include_sc_trans = False):
@@ -1390,19 +1396,19 @@ class ClusterOrbit(ClustersPool):
         option = 2
         
         if  option == 1:
-            orbit_list = []
+            _orbit_list = []
             for per in super_cell.get_sym_perm(include_sc_trans = True):
                 sigmas_tuple  = tuple( sigmas[np.ix_(per)].tolist() )
-                orbit_list.append(sigmas_tuple)
+                _orbit_list.append(sigmas_tuple)
 
-            orbit = Counter(orbit_list).keys()
-            weights = Counter(orbit_list).values()
-            #orbit, weights = np.unique(orbit_list, return_counts = True, axis=0)
-            
-            self.weights = np.array(weights)
+            __orbit_list = list(Counter(_orbit_list).keys())
+            weights = Counter(_orbit_list).values()
+            self.weights = np.array(list(weights))
             self.multiplicity = self.reduced_multiplicity
-
-            
+            orbit_list = []
+            for cll in __orbit_list:
+                orbit_list.append(np.array(cll).nonzero()[0])
+                
         if option == 2:
             orbit_set = set()
             orbit_dict = {}
@@ -1427,110 +1433,8 @@ class ClusterOrbit(ClustersPool):
         for cl in orbit:
             self.add_cluster(cl)
 
-        """
-        for per in super_cell.get_sym_perm(include_sc_trans = True):
-            sigmas_tuple  = tuple( sigmas[np.ix_(per)].tolist() )
-            if sigmas_tuple not in orbit:
-            orbit.add( sigmas_tuple )
-        self.multiplicity = len(orbit)
-        """
-        """
-        if cluster_sites is not None:
-            # Get original cluster cartesian positions (p0)
-            pos = super_cell.get_positions(wrap=True)
-            p0 = np.array([pos[site] for site in cluster_sites])
-        else:
-            p0 = cluster_positions
-            
-        # empty cluster
-        if len(p0) == 0:
-            self.add_cluster(Cluster([],[],super_cell))
-            self.weights = np.array([1], int)
-            self.multiplicity = 1
-            self.reduced_multiplicity = 1
-            return
-
-        cluster_species = np.array(cluster_species)
         
-        # Get internal translation of the parent lattice in the super cell
-        if no_trans:
-            internal_trans = np.zeros((3,3))
-        else:
-            internal_trans = super_cell.get_internal_translations() # Scaled to super_cell
-
-        if distances is None:
-            distances = super_cell.get_all_distances(mic=False)
-        
-
-        spos1 = super_cell.get_scaled_positions(wrap=True) # Super-cell scaled positions
-        spos = np.around(spos1,8) # Wrapping in ASE doesn't always work. Here a hard external fix by rounding and then applying again ASE's style wrapping.
-
-        for i, periodic in enumerate(super_cell.get_pbc()):
-            if periodic:
-                spos[:, i] %= 1.0
-                spos[:, i] %= 1.0
-                
-
-        # Get cluster orbit for the point symmetry operations of the parent lattice only (small cluster orbit)
-        sp0 = get_scaled_positions(p0, self._plat.get_cell(), pbc = super_cell.get_pbc(), wrap = False) # sp0: scaled cluster positions with respect to parent lattice
-        
-        _orbit = []
-        clset = set()
-
-        orbit0 = self._get_small_cluster_orbit(sp0, cluster_species)
-        
-        mult = len(orbit0) # Multiplicity of the cluster with respect to the point symmetries of the parent lattice (not the supercell). This is the standard cluster multiplicity used in literature.
-
-        reduced_orbit0 = []
-
-        for _sp1 in orbit0:
-            # Get cartesian, then scaled to supercell
-            _p1 = np.dot(_sp1, self._plat.get_cell())
-            __sp1 = get_scaled_positions(_p1, super_cell.get_cell(), pbc = super_cell.get_pbc(), wrap = True)
-            reduced_orbit0.append(__sp1)
-            
-        reduced_mult = mult
-        
-        for _sp1 in reduced_orbit0:
-            for itr,tr in enumerate(internal_trans): # Now apply the internal translations
-                __sp1 = np.add(_sp1, tr)
-                __sp1 = wrap_scaled_positions(__sp1,super_cell.get_pbc())
-                _cl = get_cl_idx_sc(__sp1, spos, method=1, tol=tol)
-
-                ocl = Cluster(_cl,cluster_species)
-                _orbit.append(ocl)
-                clset.add(ocl)
-
-        weights = []
-        orbit = []
-        crossedout = []
-        ncl = len(_orbit)
-        cnt = 0
-        for i in range(ncl):
-            if i not in crossedout:
-                cl_i = _orbit[i]
-                weights.append(1)
-                orbit.append(Cluster(cl_i.get_idxs(),cl_i.get_nrs(),super_cell,distances))
-                cnt += 1
-            
-                for j in range(i+1, ncl):
-                    if j not in crossedout:
-                        cl_j = _orbit[j]
-                        if cl_i == cl_j:
-                            weights[cnt-1] += 1
-                            crossedout.append(j)
-                        
-
-        for cl in orbit:
-            self.add_cluster(cl)
-        
-        self.weights = np.array(weights, int)
-        self.multiplicity = mult
-        self.reduced_multiplicity = reduced_mult
-
-        """
-        
-    def gen_orbit(self, super_cell, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans=False, cluster_positions=None):
+    def gen_orbit_slow_version(self, super_cell, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans=False, cluster_positions=None):
         """
         Generate cluster orbit inside a supercell.
 
