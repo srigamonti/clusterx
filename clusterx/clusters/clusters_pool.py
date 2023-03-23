@@ -416,8 +416,7 @@ class ClustersPool():
 
         return clsets
 
-    def gen_clusters(self,method=1):
-        method = 0
+    def gen_clusters(self,method=0):
         if method == 0:
             self.gen_clusters0()
         if method == 1:
@@ -450,25 +449,25 @@ class ClustersPool():
         full_list = set()
         symper = scell.get_sym_perm()
         i = 0
-        cpool_sigmas = []
         cpool_idx_ss = []
         cpool_maxradii = []
         
         wyck_idxs = set()
         
         full_list = set()
-        n_max = int(scipy.special.binom(nsatoms, 1))
-        for idxs in tqdm(combinations(satoms,1), total=n_max, desc="Finding wyckoff sites"):
+        
+        for idxs in tqdm(satoms, total=nsatoms, desc="Finding wyckoff sites"):
             sigmas = np.zeros(natoms, dtype = "int")
             np.put(sigmas, idxs, [1])
                     
-            if tuple(sigmas.tolist()) not in full_list:
-                wyck_idxs.add(idxs[0])
+            #if tuple(sigmas.tolist()) not in full_list:
+            if tuple([idxs]) not in full_list:
+                wyck_idxs.add(idxs)
                 
             for per in symper:
                 full_list.add(
                     tuple(
-                        sigmas[np.ix_(per)].tolist()
+                        sigmas[np.ix_(per)].nonzero()[0].tolist()
                     )
                 )
 
@@ -482,10 +481,6 @@ class ClustersPool():
                     if self._distances_mic_true[widx,satidx] <= radius:
                         idxs.append(satidx)
             idxs_sets[irad] = np.unique(np.array(idxs))
-            #print(idxs)
-            #print(idxs_sets[irad])
-                    
-        #sys.exit()
             
                 
         full_list = set()
@@ -495,16 +490,12 @@ class ClustersPool():
             clrs_full = []
             n_max = int(scipy.special.binom(len(set(idxs_sets[irad]).difference(set([widx]))), npts-1))*len(wyck_idxs)
             
-            #for idxs in tqdm(combinations(satoms,npts), total=n_max, desc="Finding unique clusters"):
-            #for idxs in tqdm(combinations(idxs_sets[irad],npts), total=n_max, desc="Finding unique clusters"):
             for widx in wyck_idxs:
                 for idxs_ in tqdm(combinations(set(idxs_sets[irad]).difference(set([widx])),npts-1), total=n_max, desc=f"Finding unique clusters of {npts} points"):
 
                     idxs = [widx]
                     for idx in idxs_:
                         idxs.append(idx)
-
-                    #if len(set(idxs).intersection(wyck_idxs)) != 0:
 
                     _radius = 0
                     for idxs2 in combinations(idxs,2):
@@ -522,16 +513,16 @@ class ClustersPool():
                             sigmas = np.zeros(natoms, dtype = "int")
                             np.put(sigmas, idxs, ss)
 
-                            if tuple(sigmas.tolist()) not in full_list:
-                                cpool_sigmas.append(sigmas)
+                            if tuple(sigmas.nonzero()[0].tolist()) not in full_list:
                                 cpool_idx_ss.append([idxs,list(ss)])
                                 cpool_maxradii.append(radius)
 
                             for per in symper:
-                                if set(sigmas[np.ix_(per)].nonzero()[0]).intersection(wyck_idxs):
+                                newidxs = sigmas[np.ix_(per)].nonzero()[0]
+                                if set(newidxs).intersection(wyck_idxs):
                                     full_list.add(
                                         tuple(
-                                            sigmas[np.ix_(per)].tolist()
+                                            newidxs.tolist()
                                         )
                                     )
 
