@@ -1372,11 +1372,40 @@ class ClusterOrbit(ClustersPool):
         from sympy.utilities.iterables import multiset_permutations
         import sys
         from collections import Counter
+        from clusterx.utils import isclose
+
+        round_decimals = 8
 
         natoms = super_cell.get_natoms()
         sites = super_cell.get_sites()
         
         sigmas = np.zeros(natoms, dtype = "int")
+
+        if cluster_sites is None:
+            spos1 = super_cell.get_scaled_positions(wrap=True) # Super-cell scaled positions
+            sps_sc = np.around(spos1,round_decimals) # Wrapping in ASE doesn't always work. Here a hard external fix by rounding and then applying again ASE's style wrapping.
+
+            for i, periodic in enumerate(super_cell.get_pbc()):
+                if periodic:
+                    sps_sc[:, i] %= 1.0
+                    sps_sc[:, i] %= 1.0
+
+            #sp0 = get_scaled_positions(p0, self._plat.get_cell(), pbc = super_cell.get_pbc(), wrap = False) # sp0: scaled cluster positions with respect to parent lattice
+            sps_cl = np.around(get_scaled_positions(cluster_positions, super_cell.get_cell(), pbc = super_cell.get_pbc(), wrap = True), round_decimals)
+
+            cluster_sites = []
+
+            option_2 = 2
+
+            if option_2 == 1: 
+                for sp_cl in sps_cl:
+                    for idxsc,sp_sc in enumerate(sps_sc):
+                        if isclose(sp_sc,sp_cl):
+                            cluster_sites.append(idxsc)
+            if option_2 == 2:
+                for sp_cl in sps_cl:
+                    cluster_sites.append(np.where(np.all(sps_sc==sp_cl,axis=1))[0][0]) # THIS MAY NEED TO BE REPLACED WITH utils.isclose() !!!
+                
 
         cluster_tags = []
         for idx, sp in zip(cluster_sites, cluster_species):
