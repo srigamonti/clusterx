@@ -446,17 +446,17 @@ class ClustersPool():
         distances = self._distances
         radii = self._radii
 
-        full_list = set()
         symper = scell.get_sym_perm()
+        
+        print("INFO(clusters_pool): Initialization finished")
+        
         i = 0
         cpool_idx_ss = []
         cpool_maxradii = []
-        
         wyck_idxs = set()
-        
         full_list = set()
         
-        for idxs in tqdm(satoms, total=nsatoms, desc="Finding wyckoff sites"):
+        for idxs in tqdm(satoms, total=nsatoms, desc="INFO(clusters_pool): Finding wyckoff sites"):
             sigmas = np.zeros(natoms, dtype = "int")
             np.put(sigmas, idxs, [1])
                     
@@ -491,7 +491,7 @@ class ClustersPool():
             n_max = int(scipy.special.binom(len(set(idxs_sets[irad]).difference(set([widx]))), npts-1))*len(wyck_idxs)
             
             for widx in wyck_idxs:
-                for idxs_ in tqdm(combinations(set(idxs_sets[irad]).difference(set([widx])),npts-1), total=n_max, desc=f"Finding unique clusters of {npts} points"):
+                for idxs_ in tqdm(combinations(set(idxs_sets[irad]).difference(set([widx])),npts-1), total=n_max, desc=f"INFO(clusters_pool): Finding unique clusters of {npts} points"):
 
                     idxs = [widx]
                     for idx in idxs_:
@@ -526,7 +526,7 @@ class ClustersPool():
                                         )
                                     )
 
-        for i, idx_ss in tqdm(enumerate(cpool_idx_ss), total=len(cpool_idx_ss), desc="Creating clusters objects"):
+        for i, idx_ss in tqdm(enumerate(cpool_idx_ss), total=len(cpool_idx_ss), desc="INFO(clusters_pool): Creating clusters objects"):
             sps = []
             for idx,isp in zip(idx_ss[0],idx_ss[1]):
                 sps.append(sites[idx][isp])
