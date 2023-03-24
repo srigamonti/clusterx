@@ -332,8 +332,15 @@ class StructuresSet():
 
         return images
 
-    def get_subset(self, structure_indices = []):
+    def get_subset(self, structure_indices = [], transfer_properties = True):
         """Return structures set instance containing a subset of structures of the original structures set
+
+        **Parameters**
+
+        ``structure_indices``: list or array
+            indices of the structures in the original StructuresSet to be included in the subset.
+        ``transfer_properties``: Boolean
+            if True (default), copy the properties from the original StructuresSet to the subset.
         """
         folders = self.get_folders()
         property_dict = self.get_property()
@@ -349,11 +356,13 @@ class StructuresSet():
                 
             
         subset.set_calculator(calculator)
-        for pn, pv in property_dict.items():
-            _pv = []
-            for i in structure_indices:
-                _pv.append(pv[i])
-            subset.set_property_values(property_name = pn, property_vals = _pv)
+
+        if transfer_properties:
+            for pn, pv in property_dict.items():
+                _pv = []
+                for i in structure_indices:
+                    _pv.append(pv[i])
+                subset.set_property_values(property_name = pn, property_vals = _pv)
 
         return subset
             
