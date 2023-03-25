@@ -434,6 +434,8 @@ class ClustersPool():
         from tqdm import tqdm
         import scipy
         import time
+
+        print("INFO(clusters_pool): Initialization started")
         
         npoints = self._npoints
         scell = self._cpool_scell
@@ -446,17 +448,17 @@ class ClustersPool():
         distances = self._distances
         radii = self._radii
 
-        full_list = set()
         symper = scell.get_sym_perm()
+        
+        print("INFO(clusters_pool): Initialization finished")
+        
         i = 0
         cpool_idx_ss = []
         cpool_maxradii = []
-        
         wyck_idxs = set()
-        
         full_list = set()
         
-        for idxs in tqdm(satoms, total=nsatoms, desc="Finding wyckoff sites"):
+        for idxs in tqdm(satoms, total=nsatoms, desc="INFO(clusters_pool): Finding wyckoff sites"):
             sigmas = np.zeros(natoms, dtype = "int")
             np.put(sigmas, idxs, [1])
                     
@@ -491,7 +493,7 @@ class ClustersPool():
             n_max = int(scipy.special.binom(len(set(idxs_sets[irad]).difference(set([widx]))), npts-1))*len(wyck_idxs)
             
             for widx in wyck_idxs:
-                for idxs_ in tqdm(combinations(set(idxs_sets[irad]).difference(set([widx])),npts-1), total=n_max, desc=f"Finding unique clusters of {npts} points"):
+                for idxs_ in tqdm(combinations(set(idxs_sets[irad]).difference(set([widx])),npts-1), total=n_max, desc=f"INFO(clusters_pool): Finding unique clusters of {npts} points"):
 
                     idxs = [widx]
                     for idx in idxs_:
@@ -526,7 +528,7 @@ class ClustersPool():
                                         )
                                     )
 
-        for i, idx_ss in tqdm(enumerate(cpool_idx_ss), total=len(cpool_idx_ss), desc="Creating clusters objects"):
+        for i, idx_ss in tqdm(enumerate(cpool_idx_ss), total=len(cpool_idx_ss), desc="INFO(clusters_pool): Creating clusters objects"):
             sps = []
             for idx,isp in zip(idx_ss[0],idx_ss[1]):
                 sps.append(sites[idx][isp])
@@ -1302,7 +1304,7 @@ class ClusterOrbit(ClustersPool):
 
 
     def _gen_orbit(self, super_cell, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans=False, cluster_positions=None):
-        self.gen_orbit(super_cell, cluster_sites=cluster_sites, cluster_species=cluster_species, tol = tol, distances=distances, no_trans=no_trans, cluster_positions=cluster_positions)
+        self.gen_orbit_slow_version(super_cell, cluster_sites=cluster_sites, cluster_species=cluster_species, tol = tol, distances=distances, no_trans=no_trans, cluster_positions=cluster_positions)
 
 
     def gen_orbit(self, super_cell, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans=False, cluster_positions=None):
@@ -1372,63 +1374,97 @@ class ClusterOrbit(ClustersPool):
         from sympy.utilities.iterables import multiset_permutations
         import sys
         from collections import Counter
+        from clusterx.utils import isclose
+
+        round_decimals = 8
 
         natoms = super_cell.get_natoms()
         sites = super_cell.get_sites()
         
-        sigmas = np.zeros(natoms, dtype = "int")
+        # empty cluster
+        empty_cluster = None
+        if (cluster_sites is None and cluster_positions is None):
+            return
+        if cluster_sites is not None:
+            if len(cluster_sites) == 0:
+                empty_cluster = True
+        if cluster_positions is not None:
+            if len(cluster_positions) == 0:
+                empty_cluster = True
+                
+        if empty_cluster:
+            self.add_cluster(Cluster([],[],super_cell))
+            self.weights = np.array([1], int)
+            self.multiplicity = 1
+            self.reduced_multiplicity = 1
+            return
+
+        if cluster_sites is None:
+            spos1 = super_cell.get_scaled_positions(wrap=True) # Super-cell scaled positions
+            sps_sc = np.around(spos1,round_decimals) # Wrapping in ASE doesn't always work. Here a hard external fix by rounding and then applying again ASE's style wrapping.
+
+            for i, periodic in enumerate(super_cell.get_pbc()):
+                if periodic:
+                    sps_sc[:, i] %= 1.0
+                    sps_sc[:, i] %= 1.0
+
+            #sp0 = get_scaled_positions(p0, self._plat.get_cell(), pbc = super_cell.get_pbc(), wrap = False) # sp0: scaled cluster positions with respect to parent lattice
+            sps_cl = np.around(get_scaled_positions(cluster_positions, super_cell.get_cell(), pbc = super_cell.get_pbc(), wrap = True), round_decimals)
+
+            cluster_sites = []
+
+            option_2 = 2
+
+            if option_2 == 1: 
+                for sp_cl in sps_cl:
+                    for idxsc,sp_sc in enumerate(sps_sc):
+                        if isclose(sp_sc,sp_cl):
+                            cluster_sites.append(idxsc)
+            if option_2 == 2:
+                for sp_cl in sps_cl:
+                    cluster_sites.append(np.where(np.all(sps_sc==sp_cl,axis=1))[0][0]) # THIS MAY NEED TO BE REPLACED WITH utils.isclose() !!!
+                
 
         cluster_tags = []
         for idx, sp in zip(cluster_sites, cluster_species):
             cluster_tags.append(np.where(sites[idx] == sp)[0][0])
-            
-        np.put(sigmas, cluster_sites, cluster_tags)
 
         small_orbit = set()
         for per in super_cell.get_sym_perm(include_sc_trans = False):
+            csper = []
+            for idx in cluster_sites:
+                csper.append(per[idx])
+                
             small_orbit.add(
                 tuple(
-                    sigmas[np.ix_(per)].tolist()
+                    csper
                 )
             )
+
         self.reduced_multiplicity = len(small_orbit)
 
-        option = 2
-        
-        if  option == 1:
-            _orbit_list = []
-            for per in super_cell.get_sym_perm(include_sc_trans = True):
-                sigmas_tuple  = tuple( sigmas[np.ix_(per)].tolist() )
-                _orbit_list.append(sigmas_tuple)
+        orbit_set = set()
+        orbit_dict = {}
+        for per in super_cell.get_sym_perm(include_sc_trans = not no_trans):
+            idxs = []
+            for idx in cluster_sites:
+                idxs.append(per[idx])
+            idxs_tuple = tuple(idxs)
 
-            __orbit_list = list(Counter(_orbit_list).keys())
-            weights = Counter(_orbit_list).values()
-            self.weights = np.array(list(weights))
-            self.multiplicity = self.reduced_multiplicity
-            orbit_list = []
-            for cll in __orbit_list:
-                orbit_list.append(np.array(cll).nonzero()[0])
-                
-        if option == 2:
-            orbit_set = set()
-            orbit_dict = {}
-            for per in super_cell.get_sym_perm(include_sc_trans = True):
-                idxs_tuple  = tuple( sigmas[np.ix_(per)].nonzero()[0].tolist() )
+            if idxs_tuple not in orbit_set:
+                orbit_set.add(idxs_tuple)
+                orbit_dict[idxs_tuple] = 1
+            else:
+                orbit_dict[idxs_tuple] += 1
 
-                if idxs_tuple not in orbit_set:
-                    orbit_set.add(idxs_tuple)
-                    orbit_dict[idxs_tuple] = 1
-                else:
-                    orbit_dict[idxs_tuple] += 1
-
-            orbit_list = orbit_dict.keys()
-            self.weights = np.array(orbit_dict.values())
-            self.multiplicity = self.reduced_multiplicity
-
+        orbit_list = orbit_dict.keys()
+        self.weights = np.array(list(orbit_dict.values()))
+        self.multiplicity = self.reduced_multiplicity
+            
         orbit = []
-
+        
         for cl_tuple in orbit_list:
-            orbit.append(Cluster(cl_tuple,cluster_species,super_cell,distances))
+            orbit.append(Cluster(list(cl_tuple),cluster_species,super_cell,distances))
             
         for cl in orbit:
             self.add_cluster(cl)
