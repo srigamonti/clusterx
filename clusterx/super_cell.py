@@ -133,17 +133,22 @@ class SuperCell(ParentLattice):
             self._sym_table = self.get_symmetry_table()
         else: 
             self._sym_table = []
-        
+
         self.sc_sg, self.sc_sym = self.get_sym()
+        self.sc_sg_pl, self.sc_sym_pl = self.get_sym_platt()
         #self.internal_trans = get_internal_translations(self._plat, self) # Scaled to super_cell
         self.internal_trans = None # Scaled to super_cell
         #self.all_distances_mic = None
         #self.all_distances_nomic = None
         #self.scaled_positions = None
         self.sym_perm = None
+        self.sym_perm_platt = None
 
-    def compute_sym_perm(self):
-        self.sym_perm = []
+    def compute_sym_perm(self, include_sc_trans = True):
+        if include_sc_trans:
+            self.sym_perm = []
+        else:
+            self.sym_perm_platt = []
 
         tol = 1e-3/np.cbrt(self.get_natoms())
         internal_trans = self.get_internal_translations() # Scaled to super_cell
@@ -155,7 +160,11 @@ class SuperCell(ParentLattice):
                 spos[:, i] %= 1.0
                 spos[:, i] %= 1.0
 
-        sg, sym = self.get_sym()
+        if include_sc_trans:
+            sg, sym = self.get_sym()
+        else:
+            sg, sym = self.get_sym_platt()
+            
         rot = sym["rotations"]
         tra = sym["translations"]
 
@@ -178,15 +187,25 @@ class SuperCell(ParentLattice):
             _cl = get_cl_idx_sc(_sp1, spos, method=1, tol=tol)
             _sym_perm.append(_cl)
 
-        self.sym_perm = np.unique(_sym_perm, axis = 0)
+        if include_sc_trans:
+            self.sym_perm = np.unique(_sym_perm, axis = 0)
+        else:
+            self.sym_perm_platt = np.unique(_sym_perm, axis = 0)
         #self.sym_perm = _sym_perm
 
-    def get_sym_perm(self):
-        if self.sym_perm is None:
-            self.compute_sym_perm()
-            return self.sym_perm
+    def get_sym_perm(self, include_sc_trans = True):
+        if include_sc_trans:
+            if self.sym_perm is None:
+                self.compute_sym_perm(include_sc_trans = True)
+                return self.sym_perm
+            else:
+                return self.sym_perm
         else:
-            return self.sym_perm
+            if self.sym_perm_platt is None:
+                self.compute_sym_perm(include_sc_trans = False)
+                return self.sym_perm_platt
+            else:
+                return self.sym_perm_platt
 
     def get_sym(self):
         """Get space symmetry of a ParentLattice object.
@@ -196,6 +215,15 @@ class SuperCell(ParentLattice):
         except:
             self.sc_sg, self.sc_sym = self._compute_sym()
             return self.sc_sg, self.sc_sym
+
+    def get_sym_platt(self):
+        """Get space symmetry of a ParentLattice object.
+        """
+        try:
+            return self.sc_sg_pl, self.sc_sym_pl
+        except:
+            self.sc_sg_pl, self.sc_sym_pl = self.get_parent_lattice()._compute_sym()
+            return self.sc_sg_pl, self.sc_sym_pl
 
     def _compute_sym(self):
         return get_spacegroup(self)

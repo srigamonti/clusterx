@@ -723,7 +723,8 @@ def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
         tolerance to determine whether cluster and atom positions are the same.
     """
     from scipy.spatial.distance import cdist
-
+    sdistances = None
+    method = 1
     if method == 0:
         idxs = np.zeros(len(cl),dtype="int")
         for icl,clp in enumerate(cl):
