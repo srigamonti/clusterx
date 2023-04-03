@@ -12,6 +12,26 @@ from ase import Atoms
 class SupercellError(Exception):
     pass
 
+def findmax(*args):
+    vals = []
+    for v in args:
+        if hasattr(v,"__len__"):
+            vals.append(np.amax(v))
+        else:
+            vals.append(v)
+
+    return np.amax(vals)
+
+def findmin(*args):
+    vals = []
+    for v in args:
+        if hasattr(v,"__len__"):
+            vals.append(np.amin(v))
+        else:
+            vals.append(v)
+
+    return np.amin(vals)
+        
 def isclose(r1,r2,rtol=1e-4):
     """Determine whether two vectors are similar
 
