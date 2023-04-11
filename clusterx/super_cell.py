@@ -383,7 +383,7 @@ class SuperCell(ParentLattice):
             _nsubs = {}
             for k,v in slts.items():
                 if len(v) != 1:
-                    _nsubs[k] = [np.random.randint(0,len(np.where(self.get_tags() == k)[0]))]
+                    _nsubs[k] = [np.random.randint(0,len(np.where(self.get_tags() == k)[0])+1)]
 
         elif isinstance(nsubs,int):
             if self.is_nary(2):
