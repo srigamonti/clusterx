@@ -530,6 +530,8 @@ class ParentLattice(Atoms):
             Whether to return a dictionary or a self-explanatory and nicely
             formatted string.
 
+            DEPRECATED: Use `print_sublattice_types()` instead.
+
         **Examples:**
         For instance, if a ParentLattice object consists of six positions, such that
         the first three positions can be occupied by species 14 or 13, the 4th
@@ -545,18 +547,24 @@ class ParentLattice(Atoms):
         if not pretty_print:
             return self.idx_subs
         else:
-            from ase.data import chemical_symbols as cs
-            sld = self.idx_subs
-            cs = np.array(cs)
-            print("\n+--------------------------------------------------------------------+")
-            print("|{0:^68s}|".format("The structure consists of "+str(len(sld))+" sublattices"))
-            print("+--------------------------------------------------------------------+")
-            print("|{0:^17s}|{1:^30s}|{2:^19s}|".format("Sublattice type","Chemical symbols","Atomic numbers"))
-            print("+--------------------------------------------------------------------+")
+            warnings.warn("Using `pretty_print=True` is deprecated. Use `print_sublattice_types()` instead.", category=FutureWarning)
+            self.print_sublattice_types()
 
-            for slind,slsps in self.idx_subs.items():
-                print("|{0:^17s}|{1:^30s}|{2:^19s}|".format(str(slind),str(cs[slsps]),str(slsps)))
-            print("+--------------------------------------------------------------------+\n")
+    def print_sublattice_types(self):
+        """Print chemical symbols and atomic numbers for each sublattice type.
+        """
+        from ase.data import chemical_symbols as cs
+        sld = self.idx_subs
+        cs = np.array(cs)
+        print("\n+--------------------------------------------------------------------+")
+        print("|{0:^68s}|".format("The structure consists of "+str(len(sld))+" sublattices"))
+        print("+--------------------------------------------------------------------+")
+        print("|{0:^17s}|{1:^30s}|{2:^19s}|".format("Sublattice type","Chemical symbols","Atomic numbers"))
+        print("+--------------------------------------------------------------------+")
+
+        for slind,slsps in self.idx_subs.items():
+            print("|{0:^17s}|{1:^30s}|{2:^19s}|".format(str(slind),str(cs[slsps]),str(slsps)))
+        print("+--------------------------------------------------------------------+\n")
 
     # Deprecated, use get_sublattice_types instead
     def get_idx_subs(self):

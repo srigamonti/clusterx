@@ -1250,7 +1250,24 @@ class ClustersPool():
     def display_info(self, ecis = None):
         """Display in screen information about the clusters pools
 
+        DEPRECATED: Use `print_info()` instead.
+
         Displays on screen a table with information concerning the clusters pool.
+
+        **Parameters**:
+
+        ``ecis``: Array of float (optional)
+            Effective cluster interactions. If not ``None``, the displayed
+            table contains the ECI values in the last column.
+        """
+        import warnings
+        warnings.warn("The name of this function has changed. Please use `print_info()`.", category=FutureWarning)
+        self.print_info(ecis=ecis)
+
+    def print_info(self, ecis = None):
+        """Print information about the clusters pools
+
+        Prints a table with information concerning the clusters pool.
 
         **Parameters**:
 
