@@ -422,7 +422,8 @@ class Model():
         """Return absolute errors of every structure in a structures set.
 
         **Parameters:**
-        ``sset``: StructuresSet objec
+
+        ``sset``: StructuresSet object
             the errors are calculated for every structure in the structures set
         ``srtd``: Boolean (default: ``False``)
             if ``True`` the output errors are sorted from smallest to largest. 
@@ -664,6 +665,7 @@ class ModelBuilder():
         Only pickle format is supported.
 
         **Parameters:**
+        
         ``filepath``: string (default: "MODELBDR.pickle")
             file path of the pickle file to serialize the model builder object
         """

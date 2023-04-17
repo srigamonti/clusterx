@@ -824,6 +824,7 @@ class StructuresSet():
         If an associated json database exists, it is updated with the new property.
 
         **Parameters:**
+        
         ``property_name``: string
             The name used to label the property in the structures set. This label is then listed
             in ``sset.get_property_names()`` and the property values for this label can be obtained
