@@ -49,8 +49,12 @@ class ClustersPool():
         If 1, an elimination method is used to build the clusters pool. If 2, an
         incremental method is used instead. Use method 2 only if ``super_cell`` is
         ``None``.
-    ``json_db_filepath``: string (default: None)
+    ``filepath``: string (default: None)
         Overrides all the above. Used to initialize from file. Path of a json
+        file containing a serialized ClustersPool object, as generated
+        by the ``ClustersPool.serialize()`` method.
+    ``json_db_filepath``: string (default: None)
+        *DEPRECATED*, use ``filepath`` instead. Overrides all the above. Used to initialize from file. Path of a json
         file containing a serialized ClustersPool object, as generated
         by the ``ClustersPool.serialize()`` method.
 
@@ -88,9 +92,13 @@ class ClustersPool():
 
     **Methods:**
     """
-    def __init__(self, parent_lattice=None, npoints=[], radii=[], super_cell=None, method=0, json_db_filepath=None, db = None):
+    def __init__(self, parent_lattice=None, npoints=[], radii=[], super_cell=None, method=0, filepath=None, json_db_filepath=None, db = None):
+
         if json_db_filepath is not None:
-            db = connect(json_db_filepath)
+            filepath = json_db_filepath
+            
+        if filepath is not None:
+            db = connect(filepath)
 
         if db is not None:            
             self.nclusters = db.metadata.get("nclusters",0)
