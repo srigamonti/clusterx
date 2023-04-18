@@ -88,7 +88,7 @@ class ClustersPool():
 
     **Methods:**
     """
-    def __init__(self, parent_lattice=None, npoints=[], radii=[], super_cell=None, method=1, json_db_filepath=None, db = None):
+    def __init__(self, parent_lattice=None, npoints=[], radii=[], super_cell=None, method=0, json_db_filepath=None, db = None):
         if json_db_filepath is not None:
             db = connect(json_db_filepath)
 
@@ -303,7 +303,7 @@ class ClustersPool():
     def get_subpool(self, cluster_indexes):
         """Return a ClustersPool object formed by a subset of the clusters pool
 
-        Parameters:
+        **Parameters:**
 
         cluster_indexes: array of integers
             The indexes of the clusters to build the subpool from.
@@ -320,7 +320,7 @@ class ClustersPool():
     def get_clusters_sets(self, grouping_strategy = "size", nclmax = 0, set0=[0,0]):
         """Return cluster sets for cluster selection based on CV
 
-        Parameters:
+        **Parameters:**
 
         grouping_strategy: string
             Can take the values "size" and "combinations". If "size", a set in the clusters set
@@ -417,16 +417,18 @@ class ClustersPool():
         return clsets
 
     def gen_clusters(self,method=0):
+        """Generate pool of clusters
+
+        **Parameters:**
+
+        ``method``: int
+        0: Fast, default method. 1: Slow, use only for benchmarking purposes.
+
+        """
         if method == 0:
             self.gen_clusters0()
         if method == 1:
             self.gen_clusters1()
-        if method == 2:
-            self.gen_clusters2()
-        if method == 3:
-            self.gen_clusters3()
-        if method == 4:
-            self.gen_clusters4()
 
     def gen_clusters0(self):
         from clusterx.super_cell import SuperCell
@@ -451,28 +453,22 @@ class ClustersPool():
         symper = scell.get_sym_perm()
         
         print("INFO(clusters_pool): Initialization finished")
-        
-        i = 0
-        cpool_idx_ss = []
-        cpool_maxradii = []
+
+        # Find Wyckoff sites
         wyck_idxs = set()
         full_list = set()
-        
-        for idxs in tqdm(satoms, total=nsatoms, desc="INFO(clusters_pool): Finding wyckoff sites"):
+
+        for idx in tqdm(satoms, total=nsatoms, desc="INFO(clusters_pool): Finding wyckoff sites"):
             sigmas = np.zeros(natoms, dtype = "int")
-            np.put(sigmas, idxs, [1])
+            np.put(sigmas, idx, [1])
                     
-            #if tuple(sigmas.tolist()) not in full_list:
-            if tuple([idxs]) not in full_list:
-                wyck_idxs.add(idxs)
+            if idx not in full_list:
+                wyck_idxs.add(idx)
                 
             for per in symper:
-                full_list.add(
-                    tuple(
-                        sigmas[np.ix_(per)].nonzero()[0].tolist()
-                    )
-                )
+                full_list.add(sigmas[np.ix_(per)].nonzero()[0][0])
 
+        # Determine set of indices compatible with given radii
         idxs_sets = []
         for irad, radius in enumerate(radii):
             idxs_sets.append([])
@@ -484,17 +480,29 @@ class ClustersPool():
                         idxs.append(satidx)
             idxs_sets[irad] = np.unique(np.array(idxs))
             
-                
+        # Find out clusters
+        cpool_idx_ss = []
+        cpool_maxradii = []
         full_list = set()
-        irad = -1
-        for npts,radius in zip(npoints,radii):
-            irad += 1
-            clrs_full = []
-            n_max = int(scipy.special.binom(len(set(idxs_sets[irad]).difference(set([widx]))), npts-1))*len(wyck_idxs)
+        
+        for i, (npts,radius) in enumerate(zip(npoints,radii)):
             
-            for widx in wyck_idxs:
-                for idxs_ in tqdm(combinations(set(idxs_sets[irad]).difference(set([widx])),npts-1), total=n_max, desc=f"INFO(clusters_pool): Finding unique clusters of {npts} points"):
-
+            clrs_full = []
+            #n_max = int(scipy.special.binom(len(set(idxs_sets[i]).difference(set([widx]))), npts-1))*len(wyck_idxs)
+            n_max = int(scipy.special.binom(len(idxs_sets[i])-1, npts-1))*len(wyck_idxs)
+            
+            for widx in tqdm(
+                    wyck_idxs,
+                    total=len(wyck_idxs),
+                    desc=f"Loop over Wyckoff sites",
+                    position=0):
+                for idxs_ in tqdm(
+                        combinations(set(idxs_sets[i]).difference(set([widx])),npts-1),
+                        total=n_max,
+                        desc=f"INFO(clusters_pool): Finding unique clusters of {npts} points",
+                        position=1,
+                        leave=False):
+                
                     idxs = [widx]
                     for idx in idxs_:
                         idxs.append(idx)
@@ -628,258 +636,6 @@ class ClustersPool():
             self._cpool, self._multiplicities = (list(t) for t in zip(*sorted(zip(self._cpool, self._multiplicities))))
 
 
-    def gen_clusters2(self):
-        from clusterx.super_cell import SuperCell
-        from itertools import product, combinations
-        npoints = self._npoints
-        radii = self._radii
-
-        scell = self._cpool_scell
-        natoms = scell.get_natoms()
-        sites = scell.get_sites()
-        satoms = scell.get_substitutional_sites()
-        nsatoms = len(satoms)
-        idx_subs = scell.get_sublattice_types()
-        tags = scell.get_tags()
-        distances = self._distances
-        radii = self._radii
-
-        for npts,radius in zip(npoints,radii):
-            clrs_full = []
-            for idxs in combinations(satoms,npts):
-                sites_arrays = []
-                for idx in idxs:
-                    sites_arrays.append(sites[idx][1:])
-                for ss in product(*sites_arrays):
-                    #tc0 = time.time()
-                    #cl = Cluster(idxs, ss, scell, distances=distances)
-                    _cl = Cluster(idxs, ss)
-                    #print("\n---\n",idxs,ss)
-                    #if cl.radius <= radius:
-                    #count += 1
-                    #print("-----",count,"------")
-                    if _cl.get_radius(distances) <= radius:
-                        #new = True
-                        #for __cl in clrs_full:
-                        #    if _cl == __cl:
-                        #        new = False
-                        #        break
-                        #if new:
-                        if _cl not in clrs_full:
-                            _orbit = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),distances=distances)
-                            orbit = _orbit.as_array()
-                            mult = _orbit.get_multiplicity_in_parent_lattice()
-                            orbit.sort() # this avoids adding to the returned pool non-compact translations of the cluster.
-                            #self._cpool.append(orbit[0])
-                            #self._cpool.append(Cluster(orbit[0].get_idxs(),orbit[0].get_nrs(),scell,distances))
-                            """
-                            new2 = True
-                            for __cl1 in orbit[:]:
-                                for i,__cl2 in enumerate(clrs_full):
-                                    if __cl1 == __cl2:
-                                        new2 = False
-                                        break
-                                if not new2:
-                                    break
-                            if new2:
-                                self._cpool.append(orbit[0])
-                                self._multiplicities.append(mult)
-                            """
-                            if orbit[0] not in clrs_full:
-                                self._cpool.append(orbit[0])
-                                self._multiplicities.append(mult)
-                            for __cl in orbit:
-                                #if __cl not in clrs_full: # Desirable condition, however slows down the generation considerably. Result is the same, only that clsr_full may contain repeated clusters.
-                                clrs_full.append(__cl)
-                            #print(len(clrs_full))
-                            #print("cluster nr: ",len(self._cpool), " added, out of", len(clrs_full))
-
-
-        #print("out of big loop, sorting\n")
-        if len(self._cpool) == 0:
-            return [],0
-        else:
-            self._cpool, self._multiplicities = (list(t) for t in zip(*sorted(zip(self._cpool, self._multiplicities))))
-        #print("finished sorting\n")
-
-    def gen_clusters3(self): # Experimental
-        from clusterx.super_cell import SuperCell
-        from itertools import product, combinations
-
-        npoints = self._npoints
-        scell = self._cpool_scell
-        natoms = scell.get_natoms()
-        sites = scell.get_sites()
-        satoms = scell.get_substitutional_sites()
-        nsatoms = len(satoms)
-        idx_subs = scell.get_sublattice_types()
-        tags = scell.get_tags()
-        distances = self._distances
-        radii = self._radii
-        for npts,radius in zip(npoints,radii):
-            clrs_full = []
-            clrs_full_set = set()
-            for idxs in combinations(satoms,npts):
-                sites_arrays = []
-                for idx in idxs:
-                    sites_arrays.append(sites[idx][1:])
-                for ss in product(*sites_arrays):
-                    #_cl = Cluster(idxs, ss, scell, distances=distances) # This slows down the routine considerably
-                    _cl = Cluster(idxs, ss)
-                    if _cl.get_radius(distances) <= radius:
-                        clrs_full.append(_cl)
-                        clrs_full_set.add(_cl)
-
-            #clrs_full.sort()
-
-            while len(clrs_full_set)!=0:
-                print(len(clrs_full_set))
-                _cl = clrs_full_set.pop()
-                _orbit = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(), distances=distances)
-                orbit = _orbit.as_array()
-                mult = _orbit.get_multiplicity_in_parent_lattice()
-                orbit.sort()
-
-                for __cl1 in orbit[:]:
-                    if __cl1 in clrs_full_set:
-                        clrs_full_set.remove(__cl1)
-                
-                self._cpool.append(Cluster(_cl.get_idxs(),_cl.get_nrs(),self._cpool_scell,self._distances))
-                #self._cpool.append(orbit[0])
-                self._multiplicities.append(mult)
-            
-        if len(self._cpool) == 0:
-            return [],0
-        else:
-            self._cpool, self._multiplicities = (list(t) for t in zip(*sorted(zip(self._cpool, self._multiplicities))))
-
-    def gen_clusters4(self): # Like gen_clusters1 but faster for system with a single atom in the parent lattice
-        from clusterx.super_cell import SuperCell
-        from itertools import product, combinations
-        from clusterx.utils import atoms_equivalence_check
-
-        npoints = self._npoints
-        scell = self._cpool_scell
-        natoms = scell.get_natoms()
-        sites = scell.get_sites()
-        satoms0 = scell.get_substitutional_sites()
-        nsatoms = len(satoms0)
-        idx_subs = scell.get_sublattice_types()
-        tags = scell.get_tags()
-        distances = self._distances
-        radii = self._radii
-
-        npl = len(self._plat)
-
-        _cpool = []
-        _multiplicities = []
-        
-        
-        for npts,radius in zip(npoints,radii):
-            __cpool = []
-            __multiplicities = []
-            print('**** LOOP 1:  #of points: ',npts,', max radius: ',radius)
-            clrs_full2 = []
-            satoms = []
-            
-            if npts > 1:
-                for i in satoms0:
-                    if distances[0,i]<=radius:
-                        satoms.append(i)
-            else:
-                satoms = satoms0
-            
-            for idxs in combinations(satoms,npts):
-                if npl == 1 and 0 not in idxs and npts != 0:
-                    continue
-                sites_arrays = []
-                for idx in idxs:
-                    sites_arrays.append(sites[idx][1:])
-                for ss in product(*sites_arrays):
-                    #_cl = Cluster(idxs, ss, scell, distances=distances) # This slows down the routine considerably
-                    _cl = Cluster(idxs, ss)
-                    if _cl.get_radius(distances) <= radius:
-                        clrs_full2.append(_cl)
-
-                
-            radii = []
-            for cl in clrs_full2:
-                radii.append(cl.get_radius())
-
-            if npl == 1:
-                clrs_full = [x for _, x in sorted(zip(radii, clrs_full2))]
-            else:
-                clrs_full2.sort()
-                clrs_full = clrs_full2
-
-            print('**** Start removal of symetrically equivalent clusters')
-            while len(clrs_full) != 0:
-                print('**** LOOP 2:  remaning clusters',len(clrs_full))
-
-                _cl = clrs_full[0]
-                if npl == 1:
-                    _orbit = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),distances=distances, no_trans = True)
-                else:
-                    _orbit = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs(),distances=distances)
-                mult = _orbit.get_multiplicity_in_parent_lattice()
-                orbit = _orbit.as_array()
-                orbit.sort()
-
-                delids = []
-                for __cl1 in orbit[:]:
-                    for i,__cl2 in enumerate(clrs_full):
-                        if __cl1 == __cl2:
-                            delids.append(i)
-                clrs_full = [c for i,c in enumerate(clrs_full) if i not in delids]
-
-                new = True
-                """
-
-                for __cl1 in orbit:
-                    for __cl2 in self._cpool:
-                        if __cl1 == __cl2:
-                            new = False
-                            break
-                    if not new:
-                        break
-                if _cl in self._cpool:
-                    new = False
-                """
-                if new:
-                    #self._cpool.append(_cl)
-                    #_cpool.append(Cluster(_cl.get_idxs(),_cl.get_nrs(),self._cpool_scell,self._distances))
-                    #self._cpool.append(orbit[0])
-                    #_multiplicities.append(mult)
-
-                    __cpool.append(Cluster(_cl.get_idxs(),_cl.get_nrs(),self._cpool_scell,self._distances))
-                    __multiplicities.append(mult)
-                    
-            print('**** Finished removal of symetrically equivalent')
-            
-            if npl == 1 and npts > 1:
-                cpool_atoms = self.get_cpool_atoms(orbit=__cpool, super_cell=self._cpool_scell)
-                
-                eq_clusters = atoms_equivalence_check(cpool_atoms)
-
-                for k,v in eq_clusters.items():
-                    idx = v[0]
-                    _cpool.append(__cpool[idx])
-                    _multiplicities.append(__multiplicities[idx])
-                
-                print(eq_clusters)
-            else:
-                for i in range(len(__cpool)):
-                    _cpool.append(__cpool[i])
-                    _multiplicities.append(__multiplicities[i])
-        
-        self._cpool = _cpool
-        self._multiplicities = _multiplicities
-                    
-        if len(self._cpool) == 0:
-            return [],0
-        else:
-            self._cpool, self._multiplicities = (list(t) for t in zip(*sorted(zip(self._cpool, self._multiplicities))))
-    
         
     def get_cpool_scell(self): # Deprecated. Use get_supercell instead
         return self._cpool_scell
@@ -921,6 +677,7 @@ class ClustersPool():
         for the ``json_db_filepath`` attribute of ClustersPool class.
 
         **Parameters:**
+
         ``filepath``: string (default: "cpool.json")
             Name of the file to save the ClustersPool object. 
 
