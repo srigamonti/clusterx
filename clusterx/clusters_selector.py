@@ -53,7 +53,7 @@ class ClustersSelector():
 
                 * ``"size"``: Clusters sub_pools of increasing size are extracted from the initial pool, and cross validation selects the optimal sub-pool.
                 * ``"combinations"``: All possible combinations of clusters from the pool are considered, this can be very computanionally demanding.
-                * ``"size+combinations"``: A fixed pool of clusters up to certain size (see ``set0``parameter below) is always kept and the combinations are searched only for subsets of ``nclmax`` (see below) clusters.
+                * ``"size+combinations"``: A fixed pool of clusters up to certain size (see ``set0`` parameter below) is always kept and the combinations are searched only for subsets of ``nclmax`` (see below) clusters.
 
                     * ``set0``: array with two elements ``[int,float]`` if ``clusters_sets`` is set to ``"size+combinations"``, this indicates the size of the fixed pool of clusters, above which a combinatorial search is performed. The first element of the array indicates the maximum number of cluster points and the second element the maximum radius, for the fixed subpool.
                     * ``nclmax``: integer. If ``clusters_sets`` is set to ``"size+combinations"``, this indicates the maximum number of clusters in the combinatorial subsets of clusters to be searched for (on top of the fixed subpool, see above).
