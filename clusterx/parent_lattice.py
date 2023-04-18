@@ -647,7 +647,7 @@ class ParentLattice(Atoms):
             
         return ParentLattice(atoms = atomss0[0], substitutions = atomss0[1:], pbc = pbc0)
 		
-    def serialize(self,fname="plat.json"):
+    def serialize(self, filepath="plat.json", fname=None):
         """
         Serialize a ParentLattice object
 
@@ -660,11 +660,16 @@ class ParentLattice(Atoms):
             ase gui plat.json
 
         **Parameters:**
+        ``filepath``: string
+            Output file name.
 
         ``fname``: string
-            Output file name.
+            *DEPRECATED*, use ``filepath`` instead. Output file name.
         """
-        db = connect(fname, type="json", append=False)
+        if fname is not None:
+            filepath = fname
+        
+        db = connect(filepath, type="json", append=False)
 
         images = []
         db.write(self.get_pristine())

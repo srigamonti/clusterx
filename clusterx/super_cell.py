@@ -480,7 +480,7 @@ class SuperCell(ParentLattice):
 
             atoms_db.write(neigs)
 
-    def serialize(self,fname="scell.json"):
+    def serialize(self,filepath="scell.json", fname=None):
         """
         Serialize a SuperCell object
 
@@ -492,11 +492,16 @@ class SuperCell(ParentLattice):
             ase gui scell.json
 
         **Parameters:**
+        ``filepath``: string
+            Output file name.
 
         ``fname``: string
-            Output file name.
+            *DEPRECATED*, use filepath instead. Output file name.
         """
-        super(SuperCell,self).serialize(fname = fname)
+        if fname is not None:
+            filepath = fname
+            
+        super(SuperCell,self).serialize(filepath = filepath)
     
     def get_symmetry_table(self, symprec=1e-12, tol=1e-3):
         '''

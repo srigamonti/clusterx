@@ -912,7 +912,7 @@ class ClustersPool():
 
         return np.array(atom_idxs, dtype=object), np.array(atom_nrs, dtype=object)
 
-    def serialize(self, db_name="cpool.json"):
+    def serialize(self, filepath="cpool.json", db_name=None):
         """Serialize clusters pool object to json database file
 
         The generated json file is compatible with ASE's GUI, so you can
@@ -921,15 +921,17 @@ class ClustersPool():
         for the ``json_db_filepath`` attribute of ClustersPool class.
 
         **Parameters:**
+        ``filepath``: string (default: "cpool.json")
+            Name of the file to save the ClustersPool object. 
 
         ``db_name``: string (default: "cpool.json")
-            Name of the json database file.
+            *DEPRECATED*, use ``filepath`` instead. Name of the json database file.
 
         """
-        if db_name is None:
-            db_name = "cpool.json"
+        if db_name is not None:
+            filepath = db_name 
 
-        self.write_clusters_db(db_name=db_name)
+        self.write_clusters_db(db_name=filepath)
 
     def as_dict(self):
         """Return a python-dictionary representation of the clusters pool

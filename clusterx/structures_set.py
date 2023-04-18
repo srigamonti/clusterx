@@ -599,7 +599,7 @@ class StructuresSet():
     def write_to_db(self, path="sset.json", overwrite=False, rm_vac=False):
         self.serialize(path=path, overwrite=overwrite, rm_vac=rm_vac)
 
-    def serialize(self, path="sset.json", overwrite=False, rm_vac=False):
+    def serialize(self, filepath="sset.json", path=None, overwrite=False, rm_vac=False):
         """Serialize StructuresSet object
 
         The serialization creates a Json ASE database object and writes a json file.
@@ -608,7 +608,14 @@ class StructuresSet():
 
             StructuresSet(filename="sset.json")
 
-        where "sset.json" is the file written in ``path``.
+        where "sset.json" is the file written in ``filepath``.
+
+        **Parameters:**
+        ``filepath``: string
+            Output file name.
+
+        ``path``: string
+            *DEPRECATED*, use filepath instead. Output file name.
 
         .. todo::
             * At the moment, if properties where calculated using a calculator from ASE,
@@ -623,11 +630,14 @@ class StructuresSet():
         from ase.io import write
         import os
 
-        self._db_fname = path
+        if path is not None:
+            filepath = path
+
+        self._db_fname = filepath
         try:
-            self._db = connect(path, type = "json", append = not overwrite)
+            self._db = connect(filepath, type = "json", append = not overwrite)
         except:
-            self._db = connect(path, type = "json", append = False)
+            self._db = connect(filepath, type = "json", append = False)
 
         nstr = self.get_nstr()
         images = self.get_images(rm_vac=rm_vac)
