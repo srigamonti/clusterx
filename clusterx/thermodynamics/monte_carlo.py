@@ -98,13 +98,24 @@ class MonteCarlo():
 
     """
 
-    def __init__(self, energy_model, scell, nsubs = None, ensemble = 'canonical', sublattice_indices = None, chemical_potentials = None, models = [], no_of_swaps = 1, predict_swap = False, error_reset = None, filename = None):
+    def __init__(
+            self,
+            energy_model,
+            scell,
+            nsubs = None,
+            ensemble = 'canonical',
+            sublattice_indices = None,
+            chemical_potentials = None,
+            models = [],
+            no_of_swaps = 1,
+            predict_swap = False,
+            error_reset = None,
+            filename = "trajectory.json"
+    ):
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
-        #print(self._nsubs)
         self._filename = filename
-        #self._last_visited_structure_name = last_visited_structure_name
 
         if sublattice_indices is None:
             try:
@@ -145,7 +156,18 @@ class MonteCarlo():
             
         self._error_reset = error_reset
 
-    def metropolis(self, scale_factor = None, no_of_sampling_steps = None, temperature = None, boltzmann_constant = None, initial_decoration = None, acceptance_ratio = None, serialize = False, filename = "trajectory.json", **kwargs):
+    def metropolis(
+            self,
+            no_of_sampling_steps = 100,
+            scale_factor = [1.0],
+            temperature = 1.0,
+            boltzmann_constant = 1.0,
+            initial_decoration = None,
+            acceptance_ratio = None,
+            serialize = False,
+            filename = None,
+            **kwargs
+    ):
         """Perform Monte-Carlo Metropolis simulation
 
         **Description**: 
@@ -203,26 +225,11 @@ class MonteCarlo():
         """
         import math
         from clusterx.utils import poppush
-
-        if no_of_sampling_steps is None:
-            import sys
-            sys.exit("The parameter no_of_sampling_steps needs to be defined.")
+        from tqdm import tqdm
         
-        if (temperature is None) and (boltzmann_constant is None) and (scale_factor is None):
-            import sys
-            sys.exit("Boltzmann factor is not properly defined. See documentation.")
-
-        else:
-            scale_factor_product = float(1)
-            if (temperature is not None):
-                scale_factor_product *= float(temperature)
-
-            if boltzmann_constant is not None:
-                scale_factor_product *= float(boltzmann_constant)
-        
-            if scale_factor is not None:
-                for el in scale_factor:
-                    scale_factor_product *= float(el)
+        scale_factor_product = boltzmann_constant * temperature
+        for el in scale_factor:
+            scale_factor_product *= el
 
         if initial_decoration is not None:
             struc = Structure(self._scell, initial_decoration, mc = True)
@@ -254,22 +261,29 @@ class MonteCarlo():
         self._em.corrc.reset_mc(mc = True)
         e = self._em.predict(struc)
 
-        if self._filename is None:
+
+        if filename is not None:
             self._filename = filename
         else:
-            if filename == "trajectory.json":
-                filename = self._filename
-            else:
-                self._filename = filename          
+            filename = self._filename
+
         
-        traj = MonteCarloTrajectory(self._scell, filename = filename, models = self._models, no_of_sampling_steps = no_of_sampling_steps, temperature = temperature, boltzmann_constant = boltzmann_constant, scale_factor = scale_factor, acceptance_ratio = acceptance_ratio, **kwargs)
+        traj = MonteCarloTrajectory(
+            self._scell,
+            filename = filename,
+            models = self._models,
+            no_of_sampling_steps = no_of_sampling_steps,
+            temperature = temperature,
+            boltzmann_constant = boltzmann_constant,
+            scale_factor = scale_factor,
+            acceptance_ratio = acceptance_ratio,
+            **kwargs)
 
         if self._models:
             key_value_pairs = {}
             for m, mo in enumerate(self._models):
                 key_value_pairs.update({mo.property: mo.predict(struc)})
             traj.add_decoration(0, e, [], decoration = struc.decor, key_value_pairs = key_value_pairs)
-
         else:
             traj.add_decoration(0, e, [], decoration = struc.decor)
 
@@ -282,7 +296,7 @@ class MonteCarlo():
             error_steps = int(self._error_reset)
             x = 1
             
-        for i in range(1,no_of_sampling_steps+1):
+        for i in tqdm(range(1,no_of_sampling_steps+1), total=no_of_sampling_steps, desc="MMC simulation"):
             indices_list = []
 
             for j in range(self._no_of_swaps):
@@ -386,7 +400,9 @@ class MonteCarloTrajectory():
     """
 
     def __init__(self, scell = None, filename="trajectory.json", read = False, **kwargs):
-        
+        # Load Boltzmann constant in eV / K from ASE
+        from ase.units import kB
+
         self._filename = filename
         self._scell = scell
         
@@ -406,7 +422,7 @@ class MonteCarloTrajectory():
             
             self._nmc = kwargs.pop('no_of_sampling_steps',None)
             self._temperature = kwargs.pop('temperature',None)
-            self._boltzmann_constant = kwargs.pop('boltzmann_constant',None)
+            self._boltzmann_constant = kwargs.pop('boltzmann_constant',kB)
             self._scale_factor = kwargs.pop('scale_factor',None)
             self._acceptance_ratio = kwargs.pop('acceptance_ratio',None)
             self._keyword_arguments = kwargs
@@ -710,17 +726,6 @@ class MonteCarloTrajectory():
             step +=1
 
         if average_func is not None:
-            #traj_info={}
-            #traj_info.update({'number_of_sampling_steps': self._nmc})
-            #traj_info.update({'temperature': self._temperature})
-            #traj_info.update({'boltzmann_constant': self._boltzmann_constant})
-            #if self._scale_factors is not None:
-            #    traj_info.update({'scale_factors': self._scale_factors})
-            #if self._acceptance_ratio is not None:
-            #    traj_info.update({'acceptance_ratio': self._acceptance_ratio})
-            #    
-            #for key in self._keyword_arguments.keys():
-            #    traj_info.update({key:self._keyword_arguments[key]})
             prop_array = np.asarray(prop_array)            
             return average_func(prop_array.T, **kwargs)
         
@@ -734,9 +739,9 @@ class MonteCarloTrajectory():
                         
                 ediff = 0
                 for p in prop_array:
-                    ediff = ediff+np.subtract(p,prop_average)*np.subtract(p,prop_average)
+                    ediff += np.subtract(p,prop_average)*np.subtract(p,prop_average)
 
-                const=1.0*np.multiply((self._temperature)**2, (self._boltzmann_constant)**2)
+                const = 1.0*np.multiply((self._temperature)**2, (self._boltzmann_constant)**2)
             
                 return np.divide(ediff, (const*len_prop*1/(1.0*factor)))
         
