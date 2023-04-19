@@ -22,45 +22,81 @@ class ClustersSelector():
     **Parameters:**
 
     ``basis``: *string*, default = ``"trigonometric"``
-        Cluster basis used during the optimization task. For details and allowed values, read the documentation in :py:class:`clusterx.correlations.CorrelationsCalculator`
+        Cluster basis used during the optimization task. For details and allowed values, 
+        read the documentation in :py:class:`clusterx.correlations.CorrelationsCalculator`
 
     ``selector_type``: *string*, default = ``"identity"``
         can be ``"identity"``, ``"subsets_cv"``, ``"lasso_cv"`` and ``"lasso_on_residual"``. 
         
-            * ``"identity"``: no slection is performed and the optimal clusters pool is the same as the argument ``"cpool"`` in the :py:meth:`select_clusters() <clusterx.clusters_selector.ClustersSelector.select_clusters>` method.
-            * ``"subsets_cv"``: a cross-validation optimization is performed on models defined by subsets of the clusters pool.
-            * ``"lasso_cv"``: a cross-validation optimization is performed to find the optimal sparsity parameter.
-            * ``"lasso_on_residual"``: a lasso selection is performed on the residual between a model defined by ``set0`` (see below) the output. The final model contains the union of clusters in ``"set0"`` and those selected by lasso on the residual.
-            * Deprecated options: ``"lasso"``, ``"linreg"``. Old ``"lasso"`` is identical to ``"lasso_cv"`` and old ``"linreg"`` is identical to ``"subsets_cv"``
+            * ``"identity"``: no slection is performed and the optimal clusters pool is the 
+              same as the argument ``"cpool"`` in the :py:meth:`select_clusters() 
+              <clusterx.clusters_selector.ClustersSelector.select_clusters>` method.
+            * ``"subsets_cv"``: a cross-validation optimization is performed on models defined 
+              by subsets of the clusters pool.
+            * ``"lasso_cv"``: a cross-validation optimization is performed to find the optimal 
+              sparsity parameter.
+            * ``"lasso_on_residual"``: a lasso selection is performed on the residual between 
+              a model defined by ``set0`` (see below) the output. The final model contains the 
+              union of clusters in ``"set0"`` and those selected by lasso on the residual.
+            * Deprecated options: ``"lasso"``, ``"linreg"``. Old ``"lasso"`` is identical to 
+              ``"lasso_cv"`` and old ``"linreg"`` is identical to ``"subsets_cv"``
 
-    ``**selector_opts``: dictionary of selector options
-        For every value of ``selector_type``, different key-value pairs can be set in the ``**selector_opts`` dictionary
-        as shown below:
+    ``selector_opts``: dictionary of selector options
+        The possible key-value pairs in this dictionary correspond to either general options, 
+        and options specific to the chosen ``selector_type``.
+
+        * General options:
+
+             * ``fit_intercept``: boolean (default ``False``). The default (``False``) assumes that 
+               you will make cluster selection on a pool of clusters containing the empty cluster. 
+               If that is not the case, set this to ``True``. It is advisable not to include the empty
+               cluster, and put this to ``True``.
+    
+             * ``cv_type``: String. Either ``"loo"``, for leave-one-out CV; ``"5-fold"`` for 5-fold CV,
+               or ``10-fold`` for 10-fold CV. Default: ``"loo"``
+    
+             * ``cv_shuffle``: Boolean. If ``cv_type`` is n-fold, this tells whether to shuffle the 
+               data for CV. Default: ``False``.
 
         * If ``selector_type`` is ``"lasso_cv"``: the selector_opts dict keys are:
 
             * ``sparsity_max``: positive real, maximal sparsity parameter (default: 1)
             * ``sparsity_min``: positive real, minimal sparsity parameter (default: 0.01)
-            * ``sparsity_step``: positive real, optional, if set to 0.0, a logarithmic grid from sparsity_max to sparsity_min is automatically created.
+            * ``sparsity_step``: positive real, optional, if set to 0.0, a logarithmic grid from 
+              sparsity_max to sparsity_min is automatically created.
             * ``max_iter``: integer, maximum number of iterations for LASSO algorithm.
             * ``tol``: small positive real, tolerance of LASSO solution.
             * ``sparsity_scale``: either ``"log"`` or ``"piece_log"``.
-            * ``cv_splits``: None or integer, default 3, number of splits for CV. If None, LeaveOneOut is performed
 
         * If ``selector_type`` is ``"subsets_cv"``: the selector_opts dict keys are:
 
             * ``clusters_sets``: one of ``"size"``, ``"combinations"``, and ``"size+combinations"``.
 
-                * ``"size"``: Clusters sub_pools of increasing size are extracted from the initial pool, and cross validation selects the optimal sub-pool.
-                * ``"combinations"``: All possible combinations of clusters from the pool are considered, this can be very computanionally demanding.
-                * ``"size+combinations"``: A fixed pool of clusters up to certain size (see ``set0`` parameter below) is always kept and the combinations are searched only for subsets of ``nclmax`` (see below) clusters.
+                * ``"size"``: Clusters sub_pools of increasing size are extracted from the initial 
+                  pool, and cross validation selects the optimal sub-pool.
+                * ``"combinations"``: All possible combinations of clusters from the pool are considered, 
+                  this can be very computationally demanding.
+                * ``"size+combinations"``: A fixed pool of clusters up to certain size (see ``set0`` 
+                  parameter below) is always kept and the combinations are searched only for subsets of 
+                  ``nclmax`` (see below) clusters.
 
-                    * ``set0``: array with two elements ``[int,float]`` if ``clusters_sets`` is set to ``"size+combinations"``, this indicates the size of the fixed pool of clusters, above which a combinatorial search is performed. The first element of the array indicates the maximum number of cluster points and the second element the maximum radius, for the fixed subpool.
-                    * ``nclmax``: integer. If ``clusters_sets`` is set to ``"size+combinations"``, this indicates the maximum number of clusters in the combinatorial subsets of clusters to be searched for (on top of the fixed subpool, see above).
+                    * ``set0``: array with two elements ``[int,float]`` if ``clusters_sets`` is set to 
+                      ``"size+combinations"``, this indicates the size of the fixed pool of clusters, 
+                      above which a combinatorial search is performed. The first element of the array 
+                      indicates the maximum number of cluster points and the second element the maximum 
+                      radius, for the fixed subpool.
+                    * ``nclmax``: integer. If ``clusters_sets`` is set to ``"size+combinations"``, this 
+                      indicates the maximum number of clusters in the combinatorial subsets of clusters 
+                      to be searched for (on top of the fixed subpool, see above).
+          
+           * ``alpha``: float (default: ``0``). For the subset selection a ridge estimator from 
+             the scikit learn library is used. This parameter determines the regularization strength. 
+             If set to ``0`` (default), the estimator switches to ordinary least squares.
 
     **Notes:**
 
-    * Besides the indicated keys above, the ``**selector_opts`` dict may contain the key ``"method"`` (deprecated), which overrides the argument ``selector_type``.
+    * Besides the indicated keys above, the ``**selector_opts`` dict may contain the key ``"method"`` 
+      (deprecated), which overrides the argument ``selector_type``.
 
     .. todo::
 
@@ -72,7 +108,9 @@ class ClustersSelector():
         self.method = selector_opts.pop("method", selector_type) # selector_type argument replaces old method argument. This ensures backward compatibility.
 
         # general options
-        self.fit_intercept = selector_opts.pop("fit_intercept",False)
+        self.fit_intercept = selector_opts.pop("fit_intercept", False)
+        self.cv_type = selector_opts.pop("cv_type", "loo")
+        self.cv_shuffle = selector_opts.pop("cv_shuffle", False)
         
         # additional arguments for estimator in CV
         self.estimator_for_selector = selector_opts.pop("estimator","skl_LinearRegression")
@@ -83,7 +121,6 @@ class ClustersSelector():
         self.sparsity_min = selector_opts.pop("sparsity_min",0.01)
         self.sparsity_step = selector_opts.pop("sparsity_step",0.0)
         self.sparsity_scale = selector_opts.pop("sparsity_scale","log")
-        self.cv_splits = selector_opts.pop("cv_splits",3)
         self.max_iter = selector_opts.pop("max_iter",10000)
         self.tol = selector_opts.pop("tol",1e-5)
 
@@ -91,6 +128,8 @@ class ClustersSelector():
         self.clusters_sets = selector_opts.pop("clusters_sets","size")
         self.nclmax = selector_opts.pop("nclmax", 0)
         self.set0 = selector_opts.pop("set0",[0, 0])
+        self.alpha = selector_opts.pop("alpha", 0)
+        
 
         self.predictions = []
         self.opt_ecis = []
@@ -107,7 +146,7 @@ class ClustersSelector():
         self.set_sizes = []
 
 
-        self.fitter_cv = None
+        self.estimator_cv = None
 
         self.basis = basis
 
@@ -119,7 +158,7 @@ class ClustersSelector():
     def get_rmse(self):
         return self.rmse
 
-    def select_clusters(self, sset, cpool, prop, comat = None, cvtype = "loo"):
+    def select_clusters(self, sset, cpool, prop, comat = None):
         """Select clusters
 
         Returns a subpool containing
@@ -134,21 +173,18 @@ class ClustersSelector():
             the clusters pool from which the optimal model is selected.
 
         ``prop``: string
-            property label (must be in sset) of property for which the optimal set of clusters is to be selected.
+            property label (must be in sset) of property for which the optimal set of clusters is 
+            to be selected.
 
         ``comat``: 2D numpy array (default "None")
             if the correlation matrix was precalculated, you can give it here
 
-        ``cvtype``: string (default "loo")
-            can be "loo" for Leave One Out cross validation or "l10po" for leave 10 percent out cross validation
         """
-        from sklearn.model_selection import LeaveOneOut
-
         self.cpool = cpool
         self.plat = cpool.get_plat()
         self.sset = sset
         self.prop = prop
-
+        
         corrc = CorrelationsCalculator(self.basis, self.plat, self.cpool)
         if comat is None:
             self.ini_comat = corrc.get_correlation_matrix(self.sset)
@@ -194,7 +230,7 @@ class ClustersSelector():
         elif self.method == "subsets_cv" or self.method == "linreg": # "linreg" is deprecated
             if self.clusters_sets == "size":
                 clsets = self.cpool.get_clusters_sets(grouping_strategy = "size")
-                opt = self._linear_regression_cv(x, p , clsets)
+                opt = self._linear_regression_cv(x, p, clsets)
             elif self.clusters_sets == "combinations":
                 clsets = self.cpool.get_clusters_sets(grouping_strategy = "combinations",  nclmax=self.nclmax)
                 opt = self._linear_regression_cv(x, p, clsets)
@@ -231,13 +267,15 @@ class ClustersSelector():
         return self.optimal_clusters._cpool
 
 
-    def _linear_regression_cv(self, x, p, clsets, cvtype = "loo"):
-        from sklearn.model_selection import LeaveOneOut
+    def _linear_regression_cv(self, x, p, clsets):
         from sklearn.model_selection import cross_val_score
         from sklearn import linear_model
-        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
+        from sklearn.metrics import mean_squared_error
 
-        self.fitter_cv = linear_model.Ridge(alpha=1.0e-6, fit_intercept=self.fit_intercept)
+        if self.alpha != 0:
+            self.estimator_cv = linear_model.Ridge(alpha=self.alpha, fit_intercept=self.fit_intercept)
+        else:
+            self.estimator_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept)
         
         rows = np.arange(len(p))
         ecis = []
@@ -251,16 +289,24 @@ class ClustersSelector():
 
         for iset, clset in enumerate(clsets):
             _comat = x[np.ix_(rows,clset)]
+            
+            _cvs = None
+            if self.cv_type == "loo":
+                from sklearn.model_selection import LeaveOneOut
+                _cvs = cross_val_score(self.estimator_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error', n_jobs = -1)
+            else:
+                from sklearn.model_selection import KFold
+                if self.cv_type == "5-fold":
+                    kf = KFold(n_splits=5, shuffle=self.cv_shuffle)
+                if self.cv_type == "10-fold":
+                    kf = KFold(n_splits=10, shuffle=self.cv_shuffle)
 
-            if cvtype == "loo":
-                _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error', n_jobs = -1)
-            if cvtype == "l10po":
-                _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=10, scoring = 'neg_mean_squared_error', n_jobs = -1)
+                _cvs = cross_val_score(self.estimator_cv, _comat, p, cv=kf.split(x), scoring = 'neg_mean_squared_error', n_jobs = -1)
                 
             mean_cv=np.sqrt(-np.mean(_cvs))
             self.cvs.append(mean_cv)
-            self.fitter_cv.fit(_comat,p)
-            self.rmse.append(np.sqrt(mean_squared_error(self.fitter_cv.predict(_comat),p)))
+            self.estimator_cv.fit(_comat,p)
+            self.rmse.append(np.sqrt(mean_squared_error(self.estimator_cv.predict(_comat),p)))
             self.set_sizes.append(len(clset))
 
             if opt_cv <= 0:
@@ -272,51 +318,11 @@ class ClustersSelector():
                     opt_clset = clset
 
         return opt_clset
-
-    """
-    def optimal_ecis(self, x, p):
-        from sklearn.model_selection import LeaveOneOut
-        from sklearn.model_selection import cross_val_score
-        from sklearn import linear_model
-        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
-
-        #if self.method == "linreg":
-        self.fitter_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept)
-
-        if self.fit_intercept:
-            if int(x.shape[1]) > 1:
-                _comat = np.delete(x, (0), axis=1)
-            else:
-                self.fitter_cv = linear_model.LinearRegression(fit_intercept=False)
-                _comat = x
-        else:
-            _comat = x
-
-        self.fitter_cv.fit(_comat,p)
-
-        ecimult = []
-        if self.fit_intercept:
-            ecimult.append(self.fitter_cv.intercept_)
-
-        for coef in self.fitter_cv.coef_:
-            ecimult.append(coef)
-
-        self.opt_ecis = ecimult
-
-        self.predictions = [el for el in self.fitter_cv.predict(_comat)]
-
-        self.opt_rmse=np.sqrt(mean_squared_error(self.fitter_cv.predict(_comat),p))
-
-        _cvs = cross_val_score(self.fitter_cv, _comat, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
-        self.opt_mean_cv=np.sqrt(-np.mean(_cvs))
-
-    """
     
     def _select_clusters_lasso_cv(self,x,p):
-        from sklearn.model_selection import LeaveOneOut
         from sklearn.model_selection import cross_val_score
         from sklearn import linear_model
-        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
+        from sklearn.metrics import mean_squared_error
 
         sparsity = self.sparsity_max
 
@@ -332,22 +338,30 @@ class ClustersSelector():
 
         idx = 1
         while sparsity.__ge__(self.sparsity_min):
-            fitter_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, max_iter = self.max_iter, tol = self.tol)
-            fitter_cv.fit(x,p)
+            estimator_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, max_iter = self.max_iter, tol = self.tol)
+            estimator_cv.fit(x,p)
 
             ecimult = []
-            for coef in fitter_cv.coef_:
+            for coef in estimator_cv.coef_:
                 ecimult.append(coef)
 
-            if self.cv_splits is None:
-                _cvs = cross_val_score(fitter_cv, x, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error', n_jobs = -1)
+            _cvs = None
+            if self.cv_type == "loo":
+                from sklearn.model_selection import LeaveOneOut
+                _cvs = cross_val_score(estimator_cv, x, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error', n_jobs = -1)
             else:
-                _cvs = cross_val_score(fitter_cv, x, p, cv=self.cv_splits, scoring = 'neg_mean_squared_error', n_jobs = -1)
+                from sklearn.model_selection import KFold
+                if self.cv_type == "5-fold":
+                    kf = KFold(n_splits=5, shuffle=self.cv_shuffle)
+                if self.cv_type == "10-fold":
+                    kf = KFold(n_splits=10, shuffle=self.cv_shuffle)
+
+                _cvs = cross_val_score(estimator_cv, x, p, cv=kf.split(x), scoring = 'neg_mean_squared_error', n_jobs = -1)
                 
             mean_cv = np.sqrt(-np.mean(_cvs))
 
             self.cvs.append(mean_cv)
-            self.rmse.append(np.sqrt(mean_squared_error(fitter_cv.predict(x),p)))
+            self.rmse.append(np.sqrt(mean_squared_error(estimator_cv.predict(x),p)))
 
             self.set_sizes.append(np.count_nonzero(ecimult))
             self.lasso_sparsities.append(sparsity)
@@ -438,13 +452,13 @@ class ClustersSelector():
         idx = 1
         while sparsity.__ge__(self.sparsity_min):
 
-            fitter_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, max_iter = self.max_iter, tol = self.tol)
-            fitter_cv.fit(x,p)
+            estimator_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, max_iter = self.max_iter, tol = self.tol)
+            estimator_cv.fit(x,p)
             
-            fitter_lr = linear_model.LinearRegression(fit_intercept=False)
+            estimator_lr = linear_model.LinearRegression(fit_intercept=False)
             
             cluster_list_lasso = []
-            for i,coef in enumerate(fitter_cv.coef_):
+            for i,coef in enumerate(estimator_cv.coef_):
                 if coef != 0:
                     cluster_list_lasso.append(i)
 
@@ -454,12 +468,25 @@ class ClustersSelector():
                 clset = np.union1d(clset0, cluster_list_lasso)
             _comat_model = x[np.ix_(rows,clset)]
 
-            _cvs = cross_val_score(fitter_lr, _comat_model, p, cv=10, scoring = 'neg_mean_squared_error', n_jobs = -1)
+            _cvs = None
+            if self.cv_type == "loo":
+                from sklearn.model_selection import LeaveOneOut
+                _cvs = cross_val_score(estimator_lr, _comat_model, p, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error', n_jobs = -1)
+            else:
+                from sklearn.model_selection import KFold
+                if self.cv_type == "5-fold":
+                    kf = KFold(n_splits=5, shuffle=self.cv_shuffle)
+                if self.cv_type == "10-fold":
+                    kf = KFold(n_splits=10, shuffle=self.cv_shuffle)
+
+                _cvs = cross_val_score(estimator_lr, _comat_model, p, cv=kf.split(x), scoring = 'neg_mean_squared_error', n_jobs = -1)
+
+
                 
             mean_cv = np.sqrt(-np.mean(_cvs))
 
             self.cvs.append(mean_cv)
-            self.rmse.append(np.sqrt(mean_squared_error(fitter_cv.predict(x),p)))
+            self.rmse.append(np.sqrt(mean_squared_error(estimator_cv.predict(x),p)))
 
             self.set_sizes.append(np.count_nonzero(clset))
             self.lasso_sparsities.append(sparsity)
