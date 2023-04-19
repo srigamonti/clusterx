@@ -95,7 +95,7 @@ def plot_optimization_vs_number_of_clusters(
         show_yzero_axis = True,
         show_plot = True,
         yaxis_label = "Errors",
-        fname="PLOT_property_vs_concentration.png"):
+        fname="PLOT_property_vs_number_of_clusters.png"):
     """Plot cluster optimization with matplotlib
 
     The plot shows the prediction and fitting errors as a function of the clusters

@@ -492,6 +492,7 @@ class SuperCell(ParentLattice):
             ase gui scell.json
 
         **Parameters:**
+
         ``filepath``: string
             Output file name.
 

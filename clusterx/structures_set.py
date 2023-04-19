@@ -611,6 +611,7 @@ class StructuresSet():
         where "sset.json" is the file written in ``filepath``.
 
         **Parameters:**
+
         ``filepath``: string
             Output file name.
 

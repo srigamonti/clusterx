@@ -648,18 +648,18 @@ class ParentLattice(Atoms):
         return ParentLattice(atoms = atomss0[0], substitutions = atomss0[1:], pbc = pbc0)
 		
     def serialize(self, filepath="plat.json", fname=None):
-        """
-        Serialize a ParentLattice object
+        """Serialize a ParentLattice object
 
         Writes a `ASE's json database <https://wiki.fysik.dtu.dk/ase/ase/db/db.html>`_
         file containing a representation of the parent lattice.
         An instance of the ParentLattice class can be initialized from the created file.
         The created database can be visualized using
         `ASE's gui <https://wiki.fysik.dtu.dk/ase/ase/gui/gui.html>`_, e.g.: ::
-
+        
             ase gui plat.json
 
         **Parameters:**
+
         ``filepath``: string
             Output file name.
 
