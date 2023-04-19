@@ -177,6 +177,9 @@ class Model():
             atoms_db.metadata = modeldict
         
     def get_plat(self):
+        get_parent_lattice(self)
+        
+    def get_parent_lattice(self):
         """ Return parent lattice of the cluster expansion model.
 
         """
