@@ -58,6 +58,8 @@ class ClustersSelector():
              * ``cv_shuffle``: Boolean. If ``cv_type`` is n-fold, this tells whether to shuffle the 
                data for CV. Default: ``False``.
 
+             * ``standardize``: Boolean. If ``True``, standardize correlations. Default: ``False``. 
+
         * If ``selector_type`` is ``"lasso_cv"``: the selector_opts dict keys are:
 
             * ``sparsity_max``: positive real, maximal sparsity parameter (default: 1)
@@ -111,6 +113,7 @@ class ClustersSelector():
         self.fit_intercept = selector_opts.pop("fit_intercept", False)
         self.cv_type = selector_opts.pop("cv_type", "loo")
         self.cv_shuffle = selector_opts.pop("cv_shuffle", False)
+        self.standardize = selector_opts.pop("standardize", False)
         
         # additional arguments for estimator in CV
         self.estimator_for_selector = selector_opts.pop("estimator","skl_LinearRegression")
@@ -272,10 +275,19 @@ class ClustersSelector():
         from sklearn import linear_model
         from sklearn.metrics import mean_squared_error
 
-        if self.alpha != 0:
-            self.estimator_cv = linear_model.Ridge(alpha=self.alpha, fit_intercept=self.fit_intercept)
+        if not self.standardize:
+            if self.alpha != 0:
+                self.estimator_cv = linear_model.Ridge(alpha=self.alpha, fit_intercept=self.fit_intercept)
+            else:
+                self.estimator_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept)
         else:
-            self.estimator_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept)
+            from sklearn.preprocessing import StandardScaler
+            from sklearn.pipeline import make_pipeline
+
+            if self.alpha != 0:
+                self.estimator_cv = make_pipeline(StandardScaler(), linear_model.Ridge(alpha=self.alpha, fit_intercept=self.fit_intercept))
+            else:
+                self.estimator_cv = make_pipeline(StandardScaler(), linear_model.LinearRegression(fit_intercept=self.fit_intercept))
         
         rows = np.arange(len(p))
         ecis = []
@@ -338,11 +350,34 @@ class ClustersSelector():
 
         idx = 1
         while sparsity.__ge__(self.sparsity_min):
-            estimator_cv = linear_model.Lasso(alpha=sparsity, fit_intercept=self.fit_intercept, max_iter = self.max_iter, tol = self.tol)
+            if not self.standardize:
+                estimator_cv = linear_model.Lasso(
+                    alpha=sparsity,
+                    fit_intercept=self.fit_intercept,
+                    max_iter = self.max_iter,
+                    tol = self.tol)
+            else:
+                from sklearn.preprocessing import StandardScaler
+                from sklearn.pipeline import make_pipeline
+                estimator_cv = make_pipeline(
+                    StandardScaler(),
+                    linear_model.Lasso(
+                        alpha=sparsity,
+                        fit_intercept=self.fit_intercept,
+                        max_iter = self.max_iter,
+                        tol = self.tol)
+                )
+                
             estimator_cv.fit(x,p)
 
             ecimult = []
-            for coef in estimator_cv.coef_:
+            
+            if not self.standardize:
+                coefs = estimator_cv.coef_
+            else:
+                coefs = estimator_cv[-1].coef_
+                
+            for coef in coefs:
                 ecimult.append(coef)
 
             _cvs = None
@@ -407,27 +442,48 @@ class ClustersSelector():
         rows = np.arange(len(p))
 
         idx = 1
-
-        est = LassoCV(eps=1e-5, n_alphas=50, fit_intercept=self.fit_intercept, n_jobs=-1, verbose = True)
+        
+        if not self.standardize: 
+            est = LassoCV(eps=1e-5, n_alphas=50, fit_intercept=self.fit_intercept, n_jobs=-1, verbose = True)
+        else:
+            from sklearn.preprocessing import StandardScaler
+            from sklearn.pipeline import make_pipeline
+            est = make_pipeline(StandardScaler(), LassoCV(eps=1e-5, n_alphas=50, fit_intercept=self.fit_intercept, n_jobs=-1, verbose = True))
+            
 
         x_ = x[:,1:]
         mod = est.fit(x_,p)
 
         
         ecimult = []
-        ecimult.append(mod.intercept_)
-        for coef in mod.coef_:
-            ecimult.append(coef)
-    
-        self.cvs = np.mean(est.mse_path_)
-        self.rmse = np.mean(est.mse_path_)
+        if not self.standardize:
+            ecimult.append(mod.intercept_)
+            for coef in mod.coef_:
+                ecimult.append(coef)
+            self.cvs = np.mean(est.mse_path_)
+            self.rmse = np.mean(est.mse_path_)
+            
+            self.set_sizes = np.ones(len(est.alphas_))
+            self.lasso_sparsities = est.alphas_
 
-        self.set_sizes = np.ones(len(est.alphas_))
-        self.lasso_sparsities = est.alphas_
+        else:
+            ecimult.append(est[-1].intercept_)
+            for coef in est[-1].coef_:
+                ecimult.append(coef)
+            self.cvs = np.mean(est[-1].mse_path_)
+            self.rmse = np.mean(est[-1].mse_path_)
+            
+            self.set_sizes = np.ones(len(est[-1].alphas_))
+            self.lasso_sparsities = est[-1].alphas_
+                
+    
 
         opt_cv = np.amin(self.cvs)
         opt_clset = [i for i, e in enumerate(ecimult) if e != 0]
-        self.opt_sparsity = est.alpha_
+        if not self.standardize:
+            self.opt_sparsity = est.alpha_
+        else:
+            self.opt_sparsity = est[-1].alpha_
         
         return opt_clset
 
