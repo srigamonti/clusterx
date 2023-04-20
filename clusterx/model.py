@@ -55,10 +55,10 @@ class Model():
             return inst
     
 
-    def __init__(self, corrc = None, property_name = None, estimator = None, ecis = None, filepath = None, json_db_filepath = None):
+    def __init__(self, corrc = None, property_name = None, estimator = None, ecis = None, filepath = None, json_db_filepath = None, standardize = False):
         pass
     
-    def initialize(self, corrc = None, property_name = None, estimator = None, ecis = None, filepath = None, json_db_filepath = None):
+    def initialize(self, corrc = None, property_name = None, estimator = None, ecis = None, filepath = None, json_db_filepath = None, standardize = False):
         self.pickle_file = None
         self._filepath_corrc = None
         if filepath is not None:
@@ -84,12 +84,15 @@ class Model():
                 sys.exit('Error: Initialization from json_db did not succeed.')
 
             self.ecis = modict.get('ECIs',[])
-            self.property = modict.get('property_name',None)
+            self.property_name = modict.get('property_name',None)
 
         else:
             self.corrc = corrc
             self.ecis = ecis
-            self.property = property_name
+            self.property_name = property_name
+            self.standardize = standardize
+            if standardize:
+                self.stdscaler = StandardScaler()
 
         self.estimator = estimator
 
@@ -120,7 +123,6 @@ class Model():
 
         fext = os.path.splitext(filepath)[1][1:]
 
-        
         if fmt is None:
             if fext == "pickle":
                 fmt = "pickle"
@@ -151,7 +153,6 @@ class Model():
             for atoms in cpool_atoms:
                 atoms_db.write(atoms)
 
-            #atoms_db.write(Atoms(symbols=None))
             modeldict = self.corrc._cpool.get_cpool_dict()
 
             corr_dict = {}
@@ -163,7 +164,7 @@ class Model():
             modeldict.update({'correlations_calculator':corr_dict})
 
             modict = {}
-            modict.update({'property_name':self.property})
+            modict.update({'property_name':self.property_name})
 
             if self.ecis is None:
                 eff_inter = np.asarray([el for el in self.estimator.coef_])
@@ -181,7 +182,6 @@ class Model():
         
     def get_parent_lattice(self):
         """ Return parent lattice of the cluster expansion model.
-
         """
         return self.corrc._plat
 
@@ -191,7 +191,10 @@ class Model():
         if self.ecis is not None:
             return self.ecis
         else:
-            return self.estimator.coef_
+            if self.standardize:
+                return self.estimator[-1].coef_
+            else:
+                return self.estimator.coef_
 
     def get_correlations_calculator(self):
         """ Return correlations calculator of the Model object
@@ -208,13 +211,22 @@ class Model():
 
         """
         corrs = self.corrc.get_cluster_correlations(structure)
+        
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1,-1))[0]
 
         else:
+            if standardize:
+                try:
+                    corrs = self.stdscaler.transform(corrs)
+                except:
+                    import sys
+                    sys.exit("StandardScaler of Model has not been fitted.")
+
             pv = 0
             for i in range(len(corrs)):
                 pv = pv + self.ecis[i]*corrs[i]
+
 
             return pv
 
@@ -238,6 +250,11 @@ class Model():
             cluster_orbits = self.corrc._cluster_orbits_mc
         except AttributeError:
             raise AttributeError("Cluster_orbit set is not predefined, look at the documentation.")
+
+        if self.standardize:
+            import sys
+            sys.exit("Predict swap does not support standardscaler")
+        
         corrs = np.zeros(len(cluster_orbits))
 
         sigma_ind1=structure.sigmas[ind1]
@@ -301,6 +318,11 @@ class Model():
             cluster_orbits = self.corrc._cluster_orbits_mc
         except AttributeError:
             raise AttributeError("Cluster_orbit set is not predefined, look at the documentation.")
+
+        if self.standardize:
+            import sys
+            sys.exit("Predict swap does not support standardscaler")
+        
         corrs = np.zeros(len(cluster_orbits))
 
         sigma_ind1=structure.sigmas[ind1]
@@ -400,7 +422,7 @@ class Model():
     def get_errors(self,sset):
         """Compute RMSE, MAE and MaxAE for model in structures set.
         """
-        calc_vals = sset.get_property_values(property_name = self.property)
+        calc_vals = sset.get_property_values(property_name = self.property_name)
         predictions = sset.get_predictions(self)
         rmse = 0
         mae = 0
@@ -439,7 +461,7 @@ class Model():
         i.e., every element of the array contains a tuple with an integer, the structure index
         and a float, the absolute error
         """
-        calc_vals = sset.get_property_values(property_name = self.property)
+        calc_vals = sset.get_property_values(property_name = self.property_name)
         predictions = sset.get_predictions(self)
 
         aes = []
@@ -470,7 +492,7 @@ class Model():
         from sklearn import linear_model
         
         X = self.corrc.get_correlation_matrix(sset)
-        y = sset.get_property_values(self.property)
+        y = sset.get_property_values(self.property_name)
 
         # cross_val_score internally clones the estimator, so the optimal one in Model is not changed.
         cvs = cross_val_score(self.estimator, X, y, fit_params=fit_params, cv=LeaveOneOut(), scoring = 'neg_mean_squared_error')
@@ -548,7 +570,8 @@ class ModelBuilder():
                  selector_opts={},
                  estimator_type="skl_LinearRegression",
                  estimator_opts={},
-                 filepath = None):
+                 filepath = None,
+                 standardize = False):
         pass
     
     def initialize(self,
@@ -557,14 +580,18 @@ class ModelBuilder():
                    selector_opts={},
                    estimator_type="skl_LinearRegression",
                    estimator_opts={},
-                   filepath = None):
+                   filepath = None,
+                   standardize = False):
 
         self.basis = basis
         self.selector_type = selector_type
         self.selector_opts = selector_opts
         self.estimator_type = estimator_type
         self.estimator_opts = estimator_opts
-
+        self.standardize = standardize
+        if "standardize" not in selector_opts.keys():
+            selector_opts["standardize"] = standardize
+        
         self.ini_comat = None
         
         self.opt_cpool = None
@@ -652,15 +679,18 @@ class ModelBuilder():
         self.opt_comat = self.selector.optimal_comat
         
         self.opt_corrc = CorrelationsCalculator(self.basis, self.plat, self.opt_cpool)
-        #if verbose: print("ModelBuilder: Build optimal correlations matrix")
-        #self.opt_comat = self.opt_corrc.get_correlation_matrix(self.sset, verbose=verbose)
 
         # Find out the ECIs using an estimator
-        self.opt_estimator = EstimatorFactory.create(self.estimator_type, **self.estimator_opts)
+        if not self.standardize:
+            self.opt_estimator = EstimatorFactory.create(self.estimator_type, **self.estimator_opts)
+        else:
+            from sklearn.preprocessing import StandardScaler
+            from sklearn.pipeline import make_pipeline
+
+            self.opt_estimator = make_pipeline(StandardScaler(), EstimatorFactory.create(self.estimator_type, **self.estimator_opts))
+
         self.opt_estimator.fit(self.opt_comat,self.target)
-
         return Model(self.opt_corrc, prop, estimator = self.opt_estimator)
-
 
     def serialize(self, filepath = "MODELBDR.pickle"):
         """ Serialize model into pickle file
