@@ -691,7 +691,7 @@ class ModelBuilder():
             self.opt_estimator = make_pipeline(StandardScaler(), EstimatorFactory.create(self.estimator_type, **self.estimator_opts))
 
         self.opt_estimator.fit(self.opt_comat,self.target)
-        return Model(self.opt_corrc, prop, estimator = self.opt_estimator)
+        return Model(self.opt_corrc, prop, estimator = self.opt_estimator, standardize = self.standardize)
 
     def serialize(self, filepath = "MODELBDR.pickle"):
         """ Serialize model into pickle file
