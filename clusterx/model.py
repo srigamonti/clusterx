@@ -92,6 +92,7 @@ class Model():
             self.property_name = property_name
             self.standardize = standardize
             if standardize:
+                from sklearn.preprocessing import StandardScaler
                 self.stdscaler = StandardScaler()
 
         self.estimator = estimator
@@ -178,7 +179,7 @@ class Model():
             atoms_db.metadata = modeldict
         
     def get_plat(self):
-        get_parent_lattice(self)
+        self.get_parent_lattice(self)
         
     def get_parent_lattice(self):
         """ Return parent lattice of the cluster expansion model.
@@ -216,7 +217,7 @@ class Model():
             return self.estimator.predict(corrs.reshape(1,-1))[0]
 
         else:
-            if standardize:
+            if self.standardize:
                 try:
                     corrs = self.stdscaler.transform(corrs)
                 except:
@@ -698,7 +699,7 @@ class ModelBuilder():
         Only pickle format is supported.
 
         **Parameters:**
-        
+
         ``filepath``: string (default: "MODELBDR.pickle")
             file path of the pickle file to serialize the model builder object
         """

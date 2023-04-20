@@ -365,31 +365,6 @@ class StructuresSet():
                 subset.set_property_values(property_name = pn, property_vals = _pv)
 
         return subset
-            
-    def get_json_string(self, super_cell):
-        fn = self.filename
-
-        #reset filename and stdout
-        self.filename = None
-        from cStringIO import StringIO
-        import sys
-        old_stdout = sys.stdout
-        sys.stdout = mystdout = StringIO()
-
-        self.write(super_cell)
-
-        #restore filename and stdout
-        sys.stdout = old_stdout
-        self.filename = fn
-
-        return  mystdout.getvalue()
-        """
-        #should try something like this, from ase jsondb.py
-        bigdct, ids, nextid = self._read_json()
-        self._metadata = bigdct.get('metadata', {})
-
-        """
-
 
     def set_calculator(self, calc):
         """
