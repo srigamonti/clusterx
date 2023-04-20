@@ -707,8 +707,8 @@ class StructuresSet():
             Remove parameter ``i`` from this template.
         """
         import os
-        f = open(os.path.join(folder,"energy.dat"),"r")
-        erg = float(f.readlines()[0])
+        with open(os.path.join(folder,"energy.dat"),"r") as f:
+            erg = float(f.readlines()[0])
         return erg
 
     def read_property_values(self, property_name = "total_energy", write_to_file=True, read_property = read_energy, **kwargs):
@@ -835,7 +835,7 @@ class StructuresSet():
         If an associated json database exists, it is updated with the new property.
 
         **Parameters:**
-        
+
         ``property_name``: string
             The name used to label the property in the structures set. This label is then listed
             in ``sset.get_property_names()`` and the property values for this label can be obtained
