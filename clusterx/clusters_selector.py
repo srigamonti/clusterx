@@ -252,13 +252,6 @@ class ClustersSelector():
 
         return self.optimal_clusters
 
-        """
-        rows = np.arange(len(p))
-        comat_opt =  x[np.ix_(rows,opt)]
-
-        self.optimal_ecis(comat_opt,p)
-        """
-
     def get_optimal_cpool(self):
         """Return optimal ClustersPool object
         """
