@@ -985,7 +985,7 @@ class PolynomialBasis():
             if m % 2 == 0:
                 sigmas.remove(0)
         else:
-            sigmas = range(m)
+            sigmas = [x for x in range(m)]
         scalar_product = 0
         for sigma in sigmas:
             scalar_product += function1(sigma) * function2(sigma)
