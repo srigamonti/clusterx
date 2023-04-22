@@ -246,7 +246,6 @@ class Model():
             index of second atom position has been swapped
 
         """
-        #corrsx = self.corrc.get_cluster_correlations(structure)
         try:
             cluster_orbits = self.corrc._cluster_orbits_mc
         except AttributeError:
@@ -314,7 +313,6 @@ class Model():
             index of second atom position has been swapped
 
         """
-        #corrsx = self.corrc.get_cluster_correlations(structure)
         try:
             cluster_orbits = self.corrc._cluster_orbits_mc
         except AttributeError:
