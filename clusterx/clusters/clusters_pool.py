@@ -58,14 +58,6 @@ class ClustersPool():
         file containing a serialized ClustersPool object, as generated
         by the ``ClustersPool.serialize()`` method.
 
-    .. todo:
-        Fix multiplicities when ``super_cell`` is used
-
-        Add calculation of the multiplicity in add_cluster and get_subpool
-
-        Modify get_containing_supercell for  the case when all radii are negative
-        and no SuperCell is given.
-
     **Examples:**
 
     The example below, will generate all possible clusters up to 2 points in the
@@ -598,7 +590,6 @@ class ClustersPool():
                 for idx in idxs:
                     sites_arrays.append(sites[idx][1:])
                 for ss in product(*sites_arrays):
-                    #_cl = Cluster(idxs, ss, scell, distances=distances) # This slows down the routine considerably
                     _cl = Cluster(idxs, ss)
                     if _cl.get_radius(distances) <= radius:
                         clrs_full.append(_cl)
@@ -620,29 +611,14 @@ class ClustersPool():
                 clrs_full = [c for i,c in enumerate(clrs_full) if i not in delids]
 
                 new = True
-                """
-
-                for __cl1 in orbit:
-                    for __cl2 in self._cpool:
-                        if __cl1 == __cl2:
-                            new = False
-                            break
-                    if not new:
-                        break
-                if _cl in self._cpool:
-                    new = False
-                """
                 if new:
-                    #self._cpool.append(_cl)
                     self._cpool.append(Cluster(_cl.get_idxs(),_cl.get_nrs(),self._cpool_scell,self._distances))
-                    #self._cpool.append(orbit[0])
                     self._multiplicities.append(mult)
 
         if len(self._cpool) == 0:
             return [],0
         else:
             self._cpool, self._multiplicities = (list(t) for t in zip(*sorted(zip(self._cpool, self._multiplicities))))
-
 
         
     def get_cpool_scell(self): # Deprecated. Use get_supercell instead
