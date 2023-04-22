@@ -618,7 +618,7 @@ class StructuresSet():
         nstr = self.get_nstr()
         images = self.get_images(rm_vac=rm_vac)
 
-        if (overwrite or not os.path.isfile(path)) and nstr != 0:
+        if (overwrite or not os.path.isfile(filepath)) and nstr != 0:
             for i in range(nstr):
                 self._db.write(images[i])
                 ppts = {}
