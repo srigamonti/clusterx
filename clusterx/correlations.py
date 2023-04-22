@@ -410,7 +410,7 @@ class CorrelationsCalculator():
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
         
-    def get_cluster_correlations(self, structure, multiplicities=None, verbose=False):
+    def get_cluster_correlations(self, structure, verbose=False):
         """Get cluster correlations for a structure
         **Parameters:**
 
@@ -419,14 +419,6 @@ class CorrelationsCalculator():
         ``mc``: Boolean
             Set to ``True`` when performing Monte-Carlo simulations, to use an
             optimized version of the method.
-        ``multiplicities``: array of integers
-            if None, the accumulated correlation functions are devided by the size
-            of the cluster orbits, otherwise they are devided by the given
-            multiplicities.
-
-        .. todo::
-
-            remove multiplicities option and always give intensive correlations.
         """
         #from clusterx.utils import get_cl_idx_sc
         cluster_orbits = None
@@ -443,18 +435,18 @@ class CorrelationsCalculator():
         cpool_list = self._cpool.get_cpool_list()
         
         correlations = np.zeros(len(cpool_list))
+        
         for icl, cluster in enumerate(cpool_list):
             cluster_orbit = cluster_orbits[icl]
             cluster_orbit_arr = cluster_orbit.as_array()
             weights = cluster_orbit.get_weights()
+
             for weight, cluster in zip(weights, cluster_orbit_arr):
                 cf = self.cluster_function(cluster, structure.sigmas, structure.ems)
                 correlations[icl] += weight * cf
 
-            if multiplicities is None:
-                correlations[icl] /= np.sum(weights)
-            else:
-                correlations[icl] /= multiplicities[icl]
+            correlations[icl] /= np.sum(weights)
+            
         return np.around(correlations,decimals=12)
 
     def get_correlation_matrix(self, structures_set, outfile = None, verbose = False):
