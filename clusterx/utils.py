@@ -220,7 +220,7 @@ def list_integer_named_folders(root=".", prefix='', suffix='', containing_files=
         if not include:
             continue
 
-        if prefix != '' or suffix != '':
+        if prefix == folder[:len(prefix)] and suffix == folder[-len(suffix):]:
             if len(prefix) != 0 and len(suffix) != 0:
                 d = folder[len(prefix):][:-len(suffix)]
             elif len(prefix) != 0 and len(suffix) == 0:
