@@ -539,6 +539,9 @@ class ModelBuilder():
     ``filepath``: string (default: None)
         If not None, it must be the path to a pickle file generated with ModelBuilder.serialize(). All other 
         parameters are overriden
+
+    ``standardize``: Boolean (defaut:``False``)
+        Whether to standardize the input. Uses StandardScaler of scikit-learn.
     """
     def __new__(cls, *args, **kwargs):
         
