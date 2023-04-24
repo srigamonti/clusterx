@@ -53,7 +53,7 @@ class StructuresSet():
         but safer if not sure how the file was built.
 
     ``folders_db_fname``: String (deprecated)
-        same as ``db_name``. Use ``db_name`` instead. If set overrides ``db_name``.
+        same as ``json_db_filepath``. Use ``json_db_filepath`` instead. If set overrides ``json_db_filepath``.
 
     **Deprecated parameters:**
     
@@ -404,48 +404,72 @@ class StructuresSet():
         """
         return self._parent_lattice
 
+    # DEPRECATED, use caclulate_property_values instead
     def calculate_property(self, prop_name="energy", prop_func=None, rm_vac=True):
+        self.compute_property_values(property_name=prop_name, property_calc=prop_func, rm_vacancies=rm_vac, update_json_db=False)
+        
+    def compute_property_values(self, property_name="energy", property_calc=None, rm_vacancies=True, update_json_db=True, **kwargs):
         """
         Return array of calculated property for all structures in the structures set.
 
         **Parameters**:
 
-        ``prop_name``: string (default: "energy")
+        ``property_name``: string (default: "energy")
             Name of the property to be calculated. This is used as a key for the
             ``self._props`` dictionary. The property values can be recovered by
-            calling the method ``StructureSet.get_property_values(prop_name)`` (see documentation).
+            calling the method ``StructureSet.get_property_values(property_name)`` (see documentation).
 
-        ``prop_func``: function (default: ``None``)
+        ``property_calc``: function (default: ``None``)
             If none, the property value is calculated with the calculator object assigned
             to the structures set with  the method ``StructuresSet.set_calculator()``. If not
-            None, it must be a function that takes a Structure object as argument, and
-            returns a number.
+            None, it must be a function with the following signature::
 
-        ``rm_vac``: Boolean (default:``True``)
-            Only takes effect if ``prop_func`` is ``None``, i.e., when an ASE calculator
+                my_function(i, structure, **kwargs)    
+
+            where ``i`` is the structure index, ``structure``
+            is the structure object for structure index ``i``, and ``**kwargs`` are
+            any additional keyword arguments. The function must return a number.
+
+        ``rm_vacancies``: Boolean (default:``True``)
+            Only takes effect if ``property_func`` is ``None``, i.e., when an ASE calculator
             (or derived calculator) is used. If True, the "Atoms.get_potential_energy()" method
             is applied to a copy of Structure.atoms object with vacancy sites removed,
             i.e., atom positions containing species with species number 0 or species
             symbol "X".
+
+        ``update_json_db``: Boolean (default:``True``)
+            Whether to update the json database file (in case one is attached to the sset instance).
+
+        ``**kwargs``: keyword argument list, arbitrary length
+            keyword arguments directly passed to ``property_func`` function.
+            You may call this method as::
+
+                sset_instance.calculate_property(property_name="my_prop", property_func="my_func", arg1=arg1, ..., argN=argN)
+
+            where ``arg1`` to  ``argN`` are the keyword arguments passed to the 
+            ``my_func(i, structure, **kwargs)`` function.
+
         """
         props = []
-        if rm_vac:
+        if rm_vacancies:
             from clusterx.utils import remove_vacancies
         for i,st in enumerate(self):
-            if prop_func is None:
+            if property_calc is None:
                 ats = st.get_atoms()
-                if rm_vac:
+                if rm_vacancies:
                     _ats = remove_vacancies(ats)
                 else:
                     _ats = ats.copy()
                     _ats.set_calculator(ats.get_calculator()) # ASE's copy() forgets calculator
                 props.append(_ats.get_potential_energy())
             else:
-                #if rm_vac:
-                #    st.atoms = remove_vacancies(st.atoms) # This leaves an inconsistent Structure object
-                props.append(prop_func(st))
+                props.append(property_calc(i, st, **kwargs))
 
-        self._props[prop_name] = props
+        self._props[property_name] = props
+
+        if update_json_db:
+            self._update_properties_in_json_db()
+            
         return props
 
     def calculate_energies(self, calculator, structure_fname="geometry.json"):
@@ -657,7 +681,10 @@ class StructuresSet():
         """
         return self._db_fname
 
-    def read_energy(i,folder,structure=None, **kwargs):
+    def read_energy(i, folder, structure=None, **kwargs): # DEPRECATED, use energy_parser instead
+        self.energy_parser(i, folder, structure=structure, **kwargs)
+        
+    def energy_parser(i, folder, structure=None, **kwargs):
         """Read value stored in ``energy.dat`` file.
 
         This is to be used as the default argument for the ``read_property``
@@ -672,27 +699,48 @@ class StructuresSet():
 
         ``folder``: string
             absolute or relative path of the folder containing the file/s to be read.
+        
+        ``structure``: Structure object
+            structure object for structure index ``i``
 
         ``**kwargs``: keyword arguments
             Extra arguments needed for the property reading. See documentation of
             ``StructureSet.read_property_values()``.
-
-        .. todo:
-
-            Remove parameter ``i`` from this template.
         """
         import os
         with open(os.path.join(folder,"energy.dat"),"r") as f:
             erg = float(f.readlines()[0])
         return erg
 
-    def read_property_values(self, property_name = "total_energy", write_to_file=True, read_property = read_energy, **kwargs):
+    # DEPRECATED, use parse_property_values instead
+    def read_property_values(self,
+                             property_name = "total_energy",
+                             write_to_file=True,
+                             read_property = energy_parser,
+                             root = "",
+                             update_json_db=True,
+                             **kwargs):
+        self.parse_property_values(
+                             property_name = property_name,
+                             write_to_file=write_to_file,
+                             property_parser = read_energy,
+                             root = root,
+                             update_json_db=update_json,
+                             **kwargs)
+        
+    def parse_property_values(self,
+                             property_name = "total_energy",
+                             write_to_file=True,
+                             property_parser = energy_parser,
+                             root = "",
+                             update_json_db=True,
+                             **kwargs):
         """Read calculated property values from ab-inito output files
 
         Read property values from ab-initio code output files. These files are
         contained in paths::
 
-            [[root] /] [prefix] id [suffix] /
+            [[root] /] [prefix] id [suffix] / file_to_read
 
         as created by ``StructureSet.write_input_files()``. The folders to be searched
         for energy values are those returned by ``StructureSet.get_folders()``. These
@@ -726,47 +774,64 @@ class StructuresSet():
             of the folder containing the relevant ab-initio files, structure
             is the structure object for structure index ``i``, and ``**kwargs`` are
             any additional keyword arguments.
+        
+        ``root``: string
+            the root folder containing the subfolders with ab-initio data. See description above.
 
-        ``**kwargs``: keyworded argument list, arbitrary length
-            keyword arguments directly passed to read_property function.
+        ``update_json_db``: Boolean (default:``True``)
+            Whether to update the json database file (in case one is attached to the sset instance).
+
+        ``**kwargs``: keyword argument list, arbitrary length
+            keyword arguments directly passed to ``read_property`` function.
             You may call this method as::
 
-                sset_instance.read_property_values(read_property, arg1=arg1, arg2=arg2, ... argN=argN)
+                sset_instance.read_property_values(read_property, arg1=arg1, ..., argN=argN)
 
-            where ``arg1`` to  ``argN`` are the keyworded arguments to the ``read_property(folder_path,**kwargs)`` function.
+            where ``arg1`` to  ``argN`` are the keyword arguments passed 
+            to the ``read_property(folder_path,**kwargs)`` function.
 
         """
         import os
         import glob
         from clusterx.utils import list_integer_named_folders
 
-        db = self.get_db()
-
         self._props[property_name] = []
         for i,folder in enumerate(self._folders):
+            if root != "":
+                folder = os.path.join(root,os.path.relpath(folder))
             try:
-                pval = read_property(i,folder,structure=self.get_structure(i),**kwargs)
+                pval = property_parser(i, folder, structure=self.get_structure(i), **kwargs)
             except:
-                print("Could not read propery ", property_name, "from folder ",folder )
+                print("Could not parse propery ", property_name, "from folder ",folder )
                 pval = None
 
             self._props[property_name].append(pval)
-            #db.update(i+1, **{property_name:pval})
-            ppts = {}
-            for k,v in self._props.items():
-                ppts[k] = v[i]
 
-            db.update(i+1, data={"properties":ppts}) # Writes to the "data" key of the db entry for this Atoms object
-
-            #db.update(i+1, property_name:pval})
+            # Store property value in a file in "root/folder/"
             if write_to_file:
-                f = open(os.path.join(folder,property_name+".dat"),"w+")
+                f = open(os.path.join(root, folder, property_name+".dat"),"w+")
                 f.write("%2.9f\n"%(pval))
                 f.close()
 
-        db.metadata = {**db.metadata,"properties":self._props}
+        if update_json_db:
+            self._update_properties_in_json_db()
 
-    def set_property_values(self, property_name = "total_energy", property_vals = []):
+    def _update_properties_in_json_db(self):
+        db = self.get_db()
+        
+        if db is not None:
+            for i in range(len(self)):
+                # Update properties dict for structure id i+1
+                ppts = {}
+                for k,v in self._props.items():
+                    ppts[k] = v[i]
+
+                db.update(i+1, data={"properties":ppts}) # Writes to the "data" key of the db entry for this Atoms object
+
+            db.metadata = {**db.metadata,"properties":self._props}
+
+
+    def set_property_values(self, property_name = "total_energy", property_vals = [], update_json_db=True):
         """Set property values
 
         Set the property values.
@@ -782,20 +847,12 @@ class StructuresSet():
         ``property_vals``: array
             Array of property values
 
+        ``update_json_db``: Boolean (default:``True``)
+            Whether to update the json database file (in case one is attached to the sset instance).
         """
         self._props[property_name] = property_vals
-
-        db = self.get_db()
-        
-        if db is not None:
-            for i in range(len(self)):
-                ppts = {}
-                for k,v in self._props.items():
-                    ppts[k] = v[i]
-
-                db.update(i+1, data={"properties":ppts}) # Writes to the "data" key of the db entry for this Atoms object
-
-            db.metadata = {**db.metadata,"properties":self._props}
+        if update_json_db:
+            self._update_properties_in_json_db()
 
     def set_property_values_from_files(self, property_name = "property", property_file_name = "property.dat", cwd = "./"):
         """Set property values read from files
