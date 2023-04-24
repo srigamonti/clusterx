@@ -493,21 +493,23 @@ def plot_property_vs_concentration(sset,
     
     if refs is None:
         refs = [0.0,0.0]
+    else:
+        refs = np.array(refs) * yfactor 
         
-    energies = sset.get_property_values(property_name = property_name)
+    energies = np.array(sset.get_property_values(property_name = property_name)) * yfactor
     if cemodel is not None:
-        predictions = sset.get_predictions(cemodel)
+        predictions = np.array(sset.get_predictions(cemodel)) * yfactor
 
     if sset_enum is not None:
-        pred_enum = sset_enum.get_predictions(cemodel)
+        pred_enum = np.array(sset_enum.get_predictions(cemodel)) * yfactor
 
     if sset_gss is not None:
-        pred_gss = sset_gss.get_predictions(cemodel)
+        pred_gss = np.array(sset_gss.get_predictions(cemodel)) * yfactor
 
     pred_cv = None
     if show_loo_predictions and cemodel is not None:
         cvs = cemodel.get_cv_score(sset)
-        pred_cv = cvs["Predictions-CV"]
+        pred_cv = np.array(cvs["Predictions-CV"]) * yfactor 
 
     frconc = sset.get_concentrations(site_type,sigma)
     vl_en = refs[0]*(1-np.array(frconc)) + np.array(frconc)*refs[1]
@@ -563,7 +565,7 @@ def plot_property_vs_concentration(sset,
     data["xlabel"] = xlabel
 
     dy = ymax-ymin
-    ax.set_ylim([ymin + 0.02 * dy, ymax + 0.30 * dy])
+    ax.set_ylim([ymin - 0.1 * dy, ymax + 0.30 * dy])
     
     if show_yzero_axis:
         ax.axhline(y=0, color='k', linewidth=0.5)
