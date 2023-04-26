@@ -3,7 +3,6 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 from ase import Atoms
-import clusterx as c
 import numpy as np
 import sys
 from ase.visualize import view
@@ -11,6 +10,8 @@ from ase.visualize import view
 from clusterx.utils import make_supercell
 from clusterx.parent_lattice import ParentLattice
 from clusterx.symmetry import get_internal_translations, get_scaled_positions, wrap_scaled_positions, get_spacegroup
+
+
 
 from clusterx.utils import get_cl_idx_sc
 import clusterx
@@ -345,6 +346,7 @@ class SuperCell(ParentLattice):
                 [14,13,56,38,13]
         
         """
+        import clusterx.structure
         return clusterx.structure.Structure(SuperCell(self._plat, self._p, self._sort_key, sym_table = bool(self._sym_table)), sigmas=sigmas, mc = mc)
         
     def gen_random(self, nsubs = None, mc = False):
@@ -375,7 +377,7 @@ class SuperCell(ParentLattice):
         Use ``gen_random_structure``, since ``gen_random`` is deprecated.
         """
         import clusterx.structure
-
+        
         if nsubs is None:
             import numpy as np
             slts = self.get_sublattice_types() #  e.g.  {0: [14,13], 1: [56,0,38], 2:[11]}
