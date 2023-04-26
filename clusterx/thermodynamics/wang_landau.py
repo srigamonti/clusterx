@@ -21,29 +21,27 @@ class WangLandau():
 
         It is initialized with:
         
-        - a Model object, that enable to calculate the enrgy of a structure,
+        - a Model object, that enables to calculate the energy of a structure,
     
         - a SuperCell object, in which the sampling is performed,
     
-        - secification of teh thermodynamic ensemble:
+        - specification of the thermodynamic ensemble:
 
             If ``ensemble`` is 'canonical', the composition for the sampling is defined with ``nsubs``. In case               
-            of multilattices, the sublattice for the sampling can be refined with ``sublattice_indices``.
+            of multilattices, the sublattice for the sampling can be defined with ``sublattice_indices``.
 
             If ``ensemble`` is 'gandcanonical', the sublattice is defined with ``sublattices_indices``. 
 
     **Parameters**:
 
     ``energy_model``: Model object
-        Model used for acceptance and rejection. Usually, the Model enables to
-        calculate the total energy of a structure.
+        Model used for computing the total internal energy of a configuration of the alloy. 
 
     ``scell``: SuperCell object
         Simulation cell in which the sampling is performed.
 
     ``ensemble``: string (default: ``canonical``) 
         ``canonical`` allows for swaps of atoms that conserve the concentration defined with ``nsubs``.
-
         ``grandcanonical`` allows for replacing atoms in the sub-lattices defined with ``sublattice_indices``. 
         (So far, ``grandcanonical`` is not yet implemented.)
 
@@ -87,7 +85,6 @@ class WangLandau():
         self._em = energy_model
         self._scell = scell
         self._nsubs = nsubs
-        #print(self._nsubs)
 
         if not sublattice_indices:
             try:
@@ -102,7 +99,6 @@ class WangLandau():
                 raise AttributeError("Index of sublattice is not properly assigned, look at the documentation.")
         else:
             self._sublattice_indices = sublattice_indices
-        #print(self._sublattice_indices)
 
         if not self._sublattice_indices:
             import sys
@@ -117,30 +113,173 @@ class WangLandau():
             self._error_steps = int(self._error_reset)
             self._x = 1
 
+
+    def _wls_create_initial_structure(self, initial_decoration):
+        if initial_decoration is not None:
+            struc = Structure(self._scell, initial_decoration, mc = True)
+            conc = struc.get_fractional_concentrations()
+            nsites = struc.get_nsites_per_type()
+            check_dict = {}
+            for key in conc.keys():
+                ns = nsites[key]
+                nl = []
+                for i,cel in enumerate(conc[key]):
+                    if i == 0:
+                        continue
+                    else:
+                        nl.append(int(cel*ns))
+                check_dict.update({key:nl})
+
+            from clusterx.utils import dict_compare
+            bol = dict_compare(check_dict,self._nsubs)
+            if not bol:
+                import sys
+                sys.exit("Number of substitutents does not coincides with them from the inital decoration.")
+                              
+        else:
+            if self._nsubs is not None:
+                struc = self._scell.gen_random_structure(self._nsubs, mc = True)
+            else:
+                struc = self._scell.gen_random_structure(mc = True)
+                
+        return struc
+
+    def _wls_init_from_file(self, cd, update_method, flatness_conditions, f_range):
+        cdos = []
+        for l,eb in enumerate(cd._energy_bins):
+            cdos.append([eb,cd._cdos[l],0])
+        cdos = np.asarray(cdos)
+
+        # Update f
+        if update_method == 'square_root':
+            f = math.sqrt(cd._f)
+            cd._update_method = update_method
+        else:
+            import sys
+            sys.exit('Different update method for f requested. Please see documentation')
+
+        if f_range[1] < cd._f_range[1]:
+            cd._f_range = f_range
+        else:
+            f_range = cd._f_range
+
+        checkf, indt = self.compare_flatness_conditions(cd._flatness_conditions, flatness_conditions)
+
+        if not checkf:
+            checkff, indtt = self.compare_flatness_conditions(flatness_conditions)
+            if checkff:
+                flatness_conditions = cd._flatness_conditions
+            else:
+                self._flatness_conditions = flatness_conditions
+                print('New flatness conditions are applied.')
+
+        fi = 0
+        while f < flatness_conditions[fi][1]:
+            fi += 1
+            if fi < len(flatness_conditions):
+                histogram_flatness = float(flatness_conditions[fi][0])
+            else:
+                histogram_flatness = float(0.99)
+                break
+
+        return cdos, f, histogram_flatness, f_range, flatness_conditions, fi
+
+    def _wls_init_from_scratch(self, energy_range, energy_bin_width, flatness_conditions, f_range):
+        cdos=[]
+        eb = energy_range[0]
+        while eb < energy_range[1]:
+            cdos.append([eb,0.0,0]) # log(cdos=1.0)=0.0
+            eb = eb+energy_bin_width
+        cdos = np.asarray(cdos)
+
+        f = f_range[0]
+        fi = 0
+        histogram_flatness = flatness_conditions[fi][0]
+
+        return cdos, f, histogram_flatness, fi
+
+    def _wls_locate_histogram_bin(self, e, energies):
+        emin = energies[0]
+        emax = energies[-1]
         
-    def wang_landau_sampling(self, energy_range=[-2,2], energy_bin_width=0.2, f_range=[np.round(math.exp(1),8), np.round(math.exp(1.0e-4),8)], update_method='square_root', flatness_conditions=[[0.5,np.round(math.exp(1e-1),1)],[0.80,np.round(math.exp(1e-3),3)],[0.90,np.round(math.exp(1e-5),5)],[0.95,np.round(math.exp(1e-7),7)],[0.98,np.round(math.exp(1e-8),8)]], initial_decoration = None, serialize = False, filename = "cdos.json", serialize_during_sampling = False, restart_from_file = False, **kwargs):
+        if e <= emin:
+            ibin = 0
+        elif e >= emax:
+            ibin = len(energies) - 1
+        else:
+            for i,e_i in enumerate(energies):
+
+                if e < e_i:
+                    if i == 0:
+                        ibin = i
+                    else:
+                        diffe1 = e - energies[i-1]
+                        diffe2 = e_i - e
+                        if diffe1 < diffe2:
+                            ibin = i-1
+                        else:
+                            ibin = i
+                    break
+        return ibin
+
+    def _wls_update_modification_factor(self, f, update_method):
+        if update_method == 'square_root':
+            f = math.sqrt(f)
+        else:
+            import sys
+            sys.exit('Different update method for f requested. Please see documentation')
+        return f
+        
+            
+    def wang_landau_sampling(
+            self,
+            energy_range=[-2,2],
+            energy_bin_width=0.2,
+            f_range=[math.exp(1), math.exp(1e-4)],
+            update_method='square_root',
+            flatness_conditions=[
+                [0.5,math.exp(1e-1)],
+                [0.80,math.exp(1e-3)],
+                [0.90,math.exp(1e-5)],
+                [0.95,math.exp(1e-7)],
+                [0.98,math.exp(1e-8)]
+            ],
+            initial_decoration = None,
+            serialize = False,
+            filename = "cdos.json",
+            serialize_during_sampling = False,
+            restart_from_file = False,
+            plot_hist_real_time = False,
+            **kwargs
+    ):
         """Perform Wang Landau simulation
 
         **Description**: 
-            The Wang-Landau algorithm uses the fact that a random walk in energy space a probability proportional to 
-            :math:`1/g(E)`, with g(E) being the configurational density of states, yields a flat histogram in energy 
-            (details see: F. Wang and D.P. Landau, PRL 86, 2050 (2001)). 
-            The energy of a visited structure is calcualted with ``energy_model``. 
+            The Wang-Landau algorithm uses the fact that a Markov chain with transition probability 
+            :math:`P_{1 -> 2} = \min[ 1, g(E_1)/g(E_2) ]`, with 
+            :math:`g(E)`  being the configurational density of states, yields a flat histogram in energy 
+            [see F. Wang and D.P. Landau, PRL 86, 2050 (2001)]. This fact is employed to 
+            iteratively modify :math:`g(E)`, which is unknown and initially set to 1, in order to achieve 
+            a flat histogram of the visited energies. 
+            The accuracy of the found :math:`g(E)` will depend on how flat is the histogram at the 
+            end of the run and other parameters, as explained below.
+
+            The energy of a visited structure is calcualted with the CE model ``energy_model``. 
 
             During the sampling, a new structure at step i is accepted with the probability given 
-            by :math:`\min( 1, \exp( - g(E_i)/g(E_{i-1}) ) )`
+            by :math:`\min[ 1, g(E_{i-1})/g(E_i) ]`
 
             If a step is accepted, :math:`g(E_i)` of energy bin :math:`E_i` is updated with a modification factor :math:`f`.
             If a step is rejected, :math:`g(E_{i-1})` of the previous energy bin :math:`E_{i-1}` with a modification factor :math:`f`.
 
             The sampling procedure is a nested loop:
-        
+       
             - Inner loop: Generation of a flat histogram in energy for a fixed :math:`f`.
 
-            - Outer loop: Gradual reduction of :math:`f` to increas the accuracy of the :math:`g(E)`.
+            - Outer loop: Gradual reduction of :math:`f` to increase the accuracy of :math:`g(E)`.
 
             The initial modification factor is usually :math:`f=\exp(1)`. Since it is large, it ensures to reach all energy levels quickly. 
-            In the standard procedure, the modification factor is reduces from :math:`f` to  :math:`\sqrt{f} ` for the next inner loop. 
+            In the standard procedure, the modification factor is reduced from :math:`f` to  :math:`\sqrt{f} ` for the next inner loop. 
             :math:`f` is a measure of the accuracy for :math:`g(E)`: The lower the value of :math:`f`, the higher the accuracy. The 
             sampling stops, if the next :math:`f` is below the threshold :math:`f_{final}`.
 
@@ -201,128 +340,74 @@ class WangLandau():
         
         """
         import math
-        from clusterx.utils import poppush       
+        from clusterx.utils import poppush
+        import sys
 
-        if initial_decoration is not None:
-            struc = Structure(self._scell, initial_decoration, mc = True)
-            conc = struc.get_fractional_concentrations()
-            nsites = struc.get_nsites_per_type()
-            check_dict = {}
-            for key in conc.keys():
-                ns = nsites[key]
-                nl = []
-                for i,cel in enumerate(conc[key]):
-                    if i == 0:
-                        continue
-                    else:
-                        nl.append(int(cel*ns))
-                check_dict.update({key:nl})
-
-            from clusterx.utils import dict_compare
-            bol = dict_compare(check_dict,self._nsubs)
-            if not bol:
-                import sys
-                sys.exit("Number of substitutents does not coincides with them from the inital decoration.")
-                              
-        else:
-            if self._nsubs is not None:
-                struc = self._scell.gen_random(self._nsubs, mc = True)
-            else:
-                struc = self._scell.gen_random(mc = True)
-
-        if restart_from_file:
-            cd = ConfigurationalDensityOfStates(filename = filename, scell = self._scell, read = True, **kwargs )
-
-            cdos = []
-            for l,eb in enumerate(cd._energy_bins):
-                cdos.append([eb,cd._cdos[l],0])
-            cdos = np.asarray(cdos)
+        struc = self._wls_create_initial_structure(initial_decoration)
         
-            if update_method == 'square_root':
-                f = math.sqrt(cd._f)
-                cd._update_method = update_method
-            else:
-                import sys
-                sys.exit('Different update method for f requested. Please see documentation')
-
-            if f_range[1] < cd._f_range[1]:
-                cd._f_range = f_range
-            else:
-                f_range = cd._f_range
+        if restart_from_file:
+            cd = ConfigurationalDensityOfStates(
+                filename = filename,
+                scell = self._scell,
+                read = True,
+                **kwargs
+            )
+            cdos, f, histogram_flatness, f_range, flatness_conditions, fi = self._wls_init_from_file(cd, update_method, flatness_conditions)
             
-            checkf, indt = self.compare_flatness_conditions(cd._flatness_conditions, flatness_conditions)
-
-            if not checkf:
-                checkff, indtt = self.compare_flatness_conditions(flatness_conditions)
-                if checkff:
-                    flatness_conditions = cd._flatness_conditions
-                else:
-                    self._flatness_conditions = flatness_conditions
-                    print('New flatness conditions are applied.')
-            fi = 0
-            while f < flatness_conditions[fi][1]:
-                fi += 1
-                if fi < len(flatness_conditions):
-                    histogram_flatness = float(flatness_conditions[fi][0])
-                else:
-                    histogram_flatness = float(0.99)
-                    break
-
         else:
-            cd = ConfigurationalDensityOfStates(filename = filename, scell = self._scell, energy_range = energy_range, energy_bin_width = energy_bin_width, f_range = f_range, update_method = update_method, flatness_conditions = flatness_conditions, nsubs = self._nsubs, ensemble = self._ensemble, sublattice_indices = self._sublattice_indices, chemical_potentials = self._chemical_potentials, **kwargs )
-            
-            cdos=[]
-            eb = energy_range[0]
-            while eb < energy_range[1]:
-                cdos.append([eb,1,0])
-                eb = eb+energy_bin_width
-            cdos = np.asarray(cdos)
-
-            f = f_range[0]
-            fi = 0
-            histogram_flatness = flatness_conditions[fi][0]
+            cd = ConfigurationalDensityOfStates(
+                filename = filename,
+                scell = self._scell,
+                energy_range = energy_range,
+                energy_bin_width = energy_bin_width,
+                f_range = f_range,
+                update_method = update_method,
+                flatness_conditions = flatness_conditions,
+                nsubs = self._nsubs,
+                ensemble = self._ensemble,
+                sublattice_indices = self._sublattice_indices,
+                chemical_potentials = self._chemical_potentials,
+                **kwargs
+            )
+            cdos, f, histogram_flatness, fi = self._wls_init_from_scratch(energy_range, energy_bin_width, flatness_conditions, f_range)
 
         self._em.corrc.reset_mc(mc = True)
         e = self._em.predict(struc)
-        #print(e)
 
-        for k,d in enumerate(cdos):
-            if e < d[0]:
-                if k == 0:
-                    inde = k
-                else:
-                    diffe1 = float(e-cdos[k-1][0])
-                    diffe2 = float(d[0]-e)
-                    if diffe1 < diffe2:
-                        inde = k-1
-                    else:
-                        inde = k
-                break
+        energies = cdos[:,0]
+        ibin = self._wls_locate_histogram_bin(e, energies)
 
-        cdos[inde][1] = cdos[inde][1]+math.log(f)
-        cdos[inde][2] = cdos[inde][2]+1
-        g = cdos[inde][1]
-        
+        cdos[ibin][1] += math.log(f)
+        cdos[ibin][2] += 1
+        g = cdos[ibin][1]
+
+        if plot_hist_real_time:
+            import matplotlib.pyplot as plt
+            plt.ion()
+            figure, ax = plt.subplots(figsize=(10, 8))
+
         while f > f_range[1]:
+            print("Info (Wang-Landau): Running WL sampling.")
+            print("Info (Wang-Landau): Modification factor:",f)
+            print("Info (Wang-Landau): Histogram flatness:",histogram_flatness)
+            
+            struc, e, g, ibin, cdos, hist_cond = self.flat_histogram(struc, e, g, ibin, f, cdos, histogram_flatness, plot_hist_real_time=False)
+            
+            cd.store_cdos(cdos, f, histogram_flatness, hist_cond)
 
-            struc, e, g, inde, cdos, hist_cond = self.flat_histogram(struc, e, g, inde, f, cdos, histogram_flatness)
-            #print(self._nsubs)
+            if plot_hist_real_time:
+                ax.clear()
+                ax.bar(range(len(cdos[:,0])), cdos[:,2])
+                ax.relim()
+                figure.canvas.draw()
+                figure.canvas.flush_events()
 
-            cd.add_cdos(cdos, f, histogram_flatness, hist_cond)
             
             if serialize_during_sampling:
                 cd.serialize()
-            
-            for m,d in enumerate(cdos):
-                if d[2] > 0:
-                    cdos[m][2] = 0
-        
-            if update_method == 'square_root':
-                f = math.sqrt(f)
-            else:
-                import sys
-                sys.exit('Different update method for f requested. Please see documentation')
-                
+
+            f = self._wls_update_modification_factor(f, update_method)
+                        
             if f < flatness_conditions[fi][1]:
                 fi += 1
                 if fi < len(flatness_conditions):
@@ -337,101 +422,92 @@ class WangLandau():
         return cd
     
             
-    def flat_histogram(self, struc, e, g, inde, f, cdos, histogram_flatness):
-
+    def flat_histogram(self, struc, e, g, inde, f, cdos, histogram_flatness, plot_hist_real_time=False):
         hist_min = 0
         hist_avg = 1
         lnf = math.log(f)
 
-        i = 0
-        while (hist_min < histogram_flatness*hist_avg) or (i < 10):
-            
-            for i in range(500):
-                struc, e, g, inde, cdos = self.dos_step(struc, e, g, inde, lnf, cdos)
-                    
-            hist_sum=0
-            i=0
-            for d in cdos:
-                if float(d[2])>0:
-                    i += 1
-                    hist_sum = hist_sum+d[2]
-                    if i == 1:
-                        hist_min = d[2]
-                    elif d[2] < hist_min:
-                        hist_min = d[2]
-            hist_avg = (hist_sum)/(1.0*i)
-                                
-        #print("\n")
-        #print(f)
-        
-        #print(hist_min,hist_avg)
-        #print("Flat histogram for f=%2.12f and flatness condition g_min > %1.2f * g_mean finished"%(f,histogram_flatness))
-        
-        return struc, e, g, inde, cdos, [hist_min, hist_avg]
-                                                                                                                                                                                                                                                    
-    def dos_step(self, struc, e, g, inde, lnf, cdos):
-    
-        ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
+        cdos[:,2] = 0 # Initialize histogram
 
-        if self._predict_swap:
-            if self._error_reset:
-                if (self._x > self._error_steps):
-                    self._x = 1
-                    e1 = self._em.predict(struc)
+        while (hist_min < histogram_flatness*hist_avg) or (n_nonzero_bins < 10):
+            
+            struc, e, g, inde, cdos = self.dos_steps(struc, e, g, inde, lnf, cdos, niter=500)
+
+            hist = cdos[:,2]
+            hist_sum = 0
+            count_nonzero_bins = 0
+            for h in hist:
+                if float(h)>0:
+                    count_nonzero_bins += 1
+                    hist_sum += h
+                    if count_nonzero_bins == 1:
+                        hist_min = h
+                    elif h < hist_min:
+                        hist_min = h
+            n_nonzero_bins = count_nonzero_bins
+            hist_avg = hist_sum/(1.0*n_nonzero_bins)
+
+        return struc, e, g, inde, cdos, [hist_min, hist_avg]
+
+    
+    def dos_steps(self, struc, e, g, inde, lnf, cdos, niter):
+
+        for n in range(niter):
+            ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
+
+            if self._predict_swap:
+                if self._error_reset:
+                    if self._x > self._error_steps:
+                        self._x = 1
+                        e1 = self._em.predict(struc)
+                    else:
+                        self._x += 1
+                        de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2)
+                        e1 = e + de
                 else:
-                    self._x += 1
-                    de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2)
+                    de = self._em.predict_swap(struc, ind1 = ind1, ind2 = ind2)
                     e1 = e + de
             else:
-                de = self._em.predict_swap(struc, ind1 = ind1, ind2 = ind2)
-                e1 = e + de
-        else:
-            e1 = self._em.predict(struc)
+                e1 = self._em.predict(struc)
 
-        for k,d in enumerate(cdos):
-            if e1 < d[0]:
-                if k == 0 :
-                    g1 = d[1]
-                    kinde = 0
-                else:
-                    diffe1 = float(e1-cdos[k-1][0])
-                    diffe2 = float(d[0]-e1)
-                    if diffe1 < diffe2:
-                        g1 = cdos[k-1][1]
-                        kinde = k-1
-                    else:
-                        g1 = d[1]
-                        kinde = k
-                break
+            energies = cdos[:,0]
+            ibin = self._wls_locate_histogram_bin(e1,energies)
 
-        if g >= g1:
-            accept_swap = True
-            trans_prob = 1
-        else:
-            trans_prob = math.exp(g-g1)
-            if np.random.uniform(0,1) <= trans_prob:
+            g1 = cdos[ibin][1]
+
+            if g >= g1:
                 accept_swap = True
+                trans_prob = 1
             else:
-                accept_swap = False
+                trans_prob = math.exp(g-g1)
+                if np.random.uniform(0,1) <= trans_prob:
+                    accept_swap = True
+                else:
+                    accept_swap = False
 
-        if accept_swap:
-            g = g1+lnf
-            e = e1
-            inde = kinde
-            
-            cdos[kinde][1] = g
-            cdos[kinde][2] = cdos[kinde][2]+1
-            
-        else:
-            g = g+lnf
-            
-            cdos[inde][1] = g
-            cdos[inde][2] = cdos[inde][2]+1
-            struc.swap(ind2, ind1, site_type = site_type, rindices = rindices)
+            if accept_swap:
+                e = e1
+                inde = ibin
+            else:
+                struc.swap(ind2, ind1, site_type = site_type, rindices = rindices)
 
+            cdos[inde][1] += lnf
+            cdos[inde][2] += 1
+            g = cdos[inde][1]
+            
         return struc, e, g, inde, cdos
 
-    def compare_flatness_conditions(self,flatness1,flatness2 = [[0.5,np.round(math.exp(1e-1),1)],[0.80,np.round(math.exp(1e-3),3)],[0.90,np.round(math.exp(1e-5),5)],[0.95,np.round(math.exp(1e-7),7)],[0.98,np.round(math.exp(1e-8),8)]]):
+    def compare_flatness_conditions(
+            self,
+            flatness1,
+            flatness2 = [
+                [0.5, math.exp(1e-1)],
+                [0.80, math.exp(1e-3)],
+                [0.90, math.exp(1e-5)],
+                [0.95, math.exp(1e-7)],
+                [0.98, math.exp(1e-8)]
+            ]
+    ):
         indt = -1
         flagcond = True
         for it,fct in enumerate(flatness1):
@@ -513,24 +589,34 @@ class ConfigurationalDensityOfStates():
         self._normalized = False
         self._cdos_normalized = None
 
-    def add_cdos(self, cdos, f, flatness_condition, hist_cond):
+    def store_cdos(self, cdos, f, flatness_condition, hist_cond):
         """Add entry of configurational of states that is obtained after a flat histgram reached 
            (corresponding to a fixed modification factor :math:`f`).
-
         """
+
         if len(self._energy_bins) == 0:
-            self._energy_bins = [c[0] for c in cdos]
+            self._energy_bins = cdos[:,0].copy()
             
-        self._cdos = [c[1] for c in cdos]
-        self._histogram = [c[2] for c in cdos]
+        self._cdos = cdos[:,1].copy()
+        self._histogram = cdos[:,2].copy()
         self._f = f
         self._flatness_condition = flatness_condition
 
         self._histogram_minimum = hist_cond[0]
         self._histogram_average = hist_cond[1]
-        
-        self._stored_cdos.append(dict([('cdos',self._cdos),('histogram',self._histogram),('modification_factor',f),('flatness_condition',flatness_condition),('histogram_minimum', hist_cond[0]),('histogram_average',hist_cond[1])]))
 
+        self._stored_cdos.append(
+            dict(
+                [
+                    ('cdos',self._cdos),
+                    ('histogram',self._histogram),
+                    ('modification_factor',f),
+                    ('flatness_condition',flatness_condition),
+                    ('histogram_minimum', hist_cond[0]),
+                    ('histogram_average',hist_cond[1])
+                ]
+            )
+        )
         
     def get_cdos(self, ln = False, normalization = True, discard_empty_bins = True, set_normalization_ln = None, modification_factor = None):
         """Returns the energy_bins and configurational density of states (CDOS) as arrays, respectively.
@@ -538,13 +624,13 @@ class ConfigurationalDensityOfStates():
         **Parameters**:
             
         ``ln``: boolean (default: False)
-            Decides whether the logarithm of CDOS is returned.
+            Whether to return the logarithm of CDOS. 
         
         ``normalization``: boolean (default: True)
-            Decides whether the configurational density of states is normalized.
+            Whether to normalize the configurational density of states.
         
         ``discard_empty_bins``: boolean (default: True)
-            Decides whether the energy bins that are not visited during the sampling are kept.
+            Whether to keep the energy bins that are not visited during the sampling.
 
         ``set_normalization_ln``: float (default: None)
             If not **None**, the normalization is set by the user. The given value is substracted 
@@ -562,36 +648,35 @@ class ConfigurationalDensityOfStates():
             for gj,gstored in enumerate(self._stored_cdos):
                 if isclose(modification_factor,gstored['modification_factor'],rtol = 1.0e-8):
                     g = gstored['cdos']
-                    print(gstored['modification_factor'])
                     
                 
         if normalization:
             eb = []
+
+            i_nonzero = 0
+            while g[i_nonzero] == 0.0:
+                i_nonzero += 1
+                
             
-            _gone = g[0]
-            i = 1
-            while _gone == 1.0:
-                print(_gone)
-                _gone=g[i]
-                i+=1
-            
-            _gsum = np.sum([math.exp(gel-_gone) for gel in g])
+            _gsum = np.sum([math.exp(gel-g[i_nonzero]) for gel in g])
             _lngsum = math.log(_gsum)
             _nsites = self._scell.get_nsites_per_type()
+            # _nsites = {0:16} there is in total 16 sites of type 0
+            # self._nsubs = {0: [8]} there are 8 substituent atoms in sublattice 0
             _nkey = [int(k) for k in self._nsubs.keys()]
             for _nk in _nkey:
-                _ns = self._nsubs[str(_nk)]
+                _ns = self._nsubs[_nk]
                 _nsite = _nsites[_nk]
                 
             import scipy.special as scipysp
             _binomcoeff = scipysp.binom( _nsite, _ns)
             gc = []
             for gi, ge in enumerate(g):
-                if ge > 1.000000001:
+                if ge > 0.000000001:
                     if set_normalization_ln is not None:
                         gt = ge - float(set_normalization_ln)
                     else:
-                        gt = ge - _gone - _lngsum + math.log(_binomcoeff)
+                        gt = ge - g[i_nonzero] - _lngsum + math.log(_binomcoeff)
                         
                     if not ln:
                         gc.append(math.exp(gt))
@@ -669,7 +754,6 @@ class ConfigurationalDensityOfStates():
 
         thermoprop = np.zeros(len(temperatures))
         e0 = float(e[0])
-        print("e0",e0)
         kb = float(boltzmann_constant)
 
         scale = 1
@@ -680,9 +764,8 @@ class ConfigurationalDensityOfStates():
 
         for i,t in enumerate(temperatures):
             u = 0
+            u2 = 0
             z = 0
-            if prop_name == "C_p":
-                u2 = 0
                 
             for ic,cc in enumerate(g):
                 boltzf = math.exp((-1)*(e[ic]-e0)*scale/(1.0*kb*t))
@@ -700,7 +783,7 @@ class ConfigurationalDensityOfStates():
             elif prop_name == "Z":
                 thermoprop[i] = z
                 
-            elif prop_name == "C_p":
+            elif prop_name == "Cp":
                 u2 = u2/(1.0*z)
                 thermoprop[i] = (u2-u*u)*scale/(1.0*kb*kb*t*t)
                 
@@ -715,7 +798,6 @@ class ConfigurationalDensityOfStates():
                     f = f - i*df
                 else:
                     f = f - i * df
-                    #print("df",df)
                 
                 if prop_name == "F":
                     thermoprop[i] = f
@@ -809,7 +891,16 @@ class ConfigurationalDensityOfStates():
                     for n in nsp:
                         species.append(superdict['parent_lattice']['numbers'][str(n)])
                     
-                    _plat = ParentLattice(atoms = Atoms(positions = superdict['parent_lattice']['positions'], cell = superdict['parent_lattice']['unit_cell'], numbers=np.zeros(len(species)), pbc = np.asarray(superdict['parent_lattice']['pbc'])), sites  = np.asarray(species), pbc = np.asarray(superdict['parent_lattice']['pbc']))
+                    _plat = ParentLattice(
+                        atoms = Atoms(
+                            positions = superdict['parent_lattice']['positions'],
+                            cell = superdict['parent_lattice']['unit_cell'],
+                            numbers=np.zeros(len(species)),
+                            pbc = np.asarray(superdict['parent_lattice']['pbc'])
+                        ),
+                        sites  = np.asarray(species),
+                        pbc = np.asarray(superdict['parent_lattice']['pbc'])
+                    )
                     
                 self._scell = SuperCell(_plat, np.asarray(superdict['tmat']))
             else:
@@ -837,22 +928,3 @@ class ConfigurationalDensityOfStates():
         self._flatness_condition = _last_cdos_entry['flatness_condition']
         self._histogram_minimum = _last_cdos_entry['histogram_minimum']
         self._histogram_average = _last_cdos_entry['histogram_average']
-            
-        
-#Should be in monte_carlo.py already
-#class NumpyEncoder(json.JSONEncoder):
-#    """ Special json encoder for numpy types
-#    https://stackoverflow.com/questions/26646362/numpy-array-is-not-json-serializable/32850511
-#
-#    """
-#    def default(self, obj):
-#        if isinstance(obj, list):
-#            return obj.tolist()
-#        elif isinstance(obj, (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64)):
-#            return int(obj)
-#        elif isinstance(obj, (np.float_, np.float16, np.float32, np.float64)):
-#            return float(obj)
-#        elif isinstance(obj,(np.ndarray,)):
-#            return obj.tolist()
-#
-#        return json.JSONEncoder.default(self, obj)
