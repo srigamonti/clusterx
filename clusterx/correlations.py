@@ -326,14 +326,16 @@ class CorrelationsCalculator():
         from clusterx.clusters.clusters_pool import ClustersPool
                 
         cluster_orbits = None
-
+        
+        # Check if cluster_orbit is already computed
         for i, _scell in enumerate(self._scells):
             if cluster_orbits is None:
                 if len(scell.get_positions()) == len(_scell.get_positions()):
                     if np.allclose(scell._p,_scell._p):
                         cluster_orbits = self._cluster_orbits_set[i]
                         break
-
+                    
+        # Compute cluster_orbit from scratch if not available
         if cluster_orbits is None:
             if verbose: print("Calculating cluster orbits from scratch for scell")
             from clusterx.structure import Structure
@@ -424,7 +426,6 @@ class CorrelationsCalculator():
         cluster_orbits = None
         
         if self._mc and self._cluster_orbits_set != [] and self._num_mc_calls != 0:
-            #cluster_orbits = self._cluster_orbits_set[0]
             cluster_orbits = self._cluster_orbits_mc
         else:
             cluster_orbits = self.get_cluster_orbits_for_scell(structure.get_supercell(),verbose=verbose)
