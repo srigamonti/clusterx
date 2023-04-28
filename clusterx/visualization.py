@@ -622,3 +622,52 @@ def plot_property(xvalues, yvalues, prop_name = None, xaxis_label = None, yaxis_
         plt.show()
     else:
         plt.savefig(prop_name+"_plot.png")
+
+
+def _wls_normalize_histogram_for_plotting(histogram, shift_y_first_nonzero=False):
+    hist = histogram.copy()
+    nbins = len(hist)
+    mean = 0
+    n_nonzero = 0
+
+    if shift_y_first_nonzero:
+        for i in range(nbins):
+            if hist[i] != 0:
+                hfirst = hist[i]
+                break
+        for i in range(nbins):
+            if hist[i] != 0:
+                hist[i] -= hfirst
+
+    for i in range(nbins):
+        if hist[i] != 0:
+            mean += hist[i]
+            n_nonzero += 1
+    mean /= n_nonzero
+
+    if n_nonzero == 0:
+        return hist
+    else:
+        for i in range(nbins):
+            hist[i] /= mean
+
+        return hist
+    
+def plot_histograms_wang_landau(cdos_object, index=-1):
+    import matplotlib.pyplot as plt
+    
+    hist = np.array(cdos_object._stored_cdos[index]['histogram'])
+    cdos = np.array(cdos_object._stored_cdos[index]['cdos'])
+    
+    ener_arr = np.array(cdos_object._energy_bins)
+    cdos_arr = _wls_normalize_histogram_for_plotting(cdos, shift_y_first_nonzero=True)
+    hist_arr = _wls_normalize_histogram_for_plotting(hist)
+    ones_arr = np.ones(len(ener_arr))
+    
+    figure, ax = plt.subplots(figsize=(10, 8))
+    
+    ax.bar(ener_arr, ones_arr, width=cdos_object._energy_bin_width*0.80, color="silver")
+    ax.bar(ener_arr, hist_arr, width=cdos_object._energy_bin_width*0.80)
+    ax.bar(ener_arr, cdos_arr, width=cdos_object._energy_bin_width*0.40)
+
+    plt.show()
