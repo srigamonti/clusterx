@@ -38,10 +38,13 @@ class StructuresSet():
         lattice given here. This argument can be ommited if parsing from file (see
         below).
 
-    ``json_db_filepath``: String
+    ``filepath``: String
         if provided, the structures set is initialized from a structures_set file, as created
         by ``StructuresSet.serialize()`` or ``StructuresSet.write_files()``. In this case,
         the ``parent_lattice`` argument can be ommited (if present, it is overriden).
+
+    ``json_db_filepath``: String
+        Deprecated, use ``filepath`` instead. If set, overrides ``filepath``
 
     ``calculator``: ASE calculator object (default: None)
 
@@ -51,9 +54,6 @@ class StructuresSet():
         Otherwise, the atom positions of structures and supercell are verified for
         every structure in the structures set being parsed. This leads to a slower parsing
         but safer if not sure how the file was built.
-
-    ``folders_db_fname``: String (deprecated)
-        same as ``json_db_filepath``. Use ``json_db_filepath`` instead. If set overrides ``json_db_filepath``.
 
     **Deprecated parameters:**
     
@@ -66,8 +66,11 @@ class StructuresSet():
 
     **Methods:**
     """
-    def __init__(self, parent_lattice = None, json_db_filepath = None, calculator = None, folders_db_fname = None, quick_parse = False, **sset_opts):
-        
+    def __init__(self, parent_lattice = None, filepath = None, json_db_filepath = None, calculator = None, quick_parse = False, **sset_opts):
+
+        if json_db_filepath is not None:
+            filepath = json_db_filepath
+            
         self._iter = 0
         self._parent_lattice = parent_lattice
         self._nstructures = 0
@@ -77,10 +80,8 @@ class StructuresSet():
         self._folders = []
         self._ids = []
         #########################
-        self._db_fname = sset_opts.pop("db_fname", json_db_filepath)
-        if folders_db_fname is not None:
-            self._db_fname = folders_db_fname
-
+        self._db_fname = sset_opts.pop("db_fname", filepath)
+        
         if isinstance(calculator,Calculator):
             self.set_calculator(calculator)
         else:
