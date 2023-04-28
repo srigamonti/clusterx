@@ -37,8 +37,20 @@ class WangLandau():
 
     **Parameters**:
 
-    ``energy_model``: Model object
-        Model used for computing the total internal energy of a configuration of the alloy. 
+    ``energy_model``: :class:`Model <clusterx.model.Model>` object
+        CE model for predicting the internal energy of the supercell (see ``scell`` below)
+        in [eV]. If other units are employed, see parameter ``energy_factor`` below.
+
+    ``energy_factor``: float (default: 1.0)
+        Multiplicator factor (:math:`s`) applied to the predictions of ``energy_model`` 
+        (:math:`E_{CE}`). Set this factor such that :math:`s *  E_{CE}` gives
+        the total energy, in [eV], of the supercell (``scell`` below).
+        For instance, if the CE model predicts the energy in meV/atom, set this parameter 
+        to 1000*Nsc, where Nsc is the total number of atoms of the supercel (``len(scell)``). 
+        If CE predicts the energy in Hartree
+        per parent lattice, set ``energy_factor`` to 27.2114*Npl, where Npl is 
+        the number of parent lattices contained in the supercell (this can be obtained 
+        with :meth:`scell.get_index() <clusterx.super_cell.SuperCell.get_index()>`). 
 
     ``scell``: SuperCell object
         Simulation cell in which the sampling is performed.
@@ -84,8 +96,9 @@ class WangLandau():
 
     """
 
-    def __init__(self, energy_model, scell = None, nsubs = None, ensemble = "canonical", sublattice_indices = [], chemical_potentials = None, predict_swap = False, error_reset = None):
+    def __init__(self, energy_model, energy_factor=1.0, scell = None, nsubs = None, ensemble = "canonical", sublattice_indices = [], chemical_potentials = None, predict_swap = False, error_reset = None):
         self._em = energy_model
+        self._ef = energy_factor
         self._scell = scell
         self._nsubs = nsubs
 
@@ -121,8 +134,12 @@ class WangLandau():
 
 
     def _wls_create_initial_structure(self, initial_decoration, emin, emax):
+        import sys
+
         if initial_decoration is not None:
             struc = Structure(self._scell, initial_decoration, mc = True)
+
+            # Consistency check
             conc = struc.get_fractional_concentrations()
             nsites = struc.get_nsites_per_type()
             check_dict = {}
@@ -138,16 +155,21 @@ class WangLandau():
 
             from clusterx.utils import dict_compare
             bol = dict_compare(check_dict,self._nsubs)
+            
             if not bol:
-                import sys
                 sys.exit("Number of substitutents does not coincides with them from the inital decoration.")
-            return struc
+            else:
+                e = self._em.predict(struc) * self._ef
+                if e >= emin and e <= emax:
+                    return struc
+                else:
+                    sys.exit(f"Structure with given initial_decoration lies outside range: {e} is outside bounds [{emin}, {emax}].")
         else:
             if self._nsubs is not None:
                 struc = self._scell.gen_random_structure(self._nsubs, mc = True)
             else:
                 struc = self._scell.gen_random_structure(mc = True)
-            e = self._em.predict(struc)
+            e = self._em.predict(struc) * self._ef
 
             if e >= emin and e <= emax:
                 return struc
@@ -157,9 +179,9 @@ class WangLandau():
                 while e < emin or e > emax:
                     print(f"searching struc {cou}, {emin:2.9f} {e:2.9f} {emax:2.9f}")
                     cou+=1
-
+                    
                     ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
-                    de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2)
+                    de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2) * self._ef
                     e1 = e + de
                     if e >= emin and e <= emax:
                         return struc
@@ -352,11 +374,11 @@ class WangLandau():
         **Parameters**:
 
         ``energy_range``: list of two floats [E_min, E_max] (default: [-2,2])
-            Defines the energy range starting from energy E_min (center of first energy bin) 
+            Defines the energy range, in [eV], starting from energy E_min (center of first energy bin) 
             until energy E_max.
 
         ``energy_bin_width``: float (default: 0.2)
-            Bin width w of each energy bin. 
+            Bin width w of each energy bin, in [eV]. 
             
             I.e., energy bins [E_min, E_min+w, E_min+2*w, ..., E_min+n*w ], if E_min+(n+1)*w would be larger than E_max.
 
@@ -435,7 +457,7 @@ class WangLandau():
             )
             cdos, f, histogram_flatness, fi = self._wls_init_from_scratch(energy_range, energy_bin_width, flatness_conditions, f_range)
 
-        e = self._em.predict(struc)
+        e = self._em.predict(struc) * self._ef
 
         energies = cdos[:,0]
         ibin, is_inside_range = self._wls_locate_histogram_bin(e, energies, energy_bin_width)
@@ -533,16 +555,16 @@ class WangLandau():
                 if self._error_reset:
                     if self._x > self._error_steps:
                         self._x = 1
-                        e1 = self._em.predict(struc)
+                        e1 = self._em.predict(struc) * self._ef
                     else:
                         self._x += 1
-                        de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2)
+                        de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2) * self._ef
                         e1 = e + de
                 else:
-                    de = self._em.predict_swap(struc, ind1 = ind1, ind2 = ind2)
+                    de = self._em.predict_swap(struc, ind1 = ind1, ind2 = ind2) * self._ef
                     e1 = e + de
             else:
-                e1 = self._em.predict(struc)
+                e1 = self._em.predict(struc) * self._ef
 
             ibin, is_outside_interval = self._wls_locate_histogram_bin(e1, energies, energy_bin_width)
 
@@ -797,21 +819,15 @@ class ConfigurationalDensityOfStates():
                     return self._energy_bins_bins, g
         
 
-    def calculate_thermodynamic_property(self, temperatures, boltzmann_constant, scale_factor = None, prop_name = "U", modification_factor = None):
+    def calculate_thermodynamic_property(self, temperatures, prop_name = "U", modification_factor = None):
         """Calculate the thermodynamic property with name ``prop_name`` for the temperature list given 
            with ``temperatures``. 
 
         **Parameters**:
         
         ``temperatures``: list of floats 
-            Temperatures for which the thermodynamic property is calculated.
+            Temperatures for which the thermodynamic property is calculated, in Kelvin.
 
-        ``boltzmann_constant``: float 
-            Boltzmann constant
-
-        ``scale_factor``: list of floats (default: None)
-            List is used to adjust the factor :math:`k_B T` to the same units as the energiess of the energy bins have.
-        
         ``prop_name``: string (default: U)
             Name of thermodynamic property.
 
@@ -819,34 +835,29 @@ class ConfigurationalDensityOfStates():
 
             If **U**, the internal energy is calculated. Units are the same as for the energy of the energy bins, [E].
 
-            If **C_p**, the isobaric specific heat at zero pressure is calculated. Units :math:`k_B` [scale_factor].
+            If **C_p**, the isobaric specific heat at zero pressure is calculated. Units :math:`k_B`.
 
             If **F**, the free energy is calculated. Units are the same as for the energy [E].
 
-            If **S**, the entropy is calculated. Units :math:`k_B` [scale_factor].
+            If **S**, the entropy is calculated. Units :math:`k_B`.
 
         ``modification_factor``: float (default: None)
             If **None**, the CDOS from the last iteration is used for calculuting teh thermodynamic property. 
             If not **None**, the CDOS corresponding to the given modification factor is used.
 
         """
+        from ase.units import kB
         e, log_g = self.get_cdos(ln = True, normalization = True, discard_empty_bins = True,  modification_factor = modification_factor)
 
         thermoprop = np.zeros(len(temperatures))
         e0 = e[0]
-        kb = boltzmann_constant
+        kb = kB
 
         e = np.array(e)
         log_g = np.array(log_g)
         
         for i in range(len(e)):
-            e[i] = e[i] - e0
-            
-        scale = 1
-        if scale_factor is not None:
-            for scf in scale_factor:
-                scale *= float(scf)
-        scale = np.divide(1,scale)
+            e[i] = e[i] - e0            
 
         for i, t_i in enumerate(temperatures):
             beta_i = 1.0/(kb*t_i)
@@ -859,7 +870,7 @@ class ConfigurationalDensityOfStates():
 
                 g_j = math.exp(log_g_j)
                 
-                boltzf_ij = math.exp( - e[j] * scale * beta_i )
+                boltzf_ij = math.exp( - e[j] * beta_i )
                 
                 u += e[j] * g_j * boltzf_ij
                 
@@ -878,10 +889,10 @@ class ConfigurationalDensityOfStates():
             elif prop_name == "Cp" or prop_name == "C_p":
                 u2 = np.divide(u2, z)
                 #u2 /= z
-                thermoprop[i] = ( u2 - u * u ) * scale / ( kb * kb * t_i * t_i)
+                thermoprop[i] = ( u2 - u * u ) / ( kb * kb * t_i * t_i)
                 
             else:
-                f = - kb * t_i * math.log(z) / scale + e0
+                f = - kb * t_i * math.log(z) + e0
                 if i == 0:
                     f1 = f
                 elif i == 1:
