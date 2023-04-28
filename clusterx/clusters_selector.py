@@ -199,6 +199,8 @@ class ClustersSelector():
         x = self.ini_comat
         p = self.target
 
+        opt = []
+
         if self.method == "lasso_cv" or self.method == "lasso": # "lasso" deprecated
             opt = self._select_clusters_lasso_cv(x, p)
 
