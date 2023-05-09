@@ -98,6 +98,7 @@ class Model():
                 self.stdscaler = StandardScaler()
 
         self._basis = None
+        self._delta_e_calc = None
         if corrc is not None:
             self._basis =corrc.get_basis()
         self.estimator = estimator
@@ -330,9 +331,9 @@ class Model():
             self._mc_estimator_coef = self.estimator.coef_
 
             if self._basis == 'binary-linear':
-                delta_e = self._compute_delta_e_binary_linear
+                self._delta_e_calc = self._compute_delta_e_binary_linear
             else:
-                delta_e = self._compute_delta_e
+                self._delta_e_calc = self._compute_delta_e
                 
             self._num_mc_calls = 1
             self._mc_init_time -= time.time()
@@ -343,14 +344,14 @@ class Model():
         new_sigma = structure.sigmas[ind1]
         old_sigma = structure.sigmas[ind2]
 
-        de1 = delta_e(structure, ind1, old_sigma, new_sigma)
+        de1 = self._delta_e_calc(structure, ind1, old_sigma, new_sigma)
 
         sigma1 = structure.sigmas[ind1]
         sigma2 = structure.sigmas[ind2]
         structure.sigmas[ind1] = sigma2
         structure.sigmas[ind2] = sigma1
 
-        de2 = delta_e(structure, ind2, new_sigma, old_sigma)
+        de2 = self._delta_e_calc(structure, ind2, new_sigma, old_sigma)
         
         structure.sigmas[ind1] = sigma1
         structure.sigmas[ind2] = sigma2
