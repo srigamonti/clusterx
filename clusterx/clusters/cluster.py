@@ -162,7 +162,7 @@ class Cluster():
         return hash(str(list(zip(self.ais,self.ans))))
         
     def __eq__(self, other):
-        return self.__class__ == other.__class__ and np.array_equal(self.ais,other.ais) and np.array_equal(self.ans,other.ans)
+        return self.__hash__ == other.__hash__ 
 
     def __len__(self):
         return len(self.ais)
