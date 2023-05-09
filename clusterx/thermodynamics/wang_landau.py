@@ -536,13 +536,15 @@ class WangLandau():
         print(f"Building flat histogram.")
         print(f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s}")
         while (hist_min < histogram_flatness*hist_avg) or (n_nonzero_bins < 10):
-            print(f" {f:12.9f} | {hist_min:8d} | {hist_avg:10d} | {hist_min/hist_avg:8.3f} | {histogram_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d}")
+            print(f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min/hist_avg:8.3f} | {histogram_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d}")
             
             struc, e, g, inde, cdos = self.dos_steps(struc, e, g, inde, lnf, cdos, niter_per_sweep, energy_bin_width)
             niter += niter_per_sweep
             
             hist_min, hist_avg, n_nonzero_bins = self._wls_get_hist_min_and_avg(cdos[:,2])
 
+        print(f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min/hist_avg:8.3f} | {histogram_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d}")
+        
         return struc, e, g, inde, cdos, [hist_min, hist_avg], niter
 
     
