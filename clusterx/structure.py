@@ -232,7 +232,6 @@ class Structure(SuperCell):
             ridx2 = self._idxs[site_type][sigma_swap[1]][rind2]
             rindices = [sigma_swap,[rind1,rind2]]
             self.swap(ridx1, ridx2, site_type = site_type,rindices = rindices)
-            #self.swap(ridx1, ridx2, site_type = site_type,rindices = rindices)
 
             return ridx1,ridx2,site_type,rindices
         else:
