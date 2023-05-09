@@ -119,6 +119,11 @@ class CorrelationsCalculator():
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
 
+    def get_basis(self):
+        """Return basis set name
+        """
+        return self.basis
+        
     def get_cpool(self):
         """Return ClustersPool object of the calculator
         """
@@ -213,6 +218,7 @@ class CorrelationsCalculator():
 
         
     #@profile
+    @lru_cache(maxsize=None)
     def site_basis_function(self, alpha, sigma, m):
         """
         Calculates the site basis function.
@@ -311,7 +317,7 @@ class CorrelationsCalculator():
         for i,orbit in enumerate(cluster_orbits):
             lengths[i] = len(orbit)
         return lengths
-
+    
     def get_cluster_orbits_for_scell(self, scell, verbose = False):
         """Return array of cluster orbits for a given supercell
 
@@ -411,7 +417,7 @@ class CorrelationsCalculator():
         self._mc = mc
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
-        
+
     def get_cluster_correlations(self, structure, verbose=False):
         """Get cluster correlations for a structure
         **Parameters:**

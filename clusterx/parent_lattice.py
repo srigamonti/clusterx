@@ -491,6 +491,13 @@ class ParentLattice(Atoms):
             sites = {0: [14,13], 1: [14,13], 2: [14,13], 3: [56,0,38], 4: [56,0,38], 5:[11]}
         """
         return self.sites
+    
+    def get_ems(self):
+        nspt = self.get_sites()
+        ems = np.zeros(len(nspt), dtype=int)
+        for k,v in nspt.items():
+            ems[k] = len(v)
+        return ems
 
     def get_substitutions(self):
         """Return array of (references to) Atoms objects corresponding to fully

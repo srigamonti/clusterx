@@ -8,6 +8,8 @@ from clusterx.clusters_selector import ClustersSelector
 import numpy as np
 import pickle
 import os
+import sys
+import time
 
 class Model():
     """Model class
@@ -95,7 +97,28 @@ class Model():
                 from sklearn.preprocessing import StandardScaler
                 self.stdscaler = StandardScaler()
 
+        self._basis = None
+        if corrc is not None:
+            self._basis =corrc.get_basis()
         self.estimator = estimator
+        self._mc = False
+        self._num_mc_calls = 0
+        self._mc_nclusters = 0
+        self._mc_multiplicities = []
+        self._mc_stime = 0
+        self._mc_init_time = 0
+
+
+    def reset_mc(self, mc = False):
+        self._mc = mc
+        self._num_mc_calls = 0
+        self._mc_nclusters = 0
+        self._mc_multiplicities = []
+        self._mc_start_time = 0
+        self._mc_init_time = 0
+        self._mc_estimator_intercept = 0
+        self._mc_estimator_coef = []
+        
 
 
     def serialize(self, filepath = None, fmt = None, db_name = None):
@@ -231,74 +254,8 @@ class Model():
 
             return pv
 
-    def predict_swap_binary_linear(self,structure, ind1 = None, ind2 = None, correlation = False):
-        """Predict property difference with the optimal cluster expansion model only for binary-linear)
 
-        **Parameters:**
-
-        ``structure``: Structure object
-            structure object to calculate property difference to.
-
-        ``ind1``: int
-            index of first atom position has been swapped
-
-        ``ind2``: int
-            index of second atom position has been swapped
-
-        """
-        try:
-            cluster_orbits = self.corrc._cluster_orbits_mc
-        except AttributeError:
-            raise AttributeError("Cluster_orbit set is not predefined, look at the documentation.")
-
-        if self.standardize:
-            import sys
-            sys.exit("Predict swap does not support standardscaler")
-        
-        corrs = np.zeros(len(cluster_orbits))
-
-        sigma_ind1=structure.sigmas[ind1]
-        sigma_ind2=structure.sigmas[ind2]
-
-        for icl, cluster_orbit in enumerate(cluster_orbits):
-            for cluster in cluster_orbit:
-                cluster_atomic_idxs = cluster.get_idxs()
-                if ind1 in cluster_atomic_idxs:
-                    #cluster_alphas = cluster.alphas
-                    sigmas = [structure.sigmas[cl_idx] for cl_idx in cluster_atomic_idxs]
-                    cf1 = np.prod(np.array(sigmas))
-                    sigmas[cluster_atomic_idxs.index(ind1)] = sigma_ind2
-                    if ind2 in cluster_atomic_idxs:
-                        sigmas[cluster_atomic_idxs.index(ind2)] = sigma_ind1
-                    cf0 = np.prod(np.array(sigmas))
-                    corrs[icl] += cf1
-                    corrs[icl] += (-1)*cf0
-
-                elif ind2 in cluster_atomic_idxs:
-                    #cluster_alphas = cluster.alphas
-                    sigmas = [structure.sigmas[cl_idx] for cl_idx in cluster_atomic_idxs]
-                    cf1 = np.prod(np.array(sigmas))
-                    sigmas[cluster_atomic_idxs.index(ind2)] = sigma_ind1
-                    cf0 = np.prod(np.array(sigmas))
-                    corrs[icl] += cf1
-                    corrs[icl] += (-1)*cf0
-
-
-            corrs[icl] /= len(cluster_orbit)
-        corrs = np.around(corrs,decimals=12)
-        if correlation:
-            return corrs
-
-        if self.estimator is not None:
-            return self.estimator.predict(corrs.reshape(1,-1))[0]
-        else:
-            pv = 0
-            for i in range(len(corrs)):
-                pv = pv + self.ecis[i]*corrs[i]
-            return pv
-
-
-    def predict_swap(self, structure, ind1 = None, ind2 = None, correlation = False):
+    def predict_swap(self, structure, ind1 = None, ind2 = None, correlation = False, site_types=[0]):
         """Predict property difference with the optimal cluster expansion model.
 
         **Parameters:**
@@ -313,89 +270,161 @@ class Model():
             index of second atom position has been swapped
 
         """
-        try:
-            cluster_orbits = self.corrc._cluster_orbits_mc
-        except AttributeError:
-            raise AttributeError("Cluster_orbit set is not predefined, look at the documentation.")
+        if self._num_mc_calls == 0:
+            self._mc_init_time = time.time()
+            print("Info(Model): setting up dictionary of interactions.")
+            
+            try:
+                cluster_orbits = self.corrc._cluster_orbits_mc
+                self._mc_nclusters = len(cluster_orbits)
+                for i in range(self._mc_nclusters):
+                    self._mc_multiplicities.append(len(cluster_orbits[i]))
+                
+            except AttributeError:
+                raise AttributeError("Cluster_orbit set is not predefined, look at the documentation.")
 
-        if self.standardize:
-            import sys
-            sys.exit("Predict swap does not support standardscaler")
+            if self.standardize:
+                import sys
+                sys.exit("Predict swap does not support standardscaler")
+                
+            # Determine atom indexes for which to make the interactions list
+            scell = structure.get_supercell()
+            self._atom_indexes = []
+            for st in site_types:
+                for aidx in scell.get_atom_indices_for_site_type(st)[0]:
+                    self._atom_indexes.append(aidx)
+
+            # Determine ems
+            self._ems = scell.get_ems()
+                
+                
+            # Make a list of clusters
+            self._clusters_list = []            
+
+            icl = 0
+            for cluster_index, cluster_orbit in enumerate(cluster_orbits):
+                for cluster in cluster_orbit:
+                    self._clusters_list.append({})
+
+                    self._clusters_list[icl]["cluster_index"] = cluster_index
+                    self._clusters_list[icl]["cluster_sites"] = cluster.get_idxs()
+                    self._clusters_list[icl]["cluster_funcs"] = cluster.alphas
+                    self._clusters_list[icl]["cluster_ems"] = self._ems.take(cluster.get_idxs())
+            
+                    
+                    icl += 1
+                    
+            # Determine which interactions (clusters) contain every site
+            self._interactions_dict = {}
+            
+            for ind in self._atom_indexes:
+                self._interactions_dict[ind] = {}
+                self._interactions_dict[ind]["interactions_list"] = []
+                self._interactions_dict[ind]["cluster_sites_index_for_ind"] = []
+                for icl in range(len(self._clusters_list)):
+                    if ind in self._clusters_list[icl]["cluster_sites"]:
+                        self._interactions_dict[ind]["interactions_list"].append(icl)
+                        self._interactions_dict[ind]["cluster_sites_index_for_ind"].append(self._clusters_list[icl]["cluster_sites"].index(ind))
+
+            self._mc_estimator_intercept = self.estimator.intercept_
+            self._mc_estimator_coef = self.estimator.coef_
+
+            if self._basis == 'binary-linear':
+                delta_e = self._compute_delta_e_binary_linear
+            else:
+                delta_e = self._compute_delta_e
+                
+            self._num_mc_calls = 1
+            self._mc_init_time -= time.time()
+            self._mc_init_time = -self._mc_init_time
+            self._mc_start_time = time.time()
+
         
-        corrs = np.zeros(len(cluster_orbits))
+        new_sigma = structure.sigmas[ind1]
+        old_sigma = structure.sigmas[ind2]
 
-        sigma_ind1=structure.sigmas[ind1]
-        sigma_ind2=structure.sigmas[ind2]
+        de1 = delta_e(structure, ind1, old_sigma, new_sigma)
 
-        ems_ind1=structure.ems[ind1]
-        ems_ind2=structure.ems[ind2]
+        sigma1 = structure.sigmas[ind1]
+        sigma2 = structure.sigmas[ind2]
+        structure.sigmas[ind1] = sigma2
+        structure.sigmas[ind2] = sigma1
 
-        for icl, cluster_orbit in enumerate(cluster_orbits):
-            for cluster in cluster_orbit:
-                cluster_atomic_idxs = cluster.get_idxs()
-                contribute = False
-                if ind1 in cluster_atomic_idxs:
-                    cluster_alphas = cluster.alphas
-                    sigmas = [structure.sigmas[cl_idx] for cl_idx in cluster_atomic_idxs]
-                    ems = [structure.ems[cl_idx] for cl_idx in cluster_atomic_idxs]
+        de2 = delta_e(structure, ind2, new_sigma, old_sigma)
+        
+        structure.sigmas[ind1] = sigma1
+        structure.sigmas[ind2] = sigma2
 
-                    cf1 = 1.0
-                    for i,alpha in enumerate(cluster_alphas):
-                        cf1 *= self.corrc.site_basis_function(alpha, sigmas[i], ems[i])
+        return de1 + de2
 
-                    clind =cluster_atomic_idxs.index(ind1)
-                    sigmas[clind] = sigma_ind2
-                    ems[clind] = ems_ind2
-                    if ind2 in cluster_atomic_idxs:
-                        clind =cluster_atomic_idxs.index(ind2)
-                        sigmas[clind] = sigma_ind1
-                        ems[clind] = ems_ind1
+    #@profile    
+    def _compute_delta_e_binary_linear(self, structure, ind, old_sigma, new_sigma):
+        sgn = new_sigma - old_sigma
+        corrs = np.zeros(self._mc_nclusters)
+        for icl in self._interactions_dict[ind]["interactions_list"]:
+            cluster_index = self._clusters_list[icl]["cluster_index"]
+            corrs[cluster_index] = 0
+            
+        for ifi, icl in zip(self._interactions_dict[ind]["cluster_sites_index_for_ind"],self._interactions_dict[ind]["interactions_list"]):
+            cluster_index = self._clusters_list[icl]["cluster_index"]
+            cluster_sites = self._clusters_list[icl]["cluster_sites"]
+            sigmas = structure.sigmas.take(cluster_sites).copy()
+            sigmas[ifi] = sgn
+            ss = set(sigmas)
 
-                    cf0 = 1.0
-                    for i,alpha in enumerate(cluster_alphas):
-                        cf0 *= self.corrc.site_basis_function(alpha, sigmas[i], ems[i])
+            if 0 not in ss:
+                corrs[cluster_index] += sgn
+            
+        for i in range(self._mc_nclusters):
+            corrs[i] /= self._mc_multiplicities[i]
+            
+        pv = 0
+        
+        for i in range(len(corrs)):
+            pv = pv + self._mc_estimator_coef[i]*corrs[i]
+        return pv
 
-                    corrs[icl] += cf1
-                    corrs[icl] += (-1)*cf0
+    def _compute_delta_e(self, structure, ind, old_sigma, new_sigma):
 
-                elif ind2 in cluster_atomic_idxs:
-                    cluster_alphas = cluster.alphas
-                    sigmas = [structure.sigmas[cl_idx] for cl_idx in cluster_atomic_idxs]
-                    ems = [structure.ems[cl_idx] for cl_idx in cluster_atomic_idxs]
+        corrs = np.zeros(self._mc_nclusters)
+        for icl in self._interactions_dict[ind]["interactions_list"]:
+            cluster_index = self._clusters_list[icl]["cluster_index"]
+            corrs[cluster_index] = 0
+            
+        for icl in self._interactions_dict[ind]["interactions_list"]:
+            cluster_index = self._clusters_list[icl]["cluster_index"]
+            cluster_sites = self._clusters_list[icl]["cluster_sites"]
+            cluster_funcs = self._clusters_list[icl]["cluster_funcs"]
+            cluster_ems = self._clusters_list[icl]["cluster_ems"]
+            nbodies = len(cluster_sites)
+            sigmas = structure.sigmas.take(cluster_sites)
+            
+            cf = 1.0
+            for i in range(nbodies):
+                if (i == cluster_sites.index(ind)):
+                    cf *= (self.corrc.site_basis_function(cluster_funcs[i], new_sigma, cluster_ems[i]) - self.corrc.site_basis_function(cluster_funcs[i], old_sigma, cluster_ems[i]))
+                else:
+                    cf *= self.corrc.site_basis_function(cluster_funcs[i], sigmas[i], cluster_ems[i])
 
-                    cf1 = 1.0
-                    for i,alpha in enumerate(cluster_alphas):
-                        cf1 *= self.corrc.site_basis_function(alpha, sigmas[i], ems[i])
+            corrs[cluster_index] += cf
 
-                    clind =cluster_atomic_idxs.index(ind2)
-                    sigmas[clind] = sigma_ind1
-                    ems[clind] = ems_ind1
-
-                    cf0 = 1.0
-                    for i,alpha in enumerate(cluster_alphas):
-                        cf0 *= self.corrc.site_basis_function(alpha, sigmas[i], ems[i])
-
-                    corrs[icl] += cf1
-                    corrs[icl] += (-1)*cf0
-
-            corrs[icl] /= len(cluster_orbit)
+        for i in range(self._mc_nclusters):
+            corrs[i] /= self._mc_multiplicities[i]
         corrs = np.around(corrs,decimals=12)
 
-        if correlation:
-            return corrs
-
+            
         if self.estimator is not None:
-            if (self.estimator.intercept_ > 1.e-15):
-                inter=self.estimator.intercept_
-                pv = np.subtract(self.estimator.predict(corrs.reshape(1,-1))[0],inter)
-                return pv
-            else:
-                return self.estimator.predict(corrs.reshape(1,-1))[0]
+            # Intercept must be subctracted from computation of energy change.
+            pv = self.estimator.predict(corrs.reshape(1,-1))[0] - self.estimator.intercept_
+            return pv
         else:
             pv = 0
-            for i in range(len(corrs)):
-                pv = pv + self.ecis[i]*corrs[i]
+            for icl, corr in corrs.items():
+                print(icl, corr)
+
+                pv = pv + self.ecis[icl]*corr
             return pv
+
 
     def report_errors(self, sset):
         """Report fit and CV scores

@@ -181,7 +181,7 @@ class WangLandau():
                     cou+=1
                     
                     ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
-                    de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2) * self._ef
+                    de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2, site_types = self._sublattice_indices) * self._ef
                     e1 = e + de
                     if e >= emin and e <= emax:
                         return struc
@@ -525,15 +525,18 @@ class WangLandau():
     def flat_histogram(self, struc, e, g, inde, f, cdos, histogram_flatness, energy_bin_width):
         hist_min = 0
         hist_avg = 1
+        n_nonzero_bins = 0
         lnf = math.log(f)
 
         cdos[:,2] = 0 # Initialize histogram
 
         niter = 0
-        niter_per_sweep = 500
-        
+        niter_per_sweep = 10000
+
+        print(f"Building flat histogram.")
+        print(f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s}")
         while (hist_min < histogram_flatness*hist_avg) or (n_nonzero_bins < 10):
-            #while hist_min < histogram_flatness*hist_avg:
+            print(f" {f:12.9f} | {hist_min:8d} | {hist_avg:10d} | {hist_min/hist_avg:8.3f} | {histogram_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d}")
             
             struc, e, g, inde, cdos = self.dos_steps(struc, e, g, inde, lnf, cdos, niter_per_sweep, energy_bin_width)
             niter += niter_per_sweep
@@ -545,7 +548,7 @@ class WangLandau():
     
     def dos_steps(self, struc, e, g, inde, lnf, cdos, niter, energy_bin_width):
         energies = cdos[:,0]
-
+        accept_swap = False
         for n in range(niter):
             ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
 
@@ -558,10 +561,10 @@ class WangLandau():
                         e1 = self._em.predict(struc) * self._ef
                     else:
                         self._x += 1
-                        de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2) * self._ef
+                        de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2, site_types = self._sublattice_indices) * self._ef
                         e1 = e + de
                 else:
-                    de = self._em.predict_swap(struc, ind1 = ind1, ind2 = ind2) * self._ef
+                    de = self._em.predict_swap(struc, ind1 = ind1, ind2 = ind2, site_types = self._sublattice_indices) * self._ef
                     e1 = e + de
             else:
                 e1 = self._em.predict(struc) * self._ef
@@ -580,7 +583,7 @@ class WangLandau():
                     accept_swap = True
                 else:
                     accept_swap = False
-
+                    
             if accept_swap:
                 e = e1
                 inde = ibin

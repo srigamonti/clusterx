@@ -310,11 +310,10 @@ class MonteCarlo():
                         e1 = self._em.predict(struc)
                     else:
                         x += 1
-                        #de = self._em.predict_swap_binary_linear(struc, ind1 = ind1 , ind2 = ind2)
-                        de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2)
+                        de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2, site_types = self._sublattice_indices)
                         e1 = e + de
                 else:
-                    de = self._em.predict_swap(struc, ind1 = ind1, ind2 = ind2)
+                    de = self._em.predict_swap(struc, ind1 = ind1, ind2 = ind2, site_types = self._sublattice_indices)
                     e1 = e + de
                     
             else:
@@ -356,12 +355,9 @@ class MonteCarlo():
             if acceptance_ratio:
                 if i%10 == 0 and i >= nar:
                     scale_factor_product *= math.exp((acceptance_ratio/100.0-ar)/10.0)
-                #if acceptance_ratio and i%100 == 0:
-                #    print(i,acceptance_ratio,ar*100,scale_factor_product)
 
         if serialize:
             traj.serialize()
-            #struc.serialize(fname=self._last_visited_structure_name)
 
         return traj
 
@@ -474,7 +470,7 @@ class MonteCarloTrajectory():
                 
                     for m,mo in enumerate(models):
                         # only works for single swaps
-                        dmo = mo.predict_swap(sx, ind1 = indices_list[0][0] , ind2 = indices_list[0][1])
+                        dmo = mo.predict_swap(sx, ind1 = indices_list[0][0] , ind2 = indices_list[0][1], site_types = self._sublattice_indices)
                         movalue[m] = movalue[m]+dmo
                         sdict.update({mo.property: movalue[m]})
 
