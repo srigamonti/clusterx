@@ -1065,7 +1065,7 @@ class ClusterOrbit(ClustersPool):
 
     def _gen_orbit(self, super_cell, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans=False, cluster_positions=None):
         self.gen_orbit_slow_version(super_cell, cluster_sites=cluster_sites, cluster_species=cluster_species, tol = tol, distances=distances, no_trans=no_trans, cluster_positions=cluster_positions)
-
+        
 
     def gen_orbit(self, super_cell, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans=False, cluster_positions=None):
         """
@@ -1229,7 +1229,6 @@ class ClusterOrbit(ClustersPool):
         for cl in orbit:
             self.add_cluster(cl)
 
-        
     def gen_orbit_slow_version(self, super_cell, cluster_sites=None, cluster_species=None, tol = 1e-3, distances=None, no_trans=False, cluster_positions=None):
         """
         Generate cluster orbit inside a supercell.
@@ -1366,22 +1365,20 @@ class ClusterOrbit(ClustersPool):
 
         weights = []
         orbit = []
-        crossedout = []
+        crossedout = set()
         ncl = len(_orbit)
         cnt = 0
         for i in range(ncl):
             if i not in crossedout:
-                cl_i = _orbit[i]
                 weights.append(1)
-                orbit.append(Cluster(cl_i.get_idxs(),cl_i.get_nrs(),super_cell,distances))
+                orbit.append(Cluster(_orbit[i].get_idxs(),_orbit[i].get_nrs(),super_cell,distances))
                 cnt += 1
             
                 for j in range(i+1, ncl):
                     if j not in crossedout:
-                        cl_j = _orbit[j]
-                        if cl_i == cl_j:
+                        if _orbit[i].__hash__ == _orbit[j].__hash__:
                             weights[cnt-1] += 1
-                            crossedout.append(j)
+                            crossedout.add(j)
                         
 
         for cl in orbit:
