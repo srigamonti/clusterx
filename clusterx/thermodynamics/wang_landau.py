@@ -851,12 +851,11 @@ class ConfigurationalDensityOfStates():
             If not **None**, the CDOS corresponding to the given modification factor is used.
 
         """
-        from ase.units import kB
+        from ase.units import kB as kb
         e, log_g = self.get_cdos(ln = True, normalization = True, discard_empty_bins = True,  modification_factor = modification_factor)
 
         thermoprop = np.zeros(len(temperatures))
         e0 = e[0]
-        kb = kB
 
         e = np.array(e)
         log_g = np.array(log_g)
