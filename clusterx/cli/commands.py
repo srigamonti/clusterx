@@ -13,18 +13,12 @@ import plac
 from os.path import dirname, basename, isfile
 import glob
 mods = glob.glob(dirname(__file__)+"/*.py")
-#print('mods',mods)
 
 modules = [ basename(f)[:-3] for f in mods if isfile(f) and not f.endswith('__init__.py') and not f.endswith('main.py') and not f.endswith('commands.py')]
-#print('modules',modules)
-
 
 # Finally the functions are included here
 commands = [] # This array is needed by plac
 for module in modules:
-    #print('#########################')
-    #print("module in for: ", #print('#########################')                                                   odule)
-    #print("commands: ",getattr(__import__('clusterx.cli.'+module,fromlist=[module]),'commands'))
     for command in getattr(__import__('clusterx.cli.'+module,fromlist=[module]),'commands'):
         commands.append(command)
         setattr(sys.modules[__name__], command, getattr(__import__('clusterx.cli.'+module,fromlist=[module]),command))
