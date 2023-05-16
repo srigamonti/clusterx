@@ -643,13 +643,13 @@ def _wls_normalize_histogram_for_plotting(histogram, shift_y_first_nonzero=False
         if hist[i] != 0:
             mean += hist[i]
             n_nonzero += 1
-    mean /= n_nonzero
 
     if n_nonzero == 0:
         return hist
     else:
+        mean /= n_nonzero
         for i in range(nbins):
-            hist[i] /= mean
+            hist[i] /= np.abs(mean)
 
         return hist
     

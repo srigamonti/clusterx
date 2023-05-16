@@ -96,7 +96,18 @@ class WangLandau():
 
     """
 
-    def __init__(self, energy_model, energy_factor=1.0, scell = None, nsubs = None, ensemble = "canonical", sublattice_indices = [], chemical_potentials = None, predict_swap = False, error_reset = None):
+    def __init__(
+            self,
+            energy_model,
+            energy_factor=1.0,
+            scell = None,
+            nsubs = None,
+            ensemble = "canonical",
+            sublattice_indices = [],
+            chemical_potentials = None,
+            predict_swap = False,
+            error_reset = None
+    ):
         self._em = energy_model
         self._ef = energy_factor
         self._scell = scell
@@ -526,7 +537,7 @@ class WangLandau():
         hist_min = 0
         hist_avg = 1
         n_nonzero_bins = 0
-        lnf = math.log(f)
+        lnf = math.log(f) # Natural logarithm of f
 
         cdos[:,2] = 0 # Initialize histogram
 
@@ -726,75 +737,110 @@ class ConfigurationalDensityOfStates():
             )
         )
         
-    def get_cdos(self, ln = False, normalization = True, discard_empty_bins = True, set_normalization_ln = None, modification_factor = None):
+    def get_cdos(
+            self,
+            ln = False,
+            normalization = True,
+            normalization_type = 0,
+            set_normalization_ln = None,
+            modification_factor = None,
+            discard_empty_bins = True
+    ):
         """Returns the energy_bins and configurational density of states (CDOS) as arrays, respectively.
            
         **Parameters**:
             
         ``ln``: boolean (default: False)
-            Whether to return the logarithm of CDOS. 
+            Whether to return the natural logarithm of the CDOS. 
         
         ``normalization``: boolean (default: True)
             Whether to normalize the configurational density of states.
         
+        ``normalization_type``: integer (default: ``0``)
+            If ``normalization`` is true, type of normalization applied. Possible values are:
+
+                * ``0``: :math:`g(E_{min}) = 1`
+                * ``1``: :math:`\sum_E g(E) = \sum_{subl.} Binom(N_{sites}, n_{subs})`,
+                    i.e. the total weight of the histogram equals the total number of configurations.
+                * ``2``: :math:`\sum_E g(E) = e^{F}`, 
+                    where :math:`F` is a custom normalization factor
+                    given by the argument ``set_normalization_ln``, see below.
+        
+        ``set_normalization_ln``: float (default: None)
+            If not **None**, the normalization is set by the exponential of the given value. 
+            See option ``2`` of ``normalization_type``.
+
         ``discard_empty_bins``: boolean (default: True)
             Whether to keep the energy bins that are not visited during the sampling.
 
-        ``set_normalization_ln``: float (default: None)
-            If not **None**, the normalization is set by the user. The given value is substracted 
-            from the logarithm of the CDOS for each bin.
-
         ``modification_factor``: float (default: None)
             If **None**, the CDOS from the last iteration is returned. If not **None**, the CDOS 
-            corresponding to the given modification factor is returned.
-                    
+            corresponding to the given modification factor is returned.                    
         """
         if modification_factor is None:
             modification_factor = self._stored_cdos[-1]['modification_factor']
-            g = self._cdos.copy()
+            ln_g = self._cdos.copy()
         else:
             from clusterx.utils import isclose
-            for gj,gstored in enumerate(self._stored_cdos):
-                if isclose(modification_factor,gstored['modification_factor'],rtol = 1.0e-8):
-                    g = gstored['cdos'].copy()
+            for gj,ln_gstored in enumerate(self._stored_cdos):
+                if isclose(modification_factor,ln_gstored['modification_factor'],rtol = 1.0e-8):
+                    ln_g = ln_gstored['cdos'].copy()
                     
-        log_mod_fac = math.log(modification_factor)
+        ln_mod_fac = math.log(modification_factor)
+        
         if normalization:
             eb = []
 
-            i_nonzero = 0
-            while g[i_nonzero] < log_mod_fac:
-                i_nonzero += 1
+            ln_norm_factor = 0 
+            if normalization:
 
-            _gsum = np.sum([math.exp(gel-g[i_nonzero]) for gel in g])
-            _log_sum = math.log(_gsum)
-            _nsites = self._scell.get_nsites_per_type()
-            # _nsites = {0:16} there is in total 16 sites of type 0
-            # self._nsubs = {0: [8]} there are 8 substituent atoms in sublattice 0
-            _nkey = [int(k) for k in self._nsubs.keys()]
-            for _nk in _nkey:
-                _ns = self._nsubs[str(_nk)] # [8]
-                _nsite = _nsites[_nk] # 16
+                first_i_nonzero = 0
+                while ln_g[first_i_nonzero] < ln_mod_fac:
+                    first_i_nonzero += 1
+                ln_g0 = ln_g[first_i_nonzero]
                 
-            _log_binomcoeff = math.log(scipy.special.binom( _nsite, _ns))
-            gc = []
-            for gi, ge in enumerate(g):
-                if ge >= log_mod_fac:
-                    if set_normalization_ln is not None:
-                        gt = ge - float(set_normalization_ln)
-                    else:
-                        gt = ge - g[i_nonzero] - _log_sum + _log_binomcoeff
+                if normalization_type == 0:
+                    ln_norm_factor = -ln_g0
+                    
+                elif normalization_type == 1:
+                    # gsum = sum_E g(E)/g0
+                    ln_gsum = math.log( np.sum([math.exp(ln_ge-ln_g0) for ln_ge in ln_g]) )
+
+                    # nsites_dict = {0:16, 1:3} there is in total 16 sites in sublattice 0 and 3 sites in sublattice 1.
+                    # self._nsubs = {0: [8], 1:[2]} there are 8 substituent atoms in sublattice 0 and 2 substituent atoms in sublattice 1.
+                    nsites_dict = self._scell.get_nsites_per_type()
+                    sublattices = [int(k) for k in self._nsubs.keys()]
+
+                    ln_binomcoeff = 0
+                    for sublattice in sublattices:
+                        nsubs = self._nsubs[str(sublattice)][0] # [8]
+                        nsites = nsites_dict[sublattice] # 16
+                        # ln[binom(m,n)] = ln[Gamma(m+1)]-ln[Gamma(n+1)]-ln[Gamma(m-n+1)]
+                        ln_binomcoeff += scipy.special.gammaln(nsites+1)-scipy.special.gammaln(nsubs+1)-scipy.special.gammaln(nsites-nsubs+1)
                         
+                    ln_norm_factor = ln_binomcoeff - ln_g0 - ln_gsum
+
+                elif normalization_type == 2:
+                    # gsum = sum_E g(E)/g0
+                    ln_gsum = math.log( np.sum([math.exp(ln_ge-ln_g0) for ln_ge in ln_g]) )
+
+                    ln_norm_factor = set_normalization_ln - ln_g0 - ln_gsum
+
+                
+            gc = []
+            for i, ln_gi in enumerate(ln_g):
+                if ln_gi >= ln_mod_fac:
+                    ln_gi_norm = ln_gi + ln_norm_factor
                     if not ln:
-                        gc.append(math.exp(gt))
+                        gc.append(math.exp(ln_gi_norm))
                     else:
-                        gc.append(gt)
-                    eb.append(self._energy_bins[gi])
+                        gc.append(ln_gi_norm)
+                    eb.append(self._energy_bins[i])
                     
                 else:
                     if not discard_empty_bins:
                         gc.append(float(0))
-                        eb.append(self._energy_bins[gi])
+                        eb.append(self._energy_bins[i])
                 
             self._cdos_normalized = gc
             self._energy_bins_cdos_normalized = eb
@@ -805,13 +851,13 @@ class ConfigurationalDensityOfStates():
             if discard_empty_bins:
                 gc = []
                 eb = []
-                for gi,ge in enumerate(g):
-                    if ge >= log_mod_fac:
+                for i,ge in enumerate(g):
+                    if ge >= ln_mod_fac:
                         if not ln:
                             gc.append(math.exp(ge))
                         else:
                             gc.append(ge)
-                        eb.append(self._energy_bins[gi])
+                        eb.append(self._energy_bins[i])
                         
                 return eb, gc
             
@@ -826,7 +872,27 @@ class ConfigurationalDensityOfStates():
 
     def calculate_thermodynamic_property(self, temperatures, prop_name = "U", modification_factor = None):
         """Calculate the thermodynamic property with name ``prop_name`` for the temperature list given 
-           with ``temperatures``. 
+        list ``temperatures``. 
+
+        In disregard of the normalization used for the configurational density of states :math:`g(E)`,
+        for numerical convenience this method internally normalizes :math:`g(E)` according to
+        
+        .. math::
+        
+            g(E_0=0) = 1
+
+        For the output quantities other normalizations can be easily obtained considering the following 
+        transformations:
+
+        .. math::
+        
+            & g(E) \\rightarrow c g(E)
+
+            & Z(T) \\rightarrow c Z(T)
+
+            & S(T) \\rightarrow S(T) + k_B ln(c)
+
+            & F(T) \\rightarrow F(T) - k_B T ln(c)
 
         **Parameters**:
         
@@ -836,15 +902,13 @@ class ConfigurationalDensityOfStates():
         ``prop_name``: string (default: U)
             Name of thermodynamic property.
 
-            If **Z**, the partition function is calculated.
+            If **U**, the internal energy is calculated.
 
-            If **U**, the internal energy is calculated. Units are the same as for the energy of the energy bins, [E].
+            If **C_p**, the isobaric specific heat at zero pressure is calculated. 
 
-            If **C_p**, the isobaric specific heat at zero pressure is calculated. Units :math:`k_B`.
+            If **F**, the free energy is calculated.
 
-            If **F**, the free energy is calculated. Units are the same as for the energy [E].
-
-            If **S**, the entropy is calculated. Units :math:`k_B`.
+            If **S**, the entropy is calculated.
 
         ``modification_factor``: float (default: None)
             If **None**, the CDOS from the last iteration is used for calculuting teh thermodynamic property. 
@@ -852,68 +916,65 @@ class ConfigurationalDensityOfStates():
 
         """
         from ase.units import kB as kb
+        import sys
+        ln_maxfloat = math.log(sys.float_info.max)
         e, log_g = self.get_cdos(ln = True, normalization = True, discard_empty_bins = True,  modification_factor = modification_factor)
-
         thermoprop = np.zeros(len(temperatures))
-        e0 = e[0]
 
         e = np.array(e)
         log_g = np.array(log_g)
+        log_g -= log_g[0] # Assume normalization g(E_0=0) = 1
+        e -= e[0]
         
-        for i in range(len(e)):
-            e[i] = e[i] - e0            
-
         for i, t_i in enumerate(temperatures):
             beta_i = 1.0/(kb*t_i)
 
+            p = np.zeros(len(e))
             u = 0
             u2 = 0
             z = 0
-            
+
+            # Compute canonical probability as
+            # P(E) = 1 / \sum_Ep exp(ln(Ep)-ln(E)-\beta * (Ep-E))
             for j,log_g_j in enumerate(log_g):
+                pinv_j = 0.0
+                for k,log_g_k in enumerate(log_g):
+                    exponent = log_g_k-log_g_j-beta_i*(e[k]-e[j])
+                    if exponent > ln_maxfloat or p[j] == math.inf:
+                         break
+                    else:
+                        pinv_j += math.exp(log_g_k-log_g_j-beta_i*(e[k]-e[j]))
 
-                g_j = math.exp(log_g_j)
-                
-                boltzf_ij = math.exp( - e[j] * beta_i )
-                
-                u += e[j] * g_j * boltzf_ij
-                
-                u2 += e[j]*e[j] * g_j * boltzf_ij
+                if pinv_j != 0:
+                    p[j] = 1/pinv_j
+
+            # Here we use: ln(Z) = ln(g(E)) - \beta E - ln(P(E,T)), for E=E_0=0 and g(E_0)=1
+            j_max = np.argmax(p)
+            ln_z = log_g[j_max] - beta_i * e[j_max] - math.log(p[j_max])
+            
+            f = - kb * t_i * ln_z
                     
-                z += g_j * boltzf_ij
+            for j,log_g_j in enumerate(log_g):
                 
-            u = np.divide(u, z)
-
+                u += e[j] * p[j]
+                
+                u2 += e[j]*e[j] * p[j]
+                    
             if prop_name == "U":
                 thermoprop[i] = u
                 
-            elif prop_name == "Z":
-                thermoprop[i] = z
-                
             elif prop_name == "Cp" or prop_name == "C_p":
-                u2 = np.divide(u2, z)
-                #u2 /= z
-                thermoprop[i] = ( u2 - u * u ) / ( kb * kb * t_i * t_i)
+                thermoprop[i] = ( u2 - u * u ) / ( kb * t_i * t_i )
+                
+            elif prop_name == "F":
+                thermoprop[i] = f
+                
+            elif prop_name == "S":
+                thermoprop[i] = (u-f)/t_i
                 
             else:
-                f = - kb * t_i * math.log(z) + e0
-                if i == 0:
-                    f1 = f
-                elif i == 1:
-                    f2 = f
-                    _dt = float(t_i-temperatures[0])
-                    df = (f2-f1)/(1.0*_dt)
-                    f = f - i * df
-                else:
-                    f = f - i * df
-                
-                if prop_name == "F":
-                    thermoprop[i] = f
-                elif prop_name == "S":
-                    thermoprop[i] = (u-f)/(kb*t_i)
-                else:
-                    import sys
-                    sys.exit("Thermodynamic property name ``prop_name`` not correctly defined. See Documentation.")
+                import sys
+                sys.exit("Thermodynamic property name ``prop_name`` not correctly defined. See Documentation.")
         return thermoprop
                 
                 
@@ -1029,6 +1090,7 @@ class ConfigurationalDensityOfStates():
             
         _last_cdos_entry = self._stored_cdos[-1]
         self._cdos = _last_cdos_entry['cdos']
+
         self._histogram = _last_cdos_entry['histogram']
 
         self._f = _last_cdos_entry['modification_factor']
