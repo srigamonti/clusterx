@@ -14,6 +14,75 @@ from copy import deepcopy
 import time
 import datetime
 
+def make_energy_windows(inverse_overlap, n_windows, emin, emax, sought_energy_bin_width):
+    """Make energy windows for WL sampling
+
+    **Description**
+        Determines boundaries of energy windows in an energy range for WL sampling.
+
+    **Parameters**
+
+    ``inverse_overlap``: integer
+        Inverse of the fraction of overlap of two contiguous windows. 
+        For instance, if ``inverse_overlap`` is 3, then 1/3rd of 
+        an energy window overlaps with 1/3rd of the contiguous window.
+
+    ``n_windows``: integer
+        Number of windows.
+
+    ``emin``: float
+        Minimum energy
+
+    ``emax``: float
+        Maximum energy
+    
+    ``sought_energy_bin_width``: float
+        Desired energy bin width. The actual energy bin width will be a bit higher, 
+        to evenly fill the energy windows.
+
+    **Returns**
+        
+        The function returns a dictionary with the following structure::
+
+            {
+                "inverse_overlap": float,
+                "n_windows": int,
+                "emin": float
+                "emax": float
+                "sought_energy_bin_width": float
+                "energy_bin_width": float
+                "windows":
+                    [
+                       [emin1, emax1],
+                       [emin2, emax2],
+                             ...
+                       [eminn, emaxn]
+                    ]
+            }
+
+    """
+    n_delta = int( inverse_overlap + (n_windows - 1) * (inverse_overlap - 1) )
+    delta = (emax - emin) / n_delta
+
+    energy_bin_width = delta / np.floor(delta/sought_energy_bin_width)
+
+    energy_windows = {}
+    energy_windows["inverse_overlap"] = inverse_overlap
+    energy_windows["n_windows"] = n_windows
+    energy_windows["emin"] = emin
+    energy_windows["emax"] = emax
+    energy_windows["sought_energy_bin_width"] = sought_energy_bin_width
+    energy_windows["energy_bin_width"] = energy_bin_width
+
+    wins = np.zeros((n_windows,2))
+    for i in range(n_windows):
+        wins[i,0] = emin + (inverse_overlap - 1) * delta * i
+        wins[i,1] = wins[i,0] + inverse_overlap * delta
+
+    energy_windows["windows"] = wins
+
+    return energy_windows
+        
 class WangLandau():
     """Wang Landau class
 
