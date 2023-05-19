@@ -213,7 +213,7 @@ class WangLandau():
             self._x = 1
 
 
-    def _wls_create_initial_structure(self, initial_decoration, emin, emax):
+    def _wls_create_initial_structure(self, initial_decoration, emin, emax, trans_prob=1e-3):
         import sys
 
         if initial_decoration is not None:
@@ -269,7 +269,6 @@ class WangLandau():
                         if (e1 > emax and de <= 0) or (e1 < emin and de >= 0):
                             accept_swap = True
                         else:
-                            trans_prob = 0.1
                             if np.random.uniform(0,1) <= trans_prob:
                                 accept_swap = True
                             else:
@@ -341,33 +340,18 @@ class WangLandau():
 
     def _wls_locate_histogram_bin(self, e, energies, energy_bin_width):
         emin = energies[0]
-        emax = energies[-1]
+        emax = energies[-1] + energy_bin_width
 
         is_outside_interval = False
         
-        if e <= emin:
-            ibin = 0
-            if e < emin - energy_bin_width/2:
-                return  ibin, True
+        if e < emin:
+            return  None, True
         elif e >= emax:
-            ibin = len(energies) - 1
-            if e > emax + energy_bin_width/2:
-                return  ibin, True
+            return  None, True
         else:
-            for i,e_i in enumerate(energies):
-
-                if e < e_i:
-                    if i == 0:
-                        ibin = i
-                    else:
-                        diffe1 = e - energies[i-1]
-                        diffe2 = e_i - e
-                        if diffe1 < diffe2:
-                            ibin = i-1
-                        else:
-                            ibin = i
-                    break
-        return ibin, is_outside_interval
+            for i in range(len(energies)):
+                if e >= energies[i] and e < energies[i] + energy_bin_width:
+                    return  i, False
 
     def _wls_update_modification_factor(self, f, update_method):
         if update_method == 'square_root':
@@ -509,7 +493,7 @@ class WangLandau():
         
         self._em.corrc.reset_mc(mc = True)
         
-        struc = self._wls_create_initial_structure(initial_decoration, energy_range[0]-energy_bin_width/2, energy_range[1]+energy_bin_width/2)
+        struc = self._wls_create_initial_structure(initial_decoration, energy_range[0], energy_range[1])
         
         if restart_from_file:
             cd = ConfigurationalDensityOfStates(
@@ -614,14 +598,16 @@ class WangLandau():
         niter_per_sweep = 10000
 
         print(f"Building flat histogram.")
-        print(f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s}")
+        print(f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} ")
         while (hist_min < histogram_flatness*hist_avg) or (n_nonzero_bins < 10):
-            print(f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min/hist_avg:8.3f} | {histogram_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d}")
+            print(f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min/hist_avg:8.3f} | {histogram_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d} | {cdos[0,0]:11.3f} | {cdos[-1,0]:11.3f}")
             
             struc, e, g, inde, cdos = self.dos_steps(struc, e, g, inde, lnf, cdos, niter_per_sweep, energy_bin_width)
             niter += niter_per_sweep
             
             hist_min, hist_avg, n_nonzero_bins = self._wls_get_hist_min_and_avg(cdos[:,2])
+            if n_nonzero_bins < 10:
+                print(f"{inde:4d} | {cdos[0,0]:11.3f} | {e:11.3f} | {cdos[-1,0]:11.3f}")
 
         print(f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min/hist_avg:8.3f} | {histogram_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d}")
         
@@ -653,19 +639,21 @@ class WangLandau():
 
             ibin, is_outside_interval = self._wls_locate_histogram_bin(e1, energies, energy_bin_width)
 
-            g1 = cdos[ibin][1]
 
             if is_outside_interval:
                 accept_swap = False
-            elif g >= g1:
-                accept_swap = True
             else:
-                trans_prob = math.exp(g-g1)
-                if np.random.uniform(0,1) <= trans_prob:
+                g1 = cdos[ibin][1]
+
+                if g >= g1:
                     accept_swap = True
                 else:
-                    accept_swap = False
-                    
+                    trans_prob = math.exp(g-g1)
+                    if np.random.uniform(0,1) <= trans_prob:
+                        accept_swap = True
+                    else:
+                        accept_swap = False
+
             if accept_swap:
                 e = e1
                 inde = ibin
