@@ -249,7 +249,9 @@ class WangLandau():
                         else:
                             accept_swap = False
 
-                print(f"searching struc {cou}, {emin:2.9f} {e:2.9f} {de} {ind1:d} {ind2:d} {emax:2.9f}")
+                if not cou%1000:
+                    print(f"searching struc {cou}, {emin:2.9f} {e:2.9f} {de} {ind1:d} {ind2:d} {emax:2.9f}")
+                    
                 if accept_swap:
                     e = e1
                 else:
@@ -571,11 +573,12 @@ class WangLandau():
         cdos[:,2] = 0 # Initialize histogram
 
         niter = 0
-        niter_per_sweep = 10000
+        niter_per_sweep = 100000
+        nonzero_bins_thresh = 8
 
         print(f"Building flat histogram.")
         print(f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} ")
-        while (hist_min < histogram_flatness*hist_avg) or (n_nonzero_bins < 10):
+        while (hist_min < histogram_flatness*hist_avg) or (n_nonzero_bins < nonzero_bins_thresh):
             print(f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min/hist_avg:8.3f} | {histogram_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d} | {cdos[0,0]:11.3f} | {cdos[-1,0]:11.3f}")
             
             struc, e, g, inde, cdos = self.dos_steps(struc, e, g, inde, lnf, cdos, niter_per_sweep, energy_bin_width)
