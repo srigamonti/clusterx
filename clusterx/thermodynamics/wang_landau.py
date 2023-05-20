@@ -213,73 +213,49 @@ class WangLandau():
             self._x = 1
 
 
-    def _wls_create_initial_structure(self, initial_decoration, emin, emax, trans_prob=1e-3):
+    def _wls_create_initial_structure(self, initial_decoration, emin, emax, trans_prob=1e-3, itmax=int(1e8)):
         import sys
 
         if initial_decoration is not None:
             struc = Structure(self._scell, initial_decoration, mc = True)
-
-            # Consistency check
-            conc = struc.get_fractional_concentrations()
-            nsites = struc.get_nsites_per_type()
-            check_dict = {}
-            for key in conc.keys():
-                ns = nsites[key]
-                nl = []
-                for i,cel in enumerate(conc[key]):
-                    if i == 0:
-                        continue
-                    else:
-                        nl.append(int(cel*ns))
-                check_dict.update({key:nl})
-
-            from clusterx.utils import dict_compare
-            bol = dict_compare(check_dict,self._nsubs)
-            
-            if not bol:
-                sys.exit("Number of substitutents does not coincides with them from the inital decoration.")
-            else:
-                e = self._em.predict(struc) * self._ef
-                if e >= emin and e <= emax:
-                    return struc
-                else:
-                    sys.exit(f"Structure with given initial_decoration lies outside range: {e} is outside bounds [{emin}, {emax}].")
         else:
             if self._nsubs is not None:
                 struc = self._scell.gen_random_structure(self._nsubs, mc = True)
             else:
                 struc = self._scell.gen_random_structure(mc = True)
-            e = self._em.predict(struc) * self._ef
 
-            if e >= emin and e <= emax:
-                return struc
-            else:
-                
-                cou = 0
-                while e < emin or e > emax:
-                    print(f"searching struc {cou}, {emin:2.9f} {e:2.9f} {emax:2.9f}")
-                    cou+=1
+        e = self._em.predict(struc) * self._ef
+
+        if e >= emin and e <= emax:
+            return struc
+        else:
+            cou = 0
+            while e < emin or e > emax:
+                cou+=1
+                if cou > itmax:
+                    sys.exit("WangLandau: maximum number of iterations for searching initial structure reached. Aborting simulation.")
                     
-                    ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
-                    de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2, site_types = self._sublattice_indices) * self._ef
-                    e1 = e + de
-                    if e >= emin and e <= emax:
-                        return struc
+                ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
+                de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2, site_types = self._sublattice_indices) * self._ef
+                e1 = e + de
+                if e >= emin and e <= emax:
+                    return struc
+                else:
+                    if (e1 > emax and de <= 0) or (e1 < emin and de >= 0):
+                        accept_swap = True
                     else:
-                        if (e1 > emax and de <= 0) or (e1 < emin and de >= 0):
+                        if np.random.uniform(0,1) <= trans_prob:
                             accept_swap = True
                         else:
-                            if np.random.uniform(0,1) <= trans_prob:
-                                accept_swap = True
-                            else:
-                                accept_swap = False
-                            
-                    if accept_swap:
-                        e = e1
-                    else:
-                        struc.swap(ind2, ind1, site_type = site_type, rindices = rindices)
-                        
-                return struc
+                            accept_swap = False
+
+                print(f"searching struc {cou}, {emin:2.9f} {e:2.9f} {de} {ind1:d} {ind2:d} {emax:2.9f}")
+                if accept_swap:
+                    e = e1
+                else:
+                    struc.swap(ind2, ind1, site_type = site_type, rindices = rindices)
+
+            return struc
     
 
     def _wls_init_from_file(self, cd, update_method, flatness_conditions, f_range):
@@ -328,7 +304,7 @@ class WangLandau():
         eb = energy_range[0]
         while eb < energy_range[1]:
             cdos.append([eb,0.0,0]) # log(cdos=1.0)=0.0
-            eb = eb+energy_bin_width
+            eb += energy_bin_width
         cdos = np.asarray(cdos)
 
         f = f_range[0]
@@ -921,10 +897,10 @@ class ConfigurationalDensityOfStates():
             else:
                 if not ln:
                     _expg = [math.exp(ge) for ge in g]
-                    return self._energy_bins_bins, expg
+                    return self._energy_bins, expg
                 else:
 
-                    return self._energy_bins_bins, g
+                    return self._energy_bins, g
         
 
     def calculate_thermodynamic_property(self, temperatures, prop_name = "U", modification_factor = None):
