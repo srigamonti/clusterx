@@ -376,6 +376,8 @@ class WangLandau():
             serialize_during_sampling = False,
             restart_from_file = False,
             plot_hist_real_time = False,
+            acc_prob_init_structure=1e-3,
+            itmax_init_structure=int(1e8),
             **kwargs
     ):
         """Perform Wang Landau simulation
@@ -455,7 +457,15 @@ class WangLandau():
 
         ``serialize_during_sampling``: boolean (default: False)
             If **True**, the ConfigurationalDensityOfStates object is serialized every time after a flat histogramm is reached 
-            (i.e. the inner loop is completed). This allows for studying the CDOS while the final :math:`f` is not yet reached. 
+            (i.e. the inner loop is completed). This allows for studying the CDOS while the final :math:`f` is not yet reached.
+
+        ``acc_prob_init_structure``: float (default: 1e-3)
+            When searching for an initial structure inside a given energy window, this is the acceptance probability
+            for moves which whose energy difference with the upper window bound increases or for moves whose energy
+            difference with the lower window bound decreases.
+
+        ``itmax_init_structure``: integer
+            Maximum number of trials to search for initial structure inside given energy window.
 
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the ConfigurationalDensityOfStates object that is initialized in this method.
@@ -471,7 +481,13 @@ class WangLandau():
         
         self._em.corrc.reset_mc(mc = True)
         
-        struc = self._wls_create_initial_structure(initial_decoration, energy_range[0], energy_range[1])
+        struc = self._wls_create_initial_structure(
+            initial_decoration, 
+            energy_range[0], 
+            energy_range[1], 
+            trans_prob = acc_prob_init_structure, 
+            itmax=itmax_init_structure
+        )
         
         if restart_from_file:
             cd = ConfigurationalDensityOfStates(
