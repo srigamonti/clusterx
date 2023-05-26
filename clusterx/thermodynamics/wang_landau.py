@@ -14,6 +14,136 @@ from copy import deepcopy
 import time
 import datetime
 
+def cdos_interpolation(energy, log_cdos, show_plot=False, plot_temperature=None, **splrep_args):
+    from scipy import interpolate
+
+    e = energy
+    log_g = log_cdos    
+    log_g -= log_g[0] # Assume normalization g(E_0=0) = 1
+
+    #tck = interpolate.splrep(e, log_g, k=3, s=4000)
+    tck = interpolate.splrep(e, log_g, **splrep_args)
+    e_itpl = np.arange(e[0],e[-1],(e[1]-e[0])/np.pi)
+    log_g_itpl = interpolate.splev(e_itpl, tck)
+    log_g_itpl -= log_g_itpl[0]
+    
+    if show_plot:
+        import matplotlib.pyplot as plt
+
+        if plot_temperature is None:
+            plt.plot(e_itpl, log_g_itpl)
+            plt.plot(e,log_g)
+        else:
+            plt.plot(ee,gg-ee/(kb*plot_temperature))
+            plt.plot(e,log_g-e/(kb*plot_temperature))
+
+        plt.show()
+        
+    return e_itpl, log_g_itpl
+        
+def compute_thermodynamic_averages(temperatures, energy, log_cdos, filename=None):
+    """Compute thermodynamic averages in the canonical ensemble as a function of temperature. 
+
+    In disregard of the normalization used for the configurational density of states (CDOS) :math:`g(E)`,
+    for numerical convenience this method internally normalizes :math:`g(E)` according to
+
+    .. math::
+
+        g(E_0=0) = 1
+
+    For the output quantities other normalizations can be easily obtained considering the following 
+    transformations:
+
+    .. math::
+
+        & g(E) \\rightarrow c g(E)
+
+        & Z(T) \\rightarrow c Z(T)
+
+        & S(T) \\rightarrow S(T) + k_B ln(c)
+
+        & F(T) \\rightarrow F(T) - k_B T ln(c)
+
+    **Parameters**:
+
+    ``temperatures``: list of floats 
+        Temperatures for which the thermodynamic property is calculated, in Kelvin.
+    
+    ``energy``: array of floats
+        energies for which the CDOS is given. 
+
+    ``log_cdos``: array of floats
+        Natural logarithm of the CDOS for the given energies in ``energy`` array.
+
+    """
+    from ase.units import kB as kb
+    import sys
+    ln_maxfloat = math.log(sys.float_info.max)
+    e = energy
+    log_g = log_cdos
+    
+    thavg = np.zeros((4, len(temperatures)))
+
+    for i, t_i in enumerate(temperatures):
+        beta_i = 1.0/(kb*t_i)
+
+        p = np.zeros(len(e))
+        u = 0
+        u2 = 0
+        z = 0
+
+        # Compute canonical probability as
+        # P(E) = 1 / \sum_Ep exp(ln(Ep)-ln(E)-\beta * (Ep-E))
+        for j,log_g_j in enumerate(log_g):
+            pinv_j = 0
+            for k,log_g_k in enumerate(log_g):
+                exponent = log_g_k-log_g_j-beta_i*(e[k]-e[j])
+                if exponent > ln_maxfloat or pinv_j == math.inf:
+                    pinv_j = 0
+                    break
+                else:
+                    pinv_j += math.exp(exponent)
+
+            if pinv_j != 0:
+                p[j] = 1/pinv_j
+
+        # Here we use: ln(Z) = ln(g(E)) - \beta E - ln(P(E,T))
+        j_max = np.argmax(p)
+        ln_z = log_g[j_max] - beta_i * e[j_max] - math.log(p[j_max])
+
+        f = - kb * t_i * ln_z
+
+        for j,log_g_j in enumerate(log_g):
+            u += e[j] * p[j]
+            u2 += e[j]*e[j] * p[j]
+
+        thavg[0, i] = u # Internal energy
+        thavg[1, i] = ( u2 - u * u ) / ( kb * t_i * t_i ) # Specific heat
+        thavg[2, i] = f # Helmholtz (or Gibbs at p=0) free energy
+        thavg[3, i] = (u-f)/t_i # Entropy
+
+    if filename is not None:
+        np.savez(
+            filename,
+            temperature=temperatures,
+            internal_energy=thavg[0],
+            specific_heat=thavg[1],
+            free_energy=thavg[2],
+            entropy=thavg[3],
+        )
+        np.savetxt(
+            filename,
+            np.vstack((
+                temperatures,
+                thavg[0],
+                thavg[1],
+                thavg[2],
+                thavg[3]
+            )).T
+        )
+        
+    return thavg
+    
 def make_energy_windows(inverse_overlap, n_windows, emin, emax, sought_energy_bin_width):
     """Make energy windows for WL sampling
 
@@ -82,6 +212,99 @@ def make_energy_windows(inverse_overlap, n_windows, emin, emax, sought_energy_bi
     energy_windows["windows"] = wins
 
     return energy_windows
+
+def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=False, filename=None):
+    """Merge CDOSs from a parallel WL run into a single CDOS for postprocessing
+    """
+    eps_energy = 1e-3
+    cdoss = []
+
+    for filepath in filepaths:
+        with open(filepath,'r') as f:
+            data = json.load(f)
+        cdoss.append(data)
+
+    n_cdos = len(cdoss)
+
+    energy = []
+    log_g = []
+
+    wl_itrn = []
+    for i in range(n_cdos):
+        
+        wl_itrn.append(str(wliteration))
+        if wliteration == -1:
+            wl_itrn[i] = str(len(cdoss[i])-2)
+
+    if 0:
+        for i in range(n_cdos):
+
+            for e, g in zip(cdoss[i]["sampling_info"]["energy_bins"], cdoss[i][wl_itrn[i]]["cdos"]):
+                energy.append(e)
+                log_g.append(g)
+
+        import matplotlib.pyplot as plt
+        plt.scatter(energy, log_g)
+        plt.show()
+    
+    matching_deltas = []
+    matching_deltas.append(cdoss[0][wl_itrn[0]]["cdos"][0])
+    for i in range(1, n_cdos):
+        deltas = []
+        for j1, e1 in enumerate(cdoss[i-1]["sampling_info"]["energy_bins"]):
+            for  j2, e2 in enumerate(cdoss[i]["sampling_info"]["energy_bins"]):
+                if np.abs(e1-e2) < eps_energy:
+                    deltas.append(cdoss[i][wl_itrn[i]]["cdos"][j2]-cdoss[i-1][wl_itrn[i-1]]["cdos"][j1])
+
+        if i == 0:
+            matching_deltas.append(np.mean(deltas))
+        else:
+            matching_deltas.append(np.mean(deltas)+matching_deltas[i-1])
+
+    for i in range(n_cdos):
+        
+        for e, g in zip(cdoss[i]["sampling_info"]["energy_bins"], cdoss[i][wl_itrn[i]]["cdos"]):
+            energy.append(e)
+            log_g.append(g-matching_deltas[i])
+
+    energy_unique = np.unique(energy)
+
+    log_g_unique = np.zeros(len(energy_unique))
+    for i, e in enumerate(energy_unique):
+        g_avg = 0
+        count = 0
+        for e2, g in zip(energy, log_g):
+            if np.abs(e-e2) < eps_energy:
+                g_avg += g
+                count += 1
+        if count != 0:
+            log_g_unique[i] = g_avg / count
+
+    energy_unique *= e_factor
+    log_g_unique *= e_factor
+
+    if filename is not None:
+        np.savez(
+            filename,
+            energy=energy_unique,
+            log_cdos=log_g_unique
+        )
+
+        np.savetxt(
+            filename,
+            np.vstack((
+                energy_unique,
+                log_g_unique
+            )).T
+        )
+
+    if show_plot:
+        import matplotlib.pyplot as plt
+        plt.scatter(np.array(energy) * e_factor, np.array(log_g) * e_factor)
+        plt.scatter(energy_unique, log_g_unique)
+        plt.show()
+
+    return energy_unique, log_g_unique
         
 class WangLandau():
     """Wang Landau class
