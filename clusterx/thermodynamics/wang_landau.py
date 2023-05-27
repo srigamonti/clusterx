@@ -188,7 +188,9 @@ def make_energy_windows(inverse_overlap, n_windows, emin, emax, sought_energy_bi
                        [emin2, emax2],
                              ...
                        [eminn, emaxn]
-                    ]
+                    ],
+                "nbins_per_window_f",
+                "nbins_per_window_i"
             }
 
     """
@@ -211,6 +213,9 @@ def make_energy_windows(inverse_overlap, n_windows, emin, emax, sought_energy_bi
         wins[i,1] = wins[i,0] + inverse_overlap * delta
 
     energy_windows["windows"] = wins
+    
+    energy_windows["nbins_per_window_f"] = (wins[0,1] - wins[0,0])/energy_bin_width
+    energy_windows["nbins_per_window_i"] = round((wins[0,1] - wins[0,0])/energy_bin_width)
 
     return energy_windows
 
@@ -814,7 +819,7 @@ class WangLandau():
 
         niter = 0
         niter_per_sweep = 100000
-        nonzero_bins_thresh = 8
+        nonzero_bins_thresh = 5
 
         print(f"Building flat histogram.")
         print(f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} ")
