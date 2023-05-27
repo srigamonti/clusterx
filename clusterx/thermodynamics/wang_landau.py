@@ -16,6 +16,7 @@ import datetime
 
 def cdos_interpolation(energy, log_cdos, show_plot=False, plot_temperature=None, **splrep_args):
     from scipy import interpolate
+    from ase.units import kB as kb
 
     e = energy
     log_g = log_cdos    
@@ -34,7 +35,7 @@ def cdos_interpolation(energy, log_cdos, show_plot=False, plot_temperature=None,
             plt.plot(e_itpl, log_g_itpl)
             plt.plot(e,log_g)
         else:
-            plt.plot(ee,gg-ee/(kb*plot_temperature))
+            plt.plot(e_itpl, log_g_itpl-e_itpl/(kb*plot_temperature))
             plt.plot(e,log_g-e/(kb*plot_temperature))
 
         plt.show()
