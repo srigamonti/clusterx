@@ -282,7 +282,7 @@ class Model():
                     self._mc_multiplicities.append(len(cluster_orbits[i]))
                 
             except AttributeError:
-                raise AttributeError("Cluster_orbit set is not predefined, look at the documentation.")
+                raise AttributeError("Cluster_orbits set has not been pre computed.")
 
             if self.standardize:
                 import sys

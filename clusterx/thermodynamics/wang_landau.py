@@ -1218,18 +1218,19 @@ class ConfigurationalDensityOfStates():
             # Compute canonical probability as
             # P(E) = 1 / \sum_Ep exp(ln(Ep)-ln(E)-\beta * (Ep-E))
             for j,log_g_j in enumerate(log_g):
-                pinv_j = 0.0
+                pinv_j = 0
                 for k,log_g_k in enumerate(log_g):
                     exponent = log_g_k-log_g_j-beta_i*(e[k]-e[j])
-                    if exponent > ln_maxfloat or p[j] == math.inf:
-                         break
+                    if exponent > ln_maxfloat or pinv_j == math.inf:
+                        pinv_j = 0
+                        break
                     else:
-                        pinv_j += math.exp(log_g_k-log_g_j-beta_i*(e[k]-e[j]))
+                        pinv_j += math.exp(exponent)
 
                 if pinv_j != 0:
                     p[j] = 1/pinv_j
 
-            # Here we use: ln(Z) = ln(g(E)) - \beta E - ln(P(E,T)), for E=E_0=0 and g(E_0)=1
+            # Here we use: ln(Z) = ln(g(E)) - \beta E - ln(P(E,T))
             j_max = np.argmax(p)
             ln_z = log_g[j_max] - beta_i * e[j_max] - math.log(p[j_max])
             
