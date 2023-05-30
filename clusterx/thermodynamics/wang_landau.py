@@ -460,14 +460,14 @@ class WangLandau():
         else:
             cou = 0
             while e < emin or e > emax:
-                cou+=1
+                cou += 1
                 if cou > itmax:
                     sys.exit("WangLandau: maximum number of iterations for searching initial structure reached. Aborting simulation.")
                     
                 ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
                 de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2, site_types = self._sublattice_indices) * self._ef
                 e1 = e + de
-                if e >= emin and e <= emax:
+                if e1 >= emin and e1 <= emax:
                     return struc
                 else:
                     if (e1 > emax and de <= 0) or (e1 < emin and de >= 0):
@@ -478,7 +478,7 @@ class WangLandau():
                         else:
                             accept_swap = False
 
-                if not cou%1000:
+                if not cou % 1000:
                     print(f"searching struc {cou}, {emin:2.9f} {e:2.9f} {de} {ind1:d} {ind2:d} {emax:2.9f}")
                     
                 if accept_swap:
