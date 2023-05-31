@@ -442,8 +442,22 @@ class WangLandau():
             self._x = 1
 
 
-    def _wls_create_initial_structure(self, initial_decoration, emin, emax, trans_prob=1e-3, itmax=int(1e8)):
+    def _wls_create_initial_structure(
+        self, 
+        initial_decoration, 
+        emin, 
+        emax, 
+        prob_dist = "gaussian",
+        trans_prob = 1e-3, 
+        itmax = int(1e8)
+    ):
         import sys
+        emean = None
+        scale = None
+        if prob_dist == "gaussian":
+            import scipy.stats.norm.pdf as pdf
+            emean = (emax+emin)/2.0
+            scale = emax - emin
 
         if initial_decoration is not None:
             struc = Structure(self._scell, initial_decoration, mc = True)
@@ -459,10 +473,8 @@ class WangLandau():
             return struc
         else:
             cou = 0
-            while e < emin or e > emax:
+            while cou < itmax:
                 cou += 1
-                if cou > itmax:
-                    sys.exit("WangLandau: maximum number of iterations for searching initial structure reached. Aborting simulation.")
                     
                 ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
                 de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2, site_types = self._sublattice_indices) * self._ef
@@ -470,9 +482,12 @@ class WangLandau():
                 if e1 >= emin and e1 <= emax:
                     return struc
                 else:
-                    if (e1 > emax and de <= 0) or (e1 < emin and de >= 0):
+                    if (e1 > emax and de < 0) or (e1 < emin and de > 0):
                         accept_swap = True
                     else:
+                        if prob_dist == "gaussian":
+                            trans_prob = pdf(e1, emean, scale)
+
                         if np.random.uniform(0,1) <= trans_prob:
                             accept_swap = True
                         else:
@@ -486,7 +501,8 @@ class WangLandau():
                 else:
                     struc.swap(ind2, ind1, site_type = site_type, rindices = rindices)
 
-            return struc
+            if cou >= itmax:
+                sys.exit("WangLandau: maximum number of iterations for searching initial structure reached. Aborting simulation.")
     
 
     def _wls_init_from_file(self, cd, update_method, flatness_conditions, f_range):
@@ -605,7 +621,8 @@ class WangLandau():
             serialize_during_sampling = False,
             restart_from_file = False,
             plot_hist_real_time = False,
-            acc_prob_init_structure=1e-3,
+            acc_prob_init_structure = 1e-3,
+            acc_prob_dist_init_structure = "gaussian",
             itmax_init_structure=int(1e8),
             **kwargs
     ):
@@ -714,7 +731,8 @@ class WangLandau():
             initial_decoration, 
             energy_range[0], 
             energy_range[1], 
-            trans_prob = acc_prob_init_structure, 
+            trans_prob = acc_prob_init_structure,
+            prob_dist = acc_prob_dist_init_structure,
             itmax=itmax_init_structure
         )
         
