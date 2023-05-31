@@ -455,7 +455,8 @@ class WangLandau():
         emean = None
         scale = None
         if prob_dist == "gaussian":
-            import scipy.stats.norm.pdf as pdf
+            from scipy.stats import norm
+            
             emean = (emax+emin)/2.0
             scale = emax - emin
 
@@ -486,7 +487,7 @@ class WangLandau():
                         accept_swap = True
                     else:
                         if prob_dist == "gaussian":
-                            trans_prob = pdf(e1, emean, scale)
+                            trans_prob = norm.pdf(e1, emean, scale)
 
                         if np.random.uniform(0,1) <= trans_prob:
                             accept_swap = True
