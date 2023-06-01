@@ -472,9 +472,9 @@ class WangLandau():
             return struc
         else:
             cou = 0
-            f = open(f"init_str_search_nproc_{nproc}", "w")
+            f = open(f"init_str_search_nproc_{nproc}.txt", "w")
             while cou < itmax:
-                f.write(f"{nproc}\t{cou}\t{emin}\t{emax}\t{e}")
+                f.write(f"{nproc}\t{cou}\t{emin}\t{emax}\t{e}\n")
                 cou += 1
                     
                 ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
