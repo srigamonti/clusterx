@@ -2,10 +2,7 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-## packages needed for WangLandau
 from clusterx.structure import Structure
-
-## packages needed for ConfigurationalDensityOfStates
 import json
 import math
 import numpy as np
@@ -1151,7 +1148,7 @@ class ConfigurationalDensityOfStates():
             if discard_empty_bins:
                 gc = []
                 eb = []
-                for i,ge in enumerate(g):
+                for i,ge in enumerate(ln_g):
                     if ge >= ln_mod_fac:
                         if not ln:
                             gc.append(math.exp(ge))
@@ -1163,11 +1160,11 @@ class ConfigurationalDensityOfStates():
             
             else:
                 if not ln:
-                    _expg = [math.exp(ge) for ge in g]
-                    return self._energy_bins, expg
+                    _expg = [math.exp(ge) for ge in ln_g]
+                    return self._energy_bins, _expg
                 else:
 
-                    return self._energy_bins, g
+                    return self._energy_bins, ln_g
         
 
     def calculate_thermodynamic_property(self, temperatures, prop_name = "U", modification_factor = None):
