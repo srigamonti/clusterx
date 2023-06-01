@@ -446,7 +446,8 @@ class WangLandau():
         emax, 
         prob_dist = "gaussian",
         trans_prob = 1e-3, 
-        itmax = int(1e8)
+        itmax = int(1e8),
+        nproc = 0
     ):
         import sys
         emean = None
@@ -471,7 +472,9 @@ class WangLandau():
             return struc
         else:
             cou = 0
+            f = open(f"init_str_search_nproc_{nproc}", "w")
             while cou < itmax:
+                f.write(f"{nproc}\t{cou}\t{emin}\t{emax}\t{e}")
                 cou += 1
                     
                 ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
@@ -486,19 +489,17 @@ class WangLandau():
                         if prob_dist == "gaussian":
                             trans_prob = norm.pdf(e1, emean, scale)
 
-                        if np.random.uniform(0,1) <= trans_prob:
-                            accept_swap = True
-                        else:
-                            accept_swap = False
+                        accept_swap = np.random.uniform(0,1) <= trans_prob
 
                 if not cou % 1000:
+                    f.flush()
                     print(f"searching struc {cou}, {emin:2.9f} {e:2.9f} {de} {ind1:d} {ind2:d} {emax:2.9f}")
                     
                 if accept_swap:
                     e = e1
                 else:
                     struc.swap(ind2, ind1, site_type = site_type, rindices = rindices)
-
+            f.close()
             if cou >= itmax:
                 sys.exit("WangLandau: maximum number of iterations for searching initial structure reached. Aborting simulation.")
     
@@ -622,6 +623,7 @@ class WangLandau():
             acc_prob_init_structure = 1e-3,
             acc_prob_dist_init_structure = "gaussian",
             itmax_init_structure=int(1e8),
+            nproc=0,
             **kwargs
     ):
         """Perform Wang Landau simulation
@@ -731,7 +733,8 @@ class WangLandau():
             energy_range[1], 
             trans_prob = acc_prob_init_structure,
             prob_dist = acc_prob_dist_init_structure,
-            itmax=itmax_init_structure
+            itmax = itmax_init_structure,
+            nproc = nproc
         )
         
         if restart_from_file:
