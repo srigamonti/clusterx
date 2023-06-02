@@ -182,7 +182,7 @@ class ParentLattice(Atoms):
                     unique_sites = np.unique(sites,axis=0)
                 except:
                     try:
-                        unique_sites = np.unique(sites)
+                        unique_sites = np.unique(np.array(sites,dtype=object))
                     except AttributeError:
                         raise AttributeError("sites array has problems, look at the documentation.")
 
