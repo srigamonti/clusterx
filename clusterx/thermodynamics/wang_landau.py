@@ -11,7 +11,52 @@ from copy import deepcopy
 import time
 import datetime
 
-def cdos_interpolation(energy, log_cdos, show_plot=False, plot_temperature=None, **splrep_args):
+def microcanonical_temperature(e, ln_g):
+    """Compute microcanonical temperature
+
+    The micrononical temperature is given by
+
+    .. math:
+
+        T = \frac{1}{k_B} \frac{1}{\frac{d ln(g(E))}{dE}}
+
+    **Parameters**:
+
+    ``e``: array of float
+        energies in eV.
+
+    ``ln_g``: array of float
+        natural logarithm of the configurational density of states. 
+    """
+    from ase.units import kB as kb
+
+    grad = np.gradient(ln_g,e)
+    temp = map( lambda x: 1/(kb*x), grad)
+
+    return list(temp)
+
+def cdos_interpolation(
+    energy, 
+    log_cdos, show_plot=False, 
+    plot_temperature=None, 
+    plot_microcanonical_temperature=True, 
+    **splrep_args
+    ):
+    """Perform interpolation of CDOS using splines
+    
+    Essentially wraps ``scipy.interpolate.splrep``.
+
+    **Parameters**:
+
+    ``energy``: array of float
+        energies in eV
+
+    ``log_cdos``: array of float
+        natural logarithm of the configurational density of states
+
+    ``show_plot``: boolean
+        whether to plot the interpolated CDOS
+    """
     from scipy import interpolate
     from ase.units import kB as kb
 
@@ -19,7 +64,6 @@ def cdos_interpolation(energy, log_cdos, show_plot=False, plot_temperature=None,
     log_g = log_cdos    
     log_g -= log_g[0] # Assume normalization g(E_0=0) = 1
 
-    #tck = interpolate.splrep(e, log_g, k=3, s=4000)
     tck = interpolate.splrep(e, log_g, **splrep_args)
     e_itpl = np.arange(e[0],e[-1],(e[1]-e[0])/np.pi)
     log_g_itpl = interpolate.splev(e_itpl, tck)
@@ -29,8 +73,13 @@ def cdos_interpolation(energy, log_cdos, show_plot=False, plot_temperature=None,
         import matplotlib.pyplot as plt
 
         if plot_temperature is None:
-            plt.plot(e_itpl, log_g_itpl)
-            plt.plot(e,log_g)
+            plt.plot(e_itpl, log_g_itpl, label="CDOS(itpl)")
+            plt.plot(e, log_g, label="CDOS")
+            if plot_microcanonical_temperature:
+                temp = microcanonical_temperature(e, log_g)
+                temp_itpl = microcanonical_temperature(e_itpl, log_g_itpl)
+                plt.plot(e_itpl, temp_itpl, label="T(itpl)")
+                plt.plot(e, temp, label="T")
         else:
             plt.plot(e_itpl, log_g_itpl-e_itpl/(kb*plot_temperature))
             plt.plot(e,log_g-e/(kb*plot_temperature))
