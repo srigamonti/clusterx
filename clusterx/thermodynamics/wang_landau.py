@@ -80,6 +80,7 @@ def cdos_interpolation(
                 temp_itpl = microcanonical_temperature(e_itpl, log_g_itpl)
                 plt.plot(e_itpl, temp_itpl, label="T(itpl)")
                 plt.plot(e, temp, label="T")
+                plt.ylim(-100,2000)
         else:
             plt.plot(e_itpl, log_g_itpl-e_itpl/(kb*plot_temperature))
             plt.plot(e,log_g-e/(kb*plot_temperature))
