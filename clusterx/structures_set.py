@@ -927,7 +927,7 @@ class StructuresSet():
         predictions = []
         for s in self:
             predictions.append(cemodel.predict(s))
-        return predictions
+        return np.array(predictions)
 
     def get_concentrations(self, site_type = 0, sigma = 1):
         """Get concentration values for a given site type
