@@ -569,17 +569,12 @@ class ClustersPool():
 
             
     def gen_clusters1(self):
-        from clusterx.super_cell import SuperCell
         from itertools import product, combinations
 
         npoints = self._npoints
         scell = self._cpool_scell
-        natoms = scell.get_natoms()
         sites = scell.get_sites()
         satoms = scell.get_substitutional_sites()
-        nsatoms = len(satoms)
-        idx_subs = scell.get_sublattice_types()
-        tags = scell.get_tags()
         distances = self._distances
         radii = self._radii
         
@@ -610,10 +605,8 @@ class ClustersPool():
                             delids.append(i)
                 clrs_full = [c for i,c in enumerate(clrs_full) if i not in delids]
 
-                new = True
-                if new:
-                    self._cpool.append(Cluster(_cl.get_idxs(),_cl.get_nrs(),self._cpool_scell,self._distances))
-                    self._multiplicities.append(mult)
+                self._cpool.append(Cluster(_cl.get_idxs(),_cl.get_nrs(),self._cpool_scell,self._distances))
+                self._multiplicities.append(mult)
 
         if len(self._cpool) == 0:
             return [],0
