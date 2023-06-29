@@ -389,8 +389,8 @@ class ClustersPool():
 
             clsets = []
             nsets = 0
-            np=int(set0[0])
-            r=float(set0[1])
+            np = int(set0[0])
+            r = float(set0[1])
 
             _clset0 = []
             _clset1 = []
@@ -405,9 +405,6 @@ class ClustersPool():
             else:
                 ncl=len(_clset1)
 
-            #print(_clset0)
-
-            #print(_clset1)
             for icl1 in range(0,ncl+1):
                 for x in itertools.combinations(_clset1,icl1):
                     clset=_clset0+[el for el in x]
