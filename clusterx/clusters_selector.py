@@ -58,6 +58,10 @@ class ClustersSelector():
              * ``cv_shuffle``: Boolean. If ``cv_type`` is n-fold, this tells whether to shuffle the 
                data for CV. Default: ``False``.
 
+             * ``cv_random_state``: int or None. If ``cv_shuffle`` is ``True``, this controls the ordering
+               of the shuffling. If None, the shuffling is different in every call. If an integer is passed,
+               same shuffling is got for same integer input, so reproducible results can be obtained.
+
              * ``standardize``: Boolean. If ``True``, standardize correlations. Default: ``False``. 
 
         * If ``selector_type`` is ``"lasso_cv"``: the selector_opts dict keys are:
@@ -95,6 +99,11 @@ class ClustersSelector():
              the scikit learn library is used. This parameter determines the regularization strength. 
              If set to ``0`` (default), the estimator switches to ordinary least squares.
 
+           * ``alphas``: list or numpy array of float (default: ``[]``). If the len(alphas) > 1, for 
+             the subset selection a RidgeCV estimator from 
+             the scikit learn library is used. This parameter determines the list regularization strengths. 
+
+
     **Notes:**
 
     * Besides the indicated keys above, the ``**selector_opts`` dict may contain the key ``"method"`` 
@@ -113,6 +122,7 @@ class ClustersSelector():
         self.fit_intercept = selector_opts.pop("fit_intercept", False)
         self.cv_type = selector_opts.pop("cv_type", "loo")
         self.cv_shuffle = selector_opts.pop("cv_shuffle", False)
+        self.cv_random_state = selector_opts.pop("cv_random_state", False)
         self.standardize = selector_opts.pop("standardize", False)
         
         # additional arguments for estimator in CV
@@ -132,6 +142,7 @@ class ClustersSelector():
         self.nclmax = selector_opts.pop("nclmax", 0)
         self.set0 = selector_opts.pop("set0",[0, 0])
         self.alpha = selector_opts.pop("alpha", 0)
+        self.alphas = selector_opts.pop("alphas", [])
         
 
         self.predictions = []
@@ -269,21 +280,26 @@ class ClustersSelector():
         from sklearn.model_selection import cross_val_score
         from sklearn import linear_model
         from sklearn.metrics import mean_squared_error
+        from tqdm import tqdm
 
         if not self.standardize:
-            if self.alpha != 0:
+            if self.alpha != 0 and len(self.alphas) == 0:
                 self.estimator_cv = linear_model.Ridge(alpha=self.alpha, fit_intercept=self.fit_intercept)
+            elif len(self.alphas) > 1:
+                self.estimator_cv = linear_model.RidgeCV(alphas=self.alphas, fit_intercept=self.fit_intercept)
             else:
                 self.estimator_cv = linear_model.LinearRegression(fit_intercept=self.fit_intercept)
         else:
             from sklearn.preprocessing import StandardScaler
             from sklearn.pipeline import make_pipeline
 
-            if self.alpha != 0:
+            if self.alpha != 0 and len(self.alphas) == 0:
                 self.estimator_cv = make_pipeline(StandardScaler(), linear_model.Ridge(alpha=self.alpha, fit_intercept=self.fit_intercept))
+            elif len(self.alphas) > 1:
+                self.estimator_cv = make_pipeline(StandardScaler(), linear_model.RidgeCV(alpha=self.alphas, fit_intercept=self.fit_intercept))
             else:
                 self.estimator_cv = make_pipeline(StandardScaler(), linear_model.LinearRegression(fit_intercept=self.fit_intercept))
-        
+
         rows = np.arange(len(p))
         ecis = []
         ranks = []
@@ -294,7 +310,7 @@ class ClustersSelector():
 
         el = True
 
-        for iset, clset in enumerate(clsets):
+        for iset, clset in tqdm(enumerate(clsets), total=len(clsets), desc="Subset CV"):
             _comat = x[np.ix_(rows,clset)]
             
             _cvs = None
@@ -304,9 +320,9 @@ class ClustersSelector():
             else:
                 from sklearn.model_selection import KFold
                 if self.cv_type == "5-fold":
-                    kf = KFold(n_splits=5, shuffle=self.cv_shuffle)
+                    kf = KFold(n_splits=5, shuffle=self.cv_shuffle, random_state=self.cv_random_state)
                 if self.cv_type == "10-fold":
-                    kf = KFold(n_splits=10, shuffle=self.cv_shuffle)
+                    kf = KFold(n_splits=10, shuffle=self.cv_shuffle, random_state=self.cv_random_state)
 
                 _cvs = cross_val_score(self.estimator_cv, _comat, p, cv=kf.split(x), scoring = 'neg_mean_squared_error', n_jobs = -1)
                 
@@ -382,9 +398,9 @@ class ClustersSelector():
             else:
                 from sklearn.model_selection import KFold
                 if self.cv_type == "5-fold":
-                    kf = KFold(n_splits=5, shuffle=self.cv_shuffle)
+                    kf = KFold(n_splits=5, shuffle=self.cv_shuffle, random_state=self.cv_random_state)
                 if self.cv_type == "10-fold":
-                    kf = KFold(n_splits=10, shuffle=self.cv_shuffle)
+                    kf = KFold(n_splits=10, shuffle=self.cv_shuffle, random_state=self.cv_random_state)
 
                 _cvs = cross_val_score(estimator_cv, x, p, cv=kf.split(x), scoring = 'neg_mean_squared_error', n_jobs = -1)
                 
@@ -526,9 +542,9 @@ class ClustersSelector():
             else:
                 from sklearn.model_selection import KFold
                 if self.cv_type == "5-fold":
-                    kf = KFold(n_splits=5, shuffle=self.cv_shuffle)
+                    kf = KFold(n_splits=5, shuffle=self.cv_shuffle, random_state=self.cv_random_state)
                 if self.cv_type == "10-fold":
-                    kf = KFold(n_splits=10, shuffle=self.cv_shuffle)
+                    kf = KFold(n_splits=10, shuffle=self.cv_shuffle, random_state=self.cv_random_state)
 
                 _cvs = cross_val_score(estimator_lr, _comat_model, p, cv=kf.split(x), scoring = 'neg_mean_squared_error', n_jobs = -1)
 
