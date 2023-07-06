@@ -515,10 +515,8 @@ class Model():
         ``fit_params``: dictionary
             Parameters to pass to the fit method of the estimator.
         """
-        from sklearn.model_selection import cross_val_score, cross_validate, cross_val_predict
+        from sklearn.model_selection import cross_val_score, cross_val_predict
         from sklearn.model_selection import LeaveOneOut
-        from sklearn.metrics import mean_squared_error
-        from sklearn import linear_model
         
         X = self.corrc.get_correlation_matrix(sset)
         y = sset.get_property_values(self.property_name)
