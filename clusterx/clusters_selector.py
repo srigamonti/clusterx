@@ -262,7 +262,7 @@ class ClustersSelector():
         self.optimal_comat = self.ini_comat[np.ix_(np.arange(len(p)), opt)]
         
         self.optimal_clusters = self.cpool.get_subpool(opt)
-
+        
         return self.optimal_clusters
 
     def get_optimal_cpool(self):
@@ -301,18 +301,13 @@ class ClustersSelector():
                 self.estimator_cv = make_pipeline(StandardScaler(), linear_model.LinearRegression(fit_intercept=self.fit_intercept))
 
         rows = np.arange(len(p))
-        ecis = []
-        ranks = []
-        sizes = []
 
         opt_cv = -1
         opt_clset = []
 
-        el = True
-
         for iset, clset in tqdm(enumerate(clsets), total=len(clsets), desc="Subset CV"):
-            _comat = x[np.ix_(rows,clset)]
-            
+            _comat = x[np.ix_(rows,clset)] 
+
             _cvs = None
             if self.cv_type == "loo":
                 from sklearn.model_selection import LeaveOneOut
@@ -320,11 +315,17 @@ class ClustersSelector():
             else:
                 from sklearn.model_selection import KFold
                 if self.cv_type == "5-fold":
-                    kf = KFold(n_splits=5, shuffle=self.cv_shuffle, random_state=self.cv_random_state)
+                    if self.cv_shuffle:
+                        kf = KFold(n_splits=5, shuffle=self.cv_shuffle, random_state=self.cv_random_state)
+                    else:
+                        kf = KFold(n_splits=5, shuffle=self.cv_shuffle)
                 if self.cv_type == "10-fold":
-                    kf = KFold(n_splits=10, shuffle=self.cv_shuffle, random_state=self.cv_random_state)
+                    if self.cv_shuffle:
+                        kf = KFold(n_splits=10, shuffle=self.cv_shuffle, random_state=self.cv_random_state)
+                    else:
+                        kf = KFold(n_splits=10, shuffle=self.cv_shuffle)
 
-                _cvs = cross_val_score(self.estimator_cv, _comat, p, cv=kf.split(x), scoring = 'neg_mean_squared_error', n_jobs = -1)
+                _cvs = cross_val_score(self.estimator_cv, _comat, p, cv=kf.split(_comat), scoring = 'neg_mean_squared_error', n_jobs = -1)
                 
             mean_cv=np.sqrt(-np.mean(_cvs))
             self.cvs.append(mean_cv)
