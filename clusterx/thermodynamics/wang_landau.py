@@ -180,7 +180,7 @@ def compute_thermodynamic_averages(temperatures, energy, log_cdos, filename=None
             entropy=thavg[3],
         )
         np.savetxt(
-            filename,
+            filename+".txt",
             np.vstack((
                 temperatures,
                 thavg[0],
@@ -281,10 +281,14 @@ def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=Fals
 
     energy = []
     log_g = []
+    histogram = []
+    histogram_norm = []
+    microcanonical_temp = []
+    microcanonical_temps = []
+    energy_ranges = []
 
     wl_itrn = []
-    for i in range(n_cdos):
-        
+    for i in range(n_cdos):        
         wl_itrn.append(str(wliteration))
         if wliteration == -1:
             wl_itrn[i] = str(len(cdoss[i])-2)
@@ -315,10 +319,27 @@ def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=Fals
             matching_deltas.append(np.mean(deltas)+matching_deltas[i-1])
 
     for i in range(n_cdos):
-        
-        for e, g in zip(cdoss[i]["sampling_info"]["energy_bins"], cdoss[i][wl_itrn[i]]["cdos"]):
+
+        hsum = np.sum(cdoss[i][wl_itrn[i]]["histogram"])
+        microcanonical_temp.append(
+            microcanonical_temperature(
+                cdoss[i]["sampling_info"]["energy_bins"],
+                cdoss[i][wl_itrn[i]]["cdos"]
+                )
+            )
+        energy_ranges.append(cdoss[i]["sampling_info"]["energy_bins"])
+
+
+        for e, g, h, t in zip(
+            cdoss[i]["sampling_info"]["energy_bins"], 
+            cdoss[i][wl_itrn[i]]["cdos"], 
+            cdoss[i][wl_itrn[i]]["histogram"],
+            microcanonical_temp[i]):
             energy.append(e)
             log_g.append(g-matching_deltas[i])
+            histogram.append(h)
+            histogram_norm.append(h/hsum)
+            microcanonical_temps.append(t)
 
     energy_unique = np.unique(energy)
 
@@ -337,23 +358,44 @@ def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=Fals
     log_g_unique *= e_factor
 
     if filename is not None:
+        energy_windows = []
+        log_g_windows = []
+
+        for i in range(n_cdos):
+            for e, g in zip(cdoss[i]["sampling_info"]["energy_bins"], cdoss[i][wl_itrn[i]]["cdos"]):
+                energy_windows.append(e)
+                log_g_windows.append(g)
+
         np.savez(
             filename,
             energy=energy_unique,
-            log_cdos=log_g_unique
+            log_cdos=log_g_unique,
+            energy_windows=energy_windows,
+            log_cdos_windows=log_g_windows, 
+            histogram=histogram, 
+            histogram_norm=histogram_norm,
+            microcanonical_temperature=microcanonical_temps,
+            microcanonical_temperatures=microcanonical_temp,
+            energy_ranges = energy_ranges
+
         )
 
         np.savetxt(
-            filename,
+            filename+".txt",
             np.vstack((
                 energy_unique,
-                log_g_unique
+                log_g_unique,
+                energy_windows,
+                log_g_windows,
+                histogram,
+                histogram_norm,
+                microcanonical_temps    
             )).T
         )
 
     if show_plot:
         import matplotlib.pyplot as plt
-        plt.scatter(np.array(energy) * e_factor, np.array(log_g) * e_factor)
+        plt.scatter(np.array(energy_windows) * e_factor, np.array(log_g_windows) * e_factor)
         plt.scatter(energy_unique, log_g_unique)
         plt.show()
 
@@ -497,6 +539,7 @@ class WangLandau():
         prob_dist = "gaussian",
         trans_prob = 1e-3, 
         itmax = int(1e8),
+        nitsampling = 1,
         nproc = 0
     ):
         import sys
@@ -518,20 +561,25 @@ class WangLandau():
 
         e = self._em.predict(struc) * self._ef
 
-        if e >= emin and e <= emax:
+        if e >= emin and e <= emax and nitsampling == 1:
             return struc
         else:
             cou = 0
+            scou = 0
+            countsampling = False
             f = open(f"init_str_search_nproc_{nproc}.txt", "w")
-            while cou < itmax:
+            while cou < itmax and scou < nitsampling:
                 f.write(f"{nproc}\t{cou}\t{emin}\t{emax}\t{e}\n")
                 cou += 1
+                if countsampling:
+                    scou += 1
                     
                 ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
                 de = self._em.predict_swap(struc, ind1 = ind1 , ind2 = ind2, site_types = self._sublattice_indices) * self._ef
                 e1 = e + de
                 if e1 >= emin and e1 <= emax:
-                    return struc
+                    countsampling = True
+                    accept_swap = True
                 else:
                     if (e1 > emax and de < 0) or (e1 < emin and de > 0):
                         accept_swap = True
@@ -551,8 +599,10 @@ class WangLandau():
                     struc.swap(ind2, ind1, site_type = site_type, rindices = rindices)
             f.close()
             if cou >= itmax:
-                sys.exit("WangLandau: maximum number of iterations for searching initial structure reached. Aborting simulation.")
-    
+                print("WangLandau: maximum number of iterations for searching initial structure reached. Aborting simulation.")
+                return struc
+            return struc
+
 
     def _wls_init_from_file(self, cd, update_method, flatness_conditions, f_range):
         cdos = []
