@@ -166,7 +166,6 @@ def plot_optimization_vs_number_of_clusters(
     fs = int(width*1.8)
     ticksize = fs
     golden_ratio = (math.sqrt(5) - 0.9) / 2.0
-    labelsize = fs
     height = float(width * golden_ratio)
 
     plt.figure(figsize=(width,height))
@@ -233,6 +232,17 @@ def plot_optimization_vs_number_of_clusters(
     if show_yzero_axis:
         ax.axhline(y=0, color='k', linewidth=0.5)
 
+    np.savez(
+        "xydata_optimization_vs_number_of_clusters",
+        cluster_set_sizes = set_sizes,
+        rmse_fit = rmse,
+        rmse_cv = cvs,
+        optimal_number_of_clusters = ncl_opt,
+        optimal_rmse_cv = min(cvs),
+        cluster_set_sizes_for_lowest_cv = opt_s,
+        rmse_fit_for_lowest_cv = opt_r,
+        rmse_cv_for_lowest_cv = opt_cv,
+        )
     plt.savefig(fname)
     if show_plot:
         plt.show()
@@ -418,6 +428,8 @@ def plot_property_vs_concentration(sset,
                                    property_name=None,
                                    show_loo_predictions=True,
                                    sset_enum=None,
+                                   properties_enum=None,
+                                   concentrations_enum=None,
                                    sset_gss=None,
                                    show_plot = True,
                                    refs=None,
@@ -502,6 +514,11 @@ def plot_property_vs_concentration(sset,
 
     if sset_enum is not None:
         pred_enum = np.array(sset_enum.get_predictions(cemodel)) * yfactor
+    
+    if properties_enum is not None and sset_enum is None:
+        pred_enum = properties_enum
+        frconc_enum = concentrations_enum
+        vl_en_enum = refs[0]*(1-np.array(frconc_enum)) + np.array(frconc_enum)*refs[1]
 
     if sset_gss is not None:
         pred_gss = np.array(sset_gss.get_predictions(cemodel)) * yfactor
@@ -521,6 +538,10 @@ def plot_property_vs_concentration(sset,
         frconc_gss = sset_gss.get_concentrations(site_type,sigma)
         vl_en_gss = refs[0]*(1-np.array(frconc_gss)) + np.array(frconc_gss)*refs[1]
 
+    data["concentration-enum"] = None
+    data["predicted-property-enumeration"] = None
+    data["predicted-property"] = None
+    data["predicted-property-cv"] = None
     data["concentration"] = frconc
     data["property"] = energies-vl_en
     ymax = np.amax(data["property"])
@@ -538,7 +559,7 @@ def plot_property_vs_concentration(sset,
         plt.scatter(frconc,predictions-vl_en,marker='o', edgecolors='none', facecolors='blue',label='Predicted')
         ymax = findmax(ymax,data["predicted-property"])
         ymin = findmin(ymin,data["predicted-property"])
-    if sset_enum is not None:
+    if sset_enum is not None or properties_enum is not None:
         data["concentration-enum"] = frconc_enum
         data["predicted-property-enumeration"] = pred_enum-vl_en_enum
         plt.scatter(frconc_enum,pred_enum-vl_en_enum,marker='o', edgecolors='none', facecolors='gray',label='Enumeration')
@@ -572,6 +593,16 @@ def plot_property_vs_concentration(sset,
     
     plt.legend()
     leg=ax.legend(loc='best')
+
+    np.savez(
+        "xydata_property_vs_concentration",
+        concentrations_property = data["concentration"],
+        property = data["property"],
+        predictions = data['predicted-property'],
+        predictions_cv = data['predicted-property-cv'],
+        concentrations_enum = data["concentration-enum"],
+        predictions_enum = data["predicted-property-enumeration"]
+        )
 
     if show_plot:
         plt.show()
