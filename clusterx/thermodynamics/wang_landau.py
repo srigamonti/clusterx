@@ -74,17 +74,18 @@ def cdos_interpolation(
 
         if plot_temperature is None:
             plt.plot(e_itpl, log_g_itpl, label="CDOS(itpl)")
-            plt.plot(e, log_g, label="CDOS")
+            plt.scatter(e, log_g, label="CDOS")
             if plot_microcanonical_temperature:
                 temp = microcanonical_temperature(e, log_g)
                 temp_itpl = microcanonical_temperature(e_itpl, log_g_itpl)
                 plt.plot(e_itpl, temp_itpl, label="T(itpl)")
-                plt.plot(e, temp, label="T")
-                plt.ylim(-100,2000)
+                plt.scatter(e, temp, label="T")
+                #plt.ylim(-100,2000)
         else:
             plt.plot(e_itpl, log_g_itpl-e_itpl/(kb*plot_temperature))
             plt.plot(e,log_g-e/(kb*plot_temperature))
 
+        plt.legend()
         plt.show()
         
     return e_itpl, log_g_itpl
@@ -266,7 +267,7 @@ def make_energy_windows(inverse_overlap, n_windows, emin, emax, sought_energy_bi
 
     return energy_windows
 
-def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=False, filename=None):
+def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=False, plot_microcanonical_temperature=False, plot_temperature=None, filename=None):
     """Merge CDOSs from a parallel WL run into a single CDOS for postprocessing
     """
     eps_energy = 1e-3
@@ -355,8 +356,7 @@ def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=Fals
             log_g_unique[i] = g_avg / count
 
     energy_unique *= e_factor
-    log_g_unique *= e_factor
-
+    
     if filename is not None:
         energy_windows = []
         log_g_windows = []
@@ -395,8 +395,21 @@ def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=Fals
 
     if show_plot:
         import matplotlib.pyplot as plt
-        plt.scatter(np.array(energy_windows) * e_factor, np.array(log_g_windows) * e_factor)
-        plt.scatter(energy_unique, log_g_unique)
+        from ase.units import kB as kb
+
+        log_boltzmann = np.zeros(len(energy))
+        log_boltzmann_unique = np.zeros(len(energy_unique))
+        if plot_temperature is not None:
+            log_boltzmann = np.array(energy)/(kb*plot_temperature)
+            log_boltzmann_unique = np.array(energy_unique)/(kb*plot_temperature)
+
+        plt.scatter(np.array(energy) * e_factor, np.array(log_g) - log_boltzmann, label='All data')
+        plt.scatter(energy_unique, log_g_unique - log_boltzmann_unique, label='Merged data')
+
+        if plot_microcanonical_temperature:
+            temp = microcanonical_temperature(energy_unique, log_g_unique)
+            plt.scatter(energy_unique, temp)
+
         plt.show()
 
     return energy_unique, log_g_unique
