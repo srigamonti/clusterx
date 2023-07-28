@@ -82,8 +82,8 @@ def cdos_interpolation(
                 plt.scatter(e, temp, label="T")
                 #plt.ylim(-100,2000)
         else:
-            plt.plot(e_itpl, log_g_itpl-e_itpl/(kb*plot_temperature))
-            plt.plot(e,log_g-e/(kb*plot_temperature))
+            plt.plot(e_itpl, log_g_itpl-e_itpl/(kb*plot_temperature), label="CDOS(itpl)")
+            plt.scatter(e,log_g-e/(kb*plot_temperature), label="CDOS")
 
         plt.legend()
         plt.show()
@@ -282,7 +282,12 @@ def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=Fals
 
     energy = []
     log_g = []
+    energy_window = []
+    energy_windows = []
+    log_g_window = []
+    log_g_windows = []
     histogram = []
+    histogram_window = []
     histogram_norm = []
     microcanonical_temp = []
     microcanonical_temps = []
@@ -294,16 +299,9 @@ def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=Fals
         if wliteration == -1:
             wl_itrn[i] = str(len(cdoss[i])-2)
 
-    if 0:
-        for i in range(n_cdos):
-
-            for e, g in zip(cdoss[i]["sampling_info"]["energy_bins"], cdoss[i][wl_itrn[i]]["cdos"]):
-                energy.append(e)
-                log_g.append(g)
-
-        import matplotlib.pyplot as plt
-        plt.scatter(energy, log_g)
-        plt.show()
+    for i in range(n_cdos):
+        log_g_window.append(cdoss[i][wl_itrn[i]]["cdos"])
+        energy_window.append(cdoss[i]["sampling_info"]["energy_bins"])
     
     matching_deltas = []
     matching_deltas.append(cdoss[0][wl_itrn[0]]["cdos"][0])
@@ -321,13 +319,16 @@ def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=Fals
 
     for i in range(n_cdos):
 
+        histogram_window.append(cdoss[i][wl_itrn[i]]["histogram"])
         hsum = np.sum(cdoss[i][wl_itrn[i]]["histogram"])
+        nbins = len(cdoss[i][wl_itrn[i]]["histogram"])
         microcanonical_temp.append(
             microcanonical_temperature(
                 cdoss[i]["sampling_info"]["energy_bins"],
                 cdoss[i][wl_itrn[i]]["cdos"]
                 )
             )
+
         energy_ranges.append(cdoss[i]["sampling_info"]["energy_bins"])
 
 
@@ -335,11 +336,12 @@ def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=Fals
             cdoss[i]["sampling_info"]["energy_bins"], 
             cdoss[i][wl_itrn[i]]["cdos"], 
             cdoss[i][wl_itrn[i]]["histogram"],
-            microcanonical_temp[i]):
+            microcanonical_temp[i]
+            ):
             energy.append(e)
             log_g.append(g-matching_deltas[i])
             histogram.append(h)
-            histogram_norm.append(h/hsum)
+            histogram_norm.append(h/hsum * nbins)
             microcanonical_temps.append(t)
 
     energy_unique = np.unique(energy)
@@ -356,10 +358,16 @@ def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=Fals
             log_g_unique[i] = g_avg / count
 
     energy_unique *= e_factor
-    
+
+    from ase.units import kB as kb
+    log_boltzmann = np.zeros(len(energy))
+    log_boltzmann_unique = np.zeros(len(energy_unique))
+    if plot_temperature is not None:
+        log_boltzmann = np.array(energy)/(kb*plot_temperature)
+        log_boltzmann_unique = np.array(energy_unique)/(kb*plot_temperature)
+
     if filename is not None:
-        energy_windows = []
-        log_g_windows = []
+        from ase.units import kB as kb
 
         for i in range(n_cdos):
             for e, g in zip(cdoss[i]["sampling_info"]["energy_bins"], cdoss[i][wl_itrn[i]]["cdos"]):
@@ -368,16 +376,21 @@ def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=Fals
 
         np.savez(
             filename,
+            temperature_for_log_canonical_probability=plot_temperature,
             energy=energy_unique,
             log_cdos=log_g_unique,
+            log_canonical_probability=log_g_unique - log_boltzmann_unique,
             energy_windows=energy_windows,
             log_cdos_windows=log_g_windows, 
             histogram=histogram, 
             histogram_norm=histogram_norm,
             microcanonical_temperature=microcanonical_temps,
-            microcanonical_temperatures=microcanonical_temp,
-            energy_ranges = energy_ranges
-
+            energy_window = np.array(energy_window, dtype=object),
+            log_cdos_window = np.array(log_g_window, dtype=object),
+            histogram_window = np.array(histogram_window, dtype=object),
+            microcanonical_temperatures=np.array(microcanonical_temp, dtype=object),
+            energy_ranges = np.array(energy_ranges, dtype=object),
+            allow_pickle=True
         )
 
         np.savetxt(
@@ -395,13 +408,6 @@ def merge_windows(filepaths = [], wliteration = -1, e_factor = 1, show_plot=Fals
 
     if show_plot:
         import matplotlib.pyplot as plt
-        from ase.units import kB as kb
-
-        log_boltzmann = np.zeros(len(energy))
-        log_boltzmann_unique = np.zeros(len(energy_unique))
-        if plot_temperature is not None:
-            log_boltzmann = np.array(energy)/(kb*plot_temperature)
-            log_boltzmann_unique = np.array(energy_unique)/(kb*plot_temperature)
 
         plt.scatter(np.array(energy) * e_factor, np.array(log_g) - log_boltzmann, label='All data')
         plt.scatter(energy_unique, log_g_unique - log_boltzmann_unique, label='Merged data')
