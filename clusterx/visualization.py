@@ -96,7 +96,8 @@ def plot_optimization_vs_number_of_clusters(
         show_yzero_axis = True,
         show_plot = True,
         yaxis_label = "Errors",
-        fname="PLOT_property_vs_number_of_clusters.png"):
+        fname="PLOT_property_vs_number_of_clusters.png",
+        fname_plotdata="xydata_optimization_vs_number_of_clusters"):
     """Plot cluster optimization with matplotlib
 
     The plot shows the prediction and fitting errors as a function of the clusters
@@ -181,7 +182,9 @@ def plot_optimization_vs_number_of_clusters(
     ax.tick_params(width=3*scale,size=10*scale,pad=10*scale)
 
     plt.plot([ncl_opt],[min(cvs)], 'o', markersize=25*scale, markeredgewidth=4*scale,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE' )
-
+    opt_s = None
+    opt_cv = None
+    opt_r = None
     if (clsel.clusters_sets=="combinations") or (clsel.clusters_sets=="size+combinations"):
 
         opt_r=[]
@@ -233,7 +236,7 @@ def plot_optimization_vs_number_of_clusters(
         ax.axhline(y=0, color='k', linewidth=0.5)
 
     np.savez(
-        "xydata_optimization_vs_number_of_clusters",
+        fname_plotdata,
         cluster_set_sizes = set_sizes,
         rmse_fit = rmse,
         rmse_cv = cvs,
