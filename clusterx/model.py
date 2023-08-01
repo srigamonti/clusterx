@@ -330,11 +330,11 @@ class Model():
             self._mc_estimator_intercept = self.estimator.intercept_
             self._mc_estimator_coef = self.estimator.coef_
 
-            if self._basis == 'binary-linear':
+            if self._basis == 'binary-linear' or self._basis ==  'indicator-binary':
                 self._delta_e_calc = self._compute_delta_e_binary_linear
             else:
                 self._delta_e_calc = self._compute_delta_e
-                
+            
             self._num_mc_calls = 1
             self._mc_init_time -= time.time()
             self._mc_init_time = -self._mc_init_time
@@ -358,14 +358,13 @@ class Model():
 
         return de1 + de2
 
-    #@profile    
     def _compute_delta_e_binary_linear(self, structure, ind, old_sigma, new_sigma):
         sgn = new_sigma - old_sigma
         corrs = np.zeros(self._mc_nclusters)
         for icl in self._interactions_dict[ind]["interactions_list"]:
             cluster_index = self._clusters_list[icl]["cluster_index"]
             corrs[cluster_index] = 0
-            
+
         for ifi, icl in zip(self._interactions_dict[ind]["cluster_sites_index_for_ind"],self._interactions_dict[ind]["interactions_list"]):
             cluster_index = self._clusters_list[icl]["cluster_index"]
             cluster_sites = self._clusters_list[icl]["cluster_sites"]
