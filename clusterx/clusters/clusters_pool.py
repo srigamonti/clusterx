@@ -427,14 +427,26 @@ class ClustersPool():
         if method == 1:
             self.gen_clusters1()
 
-    def gen_clusters0(self):
+    def gen_clusters0(self, verbosity=0):
         from clusterx.super_cell import SuperCell
         from itertools import product, combinations
-        from tqdm import tqdm
+        #from tqdm import tqdm
+        from tqdm.notebook import tqdm
         import scipy
         import time
 
-        print("INFO(clusters_pool): Initialization started")
+        disable_tqdm = True
+        print_info = False
+
+        if verbosity == 0:
+            disable_tqdm = True
+            print_info = False
+
+        if verbosity == 1:
+            disable_tqdm = False
+            print_info = True
+
+        if print_info: print("INFO(clusters_pool): Initialization started")
         
         npoints = self._npoints
         scell = self._cpool_scell
@@ -442,20 +454,18 @@ class ClustersPool():
         sites = scell.get_sites()
         satoms = scell.get_substitutional_sites()
         nsatoms = len(satoms)
-        idx_subs = scell.get_sublattice_types()
-        tags = scell.get_tags()
         distances = self._distances
         radii = self._radii
 
         symper = scell.get_sym_perm()
         
-        print("INFO(clusters_pool): Initialization finished")
+        if print_info: print("INFO(clusters_pool): Initialization finished")
 
         # Find Wyckoff sites
         wyck_idxs = set()
         full_list = set()
 
-        for idx in tqdm(satoms, total=nsatoms, desc="INFO(clusters_pool): Finding wyckoff sites"):
+        for idx in tqdm(satoms, total=nsatoms, desc="INFO(clusters_pool): Finding wyckoff sites", disable=disable_tqdm):
             sigmas = np.zeros(natoms, dtype = "int")
             np.put(sigmas, idx, [1])
                     
@@ -484,21 +494,21 @@ class ClustersPool():
         
         for i, (npts,radius) in enumerate(zip(npoints,radii)):
             
-            clrs_full = []
-            #n_max = int(scipy.special.binom(len(set(idxs_sets[i]).difference(set([widx]))), npts-1))*len(wyck_idxs)
             n_max = int(scipy.special.binom(len(idxs_sets[i])-1, npts-1))*len(wyck_idxs)
             
             for widx in tqdm(
                     wyck_idxs,
                     total=len(wyck_idxs),
                     desc=f"Loop over Wyckoff sites",
-                    position=0):
+                    position=0,
+                    disable=disable_tqdm):
                 for idxs_ in tqdm(
                         combinations(set(idxs_sets[i]).difference(set([widx])),npts-1),
                         total=n_max,
                         desc=f"INFO(clusters_pool): Finding unique clusters of {npts} points",
                         position=1,
-                        leave=False):
+                        leave=False,
+                        disable=disable_tqdm):
                 
                     idxs = [widx]
                     for idx in idxs_:
@@ -533,7 +543,7 @@ class ClustersPool():
                                         )
                                     )
 
-        for i, idx_ss in tqdm(enumerate(cpool_idx_ss), total=len(cpool_idx_ss), desc="INFO(clusters_pool): Creating clusters objects"):
+        for i, idx_ss in tqdm(enumerate(cpool_idx_ss), total=len(cpool_idx_ss), desc="INFO(clusters_pool): Creating clusters objects", disable=disable_tqdm):
             sps = []
             for idx,isp in zip(idx_ss[0],idx_ss[1]):
                 sps.append(sites[idx][isp])
