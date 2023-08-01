@@ -47,10 +47,7 @@ class ClustersSelector():
 
         * General options:
 
-             * ``fit_intercept``: boolean (default ``False``). The default (``False``) assumes that 
-               you will make cluster selection on a pool of clusters containing the empty cluster. 
-               If that is not the case, set this to ``True``. It is advisable not to include the empty
-               cluster, and put this to ``True``.
+             * ``fit_intercept``: boolean (default ``True``).
     
              * ``cv_type``: String. Either ``"loo"``, for leave-one-out CV; ``"5-fold"`` for 5-fold CV,
                or ``10-fold`` for 10-fold CV. Default: ``"loo"``
@@ -119,7 +116,7 @@ class ClustersSelector():
         self.method = selector_opts.pop("method", selector_type) # selector_type argument replaces old method argument. This ensures backward compatibility.
 
         # general options
-        self.fit_intercept = selector_opts.pop("fit_intercept", False)
+        self.fit_intercept = selector_opts.pop("fit_intercept", True)
         self.cv_type = selector_opts.pop("cv_type", "loo")
         self.cv_shuffle = selector_opts.pop("cv_shuffle", False)
         self.cv_random_state = selector_opts.pop("cv_random_state", False)
@@ -243,7 +240,7 @@ class ClustersSelector():
  
             opt = np.union1d(clset0, clset1)
 
-        elif self.method == "subsets_cv" or self.method == "linreg": # "linreg" is deprecated
+        elif self.method == "subsets_cv" or self.method == "subset_cv" or self.method == "subsets-cv" or self.method == "subset-cv" or self.method == "linreg": # "linreg" is deprecated
             if self.clusters_sets == "size":
                 clsets = self.cpool.get_clusters_sets(grouping_strategy = "size")
                 opt = self._linear_regression_cv(x, p, clsets)
@@ -276,11 +273,16 @@ class ClustersSelector():
         return self.optimal_clusters._cpool
 
 
-    def _linear_regression_cv(self, x, p, clsets):
+    def _linear_regression_cv(self, x, p, clsets, verbosity=0):
         from sklearn.model_selection import cross_val_score
         from sklearn import linear_model
         from sklearn.metrics import mean_squared_error
         from tqdm import tqdm
+ 
+        disable_tqdm = True
+
+        if verbosity == 0:
+            disable_tqdm = True
 
         if not self.standardize:
             if self.alpha != 0 and len(self.alphas) == 0:
@@ -305,7 +307,7 @@ class ClustersSelector():
         opt_cv = -1
         opt_clset = []
 
-        for iset, clset in tqdm(enumerate(clsets), total=len(clsets), desc="Subset CV"):
+        for iset, clset in tqdm(enumerate(clsets), total=len(clsets), desc="Subset CV", disable=disable_tqdm):
             _comat = x[np.ix_(rows,clset)] 
 
             _cvs = None
