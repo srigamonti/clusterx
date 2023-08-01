@@ -2,11 +2,10 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from collections import Counter
 import numpy as np
-import sys
 from clusterx.symmetry import get_scaled_positions
 from clusterx.utils import PolynomialBasis
+from clusterx.parent_lattice import ParentLattice
 from functools import lru_cache
 import pickle
 import os
@@ -18,8 +17,8 @@ class CorrelationsCalculator():
     **Parameters:**
 
     ``basis``: string
-        |  cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric``, ``polynomial``, and ``chebyshev``.
-        |  ``binary-linear``: highly interpretable, non-orthogonal basis functions for binary compounds
+        |  cluster basis to be used. Possible values are: ``indicator-binary``, ``trigonometric``, ``polynomial``, and ``chebyshev``.
+        |  ``indicator-binary``: highly interpretable, non-orthogonal basis functions for binary compounds (also ``binary-linear``, deprecated)
         |  ``trigonomentric``: orthonormal basis; constructed from sine and cosine functions; based on: Axel van de Walle, CALPHAD 33, 266 (2009)
         |  ``polynomial``: orthonormal basis; uses orthogonalized polynomials
         |  ``chebyshev``: orthonormsl basis; chebyshev polynomials for symmetrized sigmas (sigma in {-m/2, ..., 0, ..., m/2 }); based on: J.M. Sanchez, Physica 128A, 334-350 (1984)
@@ -188,7 +187,7 @@ class CorrelationsCalculator():
             else:
                 corr_dict.update({'lookup':False})
 
-            cpool.update({'correlations_calculator':corr_dict})
+            cpooldict.update({'correlations_calculator':corr_dict})
             atoms_db.metadata = cpooldict
 
     def _get_lookup_table(self):
@@ -256,7 +255,7 @@ class CorrelationsCalculator():
             return self._trigo_basis_function(alpha,sigma,m)
         
 
-        if self.basis == "binary-linear":
+        if self.basis == "binary-linear" or self.basis == "indicator-binary":
             # Only for binary alloys. Allows for simple interpretation of cluster interactions.
             return sigma
 
