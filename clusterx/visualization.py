@@ -11,8 +11,9 @@ def juview(plat,n=None):
 
     ``plat``: any of Atoms(ASE), ParentLattice, Supercell, Structure, StructureSet
         structure object to be plotted
-    ``n``: integer
-        plot the first ``n`` structures. If ``None``, return all structures.
+    ``n``: integer or list of integer
+        If integer, plot the first ``n`` structures. If list, plot range of structures.
+        If ``None``, return all structures.
 
     **Return:**
 
@@ -23,7 +24,6 @@ def juview(plat,n=None):
     from clusterx.structures_set import StructuresSet
     from clusterx.structures_set import Structure
     from clusterx.clusters.clusters_pool import ClustersPool
-    from clusterx.clusters.cluster import Cluster
 
     if isinstance(plat,Structure):
         return _makeview( [ plat.get_atoms() ] )
@@ -32,12 +32,20 @@ def juview(plat,n=None):
         return _makeview(plat.get_all_atoms())
 
     if isinstance(plat,StructuresSet):
-        return _makeview(plat.get_images(n=n))
+        if n is None:
+            return _makeview(plat.get_images())
+        if np.shape(n) == ():
+            return _makeview(plat.get_images(n=n))
+        if np.shape(n) == (2,):
+            return _makeview(plat.get_images()[n[0]:n[1]])
 
     if isinstance(plat,ClustersPool):
         atoms = plat.get_cpool_atoms()
         if n is not None:
-            return _makeview(atoms[0:n])
+            if np.shape(n) == ():
+                return _makeview(atoms[0:n])
+            if np.shape(n) == (2,):
+                return _makeview(atoms[n[0]:n[1]])
         else:
             return _makeview(atoms)
 
@@ -71,7 +79,8 @@ def _makeview(images):
         views.append(view)
 
     import ipywidgets
-    hboxes = [ipywidgets.HBox(views[i*3:i*3+3]) for i in range(int(math.ceil(len(views)/3.0)))]
+    #hboxes = [ipywidgets.HBox(views[i*3:i*3+3]) for i in range(int(math.ceil(len(views)/3.0)))]
+    hboxes = [ipywidgets.HBox([views[j] for j in range(i*3,min(i*3+3,len(views)))]) for i in range(int(math.ceil(len(views)/3.0)))]
     vbox = ipywidgets.VBox(hboxes)
     return vbox
 
@@ -96,8 +105,8 @@ def plot_optimization_vs_number_of_clusters(
         show_yzero_axis = True,
         show_plot = True,
         yaxis_label = "Errors",
-        fname="PLOT_property_vs_number_of_clusters.png",
-        fname_plotdata="xydata_optimization_vs_number_of_clusters"):
+        fig_fname=None,
+        data_fname=None):
     """Plot cluster optimization with matplotlib
 
     The plot shows the prediction and fitting errors as a function of the clusters
@@ -131,6 +140,7 @@ def plot_optimization_vs_number_of_clusters(
     from matplotlib import rc
     from matplotlib import rc,rcParams
     import math
+    from matplotlib.ticker import MaxNLocator
 
 
     set_sizes = sorted(clsel.set_sizes)
@@ -180,8 +190,9 @@ def plot_optimization_vs_number_of_clusters(
     plt.yticks(fontsize=ticksize)
     ax = plt.gca()
     ax.tick_params(width=3*scale,size=10*scale,pad=10*scale)
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
-    plt.plot([ncl_opt],[min(cvs)], 'o', markersize=25*scale, markeredgewidth=4*scale,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE' )
+    plt.plot([ncl_opt],[min(cvs)], 'o', markersize=25*scale, markeredgewidth=4*scale,markeredgecolor='r', markerfacecolor='None' , label='lowest RMSE-CV' )
     opt_s = None
     opt_cv = None
     opt_r = None
@@ -210,18 +221,13 @@ def plot_optimization_vs_number_of_clusters(
         opt_r.append(ormse)
         opt_cv.append(ocvs)
 
-        plt.plot(set_sizes, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='',label='training-RMSE')
-        plt.plot(set_sizes, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='',label='cv-RMSE')
+        plt.plot(set_sizes, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='',label='RMSE')
+        plt.plot(set_sizes, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='',label='RMSE-CV')
         plt.plot(opt_s, opt_r, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='-', linewidth=4*scale)
         plt.plot(opt_s, opt_cv, markersize=25*scale, marker='.',  color='black', zorder=1, linestyle='-', linewidth=4*scale)
-
     else:
-
-        #plt.plot([ncl_opt],[min(cvs)], 'o', markersize=25, markeredgewidth=4,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE' )
-        #scatter([ncl_opt],[min(cv)], s=400,facecolors='none', edgecolors='r',)
-
-        plt.plot(set_sizes, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='-',label='training-RMSE', linewidth=4*scale)
-        plt.plot(set_sizes, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='-',label='cv-RMSE',linewidth=4*scale)
+        plt.plot(set_sizes, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='-',label='RMSE', linewidth=4*scale)
+        plt.plot(set_sizes, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='-',label='RMSE-CV',linewidth=4*scale)
 
     plt.ylabel(yaxis_label ,fontsize=fs)
     plt.xlabel('Number of clusters',fontsize=fs)
@@ -235,18 +241,22 @@ def plot_optimization_vs_number_of_clusters(
     if show_yzero_axis:
         ax.axhline(y=0, color='k', linewidth=0.5)
 
-    np.savez(
-        fname_plotdata,
-        cluster_set_sizes = set_sizes,
-        rmse_fit = rmse,
-        rmse_cv = cvs,
-        optimal_number_of_clusters = ncl_opt,
-        optimal_rmse_cv = min(cvs),
-        cluster_set_sizes_for_lowest_cv = opt_s,
-        rmse_fit_for_lowest_cv = opt_r,
-        rmse_cv_for_lowest_cv = opt_cv,
-        )
-    plt.savefig(fname)
+    if data_fname is not None:
+        np.savez(
+            data_fname,
+            cluster_set_sizes = set_sizes,
+            rmse_fit = rmse,
+            rmse_cv = cvs,
+            optimal_number_of_clusters = ncl_opt,
+            optimal_rmse_cv = min(cvs),
+            cluster_set_sizes_for_lowest_cv = opt_s,
+            rmse_fit_for_lowest_cv = opt_r,
+            rmse_cv_for_lowest_cv = opt_cv,
+            )
+    
+    if fig_fname is not None:
+        plt.savefig(fig_fname)
+
     if show_plot:
         plt.show()
 
@@ -309,11 +319,11 @@ def plot_optimization_vs_sparsity(
     ax.tick_params(axis="both",which="both",width=3*scale,size=10*scale,pad=10*scale)
 
 
-    plt.semilogx([opt],[min(cvs)], 'o', markersize=25*scale, markeredgewidth=4*scale,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE')
+    plt.semilogx([opt],[min(cvs)], 'o', markersize=25*scale, markeredgewidth=4*scale,markeredgecolor='r', markerfacecolor='None' , label='lowest RMSE-CV')
     #scatter([ncl_opt],[min(cv)], s=400,facecolors='none', edgecolors='r',)
 
-    plt.semilogx(set_sparsity, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='-',label='training-RMSE', linewidth=4*scale)
-    plt.semilogx(set_sparsity, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='-',label='cv-RMSE',linewidth=4*scale)
+    plt.semilogx(set_sparsity, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='-',label='RMSE', linewidth=4*scale)
+    plt.semilogx(set_sparsity, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='-',label='RMSE-CV',linewidth=4*scale)
 
     plt.ylabel(yaxis_label ,fontsize=fs)
     plt.xlabel(xaxis_label ,fontsize=fs)
@@ -416,8 +426,8 @@ def _set_rc_params():
     rcParams['legend.borderpad'] = 0.25
     rcParams['legend.edgecolor'] = '0.3'
 
-    rcParams['text.usetex'] = True
-    rcParams['text.latex.preamble']=r"\usepackage{bm}"
+    #rcParams['text.usetex'] = True
+    #rcParams['text.latex.preamble']=r"\usepackage{bm}"
     
     # Color blind palette below
     #axes.prop_cycle: cycler('color', ['377eb8', 'ff7f00', '4daf4a', 'f781bf', 'a65628', '984ea3', '999999', 'e41a1c', 'dede00'])
@@ -440,7 +450,8 @@ def plot_property_vs_concentration(sset,
                                    yaxis_label = None,
                                    yfactor = 1.0,
                                    show_yzero_axis = True,
-                                   fname="PLOT_property_vs_concentration.png"):
+                                   data_fname=None,
+                                   fig_fname=None):
     """Plot property values versus concentration and return dictionary with data
 
     The call to this functions generates a plot with matplotlib. It also returns a dictionary
@@ -502,7 +513,7 @@ def plot_property_vs_concentration(sset,
 
     data = {}
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=np.array(rcParams['figure.figsize'])*scale)
 
     ax = fig.add_axes([0.19, 0.16, 0.78, 0.80])
     
@@ -597,20 +608,22 @@ def plot_property_vs_concentration(sset,
     plt.legend()
     leg=ax.legend(loc='best')
 
-    np.savez(
-        "xydata_property_vs_concentration",
-        concentrations_property = data["concentration"],
-        property = data["property"],
-        predictions = data['predicted-property'],
-        predictions_cv = data['predicted-property-cv'],
-        concentrations_enum = data["concentration-enum"],
-        predictions_enum = data["predicted-property-enumeration"]
-        )
+    if data_fname is not None:
+        np.savez(
+            data_fname,
+            concentrations_property = data["concentration"],
+            property = data["property"],
+            predictions = data['predicted-property'],
+            predictions_cv = data['predicted-property-cv'],
+            concentrations_enum = data["concentration-enum"],
+            predictions_enum = data["predicted-property-enumeration"]
+            )
 
     if show_plot:
         plt.show()
 
-    plt.savefig(fname) 
+    if fig_fname is not None:
+        plt.savefig(fig_fname) 
 
     plt.close()
     mpl.rcParams.update(mpl.rcParamsDefault)
