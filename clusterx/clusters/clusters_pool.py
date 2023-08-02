@@ -1379,7 +1379,7 @@ class ClusterOrbit(ClustersPool):
             
                 for j in range(i+1, ncl):
                     if j not in crossedout:
-                        if _orbit[i].__hash__ == _orbit[j].__hash__:
+                        if _orbit[i].myhash == _orbit[j].myhash:
                             weights[cnt-1] += 1
                             crossedout.add(j)
                         
