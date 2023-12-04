@@ -405,7 +405,7 @@ class StructuresSet():
         """
         return self._parent_lattice
 
-    # DEPRECATED, use caclulate_property_values instead
+    # DEPRECATED, use compute_property_values instead
     def calculate_property(self, prop_name="energy", prop_func=None, rm_vac=True):
         self.compute_property_values(property_name=prop_name, property_calc=prop_func, rm_vacancies=rm_vac, update_json_db=False)
         
@@ -470,7 +470,7 @@ class StructuresSet():
 
         if update_json_db:
             self._update_properties_in_json_db()
-            
+
         return props
 
     def calculate_energies(self, calculator, structure_fname="geometry.json"):
