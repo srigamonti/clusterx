@@ -109,6 +109,8 @@ class Cluster():
                                 r = d
             self.radius = r
 
+        self.myhash = self.__hash__()
+
     """
     def __lt__(self,other):
         if self.npoints == other.npoints:
@@ -162,7 +164,7 @@ class Cluster():
         return hash(str(list(zip(self.ais,self.ans))))
         
     def __eq__(self, other):
-        return self.__hash__ == other.__hash__ 
+        return self.myhash == other.myhash
 
     def __len__(self):
         return len(self.ais)
