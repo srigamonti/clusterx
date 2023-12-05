@@ -137,17 +137,15 @@ def plot_optimization_vs_number_of_clusters(
         
     """
     import matplotlib.pyplot as plt
-    from matplotlib import rc
-    from matplotlib import rc,rcParams
-    import math
     from matplotlib.ticker import MaxNLocator
 
+    _set_rc_params()
 
     set_sizes = sorted(clsel.set_sizes)
-    indizes = [i[0] for i in sorted(enumerate(clsel.set_sizes), key=lambda x:x[1])]
+    indexes = [i[0] for i in sorted(enumerate(clsel.set_sizes), key=lambda x:x[1])]
 
-    rmse = [clsel.rmse[ind] * yfactor for ind in indizes]
-    cvs = [clsel.cvs[ind] * yfactor for ind in indizes]
+    rmse = [clsel.rmse[ind] * yfactor for ind in indexes]
+    cvs = [clsel.cvs[ind] * yfactor for ind in indexes]
 
     nclmax = max(set_sizes)
     nclmin = min(set_sizes)
@@ -158,8 +156,6 @@ def plot_optimization_vs_number_of_clusters(
     if xmax is None:
         xmax = nclmax
          
-    ncl_range = xmax-xmin
-
     e_min = min([min(rmse),min(cvs)])
     e_max = max([max(rmse),max(cvs)])
     
@@ -169,30 +165,17 @@ def plot_optimization_vs_number_of_clusters(
     if ymax is None:
         ymax = e_max
 
-    e_range = ymax - ymin
+    ncl_opt = set_sizes[cvs.index(min(cvs))]
 
-    ncl_opt = set_sizes[clsel.cvs.index(min(clsel.cvs))]
+    fig = plt.figure(figsize=(4.0,3.0))
+    ax = fig.add_axes([0.19, 0.16, 0.78, 0.80])
 
-    width = 15.0*scale
-    fs = int(width*1.8)
-    ticksize = fs
-    golden_ratio = (math.sqrt(5) - 0.9) / 2.0
-    height = float(width * golden_ratio)
+    ax.set_ylim([ymin, ymax])
+    ax.set_xlim([xmin, xmax])
 
-    plt.figure(figsize=(width,height))
-
-    rc('axes', linewidth=3*scale)
-
-    plt.ylim(ymin - e_range * 0.02, ymax + e_range * 0.02)
-    plt.xlim(xmin - ncl_range * 0.02, xmax + ncl_range * 0.02)
-
-    plt.xticks(fontsize=ticksize)
-    plt.yticks(fontsize=ticksize)
-    ax = plt.gca()
-    ax.tick_params(width=3*scale,size=10*scale,pad=10*scale)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
-    plt.plot([ncl_opt],[min(cvs)], 'o', markersize=25*scale, markeredgewidth=4*scale,markeredgecolor='r', markerfacecolor='None' , label='lowest RMSE-CV' )
+    ax.plot([ncl_opt],[min(cvs)], 'o',markeredgecolor='r', markerfacecolor='None' , label='lowest RMSE-CV' )
     opt_s = None
     opt_cv = None
     opt_r = None
@@ -221,22 +204,20 @@ def plot_optimization_vs_number_of_clusters(
         opt_r.append(ormse)
         opt_cv.append(ocvs)
 
-        plt.plot(set_sizes, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='',label='RMSE')
-        plt.plot(set_sizes, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='',label='RMSE-CV')
-        plt.plot(opt_s, opt_r, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='-', linewidth=4*scale)
-        plt.plot(opt_s, opt_cv, markersize=25*scale, marker='.',  color='black', zorder=1, linestyle='-', linewidth=4*scale)
+        plt.plot(set_sizes, rmse, marker='.', color='blue', zorder=1,  linestyle='',label='RMSE-fit')
+        plt.plot(set_sizes, cvs, marker='.', color='black', zorder=1, linestyle='',label='RMSE-CV')
+        plt.plot(opt_s, opt_r, marker='.', color='blue', zorder=1,  linestyle='-')
+        plt.plot(opt_s, opt_cv, marker='.',  color='black', zorder=1, linestyle='-')
     else:
-        plt.plot(set_sizes, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='-',label='RMSE', linewidth=4*scale)
-        plt.plot(set_sizes, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='-',label='RMSE-CV',linewidth=4*scale)
+        ax.plot(set_sizes, rmse, marker='.', color='blue', zorder=1,  linestyle='-',label='RMSE-fit')
+        ax.plot(set_sizes, cvs, marker='.', color='black', zorder=1, linestyle='-',label='RMSE-CV')
 
-    plt.ylabel(yaxis_label ,fontsize=fs)
-    plt.xlabel('Number of clusters',fontsize=fs)
+    plt.ylabel(yaxis_label )
+    plt.xlabel('Number of clusters')
     plt.legend()
-    leg=ax.legend(loc='best',borderaxespad=2*scale,borderpad=2*scale,labelspacing=1*scale,handlelength=3*scale, handletextpad=2*scale)
-    leg.get_frame().set_linewidth(3*scale)
+    #leg=ax.legend(loc='best',borderaxespad=2,borderpad=2,labelspacing=1,handlelength=3, handletextpad=2)
+    ax.legend(loc='upper center')
 
-    for l in leg.get_texts():
-        l.set_fontsize(fs)
         
     if show_yzero_axis:
         ax.axhline(y=0, color='k', linewidth=0.5)
@@ -263,7 +244,10 @@ def plot_optimization_vs_number_of_clusters(
     
 def plot_optimization_vs_sparsity(
         clsel,
-        scale=1.0,
+        xmin = None,
+        xmax = None,
+        ymin = None,
+        ymax = None,
         xaxis_label = 'Sparsity',
         yaxis_label = "Energy [arb. units]",
         show_plot = True,
@@ -280,9 +264,8 @@ def plot_optimization_vs_sparsity(
     """
 
     import matplotlib.pyplot as plt
-    from matplotlib import rc
-    from matplotlib import rc,rcParams
-    import math
+
+    _set_rc_params()
 
     set_sparsity=clsel.lasso_sparsities
 
@@ -291,48 +274,39 @@ def plot_optimization_vs_sparsity(
 
     nclmax=max(set_sparsity)
     nclmin=min(set_sparsity)
-    ncl_range=nclmax-nclmin
+    print(nclmin,nclmax)
+    if xmin is None:
+        xmin = nclmin
 
-    e_min=min([min(rmse),min(cvs)])
-    e_max=max([max(rmse),max(cvs)])
-    e_range=e_max - e_min
+    if xmax is None:
+        xmax = nclmax
+         
+    e_min = min([min(rmse),min(cvs)])
+    e_max = max([max(rmse),max(cvs)])
+    
+    if ymin is None:
+        ymin = e_min
+
+    if ymax is None:
+        ymax = e_max
 
     opt=set_sparsity[clsel.cvs.index(min(cvs))]
 
-    width=15.0*scale
-    fs=int(width*1.8)
-    ticksize = fs
-    golden_ratio = (math.sqrt(5) - 0.9) / 2.0
-    labelsize = fs
-    height = float(width * golden_ratio)
+    fig = plt.figure(figsize=(4.0,3.0))
+    ax = fig.add_axes([0.19, 0.16, 0.75, 0.80])
 
-    plt.figure(figsize=(width,height))
+    ax.set_ylim(ymin, ymax)
+    ax.set_xlim(xmin, xmax)
+    
+    plt.semilogx([opt],[min(cvs)], 'o', markeredgecolor='r', markerfacecolor='None', label='lowest RMSE-CV')
 
-    rc('axes', linewidth=3*scale)
+    plt.semilogx(set_sparsity, rmse, marker='.', color='blue', zorder=1,  linestyle='-',label='RMSE-fit')
+    plt.semilogx(set_sparsity, cvs, marker='.', color='black', zorder=1, linestyle='-',label='RMSE-CV')
 
-    plt.ylim(e_min-e_range/8,e_max+e_range/10)
-    plt.xlim(nclmin-0.1*nclmin,nclmax+0.1*nclmax)
-
-    plt.xticks(fontsize=ticksize)
-    plt.yticks(fontsize=ticksize)
-    ax = plt.gca()
-    ax.tick_params(axis="both",which="both",width=3*scale,size=10*scale,pad=10*scale)
-
-
-    plt.semilogx([opt],[min(cvs)], 'o', markersize=25*scale, markeredgewidth=4*scale,markeredgecolor='r', markerfacecolor='None' , label='lowest RMSE-CV')
-    #scatter([ncl_opt],[min(cv)], s=400,facecolors='none', edgecolors='r',)
-
-    plt.semilogx(set_sparsity, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='-',label='RMSE', linewidth=4*scale)
-    plt.semilogx(set_sparsity, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='-',label='RMSE-CV',linewidth=4*scale)
-
-    plt.ylabel(yaxis_label ,fontsize=fs)
-    plt.xlabel(xaxis_label ,fontsize=fs)
+    plt.ylabel(yaxis_label)
+    plt.xlabel(xaxis_label)
     plt.legend()
-    leg=ax.legend(loc='best',borderaxespad=2*scale,borderpad=2*scale,labelspacing=1*scale,handlelength=3*scale, handletextpad=2*scale)
-    leg.get_frame().set_linewidth(3*scale)
-
-    for l in leg.get_texts():
-        l.set_fontsize(fs)
+    ax.legend(loc='best')
 
     plt.savefig(fname)
     if show_plot:
@@ -366,7 +340,6 @@ def plot_predictions_vs_target(sset, cemodel, prop_name, scale=1.0, xaxis_label 
     fs=int(width*1.8)
     ticksize = fs
     golden_ratio = (math.sqrt(5) - 0.9) / 2.0
-    labelsize = fs
     height = float(width * golden_ratio)
 
     plt.figure(figsize=(width,height))
@@ -396,43 +369,50 @@ def plot_predictions_vs_target(sset, cemodel, prop_name, scale=1.0, xaxis_label 
 
     #plt.savefig("plot_optimization.png")
     plt.show()
-    
+
 def _set_rc_params():
-    from matplotlib import rc,rcParams
+    from matplotlib import rcParams
     
-    rcParams['axes.linewidth'] = 1.5
     rcParams['figure.figsize'] = (4.0,3.0)
     rcParams['figure.dpi'] = 300
     rcParams['savefig.format'] = 'png'
-    rcParams['xtick.major.size'] =    3.5     # major tick size in points
+    rcParams['xtick.major.size'] =    2.5     # major tick size in points
     rcParams['xtick.minor.size'] =    1.1       # minor tick size in points
     rcParams['xtick.major.width'] =   1.5     # major tick width in points
     rcParams['xtick.minor.width'] =   0.6     # minor tick width in points
-    rcParams['ytick.major.size'] =    3.5     # major tick size in points
+    rcParams['ytick.major.size'] =    2.5     # major tick size in points
     rcParams['ytick.minor.size'] =    1.1       # minor tick size in points
     rcParams['ytick.major.width'] =   1.5     # major tick width in points
     rcParams['ytick.minor.width'] =   0.6     # minor tick width in points
-    rcParams['lines.linewidth'] = 1.3
+    rcParams['lines.linewidth'] = 2.0
     rcParams['lines.markersize'] = 6
-    rcParams['xtick.labelsize'] = 12
-    rcParams['ytick.labelsize'] = 12
+    rcParams['xtick.labelsize'] = 11
+    rcParams['ytick.labelsize'] = 11
+    rcParams['axes.formatter.useoffset'] = False
     
     rcParams['axes.titlesize'] = 24
-    rcParams['axes.labelsize'] = 12
-    rcParams['axes.linewidth'] = 1.5
+    rcParams['axes.labelsize'] = 11
+    rcParams['axes.labelpad'] = 2.0
+    rcParams['axes.linewidth'] = 1.1
     
-    rcParams['legend.handletextpad'] = 0.15
+    rcParams['legend.fontsize'] = 10
+    rcParams['legend.frameon'] = True
+    rcParams['legend.framealpha'] = 1.0
+    rcParams['legend.handletextpad'] = 0.35
     rcParams['legend.labelspacing'] = 0.15
-    rcParams['legend.borderpad'] = 0.25
-    rcParams['legend.edgecolor'] = '0.3'
+    rcParams['legend.borderpad'] = 0.30
+    rcParams['legend.edgecolor'] = '0.0'
 
-    #rcParams['text.usetex'] = True
-    #rcParams['text.latex.preamble']=r"\usepackage{bm}"
-    
-    # Color blind palette below
-    #axes.prop_cycle: cycler('color', ['377eb8', 'ff7f00', '4daf4a', 'f781bf', 'a65628', '984ea3', '999999', 'e41a1c', 'dede00'])
+    rcParams['xtick.major.width'] =   1.0     # major tick width in points
+    rcParams['xtick.minor.width'] =   0.3     # minor tick width in points
+    rcParams['ytick.major.width'] =   1.0     # major tick width in points
+    rcParams['ytick.minor.width'] =   0.3     # minor tick width in points
 
+    rcParams['lines.markersize'] = 6
 
+    rcParams['xtick.major.pad'] = 1.0
+    rcParams['ytick.major.pad'] = 1.0
+    rcParams['axes.labelpad'] = 4.0
 
 def plot_property_vs_concentration(sset,
                                    site_type=0,
@@ -505,15 +485,13 @@ def plot_property_vs_concentration(sset,
     """
     import matplotlib as mpl
     import matplotlib.pyplot as plt
-    import math
-    from matplotlib import rc,rcParams
     from clusterx.utils import findmax, findmin
     
     _set_rc_params()
 
     data = {}
 
-    fig = plt.figure(figsize=np.array(rcParams['figure.figsize'])*scale)
+    fig = plt.figure(figsize=(4.0,3.0))
 
     ax = fig.add_axes([0.19, 0.16, 0.78, 0.80])
     
@@ -560,17 +538,17 @@ def plot_property_vs_concentration(sset,
     data["property"] = energies-vl_en
     ymax = np.amax(data["property"])
     ymin = np.amin(data["property"])
-    ax.scatter(frconc,energies-vl_en,marker='o', edgecolors='k', facecolors='none',label='Calculated')
+    ax.scatter(frconc,energies-vl_en,marker='o', s=25, zorder=0, facecolors='none', edgecolors='k',label='Calculated')
     if cemodel is not None and pred_cv is not None:
         data["predicted-property"] = predictions-vl_en
         data["predicted-property-cv"] = pred_cv-vl_en
-        plt.scatter(frconc,predictions-vl_en,marker='o', s=25, edgecolors='none', facecolors='black',label='Predicted')
-        plt.scatter(frconc,pred_cv-vl_en,marker='o', s=10, edgecolors='none', facecolors='red',label='Predicted-CV')
+        plt.scatter(frconc,predictions-vl_en,marker='.', s=20, zorder=1, facecolors='k', edgecolors=None,label='Predicted-fit')
+        plt.scatter(frconc,pred_cv-vl_en,marker='.', s=10, zorder=2, facecolors='red', edgecolors=None,label='Predicted-CV')
         ymax = findmax(ymax,data["predicted-property"],data["predicted-property-cv"])
         ymin = findmin(ymin,data["predicted-property"],data["predicted-property-cv"])
     if cemodel is not None and pred_cv is None:
         data["predicted-property"] = predictions-vl_en
-        plt.scatter(frconc,predictions-vl_en,marker='o', edgecolors='none', facecolors='blue',label='Predicted')
+        plt.scatter(frconc,predictions-vl_en,marker='o', s=20, edgecolors='none', facecolors='blue',label='Predicted-fit')
         ymax = findmax(ymax,data["predicted-property"])
         ymin = findmin(ymin,data["predicted-property"])
     if sset_enum is not None or properties_enum is not None:
@@ -606,7 +584,6 @@ def plot_property_vs_concentration(sset,
         ax.axhline(y=0, color='k', linewidth=0.5)
     
     plt.legend()
-    leg=ax.legend(loc='best')
 
     if data_fname is not None:
         np.savez(
