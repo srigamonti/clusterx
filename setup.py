@@ -9,6 +9,5 @@ setup(name='clusterX',
       license='http://www.apache.org/licenses/LICENSE-2.0',
       packages=find_packages(),
       install_requires=['numpy', 'scipy', 'scikit-learn', 'matplotlib','ase','plac','pytest','spglib','sympy','nglview','ipywidgets','pytest-html', 'tqdm'],
-      entry_points={'console_scripts': ['cell=clusterx.cli.main:main']},
-      python_requires="<=3.11, >=3.0"
+      entry_points={'console_scripts': ['cell=clusterx.cli.main:main']}
 )
