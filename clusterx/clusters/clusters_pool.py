@@ -652,7 +652,7 @@ class ClustersPool():
 
         return np.array(atom_idxs, dtype=object), np.array(atom_nrs, dtype=object)
 
-    def serialize(self, filepath="cpool.json", db_name=None):
+    def serialize(self, filepath="cpool.json", vacancy_atomic_number=0, db_name=None):
         """Serialize clusters pool object to json database file
 
         The generated json file is compatible with ASE's GUI, so you can
@@ -665,6 +665,16 @@ class ClustersPool():
         ``filepath``: string (default: "cpool.json")
             Name of the file to save the ClustersPool object. 
 
+        ``vacancy_atomic_number``: integer (default: 0)
+            In ``CELL``, vacancies are formally represented as a species with species
+            number 0 and symbol ``X``. In some cases, e.g. visualization, 
+            you may want to give the vacancy a different species number. Set this variable
+            to a different number (different from all other species numbers in the 
+            corresponding parent lattice) if that is the case. 
+            IMPORTANT: Do not change the deafult value of this parameter
+            if you plan to use the generated file for creating a ``CPOOL`` object from 
+            the generated file.
+
         ``db_name``: string (default: "cpool.json")
             *DEPRECATED*, use ``filepath`` instead. Name of the json database file.
 
@@ -672,7 +682,7 @@ class ClustersPool():
         if db_name is not None:
             filepath = db_name 
 
-        self.write_clusters_db(db_name=filepath)
+        self.write_clusters_db(db_name=filepath, vacancy_atomic_number =  vacancy_atomic_number)
 
     def as_dict(self):
         """Return a python-dictionary representation of the clusters pool
@@ -719,7 +729,7 @@ class ClustersPool():
     def get_cluster(self, cln):
         return self._cpool_dict[cln]
 
-    def write_clusters_db(self, orbit=None, super_cell=None, db_name="cpool.json"):
+    def write_clusters_db(self, orbit=None, super_cell=None, db_name="cpool.json", vacancy_atomic_number=0):
         """Write cluster orbit to Atoms JSON database
 
         **Parameters:**
@@ -733,6 +743,14 @@ class ClustersPool():
 
         ``db_name``: string
             Name of the json file containing the database
+                    
+        ``vacancy_atomic_number``: integer (default: 0)
+            In ``CELL``, vacancies are formally represented as a species with species
+            number 0 and symbol ``X``. In some cases, e.g. visualization, 
+            you may want to give the vacancy a different species number. Set this variable
+            to a different number (different from all other species numbers in the 
+            corresponding parent lattice) if that is the case. 
+
         """
         from ase.db.jsondb import JSONDatabase
         from subprocess import call
@@ -740,7 +758,7 @@ class ClustersPool():
         call(["rm","-f",db_name])
         atoms_db = JSONDatabase(filename=db_name)
 
-        cpool_atoms  = self.get_cpool_atoms(orbit=orbit, super_cell=super_cell)
+        cpool_atoms  = self.get_cpool_atoms(orbit=orbit, super_cell=super_cell,vacancy_atomic_number=vacancy_atomic_number)
 
         for atoms in cpool_atoms:
             atoms_db.write(atoms)
@@ -748,7 +766,17 @@ class ClustersPool():
 
         atoms_db.metadata = self.get_cpool_dict()
 
-    def get_cpool_atoms(self, orbit=None, super_cell=None):
+    def get_cpool_atoms(self, orbit=None, super_cell=None, vacancy_atomic_number=0):
+        """
+        **Parameters:**
+
+        ``vacancy_atomic_number``: integer (default: 0)
+            In ``CELL``, vacancies are formally represented as a species with species
+            number 0 and symbol ``X``. In some cases, e.g. visualization, 
+            you may want to give the vacancy a different species number. Set this variable
+            to a different number (different from all other species numbers in the 
+            corresponding parent lattice) if that is the case. 
+        """
         from clusterx.structure import Structure
 
         if orbit is None:
@@ -786,6 +814,11 @@ class ClustersPool():
                     indices.append(i)
                     positions.append(atom.get('position'))
                     numbers.append(nr)
+                else:
+                    indices.append(i)
+                    positions.append(atom.get('position'))
+                    numbers.append(vacancy_atomic_number)
+
             self._cpool_atoms.append(Atoms(cell=atoms0.get_cell(), pbc=atoms0.get_pbc(),numbers=numbers,positions=positions))
 
         return self._cpool_atoms
@@ -1490,31 +1523,39 @@ class ClusterOrbit(ClustersPool):
         return self.weights
 
     
-    def serialize(self, json_db_filepath="cpool.json"):
+    def serialize(self, filepath="cpool.json", vacancy_atomic_number=0, json_db_filepath=None):
         """Write cluster orbit to Atoms JSON database
 
         **Parameters:**
 
-        ``orbit``: python list (default: ``None``)
-            list of ``Cluster`` objects. If ``None``, just the clusters in the ``ClustersPool`` object are written.
+        ``filepath``: string (default: ``cpool.json``)
+            absolute or relative path where serialized structure is saved.
+            
+        ``vacancy_atomic_number``: integer (default: 0)
+            In ``CELL``, vacancies are formally represented as a species with species
+            number 0 and symbol ``X``. In some cases, e.g. visualization, 
+            you may want to give the vacancy a different species number. Set this variable
+            to a different number (different from all other species numbers in the 
+            corresponding parent lattice) if that is the case. 
+            IMPORTANT: Do not change the deafult value of this parameter
+            if you plan to use the generated file for creating a ``CPOOL`` object from 
+            the generated file.
 
-        ``super_cell``: ``SuperCell`` object (default: ``None``)
-            The supercell in which the clusters are supported. 
-            If ``None``, the ``SuperCell`` object of ``self`` (output of method ``get_cpool_scell()``) is used.
-
-        ``db_name``: string
-            Name of the json file containing the database
+        ``json_db_filepath``: string (default: ``None``)
+            DEPRECATED, use filepath instead. 
         """
         from ase.db.jsondb import JSONDatabase
         from subprocess import call
+
+        if json_db_filepath is not None:
+            filepath = json_db_filepath
         
         call(["rm","-f",json_db_filepath])
-        atoms_db = JSONDatabase(filename=json_db_filepath)
+        atoms_db = JSONDatabase(filename=filepath)
 
-        cpool_atoms  = self.get_cpool_atoms()
+        cpool_atoms  = self.get_cpool_atoms(vacancy_atomic_number =  vacancy_atomic_number)
 
         for atoms in cpool_atoms:
             atoms_db.write(atoms)
-        #atoms_db.write(Atoms(symbols=None))
 
         atoms_db.metadata = self.get_cpool_dict()
