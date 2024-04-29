@@ -31,7 +31,7 @@ class MonteCarlo():
             If ``ensemble`` is 'canonical', the composition for the sampling is defined with ``nsubs``. In case 
             of multilattices, the sublattice for the sampling can be refined with ``sublattice_indices``.
 
-            If ``ensemble`` is 'gandcanonical', the sublattice is defined with ``sublattices_indices``.
+            If ``ensemble`` is 'grandcanonical', the sublattice is defined with ``sublattices_indices``.
 
     **Parameters**:
 
@@ -171,14 +171,15 @@ class MonteCarlo():
         """Perform Monte-Carlo Metropolis simulation
 
         **Description**: 
-            Perfom Monte-Carlo Metropolis sampling for nmc sampling steps.
+            Perfom Monte-Carlo Metropolis sampling for 
+            ``no_of_sampling_steps`` sampling steps.
 
             During the sampling, a new structure at step i is accepted
             with the probability given by :math:`\min( 1, \exp( - (E_i - E_{i-1})/(k_B T)) )`
 
             The energy :math:`E_i` of visited structure at step i is calculated from the Model 
             ``energy_model``. The factor :math:`k_B T` is the product of the temperature :math:`T` 
-            and the Boltzmann constant :math:`k_B` (also know as the thermal energy).
+            and the Boltzmann constant :math:`k_B`.
 
             Note: The units of the ``energy`` :math:`E` and the factor :math:`k_B T` must be the same. 
             With ``scale_factor``, :math:`k_B T` can be adjusted to the correct units (see below).
@@ -197,8 +198,8 @@ class MonteCarlo():
         ``scale_factor``: list of floats
             List is used to adjust the factor :math:`k_B T` to the same units as the energy from ``energy_model``.
  
-            All floats in list are multiply to the factor :math:`k_B T`.
-            If list is empty, the factor :math:`k_B T` remains changed.
+            All floats in list are multiplied by the factor :math:`k_B T`.
+            If list is empty, the factor :math:`k_B T` remains unchanged.
              
         ``initial_decoration``: list of integers
             Atomic numbers of the initial structure, from which the sampling starts.
