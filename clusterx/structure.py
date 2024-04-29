@@ -202,7 +202,7 @@ class Structure(SuperCell):
             documentation in https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write).
 
         ``filepath``: string (default: ``structure.json``)
-            DEPRECATED, use filepath instead file name (may includ absolute or relative path).
+            absolute or relative path where serialized structure is saved.
 
         ``fname``: string (default: ``None``)
             DEPRECATED, use filepath instead. File name (may includ absolute or relative path).
