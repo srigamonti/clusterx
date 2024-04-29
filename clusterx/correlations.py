@@ -427,7 +427,6 @@ class CorrelationsCalculator():
             Set to ``True`` when performing Monte-Carlo simulations, to use an
             optimized version of the method.
         """
-        #from clusterx.utils import get_cl_idx_sc
         cluster_orbits = None
         
         if self._mc and self._cluster_orbits_set != [] and self._num_mc_calls != 0:
@@ -442,7 +441,7 @@ class CorrelationsCalculator():
         
         correlations = np.zeros(len(cpool_list))
         
-        for icl, cluster in enumerate(cpool_list):
+        for icl, _ in enumerate(cpool_list):
             cluster_orbit = cluster_orbits[icl]
             cluster_orbit_arr = cluster_orbit.as_array()
             weights = cluster_orbit.get_weights()
@@ -450,6 +449,7 @@ class CorrelationsCalculator():
             for weight, cluster in zip(weights, cluster_orbit_arr):
                 cf = self.cluster_function(cluster, structure.sigmas, structure.ems)
                 correlations[icl] += weight * cf
+
 
             correlations[icl] /= np.sum(weights)
             
