@@ -57,12 +57,20 @@ class Model():
             return inst
     
 
-    def __init__(self, corrc = None, property_name = None, estimator = None, ecis = None, filepath = None, json_db_filepath = None, standardize = False):
+    def __init__(self, 
+                 corrc = None, 
+                 property_name = None, 
+                 estimator = None, 
+                 ecis = None, 
+                 filepath = None, 
+                 json_db_filepath = None, 
+                 standardize = False):
         pass
     
     def initialize(self, corrc = None, property_name = None, estimator = None, ecis = None, filepath = None, json_db_filepath = None, standardize = False):
         self.pickle_file = None
         self._filepath_corrc = None
+        
         if filepath is not None:
             fext = os.path.splitext(filepath)[1][1:]
             
@@ -702,11 +710,15 @@ class ModelBuilder():
         
         self.target = self.sset.get_property_values(property_name = self.prop)
 
+        self.opt_cpool = self.cpool
+        self.opt_comat = self.ini_comat
+
         # Select optimal clusters using the clusters_selector module
-        self.selector = ClustersSelector(basis=self.basis, method=self.selector_type, **self.selector_opts)
-        self.opt_cpool = self.selector.select_clusters(sset, cpool, prop, comat = self.ini_comat)
-        self.opt_comat = self.selector.optimal_comat
-        
+        if self.selector != "identity":
+            self.selector = ClustersSelector(basis=self.basis, method=self.selector_type, **self.selector_opts)
+            self.opt_cpool = self.selector.select_clusters(sset, cpool, prop, comat = self.ini_comat)
+            self.opt_comat = self.selector.optimal_comat
+
         self.opt_corrc = CorrelationsCalculator(self.basis, self.plat, self.opt_cpool)
 
         # Find out the ECIs using an estimator
