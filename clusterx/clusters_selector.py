@@ -38,6 +38,7 @@ class ClustersSelector():
             * ``"lasso_on_residual"``: a lasso selection is performed on the residual between 
               a model defined by ``set0`` (see below) the output. The final model contains the 
               union of clusters in ``"set0"`` and those selected by lasso on the residual.
+            * ``"OMP"``: Orthogonal Matching Pursuit.
             * Deprecated options: ``"lasso"``, ``"linreg"``. Old ``"lasso"`` is identical to 
               ``"lasso_cv"`` and old ``"linreg"`` is identical to ``"subsets_cv"``
 
@@ -100,6 +101,10 @@ class ClustersSelector():
              the subset selection a RidgeCV estimator from 
              the scikit learn library is used. This parameter determines the list regularization strengths. 
 
+        * If ``selector_type`` is ``"OMP"``: the selector_opts dict keys are:
+
+            * ``n_nonzero_coefs``: number of nonzero parameters (default: 1)
+
 
     **Notes:**
 
@@ -141,6 +146,8 @@ class ClustersSelector():
         self.alpha = selector_opts.pop("alpha", 0)
         self.alphas = selector_opts.pop("alphas", [])
         
+        # additional arguments for omp
+        self.n_nonzero_coefs = selector_opts.pop("n_nonzero_coefs",1)
 
         self.predictions = []
         self.opt_ecis = []
@@ -253,6 +260,9 @@ class ClustersSelector():
 
         elif self.method == "identity":
             opt = np.arange(len(self.cpool),dtype=int)
+
+        elif self.method == "omp" or self.method == "OMP":
+            opt = self._select_clusters_skl_omp(x, p)
 
 
         self.optimal_cluster_indices = opt
@@ -445,29 +455,19 @@ class ClustersSelector():
         return opt_clset
 
     def _select_clusters_skl_lasso_cv(self,x,p):
-        from sklearn.model_selection import LeaveOneOut
-        from sklearn.model_selection import cross_val_score
-        from sklearn import linear_model
-        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
         from sklearn.linear_model import LassoCV
 
-        opt_cv = -1
         opt_clset = []
-        rows = np.arange(len(p))
-
-        idx = 1
         
         if not self.standardize: 
             est = LassoCV(eps=1e-5, n_alphas=50, fit_intercept=self.fit_intercept, n_jobs=-1, verbose = True)
         else:
             from sklearn.preprocessing import StandardScaler
             from sklearn.pipeline import make_pipeline
-            est = make_pipeline(StandardScaler(), LassoCV(eps=1e-5, n_alphas=50, fit_intercept=self.fit_intercept, n_jobs=-1, verbose = True))
-            
+            est = make_pipeline(StandardScaler(), LassoCV(eps=1e-5, n_alphas=50, fit_intercept=self.fit_intercept, n_jobs=-1, verbose = True))            
 
         x_ = x[:,1:]
         mod = est.fit(x_,p)
-
         
         ecimult = []
         if not self.standardize:
@@ -490,9 +490,6 @@ class ClustersSelector():
             self.set_sizes = np.ones(len(est[-1].alphas_))
             self.lasso_sparsities = est[-1].alphas_
                 
-    
-
-        opt_cv = np.amin(self.cvs)
         opt_clset = [i for i, e in enumerate(ecimult) if e != 0]
         if not self.standardize:
             self.opt_sparsity = est.alpha_
@@ -500,7 +497,25 @@ class ClustersSelector():
             self.opt_sparsity = est[-1].alpha_
         
         return opt_clset
+    
+    def _select_clusters_skl_omp(self,x,p):
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.pipeline import make_pipeline
+        from sklearn.linear_model import OrthogonalMatchingPursuit
 
+        opt_clset = []
+
+        if self.standardize:
+            est = make_pipeline(StandardScaler(), OrthogonalMatchingPursuit(n_nonzero_coefs = self.n_nonzero_coefs))
+        else:
+            est = make_pipeline(OrthogonalMatchingPursuit(n_nonzero_coefs = self.n_nonzero_coefs))            
+
+        mod = est.fit(x, p)
+
+        opt_clset = [i for i, e in enumerate(mod[-1].coef_) if e != 0]
+        
+        return opt_clset
+    
     def _select_clusters_lasso_on_residual_cv(self,x,p,clset0):
         from sklearn.model_selection import LeaveOneOut
         from sklearn.model_selection import cross_val_score
