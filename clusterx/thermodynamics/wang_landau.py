@@ -1330,7 +1330,7 @@ class ConfigurationalDensityOfStates():
             If **S**, the entropy is calculated.
 
         ``modification_factor``: float (default: None)
-            If **None**, the CDOS from the last iteration is used for calculuting teh thermodynamic property. 
+            If **None**, the CDOS from the last iteration is used for calculuting the thermodynamic property. 
             If not **None**, the CDOS corresponding to the given modification factor is used.
 
         """
@@ -1487,7 +1487,7 @@ class ConfigurationalDensityOfStates():
                             numbers=np.zeros(len(species)),
                             pbc = np.asarray(superdict['parent_lattice']['pbc'])
                         ),
-                        sites  = np.asarray(species),
+                        sites  = species,
                         pbc = np.asarray(superdict['parent_lattice']['pbc'])
                     )
                     
