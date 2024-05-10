@@ -8,8 +8,8 @@ from clusterx.clusters_selector import ClustersSelector
 import numpy as np
 import pickle
 import os
-import sys
 import time
+import warnings
 
 class Model():
     """Model class
@@ -63,6 +63,8 @@ class Model():
     def initialize(self, corrc = None, property_name = None, estimator = None, ecis = None, filepath = None, json_db_filepath = None, standardize = False):
         self.pickle_file = None
         self._filepath_corrc = None
+        self.estimator = None
+
         if filepath is not None:
             fext = os.path.splitext(filepath)[1][1:]
             
@@ -88,6 +90,8 @@ class Model():
             self.ecis = modict.get('ECIs',[])
             self.property_name = modict.get('property_name',None)
 
+            self.standardize =  modict.get('standardize',False)
+
         else:
             self.corrc = corrc
             self.ecis = ecis
@@ -101,7 +105,8 @@ class Model():
         self._delta_e_calc = None
         if corrc is not None:
             self._basis =corrc.get_basis()
-        self.estimator = estimator
+        if self.estimator is None:
+            self.estimator = estimator
         self._mc = False
         self._num_mc_calls = 0
         self._mc_nclusters = 0
@@ -203,6 +208,7 @@ class Model():
             atoms_db.metadata = modeldict
         
     def get_plat(self):
+        warnings.warn("Using `get_plat()` is deprecated. Use `get_parent_lattice()` instead.", category=FutureWarning)
         return self.get_parent_lattice()
         
     def get_parent_lattice(self):
@@ -327,8 +333,9 @@ class Model():
                         self._interactions_dict[ind]["interactions_list"].append(icl)
                         self._interactions_dict[ind]["cluster_sites_index_for_ind"].append(self._clusters_list[icl]["cluster_sites"].index(ind))
 
-            self._mc_estimator_intercept = self.estimator.intercept_
-            self._mc_estimator_coef = self.estimator.coef_
+            if self.estimator is not None:
+                self._mc_estimator_intercept = self.estimator.intercept_
+                self._mc_estimator_coef = self.estimator.coef_
 
             if self._basis == 'binary-linear' or self._basis ==  'indicator-binary':
                 self._delta_e_calc = self._compute_delta_e_binary_linear
@@ -419,9 +426,7 @@ class Model():
             return pv
         else:
             pv = 0
-            for icl, corr in corrs.items():
-                print(icl, corr)
-
+            for icl, corr in enumerate(corrs):
                 pv = pv + self.ecis[icl]*corr
             return pv
 
