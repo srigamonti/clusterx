@@ -51,7 +51,7 @@ class Cluster():
                 raise ValueError("Cluster initialization failed")
 
         else:
-            self.ais = np.array(atom_indexes)
+            self.ais = np.array(atom_indexes, dtype=int)
             self.ans = np.array(atom_numbers)
 
         self.npoints = len(atom_numbers)
