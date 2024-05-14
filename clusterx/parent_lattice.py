@@ -182,7 +182,7 @@ class ParentLattice(Atoms):
                     unique_sites = np.unique(sites,axis=0)
                 except:
                     try:
-                        unique_sites = np.unique(sites)
+                        unique_sites = np.unique(np.array(sites,dtype=object))
                     except AttributeError:
                         raise AttributeError("sites array has problems, look at the documentation.")
 
@@ -491,6 +491,13 @@ class ParentLattice(Atoms):
             sites = {0: [14,13], 1: [14,13], 2: [14,13], 3: [56,0,38], 4: [56,0,38], 5:[11]}
         """
         return self.sites
+    
+    def get_ems(self):
+        nspt = self.get_sites()
+        ems = np.zeros(len(nspt), dtype=int)
+        for k,v in nspt.items():
+            ems[k] = len(v)
+        return ems
 
     def get_substitutions(self):
         """Return array of (references to) Atoms objects corresponding to fully
@@ -530,6 +537,8 @@ class ParentLattice(Atoms):
             Whether to return a dictionary or a self-explanatory and nicely
             formatted string.
 
+            DEPRECATED: Use `print_sublattice_types()` instead.
+
         **Examples:**
         For instance, if a ParentLattice object consists of six positions, such that
         the first three positions can be occupied by species 14 or 13, the 4th
@@ -545,18 +554,24 @@ class ParentLattice(Atoms):
         if not pretty_print:
             return self.idx_subs
         else:
-            from ase.data import chemical_symbols as cs
-            sld = self.idx_subs
-            cs = np.array(cs)
-            print("\n+--------------------------------------------------------------------+")
-            print("|{0:^68s}|".format("The structure consists of "+str(len(sld))+" sublattices"))
-            print("+--------------------------------------------------------------------+")
-            print("|{0:^17s}|{1:^30s}|{2:^19s}|".format("Sublattice type","Chemical symbols","Atomic numbers"))
-            print("+--------------------------------------------------------------------+")
+            warnings.warn("Using `pretty_print=True` is deprecated. Use `print_sublattice_types()` instead.", category=FutureWarning)
+            self.print_sublattice_types()
 
-            for slind,slsps in self.idx_subs.items():
-                print("|{0:^17s}|{1:^30s}|{2:^19s}|".format(str(slind),str(cs[slsps]),str(slsps)))
-            print("+--------------------------------------------------------------------+\n")
+    def print_sublattice_types(self):
+        """Print chemical symbols and atomic numbers for each sublattice type.
+        """
+        from ase.data import chemical_symbols as cs
+        sld = self.idx_subs
+        cs = np.array(cs)
+        print("\n+--------------------------------------------------------------------+")
+        print("|{0:^68s}|".format("The structure consists of "+str(len(sld))+" sublattices"))
+        print("+--------------------------------------------------------------------+")
+        print("|{0:^17s}|{1:^30s}|{2:^19s}|".format("Sublattice type","Chemical symbols","Atomic numbers"))
+        print("+--------------------------------------------------------------------+")
+
+        for slind,slsps in self.idx_subs.items():
+            print("|{0:^17s}|{1:^30s}|{2:^19s}|".format(str(slind),str(cs[slsps]),str(slsps)))
+        print("+--------------------------------------------------------------------+\n")
 
     # Deprecated, use get_sublattice_types instead
     def get_idx_subs(self):
@@ -618,6 +633,7 @@ class ParentLattice(Atoms):
         Uses ``numpy.around()`` method.
             
         **Parameters:**
+        
         ``decimals``: integer
             Number of decimal places to round to (default: 0). If decimals is negative, 
             it specifies the number of positions to the left of the decimal point.
@@ -638,24 +654,29 @@ class ParentLattice(Atoms):
             
         return ParentLattice(atoms = atomss0[0], substitutions = atomss0[1:], pbc = pbc0)
 		
-    def serialize(self,fname="plat.json"):
-        """
-        Serialize a ParentLattice object
+    def serialize(self, filepath="plat.json", fname=None):
+        """Serialize a ParentLattice object
 
         Writes a `ASE's json database <https://wiki.fysik.dtu.dk/ase/ase/db/db.html>`_
         file containing a representation of the parent lattice.
         An instance of the ParentLattice class can be initialized from the created file.
         The created database can be visualized using
         `ASE's gui <https://wiki.fysik.dtu.dk/ase/ase/gui/gui.html>`_, e.g.: ::
-
+        
             ase gui plat.json
 
         **Parameters:**
 
-        ``fname``: string
+        ``filepath``: string
             Output file name.
+
+        ``fname``: string
+            *DEPRECATED*, use ``filepath`` instead. Output file name.
         """
-        db = connect(fname, type="json", append=False)
+        if fname is not None:
+            filepath = fname
+        
+        db = connect(filepath, type="json", append=False)
 
         images = []
         db.write(self.get_pristine())

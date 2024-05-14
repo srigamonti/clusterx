@@ -3,7 +3,6 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 from ase import Atoms
-import clusterx as c
 import numpy as np
 import sys
 from ase.visualize import view
@@ -11,6 +10,8 @@ from ase.visualize import view
 from clusterx.utils import make_supercell
 from clusterx.parent_lattice import ParentLattice
 from clusterx.symmetry import get_internal_translations, get_scaled_positions, wrap_scaled_positions, get_spacegroup
+
+
 
 from clusterx.utils import get_cl_idx_sc
 import clusterx
@@ -133,17 +134,22 @@ class SuperCell(ParentLattice):
             self._sym_table = self.get_symmetry_table()
         else: 
             self._sym_table = []
-        
+
         self.sc_sg, self.sc_sym = self.get_sym()
+        self.sc_sg_pl, self.sc_sym_pl = self.get_sym_platt()
         #self.internal_trans = get_internal_translations(self._plat, self) # Scaled to super_cell
         self.internal_trans = None # Scaled to super_cell
         #self.all_distances_mic = None
         #self.all_distances_nomic = None
         #self.scaled_positions = None
         self.sym_perm = None
+        self.sym_perm_platt = None
 
-    def compute_sym_perm(self):
-        self.sym_perm = []
+    def compute_sym_perm(self, include_sc_trans = True):
+        if include_sc_trans:
+            self.sym_perm = []
+        else:
+            self.sym_perm_platt = []
 
         tol = 1e-3/np.cbrt(self.get_natoms())
         internal_trans = self.get_internal_translations() # Scaled to super_cell
@@ -155,7 +161,11 @@ class SuperCell(ParentLattice):
                 spos[:, i] %= 1.0
                 spos[:, i] %= 1.0
 
-        sg, sym = self.get_sym()
+        if include_sc_trans:
+            sg, sym = self.get_sym()
+        else:
+            sg, sym = self.get_sym_platt()
+            
         rot = sym["rotations"]
         tra = sym["translations"]
 
@@ -178,15 +188,25 @@ class SuperCell(ParentLattice):
             _cl = get_cl_idx_sc(_sp1, spos, method=1, tol=tol)
             _sym_perm.append(_cl)
 
-        self.sym_perm = np.unique(_sym_perm, axis = 0)
+        if include_sc_trans:
+            self.sym_perm = np.unique(_sym_perm, axis = 0)
+        else:
+            self.sym_perm_platt = np.unique(_sym_perm, axis = 0)
         #self.sym_perm = _sym_perm
 
-    def get_sym_perm(self):
-        if self.sym_perm is None:
-            self.compute_sym_perm()
-            return self.sym_perm
+    def get_sym_perm(self, include_sc_trans = True):
+        if include_sc_trans:
+            if self.sym_perm is None:
+                self.compute_sym_perm(include_sc_trans = True)
+                return self.sym_perm
+            else:
+                return self.sym_perm
         else:
-            return self.sym_perm
+            if self.sym_perm_platt is None:
+                self.compute_sym_perm(include_sc_trans = False)
+                return self.sym_perm_platt
+            else:
+                return self.sym_perm_platt
 
     def get_sym(self):
         """Get space symmetry of a ParentLattice object.
@@ -196,6 +216,15 @@ class SuperCell(ParentLattice):
         except:
             self.sc_sg, self.sc_sym = self._compute_sym()
             return self.sc_sg, self.sc_sym
+
+    def get_sym_platt(self):
+        """Get space symmetry of a ParentLattice object.
+        """
+        try:
+            return self.sc_sg_pl, self.sc_sym_pl
+        except:
+            self.sc_sg_pl, self.sc_sym_pl = self.get_parent_lattice()._compute_sym()
+            return self.sc_sg_pl, self.sc_sym_pl
 
     def _compute_sym(self):
         return get_spacegroup(self)
@@ -270,14 +299,12 @@ class SuperCell(ParentLattice):
         return self.index
 
     def get_parent_lattice(self):
-        """
-        Return the parent lattice object which defines the supercell.
+        """Return the parent lattice object which defines the supercell.
         """
         return self._plat
 
     def get_transformation(self):
-        """
-        Return the transformation matrix that defines the supercell from the
+        """Return the transformation matrix that defines the supercell from the
         defining parent lattice.
         """
         return self._p
@@ -286,10 +313,15 @@ class SuperCell(ParentLattice):
         return super(SuperCell, self).get_positions(wrap, **wrap_kw)
 
     def plot(self):
-        """
-        Plot the pristine supercell object.
+        """Plot the pristine supercell object.
         """
         view(self)
+
+    def get_pristine_structure(self):
+        """Return Structure object corresponding to pristine structure.
+        """
+        return self.gen_structure(sigmas=np.zeros(len(self.get_tags()),dtype=np.int8))
+
 
     def gen_structure(self, sigmas = None, mc = False):
         """
@@ -314,7 +346,7 @@ class SuperCell(ParentLattice):
                 [14,13,56,38,13]
         
         """
-
+        import clusterx.structure
         return clusterx.structure.Structure(SuperCell(self._plat, self._p, self._sort_key, sym_table = bool(self._sym_table)), sigmas=sigmas, mc = mc)
         
     def gen_random(self, nsubs = None, mc = False):
@@ -345,7 +377,7 @@ class SuperCell(ParentLattice):
         Use ``gen_random_structure``, since ``gen_random`` is deprecated.
         """
         import clusterx.structure
-
+        
         if nsubs is None:
             import numpy as np
             slts = self.get_sublattice_types() #  e.g.  {0: [14,13], 1: [56,0,38], 2:[11]}
@@ -353,7 +385,7 @@ class SuperCell(ParentLattice):
             _nsubs = {}
             for k,v in slts.items():
                 if len(v) != 1:
-                    _nsubs[k] = [np.random.randint(0,len(np.where(self.get_tags() == k)[0]))]
+                    _nsubs[k] = [np.random.randint(0,len(np.where(self.get_tags() == k)[0])+1)]
 
         elif isinstance(nsubs,int):
             if self.is_nary(2):
@@ -450,7 +482,7 @@ class SuperCell(ParentLattice):
 
             atoms_db.write(neigs)
 
-    def serialize(self,fname="scell.json"):
+    def serialize(self,filepath="scell.json", fname=None):
         """
         Serialize a SuperCell object
 
@@ -463,10 +495,16 @@ class SuperCell(ParentLattice):
 
         **Parameters:**
 
-        ``fname``: string
+        ``filepath``: string
             Output file name.
+
+        ``fname``: string
+            *DEPRECATED*, use filepath instead. Output file name.
         """
-        super(SuperCell,self).serialize(fname = fname)
+        if fname is not None:
+            filepath = fname
+            
+        super(SuperCell,self).serialize(filepath = filepath)
     
     def get_symmetry_table(self, symprec=1e-12, tol=1e-3):
         '''

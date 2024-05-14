@@ -11,8 +11,9 @@ def juview(plat,n=None):
 
     ``plat``: any of Atoms(ASE), ParentLattice, Supercell, Structure, StructureSet
         structure object to be plotted
-    ``n``: integer
-        plot the first ``n`` structures. If ``None``, return all structures.
+    ``n``: integer or list of integer
+        If integer, plot the first ``n`` structures. If list, plot range of structures.
+        If ``None``, return all structures.
 
     **Return:**
 
@@ -23,7 +24,6 @@ def juview(plat,n=None):
     from clusterx.structures_set import StructuresSet
     from clusterx.structures_set import Structure
     from clusterx.clusters.clusters_pool import ClustersPool
-    from clusterx.clusters.cluster import Cluster
 
     if isinstance(plat,Structure):
         return _makeview( [ plat.get_atoms() ] )
@@ -32,12 +32,20 @@ def juview(plat,n=None):
         return _makeview(plat.get_all_atoms())
 
     if isinstance(plat,StructuresSet):
-        return _makeview(plat.get_images(n=n))
+        if n is None:
+            return _makeview(plat.get_images())
+        if np.shape(n) == ():
+            return _makeview(plat.get_images(n=n))
+        if np.shape(n) == (2,):
+            return _makeview(plat.get_images()[n[0]:n[1]])
 
     if isinstance(plat,ClustersPool):
         atoms = plat.get_cpool_atoms()
         if n is not None:
-            return _makeview(atoms[0:n])
+            if np.shape(n) == ():
+                return _makeview(atoms[0:n])
+            if np.shape(n) == (2,):
+                return _makeview(atoms[n[0]:n[1]])
         else:
             return _makeview(atoms)
 
@@ -71,7 +79,8 @@ def _makeview(images):
         views.append(view)
 
     import ipywidgets
-    hboxes = [ipywidgets.HBox(views[i*3:i*3+3]) for i in range(int(math.ceil(len(views)/3.0)))]
+    #hboxes = [ipywidgets.HBox(views[i*3:i*3+3]) for i in range(int(math.ceil(len(views)/3.0)))]
+    hboxes = [ipywidgets.HBox([views[j] for j in range(i*3,min(i*3+3,len(views)))]) for i in range(int(math.ceil(len(views)/3.0)))]
     vbox = ipywidgets.VBox(hboxes)
     return vbox
 
@@ -85,7 +94,19 @@ def _juview_applystyle(view):
     view.add_spacefill(radius_type='vdw',scale=0.3)
 
 
-def plot_optimization_vs_number_of_clusters(clsel, xmin = None, xmax = None, scale = 1.0, yaxis_label = "Errors"):
+def plot_optimization_vs_number_of_clusters(
+        clsel,
+        xmin = None,
+        xmax = None,
+        ymin = None,
+        ymax = None,
+        yfactor = 1.0,
+        scale = 1.0,
+        show_yzero_axis = True,
+        show_plot = True,
+        yaxis_label = "Errors",
+        fig_fname=None,
+        data_fname=None):
     """Plot cluster optimization with matplotlib
 
     The plot shows the prediction and fitting errors as a function of the clusters
@@ -105,6 +126,9 @@ def plot_optimization_vs_number_of_clusters(clsel, xmin = None, xmax = None, sca
     ``xmax``: integer (Default: None)
         Maximum cluster size in x-axis.
 
+    ``yfactor``: float (Default:1.0)
+        Multipliplicative factor for y-values. Useful to pass unit conversion factors.
+
     ``scale``: float (Default: 1.0)
         Adjust this parameter to change font size, axes line width, and other details of the plot.
 
@@ -113,16 +137,15 @@ def plot_optimization_vs_number_of_clusters(clsel, xmin = None, xmax = None, sca
         
     """
     import matplotlib.pyplot as plt
-    from matplotlib import rc
-    from matplotlib import rc,rcParams
-    import math
+    from matplotlib.ticker import MaxNLocator
 
+    _set_rc_params()
 
     set_sizes = sorted(clsel.set_sizes)
-    indizes = [i[0] for i in sorted(enumerate(clsel.set_sizes), key=lambda x:x[1])]
+    indexes = [i[0] for i in sorted(enumerate(clsel.set_sizes), key=lambda x:x[1])]
 
-    rmse = [clsel.rmse[ind] for ind in indizes]
-    cvs = [clsel.cvs[ind] for ind in indizes]
+    rmse = [clsel.rmse[ind] * yfactor for ind in indexes]
+    cvs = [clsel.cvs[ind] * yfactor for ind in indexes]
 
     nclmax = max(set_sizes)
     nclmin = min(set_sizes)
@@ -133,41 +156,29 @@ def plot_optimization_vs_number_of_clusters(clsel, xmin = None, xmax = None, sca
     if xmax is None:
         xmax = nclmax
          
-    ncl_range = xmax-xmin
-
     e_min = min([min(rmse),min(cvs)])
     e_max = max([max(rmse),max(cvs)])
-    e_range = e_max - e_min
+    
+    if ymin is None:
+        ymin = e_min
 
-    ncl_opt = set_sizes[clsel.cvs.index(min(cvs))]
+    if ymax is None:
+        ymax = e_max
 
-    width = 15.0*scale
-    fs = int(width*1.8)
-    ticksize = fs
-    golden_ratio = (math.sqrt(5) - 0.9) / 2.0
-    labelsize = fs
-    height = float(width * golden_ratio)
+    ncl_opt = set_sizes[cvs.index(min(cvs))]
 
-    plt.figure(figsize=(width,height))
+    fig = plt.figure(figsize=(4.0,3.0))
+    ax = fig.add_axes([0.19, 0.16, 0.78, 0.80])
 
-    rc('axes', linewidth=3*scale)
+    ax.set_ylim([ymin, ymax])
+    ax.set_xlim([xmin, xmax])
 
-    #plt.ylim(e_min - e_range / 8.0, e_max + e_range / 10.0)
-    plt.xlim(xmin - ncl_range / 10.0, xmax + ncl_range / 10.0)
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
-    plt.xticks(fontsize=ticksize)
-    plt.yticks(fontsize=ticksize)
-    ax = plt.gca()
-    ax.tick_params(width=3*scale,size=10*scale,pad=10*scale)
-
-    #ax.tick_params(axis="x",which="minor",width=3,size=10,pad=10)
-
-
-    #print((clsel.clusters_sets=="combinations") or (clsel.clusters_sets=="size+combinations"))
-
-    plt.plot([ncl_opt],[min(cvs)], 'o', markersize=25*scale, markeredgewidth=4*scale,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE' )
-
-
+    ax.plot([ncl_opt],[min(cvs)], 'o',markeredgecolor='r', markerfacecolor='None' , label='lowest RMSE-CV' )
+    opt_s = None
+    opt_cv = None
+    opt_r = None
     if (clsel.clusters_sets=="combinations") or (clsel.clusters_sets=="size+combinations"):
 
         opt_r=[]
@@ -193,33 +204,54 @@ def plot_optimization_vs_number_of_clusters(clsel, xmin = None, xmax = None, sca
         opt_r.append(ormse)
         opt_cv.append(ocvs)
 
-        plt.plot(set_sizes, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='',label='training-RMSE')
-        plt.plot(set_sizes, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='',label='cv-RMSE')
-        plt.plot(opt_s, opt_r, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='-', linewidth=4*scale)
-        plt.plot(opt_s, opt_cv, markersize=25*scale, marker='.',  color='black', zorder=1, linestyle='-', linewidth=4*scale)
-
+        plt.plot(set_sizes, rmse, marker='.', color='blue', zorder=1,  linestyle='',label='RMSE-fit')
+        plt.plot(set_sizes, cvs, marker='.', color='black', zorder=1, linestyle='',label='RMSE-CV')
+        plt.plot(opt_s, opt_r, marker='.', color='blue', zorder=1,  linestyle='-')
+        plt.plot(opt_s, opt_cv, marker='.',  color='black', zorder=1, linestyle='-')
     else:
+        ax.plot(set_sizes, rmse, marker='.', color='blue', zorder=1,  linestyle='-',label='RMSE-fit')
+        ax.plot(set_sizes, cvs, marker='.', color='black', zorder=1, linestyle='-',label='RMSE-CV')
 
-        #plt.plot([ncl_opt],[min(cvs)], 'o', markersize=25, markeredgewidth=4,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE' )
-        #scatter([ncl_opt],[min(cv)], s=400,facecolors='none', edgecolors='r',)
-
-        plt.plot(set_sizes, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='-',label='training-RMSE', linewidth=4*scale)
-        plt.plot(set_sizes, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='-',label='cv-RMSE',linewidth=4*scale)
-
-    plt.ylabel(yaxis_label ,fontsize=fs)
-    plt.xlabel('Number of clusters',fontsize=fs)
+    plt.ylabel(yaxis_label )
+    plt.xlabel('Number of clusters')
     plt.legend()
-    leg=ax.legend(loc='best',borderaxespad=2*scale,borderpad=2*scale,labelspacing=1*scale,handlelength=3*scale, handletextpad=2*scale)
-    leg.get_frame().set_linewidth(3*scale)
+    #leg=ax.legend(loc='best',borderaxespad=2,borderpad=2,labelspacing=1,handlelength=3, handletextpad=2)
+    ax.legend(loc='upper center')
 
-    for l in leg.get_texts():
-        l.set_fontsize(fs)
+        
+    if show_yzero_axis:
+        ax.axhline(y=0, color='k', linewidth=0.5)
 
-    #plt.savefig("plot_optimization.png")
-    plt.show()
+    if data_fname is not None:
+        np.savez(
+            data_fname,
+            cluster_set_sizes = set_sizes,
+            rmse_fit = rmse,
+            rmse_cv = cvs,
+            optimal_number_of_clusters = ncl_opt,
+            optimal_rmse_cv = min(cvs),
+            cluster_set_sizes_for_lowest_cv = opt_s,
+            rmse_fit_for_lowest_cv = opt_r,
+            rmse_cv_for_lowest_cv = opt_cv,
+            )
+    
+    if fig_fname is not None:
+        plt.savefig(fig_fname)
 
+    if show_plot:
+        plt.show()
 
-def plot_optimization_vs_sparsity(clsel, scale=1.0, xaxis_label = 'Sparsity', yaxis_label = "Energy [arb. units]"):
+    
+def plot_optimization_vs_sparsity(
+        clsel,
+        xmin = None,
+        xmax = None,
+        ymin = None,
+        ymax = None,
+        xaxis_label = 'Sparsity',
+        yaxis_label = "Energy [arb. units]",
+        show_plot = True,
+        fname = "plot_optimization_vs_sparsity"):
     """Plot cluster optimization with matplotlib
 
     The plot shows the prediction and fitting errors as a function of the
@@ -232,9 +264,8 @@ def plot_optimization_vs_sparsity(clsel, scale=1.0, xaxis_label = 'Sparsity', ya
     """
 
     import matplotlib.pyplot as plt
-    from matplotlib import rc
-    from matplotlib import rc,rcParams
-    import math
+
+    _set_rc_params()
 
     set_sparsity=clsel.lasso_sparsities
 
@@ -243,51 +274,43 @@ def plot_optimization_vs_sparsity(clsel, scale=1.0, xaxis_label = 'Sparsity', ya
 
     nclmax=max(set_sparsity)
     nclmin=min(set_sparsity)
-    ncl_range=nclmax-nclmin
+    print(nclmin,nclmax)
+    if xmin is None:
+        xmin = nclmin
 
-    e_min=min([min(rmse),min(cvs)])
-    e_max=max([max(rmse),max(cvs)])
-    e_range=e_max - e_min
+    if xmax is None:
+        xmax = nclmax
+         
+    e_min = min([min(rmse),min(cvs)])
+    e_max = max([max(rmse),max(cvs)])
+    
+    if ymin is None:
+        ymin = e_min
+
+    if ymax is None:
+        ymax = e_max
 
     opt=set_sparsity[clsel.cvs.index(min(cvs))]
 
-    width=15.0*scale
-    fs=int(width*1.8)
-    ticksize = fs
-    golden_ratio = (math.sqrt(5) - 0.9) / 2.0
-    labelsize = fs
-    height = float(width * golden_ratio)
+    fig = plt.figure(figsize=(4.0,3.0))
+    ax = fig.add_axes([0.19, 0.16, 0.75, 0.80])
 
-    plt.figure(figsize=(width,height))
+    ax.set_ylim(ymin, ymax)
+    ax.set_xlim(xmin, xmax)
+    
+    plt.semilogx([opt],[min(cvs)], 'o', markeredgecolor='r', markerfacecolor='None', label='lowest RMSE-CV')
 
-    rc('axes', linewidth=3*scale)
+    plt.semilogx(set_sparsity, rmse, marker='.', color='blue', zorder=1,  linestyle='-',label='RMSE-fit')
+    plt.semilogx(set_sparsity, cvs, marker='.', color='black', zorder=1, linestyle='-',label='RMSE-CV')
 
-    plt.ylim(e_min-e_range/8,e_max+e_range/10)
-    plt.xlim(nclmin-0.1*nclmin,nclmax+0.1*nclmax)
-
-    plt.xticks(fontsize=ticksize)
-    plt.yticks(fontsize=ticksize)
-    ax = plt.gca()
-    ax.tick_params(axis="both",which="both",width=3*scale,size=10*scale,pad=10*scale)
-
-
-    plt.semilogx([opt],[min(cvs)], 'o', markersize=25*scale, markeredgewidth=4*scale,markeredgecolor='r', markerfacecolor='None' , label='lowest cv-RMSE')
-    #scatter([ncl_opt],[min(cv)], s=400,facecolors='none', edgecolors='r',)
-
-    plt.semilogx(set_sparsity, rmse, markersize=25*scale, marker='.', color='blue', zorder=1,  linestyle='-',label='training-RMSE', linewidth=4*scale)
-    plt.semilogx(set_sparsity, cvs, markersize=25*scale, marker='.', color='black', zorder=1, linestyle='-',label='cv-RMSE',linewidth=4*scale)
-
-    plt.ylabel(yaxis_label ,fontsize=fs)
-    plt.xlabel(xaxis_label ,fontsize=fs)
+    plt.ylabel(yaxis_label)
+    plt.xlabel(xaxis_label)
     plt.legend()
-    leg=ax.legend(loc='best',borderaxespad=2*scale,borderpad=2*scale,labelspacing=1*scale,handlelength=3*scale, handletextpad=2*scale)
-    leg.get_frame().set_linewidth(3*scale)
+    ax.legend(loc='best')
 
-    for l in leg.get_texts():
-        l.set_fontsize(fs)
-
-    #plt.savefig("plot_optimization.png")
-    plt.show()
+    plt.savefig(fname)
+    if show_plot:
+        plt.show()
 
 
 def plot_predictions_vs_target(sset, cemodel, prop_name, scale=1.0, xaxis_label = 'Calculated energy [arb. units]', yaxis_label = "Predicted energy [arb. units]"):
@@ -301,7 +324,6 @@ def plot_predictions_vs_target(sset, cemodel, prop_name, scale=1.0, xaxis_label 
     ``cemodel``: Model object
     ``prop_name``: string
     """
-
     import matplotlib.pyplot as plt
     from matplotlib import rc
     from matplotlib import rc,rcParams
@@ -318,7 +340,6 @@ def plot_predictions_vs_target(sset, cemodel, prop_name, scale=1.0, xaxis_label 
     fs=int(width*1.8)
     ticksize = fs
     golden_ratio = (math.sqrt(5) - 0.9) / 2.0
-    labelsize = fs
     height = float(width * golden_ratio)
 
     plt.figure(figsize=(width,height))
@@ -349,7 +370,68 @@ def plot_predictions_vs_target(sset, cemodel, prop_name, scale=1.0, xaxis_label 
     #plt.savefig("plot_optimization.png")
     plt.show()
 
-def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, property_name = None, show_loo_predictions = True, sset_enum=None, sset_gss=None, show_plot = True, refs=None, scale=1.0):
+def _set_rc_params():
+    from matplotlib import rcParams
+    
+    rcParams['figure.figsize'] = (4.0,3.0)
+    rcParams['figure.dpi'] = 300
+    rcParams['savefig.format'] = 'png'
+    rcParams['xtick.major.size'] =    2.5     # major tick size in points
+    rcParams['xtick.minor.size'] =    1.1       # minor tick size in points
+    rcParams['xtick.major.width'] =   1.5     # major tick width in points
+    rcParams['xtick.minor.width'] =   0.6     # minor tick width in points
+    rcParams['ytick.major.size'] =    2.5     # major tick size in points
+    rcParams['ytick.minor.size'] =    1.1       # minor tick size in points
+    rcParams['ytick.major.width'] =   1.5     # major tick width in points
+    rcParams['ytick.minor.width'] =   0.6     # minor tick width in points
+    rcParams['lines.linewidth'] = 2.0
+    rcParams['lines.markersize'] = 6
+    rcParams['xtick.labelsize'] = 11
+    rcParams['ytick.labelsize'] = 11
+    rcParams['axes.formatter.useoffset'] = False
+    
+    rcParams['axes.titlesize'] = 24
+    rcParams['axes.labelsize'] = 11
+    rcParams['axes.labelpad'] = 2.0
+    rcParams['axes.linewidth'] = 1.1
+    
+    rcParams['legend.fontsize'] = 10
+    rcParams['legend.frameon'] = True
+    rcParams['legend.framealpha'] = 1.0
+    rcParams['legend.handletextpad'] = 0.35
+    rcParams['legend.labelspacing'] = 0.15
+    rcParams['legend.borderpad'] = 0.30
+    rcParams['legend.edgecolor'] = '0.0'
+
+    rcParams['xtick.major.width'] =   1.0     # major tick width in points
+    rcParams['xtick.minor.width'] =   0.3     # minor tick width in points
+    rcParams['ytick.major.width'] =   1.0     # major tick width in points
+    rcParams['ytick.minor.width'] =   0.3     # minor tick width in points
+
+    rcParams['lines.markersize'] = 6
+
+    rcParams['xtick.major.pad'] = 1.0
+    rcParams['ytick.major.pad'] = 1.0
+    rcParams['axes.labelpad'] = 4.0
+
+def plot_property_vs_concentration(sset,
+                                   site_type=0,
+                                   sigma=1,
+                                   cemodel=None,
+                                   property_name=None,
+                                   show_loo_predictions=True,
+                                   sset_enum=None,
+                                   properties_enum=None,
+                                   concentrations_enum=None,
+                                   sset_gss=None,
+                                   show_plot = True,
+                                   refs=None,
+                                   scale=1.0,
+                                   yaxis_label = None,
+                                   yfactor = 1.0,
+                                   show_yzero_axis = True,
+                                   data_fname=None,
+                                   fig_fname=None):
     """Plot property values versus concentration and return dictionary with data
 
     The call to this functions generates a plot with matplotlib. It also returns a dictionary
@@ -403,43 +485,40 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
     """
     import matplotlib as mpl
     import matplotlib.pyplot as plt
-    import math
-    from matplotlib import rc,rcParams
+    from clusterx.utils import findmax, findmin
+    
+    _set_rc_params()
 
     data = {}
 
-    width = 15.0*scale
-    fs = int(width*1.8)
-    ticksize = fs
-    golden_ratio = (math.sqrt(5) - 0.9) / 2.0
-    labelsize = fs
-    height = float(width * golden_ratio)
+    fig = plt.figure(figsize=(4.0,3.0))
 
-    rc('axes', linewidth=3*scale)
-
-    fig = plt.figure(figsize=(width,height))
-    plt.xticks(fontsize=ticksize)
-    plt.yticks(fontsize=ticksize)
-    ax = plt.gca()
-    ax.tick_params(width = 3*scale, size = 10*scale, pad = 10*scale)
-
+    ax = fig.add_axes([0.19, 0.16, 0.78, 0.80])
+    
     if refs is None:
         refs = [0.0,0.0]
-
-    energies = sset.get_property_values(property_name = property_name)
+    else:
+        refs = np.array(refs) * yfactor 
+        
+    energies = np.array(sset.get_property_values(property_name = property_name)) * yfactor
     if cemodel is not None:
-        predictions = sset.get_predictions(cemodel)
+        predictions = np.array(sset.get_predictions(cemodel)) * yfactor
 
     if sset_enum is not None:
-        pred_enum = sset_enum.get_predictions(cemodel)
+        pred_enum = np.array(sset_enum.get_predictions(cemodel)) * yfactor
+    
+    if properties_enum is not None and sset_enum is None:
+        pred_enum = properties_enum
+        frconc_enum = concentrations_enum
+        vl_en_enum = refs[0]*(1-np.array(frconc_enum)) + np.array(frconc_enum)*refs[1]
 
     if sset_gss is not None:
-        pred_gss = sset_gss.get_predictions(cemodel)
+        pred_gss = np.array(sset_gss.get_predictions(cemodel)) * yfactor
 
     pred_cv = None
     if show_loo_predictions and cemodel is not None:
         cvs = cemodel.get_cv_score(sset)
-        pred_cv = cvs["Predictions-CV"]
+        pred_cv = np.array(cvs["Predictions-CV"]) * yfactor 
 
     frconc = sset.get_concentrations(site_type,sigma)
     vl_en = refs[0]*(1-np.array(frconc)) + np.array(frconc)*refs[1]
@@ -451,41 +530,77 @@ def plot_property_vs_concentration(sset, site_type=0, sigma=1, cemodel=None, pro
         frconc_gss = sset_gss.get_concentrations(site_type,sigma)
         vl_en_gss = refs[0]*(1-np.array(frconc_gss)) + np.array(frconc_gss)*refs[1]
 
-
-    #fig = plt.figure()
-    #fig.suptitle("Property vs. concentration")
+    data["concentration-enum"] = None
+    data["predicted-property-enumeration"] = None
+    data["predicted-property"] = None
+    data["predicted-property-cv"] = None
     data["concentration"] = frconc
     data["property"] = energies-vl_en
-    plt.scatter(frconc,energies-vl_en,marker='o', s=150*scale, edgecolors='green', facecolors='none',label='Calculated')
+    ymax = np.amax(data["property"])
+    ymin = np.amin(data["property"])
+    ax.scatter(frconc,energies-vl_en,marker='o', s=25, zorder=0, facecolors='none', edgecolors='k',label='Calculated')
     if cemodel is not None and pred_cv is not None:
         data["predicted-property"] = predictions-vl_en
         data["predicted-property-cv"] = pred_cv-vl_en
-        plt.scatter(frconc,pred_cv-vl_en,marker='x', s=75*scale, edgecolors='none', facecolors='red',label='Predicted-CV')
-        plt.scatter(frconc,predictions-vl_en,marker='o', s=50*scale, edgecolors='none', facecolors='blue',label='Predicted')
+        plt.scatter(frconc,predictions-vl_en,marker='.', s=20, zorder=1, facecolors='k', edgecolors=None,label='Predicted-fit')
+        plt.scatter(frconc,pred_cv-vl_en,marker='.', s=10, zorder=2, facecolors='red', edgecolors=None,label='Predicted-CV')
+        ymax = findmax(ymax,data["predicted-property"],data["predicted-property-cv"])
+        ymin = findmin(ymin,data["predicted-property"],data["predicted-property-cv"])
     if cemodel is not None and pred_cv is None:
         data["predicted-property"] = predictions-vl_en
-        plt.scatter(frconc,predictions-vl_en,marker='o', s=50*scale, edgecolors='none', facecolors='blue',label='Predicted')
-    if sset_enum is not None:
+        plt.scatter(frconc,predictions-vl_en,marker='o', s=20, edgecolors='none', facecolors='blue',label='Predicted-fit')
+        ymax = findmax(ymax,data["predicted-property"])
+        ymin = findmin(ymin,data["predicted-property"])
+    if sset_enum is not None or properties_enum is not None:
         data["concentration-enum"] = frconc_enum
         data["predicted-property-enumeration"] = pred_enum-vl_en_enum
-        plt.scatter(frconc_enum,pred_enum-vl_en_enum,marker='o', s=30*scale, edgecolors='none', facecolors='gray',label='Enumeration')
+        plt.scatter(frconc_enum,pred_enum-vl_en_enum,marker='o', edgecolors='none', facecolors='gray',label='Enumeration')
+        ymax = findmax(ymax,data["predicted-property-enumeration"])
+        ymin = findmin(ymin,data["predicted-property-enumeration"])
     if sset_gss is not None:
         data["concentration-gss"] = frconc_gss
         data["predicted-property-gss"] = pred_gss-vl_en_gss
-        plt.scatter(frconc_gss,pred_gss-vl_en_gss,marker='o', s=40*scale, edgecolors='none', facecolors='red',label='Predicted GS')
+        plt.scatter(frconc_gss,pred_gss-vl_en_gss,marker='o', edgecolors='none', facecolors='red',label='Predicted GS')
+        ymax = findmax(ymax,data["predicted-property-gss"])
+        ymin = findmin(ymin,data["predicted-property-gss"])
 
-    plt.xlabel("Concentration",fontsize=fs)
-    plt.ylabel(property_name,fontsize=fs)
+    from ase.data import chemical_symbols as cs
+    cs = np.array(cs)
+    sublattice_types = sset.get_parent_lattice().get_sublattice_types()
+    species_name = sublattice_types[site_type][sigma]
+    xlabel = "Concentration of "+cs[species_name]
+    plt.xlabel(xlabel)
+    if yaxis_label is not None:
+        plt.ylabel(yaxis_label)
+    else:
+        plt.ylabel(property_name)
 
+    data["xlabel"] = xlabel
+
+    dy = ymax-ymin
+    ax.set_ylim([ymin - 0.1 * dy, ymax + 0.30 * dy])
+    
+    if show_yzero_axis:
+        ax.axhline(y=0, color='k', linewidth=0.5)
+    
     plt.legend()
-    leg=ax.legend(loc='best',borderaxespad=2*scale,borderpad=2*scale,labelspacing=1*scale,handlelength=3*scale, handletextpad=2*scale)
-    leg.get_frame().set_linewidth(3*scale)
 
-    for l in leg.get_texts():
-        l.set_fontsize(fs)
+    if data_fname is not None:
+        np.savez(
+            data_fname,
+            concentrations_property = data["concentration"],
+            property = data["property"],
+            predictions = data['predicted-property'],
+            predictions_cv = data['predicted-property-cv'],
+            concentrations_enum = data["concentration-enum"],
+            predictions_enum = data["predicted-property-enumeration"]
+            )
 
     if show_plot:
         plt.show()
+
+    if fig_fname is not None:
+        plt.savefig(fig_fname) 
 
     plt.close()
     mpl.rcParams.update(mpl.rcParamsDefault)
@@ -499,7 +614,7 @@ def plot_property(xvalues, yvalues, prop_name = None, xaxis_label = None, yaxis_
     import math
     from matplotlib import rc,rcParams
     
-    width=12.0*scale
+    width=15.0*scale
     fs=int(width*1.8)
     ticksize = fs
     golden_ratio = (math.sqrt(5) - 0.9) / 2.0
@@ -531,3 +646,52 @@ def plot_property(xvalues, yvalues, prop_name = None, xaxis_label = None, yaxis_
         plt.show()
     else:
         plt.savefig(prop_name+"_plot.png")
+
+
+def _wls_normalize_histogram_for_plotting(histogram, shift_y_first_nonzero=False):
+    hist = histogram.copy()
+    nbins = len(hist)
+    mean = 0
+    n_nonzero = 0
+
+    if shift_y_first_nonzero:
+        for i in range(nbins):
+            if hist[i] != 0:
+                hfirst = hist[i]
+                break
+        for i in range(nbins):
+            if hist[i] != 0:
+                hist[i] -= hfirst
+
+    for i in range(nbins):
+        if hist[i] != 0:
+            mean += hist[i]
+            n_nonzero += 1
+
+    if n_nonzero == 0:
+        return hist
+    else:
+        mean /= n_nonzero
+        for i in range(nbins):
+            hist[i] /= np.abs(mean)
+
+        return hist
+    
+def plot_histograms_wang_landau(cdos_object, index=-1):
+    import matplotlib.pyplot as plt
+    
+    hist = np.array(cdos_object._stored_cdos[index]['histogram'])
+    cdos = np.array(cdos_object._stored_cdos[index]['cdos'])
+    
+    ener_arr = np.array(cdos_object._energy_bins)
+    cdos_arr = _wls_normalize_histogram_for_plotting(cdos, shift_y_first_nonzero=True)
+    hist_arr = _wls_normalize_histogram_for_plotting(hist)
+    ones_arr = np.ones(len(ener_arr))
+    
+    figure, ax = plt.subplots(figsize=(10, 8))
+    
+    ax.bar(ener_arr, ones_arr, width=cdos_object._energy_bin_width*0.80, color="silver")
+    ax.bar(ener_arr, hist_arr, width=cdos_object._energy_bin_width*0.80)
+    ax.bar(ener_arr, cdos_arr, width=cdos_object._energy_bin_width*0.40)
+
+    plt.show()

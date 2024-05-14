@@ -189,7 +189,7 @@ class Structure(SuperCell):
         return _atoms.get_potential_energy()
     """
 
-    def serialize(self, fmt="json", fname="structure.json"):
+    def serialize(self, fmt="json", filepath="structure.json", fname=None):
         """Serialize structure object
 
         Wrapper for ASEs write method.
@@ -201,14 +201,20 @@ class Structure(SuperCell):
             accepted by ``ase.io.write()`` method are valid (see corresponding
             documentation in https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write).
 
-        ``fname``: string (default: ``structure.json``)
-            file name (may includ absolute or relative path).
+        ``filepath``: string (default: ``structure.json``)
+            DEPRECATED, use filepath instead file name (may includ absolute or relative path).
+
+        ``fname``: string (default: ``None``)
+            DEPRECATED, use filepath instead. File name (may includ absolute or relative path).
         """
         from ase.io import write
 
-        write(fname,images=self.atoms,format=fmt)
+        if fname is not None:
+            filepath = fname
+        
+        write(filepath,images=self.atoms,format=fmt)
 
-        self._fname = fname
+        self._fname = filepath
 
     def swap_random_binary(self, site_type, sigma_swap = [0,1]):
         """Swap two randomly selected atoms in given sub-lattice.
@@ -232,7 +238,6 @@ class Structure(SuperCell):
             ridx2 = self._idxs[site_type][sigma_swap[1]][rind2]
             rindices = [sigma_swap,[rind1,rind2]]
             self.swap(ridx1, ridx2, site_type = site_type,rindices = rindices)
-            #self.swap(ridx1, ridx2, site_type = site_type,rindices = rindices)
 
             return ridx1,ridx2,site_type,rindices
         else:

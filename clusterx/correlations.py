@@ -2,11 +2,10 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from collections import Counter
 import numpy as np
-import sys
 from clusterx.symmetry import get_scaled_positions
 from clusterx.utils import PolynomialBasis
+from clusterx.parent_lattice import ParentLattice
 from functools import lru_cache
 import pickle
 import os
@@ -18,8 +17,8 @@ class CorrelationsCalculator():
     **Parameters:**
 
     ``basis``: string
-        |  cluster basis to be used. Possible values are: ``binary-linear``, ``trigonometric``, ``polynomial``, and ``chebyshev``.
-        |  ``binary-linear``: highly interpretable, non-orthogonal basis functions for binary compounds
+        |  cluster basis to be used. Possible values are: ``indicator-binary``, ``trigonometric``, ``polynomial``, and ``chebyshev``.
+        |  ``indicator-binary``: highly interpretable, non-orthogonal basis functions for binary compounds (also ``binary-linear``, deprecated)
         |  ``trigonomentric``: orthonormal basis; constructed from sine and cosine functions; based on: Axel van de Walle, CALPHAD 33, 266 (2009)
         |  ``polynomial``: orthonormal basis; uses orthogonalized polynomials
         |  ``chebyshev``: orthonormsl basis; chebyshev polynomials for symmetrized sigmas (sigma in {-m/2, ..., 0, ..., m/2 }); based on: J.M. Sanchez, Physica 128A, 334-350 (1984)
@@ -119,6 +118,11 @@ class CorrelationsCalculator():
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
 
+    def get_basis(self):
+        """Return basis set name
+        """
+        return self.basis
+        
     def get_cpool(self):
         """Return ClustersPool object of the calculator
         """
@@ -183,7 +187,7 @@ class CorrelationsCalculator():
             else:
                 corr_dict.update({'lookup':False})
 
-            cpool.update({'correlations_calculator':corr_dict})
+            cpooldict.update({'correlations_calculator':corr_dict})
             atoms_db.metadata = cpooldict
 
     def _get_lookup_table(self):
@@ -213,6 +217,7 @@ class CorrelationsCalculator():
 
         
     #@profile
+    @lru_cache(maxsize=None)
     def site_basis_function(self, alpha, sigma, m):
         """
         Calculates the site basis function.
@@ -250,7 +255,7 @@ class CorrelationsCalculator():
             return self._trigo_basis_function(alpha,sigma,m)
         
 
-        if self.basis == "binary-linear":
+        if self.basis == "binary-linear" or self.basis == "indicator-binary":
             # Only for binary alloys. Allows for simple interpretation of cluster interactions.
             return sigma
 
@@ -311,7 +316,7 @@ class CorrelationsCalculator():
         for i,orbit in enumerate(cluster_orbits):
             lengths[i] = len(orbit)
         return lengths
-
+    
     def get_cluster_orbits_for_scell(self, scell, verbose = False):
         """Return array of cluster orbits for a given supercell
 
@@ -326,14 +331,16 @@ class CorrelationsCalculator():
         from clusterx.clusters.clusters_pool import ClustersPool
                 
         cluster_orbits = None
-
+        
+        # Check if cluster_orbit is already computed
         for i, _scell in enumerate(self._scells):
             if cluster_orbits is None:
                 if len(scell.get_positions()) == len(_scell.get_positions()):
                     if np.allclose(scell._p,_scell._p):
                         cluster_orbits = self._cluster_orbits_set[i]
                         break
-
+                    
+        # Compute cluster_orbit from scratch if not available
         if cluster_orbits is None:
             if verbose: print("Calculating cluster orbits from scratch for scell")
             from clusterx.structure import Structure
@@ -409,8 +416,8 @@ class CorrelationsCalculator():
         self._mc = mc
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
-        
-    def get_cluster_correlations(self, structure, multiplicities=None, verbose=False):
+
+    def get_cluster_correlations(self, structure, verbose=False):
         """Get cluster correlations for a structure
         **Parameters:**
 
@@ -419,20 +426,11 @@ class CorrelationsCalculator():
         ``mc``: Boolean
             Set to ``True`` when performing Monte-Carlo simulations, to use an
             optimized version of the method.
-        ``multiplicities``: array of integers
-            if None, the accumulated correlation functions are devided by the size
-            of the cluster orbits, otherwise they are devided by the given
-            multiplicities.
-
-        .. todo::
-
-            remove multiplicities option and always give intensive correlations.
         """
         #from clusterx.utils import get_cl_idx_sc
         cluster_orbits = None
         
         if self._mc and self._cluster_orbits_set != [] and self._num_mc_calls != 0:
-            #cluster_orbits = self._cluster_orbits_set[0]
             cluster_orbits = self._cluster_orbits_mc
         else:
             cluster_orbits = self.get_cluster_orbits_for_scell(structure.get_supercell(),verbose=verbose)
@@ -443,18 +441,18 @@ class CorrelationsCalculator():
         cpool_list = self._cpool.get_cpool_list()
         
         correlations = np.zeros(len(cpool_list))
+        
         for icl, cluster in enumerate(cpool_list):
             cluster_orbit = cluster_orbits[icl]
             cluster_orbit_arr = cluster_orbit.as_array()
             weights = cluster_orbit.get_weights()
+
             for weight, cluster in zip(weights, cluster_orbit_arr):
                 cf = self.cluster_function(cluster, structure.sigmas, structure.ems)
                 correlations[icl] += weight * cf
 
-            if multiplicities is None:
-                correlations[icl] /= np.sum(weights)
-            else:
-                correlations[icl] /= multiplicities[icl]
+            correlations[icl] /= np.sum(weights)
+            
         return np.around(correlations,decimals=12)
 
     def get_correlation_matrix(self, structures_set, outfile = None, verbose = False):

@@ -4,7 +4,6 @@
 
 import numpy as np
 from importlib import import_module
-#import sklearn
 
 class EstimatorFactory(object):
     """Property-estimator factory
@@ -14,9 +13,6 @@ class EstimatorFactory(object):
     def create(estimator_type, **estimator_opts):
         """Create an estimator object from (or compatible with) the `scikit-learn <https://scikit-learn.org/stable/index.html>`_ library.
             
-            So far no compatible estimators are implemented, so this class acts as 
-            a factory of scikit-learn estimators.
-
         **Parameters:**
 
         ``estimator_type``: string

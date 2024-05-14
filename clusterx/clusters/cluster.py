@@ -51,7 +51,7 @@ class Cluster():
                 raise ValueError("Cluster initialization failed")
 
         else:
-            self.ais = np.array(atom_indexes)
+            self.ais = np.array(atom_indexes, dtype=int)
             self.ans = np.array(atom_numbers)
 
         self.npoints = len(atom_numbers)
@@ -109,6 +109,8 @@ class Cluster():
                                 r = d
             self.radius = r
 
+        self.myhash = self.__hash__()
+
     """
     def __lt__(self,other):
         if self.npoints == other.npoints:
@@ -162,7 +164,7 @@ class Cluster():
         return hash(str(list(zip(self.ais,self.ans))))
         
     def __eq__(self, other):
-        return self.__class__ == other.__class__ and np.array_equal(self.ais,other.ais) and np.array_equal(self.ans,other.ans)
+        return self.myhash == other.myhash
 
     def __len__(self):
         return len(self.ais)
