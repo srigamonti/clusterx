@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='clusterX',
-      version='2.1.0.rc5',
+      version='2.1.0',
       description='CELL (aka clusterX) is a python package for building Cluster Expansion models of simple and complex alloys and performing thermodynamical analyses of materials.',
       url='http://sol.physik.hu-berlin.de/cell/',
       author='CELL Developers',
