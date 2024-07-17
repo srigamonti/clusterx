@@ -3,6 +3,7 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import numpy as np
+from clusterx.structures_set import StructuresSet
 
 def juview(plat,n=None):
     """Visualize structure object in Jupyter notebook
@@ -414,22 +415,22 @@ def _set_rc_params():
     rcParams['ytick.major.pad'] = 1.0
     rcParams['axes.labelpad'] = 4.0
 
-def plot_property_vs_concentration(sset,
+def plot_property_vs_concentration(sset: StructuresSet,
+                                   property_name: str,
                                    site_type=0,
                                    sigma=1,
                                    cemodel=None,
-                                   property_name=None,
                                    show_loo_predictions=True,
                                    sset_enum=None,
                                    properties_enum=None,
                                    concentrations_enum=None,
                                    sset_gss=None,
-                                   show_plot = True,
+                                   show_plot=True,
                                    refs=None,
                                    scale=1.0,
-                                   yaxis_label = None,
-                                   yfactor = 1.0,
-                                   show_yzero_axis = True,
+                                   yaxis_label=None,
+                                   yfactor=1.0,
+                                   show_yzero_axis=True,
                                    data_fname=None,
                                    fig_fname=None):
     """Plot property values versus concentration and return dictionary with data
@@ -443,6 +444,10 @@ def plot_property_vs_concentration(sset,
 
     ``sset``: StructuresSet object
         The property values will be plotted for structures in ``sset``.
+    ``property_name``: string
+        The calculated property ``property_name`` will be extracted
+        from the ``sset`` and depicted in the plot. If ``cemodel`` is not ``None``
+        as well, then both predicted and calculated data are plot.
     ``site_type``: integer
         The x axis of the plot will indicate the fractional concentration for
         site type ``site_type``
@@ -454,10 +459,6 @@ def plot_property_vs_concentration(sset,
         depicted.
     ``refs``: 1D Array containing two float (optional, default: None)
         the values of a reference energy at concentrations 0 and 1.
-    ``property_name``: string
-        If not ``None``, the calculated property ``property_name`` will be extracted
-        from the ``sset`` and depicted in the plot. If ``cemodel`` is not ``None``
-        as well, then both predicted and calculated data are plot.
     ``show_loo_predictions``: Boolean
         If true, show predicted properties corresponding to leave-one-out CV.
         That is, the predictions for the left-out samples in the CV procedure are
