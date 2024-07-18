@@ -5,6 +5,8 @@
 import plac
 import inspect
 import sys
+import os
+import toml
 from clusterx.cli.config_utils import read_toml_config, generate_argv
 
 def main():
@@ -19,7 +21,19 @@ def main():
     """
     from clusterx.cli import commands as cmds
 
-    no_toml_file = not any(arg in sys.argv for arg in {"--toml_file", "-tf"})
+    # Check for cellinput.toml in the current working directory
+    toml_file_path = os.path.join(os.getcwd(), 'cellinput.toml')
+    custom_dir = os.getcwd()  # Default to CWD
+
+    no_toml_file = True
+    if os.path.isfile(toml_file_path):
+        config_dict = read_toml_config(toml_file_path)
+        custom_dir = config_dict.get('custom_dir', os.getcwd())
+        
+        # Add the custom directory to sys.path to import custom modules
+        sys.path.append(custom_dir)
+        no_toml_file = False
+
     print_help = len(sys.argv) == 2 and ( sys.argv[1] == "-h" or sys.argv[1] == "--help" )
 
     if print_help:
@@ -27,26 +41,16 @@ def main():
 
     config_dict = {}
     commands = []
-    if no_toml_file:
+    if no_toml_file or len(sys.argv) > 1:
         print(sys.argv[1:])
         plac.call(cmds, sys.argv[1:])
     else:
-        try:
-            toml_file_index = sys.argv.index('--toml_file') + 1
-        except ValueError:
-            pass
-
-        try:
-            toml_file_index = sys.argv.index('-tf') + 1
-        except ValueError:
-            raise ValueError("Neither --toml_file nor -tf in cli")
-
-        toml_file = sys.argv[toml_file_index]
-        config_dict = read_toml_config(toml_file)
-        commands = list(config_dict.keys())
-            
-        available_commands = cmds.commands  # List of available command names in my_module
-
+        config_dict = read_toml_config(toml_file_path)
+        commands = [key for key, value in config_dict.items() if isinstance(value, dict)]
+        print("commands are", commands)
+        available_commands = cmds.commands  # List of available command names
+        print("available commands are", available_commands)
+        
         for command in commands:
             if command in available_commands:
                 func = getattr(cmds, command)
@@ -55,8 +59,6 @@ def main():
             else:
                 print(f"Unknown command: {command}")
                 sys.exit(1)
-
-
     
 if __name__ == '__main__':
     main()
