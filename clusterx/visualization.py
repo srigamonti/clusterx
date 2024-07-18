@@ -4,6 +4,12 @@
 
 import numpy as np
 from clusterx.structures_set import StructuresSet
+from clusterx.model import Model
+from clusterx.visualization_utils import scatter_plot, save_plot_data, auto_scale_yaxis, _set_rc_params
+from ase.data import chemical_symbols as cs
+from typing import Optional, List, Dict, Union
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 
 def juview(plat,n=None):
     """Visualize structure object in Jupyter notebook
@@ -137,7 +143,6 @@ def plot_optimization_vs_number_of_clusters(
         Label for the y-axis of the plot
         
     """
-    import matplotlib.pyplot as plt
     from matplotlib.ticker import MaxNLocator
 
     _set_rc_params()
@@ -263,9 +268,6 @@ def plot_optimization_vs_sparsity(
         The ClustersSelector oject which was used for the optimization to be plotted.
         sparsity parameter when the LASSO method is used.
     """
-
-    import matplotlib.pyplot as plt
-
     _set_rc_params()
 
     set_sparsity=clsel.lasso_sparsities
@@ -325,7 +327,6 @@ def plot_predictions_vs_target(sset, cemodel, prop_name, scale=1.0, xaxis_label 
     ``cemodel``: Model object
     ``prop_name``: string
     """
-    import matplotlib.pyplot as plt
     from matplotlib import rc
     from matplotlib import rc,rcParams
     import math
@@ -371,68 +372,27 @@ def plot_predictions_vs_target(sset, cemodel, prop_name, scale=1.0, xaxis_label 
     #plt.savefig("plot_optimization.png")
     plt.show()
 
-def _set_rc_params():
-    from matplotlib import rcParams
-    
-    rcParams['figure.figsize'] = (4.0,3.0)
-    rcParams['figure.dpi'] = 300
-    rcParams['savefig.format'] = 'png'
-    rcParams['xtick.major.size'] =    2.5     # major tick size in points
-    rcParams['xtick.minor.size'] =    1.1       # minor tick size in points
-    rcParams['xtick.major.width'] =   1.5     # major tick width in points
-    rcParams['xtick.minor.width'] =   0.6     # minor tick width in points
-    rcParams['ytick.major.size'] =    2.5     # major tick size in points
-    rcParams['ytick.minor.size'] =    1.1       # minor tick size in points
-    rcParams['ytick.major.width'] =   1.5     # major tick width in points
-    rcParams['ytick.minor.width'] =   0.6     # minor tick width in points
-    rcParams['lines.linewidth'] = 2.0
-    rcParams['lines.markersize'] = 6
-    rcParams['xtick.labelsize'] = 11
-    rcParams['ytick.labelsize'] = 11
-    rcParams['axes.formatter.useoffset'] = False
-    
-    rcParams['axes.titlesize'] = 24
-    rcParams['axes.labelsize'] = 11
-    rcParams['axes.labelpad'] = 2.0
-    rcParams['axes.linewidth'] = 1.1
-    
-    rcParams['legend.fontsize'] = 10
-    rcParams['legend.frameon'] = True
-    rcParams['legend.framealpha'] = 1.0
-    rcParams['legend.handletextpad'] = 0.35
-    rcParams['legend.labelspacing'] = 0.15
-    rcParams['legend.borderpad'] = 0.30
-    rcParams['legend.edgecolor'] = '0.0'
 
-    rcParams['xtick.major.width'] =   1.0     # major tick width in points
-    rcParams['xtick.minor.width'] =   0.3     # minor tick width in points
-    rcParams['ytick.major.width'] =   1.0     # major tick width in points
-    rcParams['ytick.minor.width'] =   0.3     # minor tick width in points
-
-    rcParams['lines.markersize'] = 6
-
-    rcParams['xtick.major.pad'] = 1.0
-    rcParams['ytick.major.pad'] = 1.0
-    rcParams['axes.labelpad'] = 4.0
-
-def plot_property_vs_concentration(sset: StructuresSet,
-                                   property_name: str,
-                                   site_type=0,
-                                   sigma=1,
-                                   cemodel=None,
-                                   show_loo_predictions=True,
-                                   sset_enum=None,
-                                   properties_enum=None,
-                                   concentrations_enum=None,
-                                   sset_gss=None,
-                                   show_plot=True,
-                                   refs=None,
-                                   scale=1.0,
-                                   yaxis_label=None,
-                                   yfactor=1.0,
-                                   show_yzero_axis=True,
-                                   data_fname=None,
-                                   fig_fname=None):
+def plot_property_vs_concentration(
+    sset: StructuresSet,
+    property_name: str,
+    site_type: int = 0,
+    sigma: int = 1,
+    cemodel: Optional[Model] = None,
+    show_loo_predictions: bool = True,
+    sset_enum: Optional[StructuresSet] = None,
+    properties_enum: Optional[np.ndarray] = None,
+    concentrations_enum: Optional[np.ndarray] = None,
+    sset_gss: Optional[StructuresSet] = None,
+    show_plot: bool = True,
+    refs: Optional[List[float]] = None,
+    scale: float = 1.0,
+    yaxis_label: Optional[str] = None,
+    yfactor: float = 1.0,
+    show_yzero_axis: bool = True,
+    data_fname: Optional[str] = None,
+    fig_fname: Optional[str] = None
+) -> Dict[str, Union[np.ndarray, str]]:
     """Plot property values versus concentration and return dictionary with data
 
     The call to this functions generates a plot with matplotlib. It also returns a dictionary
@@ -484,134 +444,76 @@ def plot_property_vs_concentration(sset: StructuresSet,
         returned dictionary elements may be missing.
 
     """
-    import matplotlib as mpl
-    import matplotlib.pyplot as plt
-    from clusterx.utils import findmax, findmin
-    
     _set_rc_params()
 
     data = {}
+    fig, ax = plt.subplots()
 
-    fig = plt.figure(figsize=(4.0,3.0))
+    refs = np.array(refs) * yfactor if refs is not None else np.array([0.0, 0.0])
 
-    ax = fig.add_axes([0.19, 0.16, 0.78, 0.80])
-    
-    if refs is None:
-        refs = [0.0,0.0]
-    else:
-        refs = np.array(refs) * yfactor 
+    energies = np.array(sset.get_property_values(property_name=property_name)) * yfactor
+    predictions = np.array(sset.get_predictions(cemodel)) * yfactor if cemodel is not None else None
+    pred_enum = np.array(sset_enum.get_predictions(cemodel)) * yfactor if sset_enum is not None else properties_enum
         
-    energies = np.array(sset.get_property_values(property_name = property_name)) * yfactor
-    if cemodel is not None:
-        predictions = np.array(sset.get_predictions(cemodel)) * yfactor
+    frconc = sset.get_concentrations(site_type, sigma)
+    vl_en = refs[0] * (1 - np.array(frconc)) + np.array(frconc) * refs[1]
 
-    if sset_enum is not None:
-        pred_enum = np.array(sset_enum.get_predictions(cemodel)) * yfactor
-    
-    if properties_enum is not None and sset_enum is None:
-        pred_enum = properties_enum
-        frconc_enum = concentrations_enum
-        vl_en_enum = refs[0]*(1-np.array(frconc_enum)) + np.array(frconc_enum)*refs[1]
+    frconc_enum = sset_enum.get_concentrations(site_type, sigma) if sset_enum is not None else concentrations_enum
+    vl_en_enum = refs[0] * (1 - np.array(frconc_enum)) + np.array(frconc_enum) * refs[1] if frconc_enum is not None else None
 
-    if sset_gss is not None:
-        pred_gss = np.array(sset_gss.get_predictions(cemodel)) * yfactor
-
-    pred_cv = None
-    if show_loo_predictions and cemodel is not None:
+    if cemodel is not None and show_loo_predictions:
         cvs = cemodel.get_cv_score(sset)
-        pred_cv = np.array(cvs["Predictions-CV"]) * yfactor 
-
-    frconc = sset.get_concentrations(site_type,sigma)
-    vl_en = refs[0]*(1-np.array(frconc)) + np.array(frconc)*refs[1]
-
-    if sset_enum is not None:
-        frconc_enum = sset_enum.get_concentrations(site_type,sigma)
-        vl_en_enum = refs[0]*(1-np.array(frconc_enum)) + np.array(frconc_enum)*refs[1]
-    if sset_gss is not None:
-        frconc_gss = sset_gss.get_concentrations(site_type,sigma)
-        vl_en_gss = refs[0]*(1-np.array(frconc_gss)) + np.array(frconc_gss)*refs[1]
-
-    data["concentration-enum"] = None
-    data["predicted-property-enumeration"] = None
-    data["predicted-property"] = None
-    data["predicted-property-cv"] = None
-    data["concentration"] = frconc
-    data["property"] = energies-vl_en
-    ymax = np.amax(data["property"])
-    ymin = np.amin(data["property"])
-    ax.scatter(frconc,energies-vl_en,marker='o', s=25, zorder=0, facecolors='none', edgecolors='k',label='Calculated')
-    if cemodel is not None and pred_cv is not None:
-        data["predicted-property"] = predictions-vl_en
-        data["predicted-property-cv"] = pred_cv-vl_en
-        plt.scatter(frconc,predictions-vl_en,marker='.', s=20, zorder=1, facecolors='k', edgecolors=None,label='Predicted-fit')
-        plt.scatter(frconc,pred_cv-vl_en,marker='.', s=10, zorder=2, facecolors='red', edgecolors=None,label='Predicted-CV')
-        ymax = findmax(ymax,data["predicted-property"],data["predicted-property-cv"])
-        ymin = findmin(ymin,data["predicted-property"],data["predicted-property-cv"])
-    if cemodel is not None and pred_cv is None:
-        data["predicted-property"] = predictions-vl_en
-        plt.scatter(frconc,predictions-vl_en,marker='o', s=20, edgecolors='none', facecolors='blue',label='Predicted-fit')
-        ymax = findmax(ymax,data["predicted-property"])
-        ymin = findmin(ymin,data["predicted-property"])
-    if sset_enum is not None or properties_enum is not None:
-        data["concentration-enum"] = frconc_enum
-        data["predicted-property-enumeration"] = pred_enum-vl_en_enum
-        plt.scatter(frconc_enum,pred_enum-vl_en_enum,marker='o', edgecolors='none', facecolors='gray',label='Enumeration')
-        ymax = findmax(ymax,data["predicted-property-enumeration"])
-        ymin = findmin(ymin,data["predicted-property-enumeration"])
-    if sset_gss is not None:
-        data["concentration-gss"] = frconc_gss
-        data["predicted-property-gss"] = pred_gss-vl_en_gss
-        plt.scatter(frconc_gss,pred_gss-vl_en_gss,marker='o', edgecolors='none', facecolors='red',label='Predicted GS')
-        ymax = findmax(ymax,data["predicted-property-gss"])
-        ymin = findmin(ymin,data["predicted-property-gss"])
-
-    from ase.data import chemical_symbols as cs
-    cs = np.array(cs)
-    sublattice_types = sset.get_parent_lattice().get_sublattice_types()
-    species_name = sublattice_types[site_type][sigma]
-    xlabel = "Concentration of "+cs[species_name]
-    plt.xlabel(xlabel)
-    if yaxis_label is not None:
-        plt.ylabel(yaxis_label)
+        pred_cv = np.array(cvs["Predictions-CV"]) * yfactor
     else:
-        plt.ylabel(property_name)
+        pred_cv = None
 
+    frconc_gss = sset_gss.get_concentrations(site_type, sigma) if sset_gss is not None else None
+    pred_gss = np.array(sset_gss.get_predictions(cemodel)) * yfactor if sset_gss is not None else None
+    vl_en_gss = refs[0] * (1 - np.array(frconc_gss)) + np.array(frconc_gss) * refs[1] if frconc_gss is not None else None
+
+    data["concentration"] = frconc
+    data["property"] = energies - vl_en
+    data["predicted-property"] = predictions - vl_en if predictions is not None else None
+    data["predicted-property-cv"] = pred_cv - vl_en if pred_cv is not None else None
+    data["concentration-enum"] = frconc_enum
+    data["predicted-property-enumeration"] = pred_enum - vl_en_enum if pred_enum is not None else None
+    data["concentration-gss"] = frconc_gss
+    data["predicted-property-gss"] = pred_gss - vl_en_gss if pred_gss is not None else None
+
+    scatter_plot(ax, frconc, energies - vl_en, 'o', 'k', 'Calculated')
+    if predictions is not None:
+        scatter_plot(ax, frconc, predictions - vl_en, '.', 'k', 'Predicted-fit')
+    if pred_cv is not None:
+        scatter_plot(ax, frconc, pred_cv - vl_en, '.', 'red', 'Predicted-CV')
+    if pred_enum is not None:
+        scatter_plot(ax, frconc_enum, pred_enum - vl_en_enum, 'o', 'gray', 'Enumeration')
+    if pred_gss is not None:
+        scatter_plot(ax, frconc_gss, pred_gss - vl_en_gss, 'o', 'red', 'Predicted GS')
+
+    species_name = sset.get_parent_lattice().get_sublattice_types()[site_type][sigma]
+    xlabel = f"Concentration of {cs[species_name]}"
+    plt.xlabel(xlabel)
+    plt.ylabel(yaxis_label if yaxis_label else property_name)
     data["xlabel"] = xlabel
 
-    dy = ymax-ymin
-    ax.set_ylim([ymin - 0.1 * dy, ymax + 0.30 * dy])
-    
+    ax.set_ylim(auto_scale_yaxis(data["property"], data))
+
     if show_yzero_axis:
         ax.axhline(y=0, color='k', linewidth=0.5)
     
     plt.legend()
-
-    if data_fname is not None:
-        np.savez(
-            data_fname,
-            concentrations_property = data["concentration"],
-            property = data["property"],
-            predictions = data['predicted-property'],
-            predictions_cv = data['predicted-property-cv'],
-            concentrations_enum = data["concentration-enum"],
-            predictions_enum = data["predicted-property-enumeration"]
-            )
-
+    save_plot_data(data, data_fname)
     if show_plot:
         plt.show()
-
     if fig_fname is not None:
         plt.savefig(fig_fname) 
 
     plt.close()
-    mpl.rcParams.update(mpl.rcParamsDefault)
     return data
 
 def plot_property(xvalues, yvalues, prop_name = None, xaxis_label = None, yaxis_label = None, show_plot = True, scale = 1.0):
     """yvalues versus xvalues 
     """
-    import matplotlib as mpl
-    import matplotlib.pyplot as plt
     import math
     from matplotlib import rc,rcParams
     
@@ -679,7 +581,6 @@ def _wls_normalize_histogram_for_plotting(histogram, shift_y_first_nonzero=False
         return hist
     
 def plot_histograms_wang_landau(cdos_object, index=-1):
-    import matplotlib.pyplot as plt
     
     hist = np.array(cdos_object._stored_cdos[index]['histogram'])
     cdos = np.array(cdos_object._stored_cdos[index]['cdos'])
