@@ -56,7 +56,6 @@ def dict_to_argv(params_without_defaults, params_with_defaults, defaults, param_
     for param, default in zip(params_with_defaults, defaults):
         if param in param_dict:
             val = str(param_dict[param])
-            print(default, val)
             if str(default) == "False" or str(default) == "True":
                 if val == "False":
                     pass 
