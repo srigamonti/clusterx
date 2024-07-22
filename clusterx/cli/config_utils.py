@@ -146,7 +146,7 @@ def dict_to_argv(params_without_defaults, params_with_defaults, defaults, param_
     # Add parameters without defaults
     for param in params_without_defaults:
         if param in param_dict:
-            output.append(param_dict[param])
+            output.append(str(param_dict[param]))
 
     # Add parameters with defaults
     for param, default in zip(params_with_defaults, defaults):
