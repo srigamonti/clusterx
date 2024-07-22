@@ -172,3 +172,18 @@ def generate_argv(func, config_dict):
         params_without_defaults, params_with_defaults, defaults, config_dict
     )
     return argv_list
+
+
+def cmd_message(msglbl):
+    """Display message in command execution
+
+    Parameters
+    msglbl (str): Message label. Can take the following values:
+                  "head": Prints the argument values received by the command.
+    """
+    if msglbl == "head":
+        command_name = inspect.stack()[1].function
+        config = {k: v for k, v in locals().items() if k != "command_name"}
+
+        print(f"Running {command_name} with configuration:")
+        print(config)
