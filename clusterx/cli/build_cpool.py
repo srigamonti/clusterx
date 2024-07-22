@@ -35,7 +35,7 @@ commands = ["build_cpool"]
 )
 @plac.opt("method", help="Method to use to find clusters.", choices=[1, 2, 3])
 @plac.opt(
-    "cpool_filepath_out", help="Filepath where to store the generated pool of clusters."
+    "cpool_filepath", help="Filepath where to store the generated pool of clusters."
 )
 @plac.opt(
     "vacancy_atomic_number",
@@ -47,7 +47,7 @@ def build_cpool(
     sset_filepath: Optional[str] = None,
     psc: PscType = 1,
     method: int = 1,
-    cpool_filepath_out: str = "cpool.json",
+    cpool_filepath: str = "cpool.json",
     vacancy_atomic_number: int = 0,
 ):
     """Build a pool of clusters"""
@@ -73,5 +73,5 @@ def build_cpool(
     )
     cpool.display_info()
     cpool.serialize(
-        filepath=cpool_filepath_out, vacancy_atomic_number=vacancy_atomic_number
+        filepath=cpool_filepath, vacancy_atomic_number=vacancy_atomic_number
     )
