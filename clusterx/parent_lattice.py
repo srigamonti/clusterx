@@ -5,15 +5,17 @@
 from ase import Atoms
 import numpy as np
 import copy
-from clusterx.utils import _is_integrable
 from ase.db import connect
 from clusterx.symmetry import get_spacegroup
 import warnings
-warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning) 
+
+warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
+
 
 def unique_non_sorted(a):
     _, idx = np.unique(a, return_index=True)
     return a[np.sort(idx)]
+
 
 class ParentLattice(Atoms):
     """**Parent lattice class**
@@ -47,10 +49,12 @@ class ParentLattice(Atoms):
         representing the species which can occupy the crystal
         sites (see examples below). This is overriden by ``substitutions``
         if set.
-    ``json_db_filepath``: string
+    ``filepath``: string
         Path to a Json database file, as created by ``ParentLattice.serialize()``.
         Overrides all the above. Allows to create a ``ParentLattice`` object
         from file.
+    ``json_db_filepath``: string, optional
+        Deprecated. Use ``filepath`` instead.
     ``pbc``: three bool
         Periodic boundary conditions flags. Examples:
         (1, 1, 0), (True, False, False). Default value: (1,1,1)
@@ -134,7 +138,18 @@ class ParentLattice(Atoms):
     **Methods:**
     """
 
-    def __init__(self, atoms=None, substitutions=None, numbers=None, symbols=None, json_db_filepath=None, pbc=None, sites=None, site_symbols=None):
+    def __init__(
+        self,
+        atoms=None,
+        substitutions=None,
+        numbers=None,
+        symbols=None,
+        filepath=None,
+        pbc=None,
+        sites=None,
+        site_symbols=None,
+        json_db_filepath=None,
+    ):
         if numbers is not None:
             if isinstance(numbers, dict):
                 sites = []
@@ -146,10 +161,20 @@ class ParentLattice(Atoms):
                 sites = numbers
         if symbols is not None:
             site_symbols = symbols
+
         if json_db_filepath is not None:
-            db = connect(json_db_filepath)
+            warnings.warn(
+                "The 'json_filepath' parameter is deprecated and will be removed in a future version. "
+                "Please use 'filepath' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            filepath = json_db_filepath
+
+        if filepath is not None:
+            db = connect(filepath)
             substitutions = []
-            for i,row in enumerate(db.select()):
+            for i, row in enumerate(db.select()):
                 if i == 0:
                     atoms = row.toatoms()
                 else:
@@ -157,8 +182,8 @@ class ParentLattice(Atoms):
 
         if pbc is None:
             pbc = atoms.get_pbc()
-            
-        super(ParentLattice,self).__init__(symbols=atoms,pbc=pbc)
+
+        super(ParentLattice, self).__init__(symbols=atoms, pbc=pbc)
 
         if atoms is not None:
             self._atoms = atoms.copy()
@@ -172,6 +197,7 @@ class ParentLattice(Atoms):
 
             if site_symbols is not None:
                 from ase.data import atomic_numbers as an
+
                 sites = copy.deepcopy(site_symbols)
                 for i, syms in enumerate(site_symbols):
                     for j, sym in enumerate(syms):
@@ -179,17 +205,19 @@ class ParentLattice(Atoms):
 
             if sites is not None:
                 try:
-                    unique_sites = np.unique(sites,axis=0)
+                    unique_sites = np.unique(sites, axis=0)
                 except:
                     try:
-                        unique_sites = np.unique(np.array(sites,dtype=object))
+                        unique_sites = np.unique(np.array(sites, dtype=object))
                     except AttributeError:
-                        raise AttributeError("sites array has problems, look at the documentation.")
+                        raise AttributeError(
+                            "sites array has problems, look at the documentation."
+                        )
 
             tags = np.zeros(self._natoms).astype(int)
             for ius, us in enumerate(unique_sites):
                 for idx in range(self._natoms):
-                    if (np.array_equal(sites[idx], us)):
+                    if np.array_equal(sites[idx], us):
 
                         tags[idx] = int(ius)
 
@@ -202,15 +230,21 @@ class ParentLattice(Atoms):
 
             substitutions = []
             for ius, us in enumerate(unique_sites):
-                for isp in range(1,len(us)):
+                for isp in range(1, len(us)):
                     for idx in range(self._natoms):
                         if tags[idx] == ius:
                             numbers[idx] = us[isp]
                         else:
                             numbers[idx] = sites[idx][0]
 
-                    substitutions.append(Atoms(positions=self.get_positions(),cell=self.get_cell(),pbc=self.get_pbc(),numbers=numbers))
-
+                    substitutions.append(
+                        Atoms(
+                            positions=self.get_positions(),
+                            cell=self.get_cell(),
+                            pbc=self.get_pbc(),
+                            numbers=numbers,
+                        )
+                    )
 
         if substitutions is None:
             substitutions = []
@@ -218,8 +252,7 @@ class ParentLattice(Atoms):
         self._set_substitutions(substitutions)
 
     def __eq__(self, other):
-        """Check identity of two ParentLattice objects
-        """
+        """Check identity of two ParentLattice objects"""
 
         a1 = self.get_pristine()
         a2 = other.get_pristine()
@@ -227,17 +260,20 @@ class ParentLattice(Atoms):
         s2 = other.get_substitutions()
 
         areeq = True
-        if a1 != a2: return False
+        if a1 != a2:
+            return False
 
-        for ss1,ss2 in zip(s1,s2):
-            if ss1 != ss2: return False
+        for ss1, ss2 in zip(s1, s2):
+            if ss1 != ss2:
+                return False
 
         return True
 
-
     def copy(self):
         """Return a copy."""
-        pl = self.__class__(atoms=self._atoms, substitutions=self._subs, pbc=self.get_pbc())
+        pl = self.__class__(
+            atoms=self._atoms, substitutions=self._subs, pbc=self.get_pbc()
+        )
 
         pl.arrays = {}
         for name, a in self.arrays.items():
@@ -245,15 +281,8 @@ class ParentLattice(Atoms):
         pl.constraints = copy.deepcopy(self.constraints)
         return pl
 
-    """
-    def get_atoms(self):
-        "Get a copy of the Atoms object representing the pristine parent lattice."
-        return self._atoms.copy()
-    """
-
     def get_sym(self):
-        """Get space symmetry of a ParentLattice object.
-        """
+        """Get space symmetry of a ParentLattice object."""
         try:
             return self.sc_sg, self.sc_sym
         except:
@@ -269,23 +298,25 @@ class ParentLattice(Atoms):
 
     def get_positions(self, wrap=False, **wrap_kw):
         return super(ParentLattice, self).get_positions(wrap, **wrap_kw)
-    
-    def get_cell(self, complete = False):
+
+    def get_cell(self, complete=False):
         return super(ParentLattice, self).get_cell(complete)
 
-    def _set_substitutions(self,substitutions=[]):
+    def _set_substitutions(self, substitutions=[]):
         if len(substitutions) != 0:
             for atoms in substitutions:
                 if self._natoms != len(atoms):
-                    raise ValueError('Substitutions array has wrong length: %d != %d.' %
-                                     (len(self._atoms), len(substitutions)))
+                    raise ValueError(
+                        "Substitutions array has wrong length: %d != %d."
+                        % (len(self._atoms), len(substitutions))
+                    )
                 else:
                     self._subs.append(atoms)
 
         self._max_nsub = len(self._subs)
         self._set_tags()
 
-    def is_nary(self,n):
+    def is_nary(self, n):
         """Check whether lattice is n-ary
 
         Returns ``True`` if the structure is based on a n-ary ParentLattice object,
@@ -321,16 +352,14 @@ class ParentLattice(Atoms):
         """
         _is_nary = False
         sublt = self.get_sublattice_types()
-        m = np.zeros(len(sublt),dtype=int)
-        for i,(k,v) in enumerate(sublt.items()):
-            m[i]= len(v)-1
+        m = np.zeros(len(sublt), dtype=int)
+        for i, (k, v) in enumerate(sublt.items()):
+            m[i] = len(v) - 1
 
-        if (np.sum(m) == n-1) and (np.sum(m) in m):
+        if (np.sum(m) == n - 1) and (np.sum(m) in m):
             _is_nary = True
 
         return _is_nary
-
-
 
     def _set_tags(self):
         """Set the ``tags`` attribute of the Atoms object, and the ParentLattice
@@ -363,34 +392,33 @@ class ParentLattice(Atoms):
         This means that sites with tag=0 can be occupied by species 14 and 13,
         and sites with tag=1 can be occupied by species 56, vacancy, or species 38.
         """
-        all_numbers = np.zeros((self._max_nsub+1,self._natoms),dtype=int)
+        all_numbers = np.zeros((self._max_nsub + 1, self._natoms), dtype=int)
 
         all_numbers[0] = self._atoms.get_atomic_numbers()
 
         for i in range(self._max_nsub):
-            all_numbers[i+1] = self._subs[i].get_atomic_numbers()
+            all_numbers[i + 1] = self._subs[i].get_atomic_numbers()
 
         all_numbers = all_numbers.T
-        unique_subs, tags = np.unique(all_numbers,axis=0,return_inverse=True)
+        unique_subs, tags = np.unique(all_numbers, axis=0, return_inverse=True)
         self.set_tags(tags)
 
-        self.idx_subs = {i: unique_non_sorted(unique_subs[i]) for i in range(len(unique_subs))}
-        self.sites = { i:self.idx_subs[j] for i,j in enumerate(tags)}
-
+        self.idx_subs = {
+            i: unique_non_sorted(unique_subs[i]) for i in range(len(unique_subs))
+        }
+        self.sites = {i: self.idx_subs[j] for i, j in enumerate(tags)}
 
     def get_substitutional_sites(self):
-        """Return atom indexes which may be substituted
-        """
+        """Return atom indexes which may be substituted"""
         st = self.get_substitutional_tags()
         ss = []
-        for i,tag in enumerate(self.get_tags()):
+        for i, tag in enumerate(self.get_tags()):
             if tag in st:
                 ss.append(i)
         return ss
 
     def get_substitutional_atoms(self):
-        """Return Atoms object for pristine lattice containing only sites which may be substituted
-        """
+        """Return Atoms object for pristine lattice containing only sites which may be substituted"""
         ats = Atoms(cell=self.get_cell(), pbc=self.get_pbc())
         pats = self.get_pristine()
         ss = self.get_substitutional_sites()
@@ -418,18 +446,16 @@ class ParentLattice(Atoms):
             return len(st)
 
     def get_spectator_sites(self):
-        """Return atom indexes which may not be substituted
-        """
+        """Return atom indexes which may not be substituted"""
         st = self.get_spectator_tags()
         ss = []
-        for i,tag in enumerate(self.get_tags()):
+        for i, tag in enumerate(self.get_tags()):
             if tag in st:
                 ss.append(i)
         return ss
 
     def get_substitutional_tags(self):
-        """Return site types for substitutional sites
-        """
+        """Return site types for substitutional sites"""
         st = []
         for tag in self.get_tags():
             if len(self.idx_subs[tag]) > 1:
@@ -437,8 +463,7 @@ class ParentLattice(Atoms):
         return np.unique(np.asarray(st))
 
     def get_spectator_tags(self):
-        """Return site types for non substitutional sites
-        """
+        """Return site types for non substitutional sites"""
         st = []
         for tag in self.get_tags():
             if len(self.idx_subs[tag]) == 1:
@@ -491,11 +516,11 @@ class ParentLattice(Atoms):
             sites = {0: [14,13], 1: [14,13], 2: [14,13], 3: [56,0,38], 4: [56,0,38], 5:[11]}
         """
         return self.sites
-    
+
     def get_ems(self):
         nspt = self.get_sites()
         ems = np.zeros(len(nspt), dtype=int)
-        for k,v in nspt.items():
+        for k, v in nspt.items():
             ems[k] = len(v)
         return ems
 
@@ -506,8 +531,7 @@ class ParentLattice(Atoms):
         return self._subs
 
     def get_pristine(self):
-        """Return (reference to) Atoms object of pristine configuration
-        """
+        """Return (reference to) Atoms object of pristine configuration"""
         return self._atoms
 
     def get_all_atoms(self):
@@ -521,7 +545,7 @@ class ParentLattice(Atoms):
             a.append(sub.copy())
         return a
 
-    def get_sublattice_types(self, pretty_print = False):
+    def get_sublattice_types(self, pretty_print=False):
         """Return dictionary of site type indexes and substitutional species
 
         The format of the returned dictionary is::
@@ -554,37 +578,55 @@ class ParentLattice(Atoms):
         if not pretty_print:
             return self.idx_subs
         else:
-            warnings.warn("Using `pretty_print=True` is deprecated. Use `print_sublattice_types()` instead.", category=FutureWarning)
+            warnings.warn(
+                "Using `pretty_print=True` is deprecated. Use `print_sublattice_types()` instead.",
+                category=FutureWarning,
+            )
             self.print_sublattice_types()
 
     def print_sublattice_types(self):
-        """Print chemical symbols and atomic numbers for each sublattice type.
-        """
+        """Print chemical symbols and atomic numbers for each sublattice type."""
         from ase.data import chemical_symbols as cs
+
         sld = self.idx_subs
         cs = np.array(cs)
-        print("\n+--------------------------------------------------------------------+")
-        print("|{0:^68s}|".format("The structure consists of "+str(len(sld))+" sublattices"))
+        print(
+            "\n+--------------------------------------------------------------------+"
+        )
+        print(
+            "|{0:^68s}|".format(
+                "The structure consists of " + str(len(sld)) + " sublattices"
+            )
+        )
         print("+--------------------------------------------------------------------+")
-        print("|{0:^17s}|{1:^30s}|{2:^19s}|".format("Sublattice type","Chemical symbols","Atomic numbers"))
+        print(
+            "|{0:^17s}|{1:^30s}|{2:^19s}|".format(
+                "Sublattice type", "Chemical symbols", "Atomic numbers"
+            )
+        )
         print("+--------------------------------------------------------------------+")
 
-        for slind,slsps in self.idx_subs.items():
-            print("|{0:^17s}|{1:^30s}|{2:^19s}|".format(str(slind),str(cs[slsps]),str(slsps)))
-        print("+--------------------------------------------------------------------+\n")
+        for slind, slsps in self.idx_subs.items():
+            print(
+                "|{0:^17s}|{1:^30s}|{2:^19s}|".format(
+                    str(slind), str(cs[slsps]), str(slsps)
+                )
+            )
+        print(
+            "+--------------------------------------------------------------------+\n"
+        )
 
     # Deprecated, use get_sublattice_types instead
     def get_idx_subs(self):
         return self.get_sublattice_types()
 
     def as_dict(self):
-        """Return dictionary with object definition
-        """
+        """Return dictionary with object definition"""
         dict = {}
-        dict.update({"unit_cell" : self.get_cell()})
-        dict.update({"pbc" : self.get_pbc()})
-        dict.update({"positions" : self.get_positions()})
-        dict.update({"numbers" : self.get_sites()})
+        dict.update({"unit_cell": self.get_cell()})
+        dict.update({"pbc": self.get_pbc()})
+        dict.update({"positions": self.get_positions()})
+        dict.update({"numbers": self.get_sites()})
 
         return dict
 
@@ -595,11 +637,11 @@ class ParentLattice(Atoms):
         _site_types = dict["parent_lattice_idx_subs"]
         _tags = np.array(dict["parent_lattice_tags"])
 
-        #numbers = np.zeros(len(positions), dtype=int)
+        # numbers = np.zeros(len(positions), dtype=int)
         numbers = []
-        for site_index,tag in enumerate(_tags):
+        for site_index, tag in enumerate(_tags):
             numbers.append(_site_types[tag])
-            #numbers[site_index] = _site_types[tag]
+            # numbers[site_index] = _site_types[tag]
         numbers_pris = []
         for nrs in numbers:
             numbers_pris.append(nrs[0])
@@ -608,8 +650,7 @@ class ParentLattice(Atoms):
         return ParentLattice(atoms=prist, numbers=numbers, pbc=pbc)
 
     def plat_from_dict(dict):
-        """Generates ParentLattice object from a dictionary as returned by ParentLattice.as_dict()
-        """
+        """Generates ParentLattice object from a dictionary as returned by ParentLattice.as_dict()"""
         cell = np.array(dict["unit_cell"])
         pbc = dict["pbc"]
         positions = np.array(dict["positions"])
@@ -623,21 +664,20 @@ class ParentLattice(Atoms):
         return ParentLattice(atoms=prist, numbers=_numbers, pbc=pbc)
 
     def get_atom_indices_for_site_type(self, site_type):
-        """Return atom indices of the structure of a certain given site type
-        """
+        """Return atom indices of the structure of a certain given site type"""
         return np.where(self.get_tags() == site_type)
 
-    def round_coords(self, decimals = 12):
-        """ Round cell vectors and lattice positions coordinates.
-            
+    def round_coords(self, decimals=12):
+        """Round cell vectors and lattice positions coordinates.
+
         Uses ``numpy.around()`` method.
-            
+
         **Parameters:**
-        
+
         ``decimals``: integer
-            Number of decimal places to round to (default: 0). If decimals is negative, 
+            Number of decimal places to round to (default: 0). If decimals is negative,
             it specifies the number of positions to the left of the decimal point.
-        
+
         **Return:**
             Returns a new ParentLattice object with rounded coordinates.
         """
@@ -645,15 +685,15 @@ class ParentLattice(Atoms):
         atomss = self.get_all_atoms()
         cell0 = np.around(self.get_cell(), decimals)
         pbc0 = self.get_pbc()
-        
+
         atomss0 = []
         for at in atomss:
             pos0 = np.around(at.get_positions(), decimals)
             ans0 = at.get_atomic_numbers()
-            atomss0.append(Atoms(positions = pos0, numbers = ans0, cell = cell0, pbc = pbc0))
-            
-        return ParentLattice(atoms = atomss0[0], substitutions = atomss0[1:], pbc = pbc0)
-		
+            atomss0.append(Atoms(positions=pos0, numbers=ans0, cell=cell0, pbc=pbc0))
+
+        return ParentLattice(atoms=atomss0[0], substitutions=atomss0[1:], pbc=pbc0)
+
     def serialize(self, filepath="plat.json", fname=None):
         """Serialize a ParentLattice object
 
@@ -662,7 +702,7 @@ class ParentLattice(Atoms):
         An instance of the ParentLattice class can be initialized from the created file.
         The created database can be visualized using
         `ASE's gui <https://wiki.fysik.dtu.dk/ase/ase/gui/gui.html>`_, e.g.: ::
-        
+
             ase gui plat.json
 
         **Parameters:**
@@ -675,7 +715,7 @@ class ParentLattice(Atoms):
         """
         if fname is not None:
             filepath = fname
-        
+
         db = connect(filepath, type="json", append=False)
 
         images = []
