@@ -5,7 +5,7 @@
 import plac
 import sys
 import os
-from clusterx.cli.config_utils import read_toml_config, generate_argv
+from clusterx.cli.config_utils import read_toml_config
 
 
 def main():
@@ -54,9 +54,9 @@ def main():
         for command in commands:
             if command in available_commands:
                 func = getattr(cmds, command)
-                argv_from_toml = generate_argv(func, config_dict[str(command)])
-                print(argv_from_toml)
-                plac.call(func, argv_from_toml)
+                arg_dict_from_toml = config_dict[str(command)]
+                print("Argument dict from TOML file: ", arg_dict_from_toml)
+                func(**arg_dict_from_toml)
             else:
                 print(f"Unknown command: {command}")
                 sys.exit(1)
