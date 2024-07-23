@@ -182,8 +182,13 @@ def cmd_message(msglbl):
                   "head": Prints the argument values received by the command.
     """
     if msglbl == "head":
+        # Get the frame of the calling function
+        caller_frame = inspect.stack()[1].frame
+        # Get the local variables from the caller's frame
+        caller_locals = caller_frame.f_locals
+
         command_name = inspect.stack()[1].function
-        config = {k: v for k, v in locals().items() if k != "command_name"}
+        config = {k: v for k, v in caller_locals.items() if k != "command_name"}
 
         print(f"Running {command_name} with configuration:")
         print(config)
