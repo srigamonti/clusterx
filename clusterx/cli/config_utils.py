@@ -1,3 +1,4 @@
+import os
 from typing import List
 import toml
 import inspect
@@ -192,3 +193,30 @@ def cmd_message(msglbl):
 
         print(f"Running {command_name} with configuration:")
         print(config)
+
+
+def remove_trailing_extension(path: str) -> str:
+    """
+    Remove the trailing extension from the last segment of a given path.
+
+    Parameters
+    ----------
+    path : str
+        The input path string.
+
+    Returns
+    -------
+    str
+        The path without the trailing extension on the last segment.
+    """
+    # Split the path into the head and the last segment
+    head, tail = os.path.split(path)
+
+    # Split the last segment into the root and extension
+    root, ext = os.path.splitext(tail)
+
+    # Reconstruct the path without the extension
+    if ext:
+        return os.path.join(head, root)
+    else:
+        return path
