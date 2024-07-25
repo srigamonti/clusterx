@@ -23,16 +23,16 @@ commands = ["build_cpool"]
 
 
 @plac.pos("npoints", help="The number of points in the clusters being built.")
-@plac.pos("radii", help="Corresponting atom radii.")
+@plac.pos("radii", help="Corresponting cluster radii.")
 @plac.opt(
     "sset_filepath",
     abbrev="ssf",
-    help="You can indicate a serialized structures set json file to get the parent lattice from it.",
+    help="Path to a serialized StructuresSet object to get the parent lattice from it.",
 )
 @plac.opt(
     "plat_filepath",
     abbrev="plf",
-    help="You can indicate a serialized parent lattice json file to get the parent lattice from it.",
+    help="Path to a serialized ParentLattice object to get the parent lattice from it.",
 )
 @plac.opt(
     "psc",
@@ -50,6 +50,13 @@ commands = ["build_cpool"]
     "vacancy_atomic_number",
     help="Look documentation for variable vacancy_atomic_number in ClustersPool class.",
 )
+@plac.opt(
+    "mlims",
+    help=(
+        "Only clusters with multiplicity m larger or equal to nlims[0] and smaller or "
+        "equal to nlims[1] are included in the built ClustersPool.",
+    ),
+)
 def build_cpool(
     npoints: Union[List[int], str],
     radii: Union[List[float], str],
@@ -59,6 +66,7 @@ def build_cpool(
     method: int = 1,
     cpool_filepath: str = "cpool.json",
     vacancy_atomic_number: int = 0,
+    mlims: Optional[List[int]] = None,
 ):
     """Build a pool of clusters"""
     if isinstance(npoints, str):
@@ -80,6 +88,16 @@ def build_cpool(
     cpool = ClustersPool(
         plat, npoints=npoints, radii=radii, super_cell=scell, method=method
     )
+
+    if mlims is not None:
+        multiplicities = cpool.get_multiplicities()
+        cidxs = []
+        for ic, m in enumerate(multiplicities):
+            if m >= mlims[0] and m <= mlims[1]:
+                cidxs.append(ic)
+
+        cpool = cpool.get_subpool(cidxs)
+
     cpool.print_info()
     cpool.serialize(
         filepath=cpool_filepath, vacancy_atomic_number=vacancy_atomic_number
