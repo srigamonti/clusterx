@@ -2,10 +2,11 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-import plac
 import sys
 import os
+import plac
 from clusterx.cli.config_utils import read_toml_config
+from clusterx.cli import commands as cmds
 
 
 def main():
@@ -18,7 +19,6 @@ def main():
     from function declaration, making easy for developers to add
     new commands, by just defining a function.
     """
-    from clusterx.cli import commands as cmds
 
     # Check for cellinput.toml in the current working directory
     toml_file_path = os.path.join(os.getcwd(), "cellinput.toml")
