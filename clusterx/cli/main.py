@@ -39,14 +39,14 @@ def main():
         print(main.__doc__)
 
     config_dict = {}
-    commands = []
     if no_toml_file or len(sys.argv) > 1:
         plac.call(cmds, sys.argv[1:])
     else:
         config_dict = read_toml_config(toml_file_path)
-        commands = [
+        commands_ = [
             key for key, value in config_dict.items() if isinstance(value, dict)
         ]
+        commands = config_dict.get("do", commands_)
         print("commands in cellinput.toml file are", commands)
         available_commands = cmds.commands  # List of available command names
         print("available commands are", available_commands)
