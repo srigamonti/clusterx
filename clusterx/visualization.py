@@ -318,12 +318,12 @@ def plot_optimization_vs_sparsity(
     """Plot cluster optimization with matplotlib
 
     The plot shows the prediction and fitting errors as a function of the
+    sparsity parameter when the LASSO method is used.
 
     **Parameters:**
 
     ``clsel``: ClustersSelector object
         The ClustersSelector oject which was used for the optimization to be plotted.
-        sparsity parameter when the LASSO method is used.
     """
     _set_rc_params()
 
@@ -620,7 +620,7 @@ def plot_property_vs_concentration(
 
     scatter_plot(ax, frconc, energies - vl_en, "o", "k", "Calculated")
     if predictions is not None:
-        scatter_plot(ax, frconc, predictions - vl_en, ".", "k", "Predicted-fit")
+        scatter_plot(ax, frconc, predictions - vl_en, ".", "r", "Predicted-fit")
     if pred_cv is not None:
         scatter_plot(ax, frconc, pred_cv - vl_en, ".", "red", "Predicted-CV")
     if pred_enum is not None:
@@ -628,7 +628,7 @@ def plot_property_vs_concentration(
             ax, frconc_enum, pred_enum - vl_en_enum, "o", "gray", "Enumeration"
         )
     if pred_gss is not None:
-        scatter_plot(ax, frconc_gss, pred_gss - vl_en_gss, "o", "red", "Predicted GS")
+        scatter_plot(ax, frconc_gss, pred_gss - vl_en_gss, "o", "green", "Predicted GS")
 
     species_name = sset.get_parent_lattice().get_sublattice_types()[site_type][sigma]
     xlabel = f"Concentration of {cs[species_name]}"
