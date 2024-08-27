@@ -2,6 +2,7 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+from typing import Optional
 import plac
 import numpy as np
 from clusterx.correlations import CorrelationsCalculator
@@ -34,6 +35,11 @@ commands = ["compute_comat"]
         "saved in formats txt and npz",
     ),
 )
+@plac.opt(
+    "property_name",
+    abbrev="pn",
+    help=("Name of the property"),
+)
 @plac.flg(
     "update_ccalc",
     abbrev="u",
@@ -47,7 +53,8 @@ def compute_comat(
     ccalc_filepath: str = "ccalc.pickle",
     sset_filepath: str = "sset.json",
     comat_filepath: str = "comat",
-    update_ccalc: bool = True,
+    property_name: Optional[str] = None,
+    update_ccalc: bool = False,
 ):
     """Compute matrix of correlations"""
     cmd_message("head")
@@ -58,7 +65,17 @@ def compute_comat(
     filepath = remove_trailing_extension(comat_filepath)
 
     comat = ccalc.get_correlation_matrix(sset, f"{filepath}.txt")
-    np.savez(f"{filepath}.npz", comat=comat)
+
+    arrays_dict = {"comat": comat}
+
+    if property_name is not None:
+        pvals = sset.get_property_values(property_name=property_name)
+
+        arrays_dict[f"property_{property_name}"] = (
+            pvals  # dynamically pass keyword to savez from string property_name
+        )
+
+    np.savez(f"{filepath}.npz", **arrays_dict)
 
     if update_ccalc:
         ccalc.serialize(filepath=ccalc_filepath)
