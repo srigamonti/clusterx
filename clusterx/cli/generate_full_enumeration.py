@@ -1,4 +1,5 @@
-from typing import Optional, List
+from typing import Optional, List, Callable
+import pickle
 from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
@@ -7,33 +8,115 @@ from clusterx.model import Model
 from clusterx.derivative_structures import DSGenerator
 from clusterx.visualization import plot_property_vs_concentration
 from clusterx.cli.find_lowest import find_lowest
-import pickle
+from ase.calculators.calculator import Calculator
 
 commands = ["generate_full_enumeration"]
 
 
 def generate_full_enumeration(
+    sc_sizes: Optional[List[int]] = None,
+    nsubs_list: Optional[List[List[int]]] = None,
     sset_filepath: Optional[str] = None,
     sset_gss_filepath: Optional[str] = None,
     model_filepath: Optional[str] = None,
     plat_filepath: Optional[str] = None,
+    dss_filepath: Optional[str] = None,
+    property_label: Optional[str] = None,
+    calculator_name: Optional[str] = None,
+    property_solver_filename: Optional[str] = None,
+    property_solver_kwargs: Optional[dict] = None,
     trafo: Optional[List[List[float]]] = None,
+    per_formula_unit: bool = False,
+    linear_reference: Optional[List[List[float]]] = None,
     do: int = 1,
 ):
     """Generate full enumeration"""
 
-    if do == 1:
-        model = Model(filepath=model_filepath) if model_filepath is not None else None
-        plat = ParentLattice(filepath=plat_filepath)
-        sset = StructuresSet(filepath=sset_filepath)
+    match do:
+        # Find derivative structures
+        case 1:
+            plat = ParentLattice(filepath=plat_filepath)
+            _do_full_enumeration(
+                plat, sc_sizes, nsubs_list, dss_filepath=dss_filepath, trafo=trafo
+            )
 
-        _do_full_enumeration(plat, trafo=trafo)
-        _do_compute_properties(model)
-        _do_plot_properties(sset, model)
+        # Compute (w/CE model) and plot properties of derivative structures
+        case 2:
+            model = (
+                Model(filepath=model_filepath) if model_filepath is not None else None
+            )
+            _do_compute_properties(
+                cem=model,
+                property_label=property_label,
+                dss_filepath=dss_filepath,
+                per_formula_unit=per_formula_unit,
+                linear_reference=linear_reference,
+            )
+            sset = StructuresSet(filepath=sset_filepath)
+            _do_plot_properties(dss_filepath, sset=sset, cem=model)
 
-    elif do == 2:
-        plat = ParentLattice(filepath=plat_filepath)
-        _do_find_gss(plat, sset_gss_filepath)
+        # Compute (w/Calculator) and plot properties of derivative structures
+        case 3:
+            match calculator_name:
+                case "mace" | "MACE" | "Mace":
+                    from mace.calculators import mace_mp
+
+                    calculator = mace_mp(
+                        model="small",
+                        dispersion=False,
+                        default_dtype="float64",
+                        device="cpu",
+                    )
+            _do_compute_properties(
+                calculator=calculator,
+                property_label=property_label,
+                dss_filepath=dss_filepath,
+                per_formula_unit=per_formula_unit,
+                linear_reference=linear_reference,
+            )
+            _do_plot_properties(dss_filepath, property_label=property_label)
+
+        # Compute (w/custom property solver) and plot properties of derivative structures
+        case 4:
+            import importlib.util
+            import sys
+            import os
+
+            module_path = os.path.join(os.getcwd(), property_solver_filename)
+            module_name = os.path.splitext(property_solver_filename)[0]
+            spec = importlib.util.spec_from_file_location(module_name, module_path)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+
+            _do_compute_properties(
+                property_solver=module.compute_property,
+                property_solver_kwargs=property_solver_kwargs,
+                property_label=property_label,
+                dss_filepath=dss_filepath,
+                per_formula_unit=per_formula_unit,
+                linear_reference=linear_reference,
+            )
+            _do_plot_properties(dss_filepath, property_label=property_label)
+
+        # Plot properties of derivative structures
+        case 5:
+            _do_plot_properties(dss_filepath, property_label=property_label)
+
+        case 6:
+            plat = ParentLattice(filepath=plat_filepath)
+            _do_find_gss(plat, sset_gss_filepath)
+
+        case 100:
+            model = (
+                Model(filepath=model_filepath) if model_filepath is not None else None
+            )
+            plat = ParentLattice(filepath=plat_filepath)
+            sset = StructuresSet(filepath=sset_filepath)
+
+            _do_full_enumeration(plat, trafo=trafo)
+            _do_compute_properties(model)
+            _do_plot_properties(sset, model)
 
 
 def _do_find_gss(plat, sset_gss_filepath):
@@ -74,83 +157,79 @@ def _do_find_gss(plat, sset_gss_filepath):
     #     write(f"geometry_{i}.in", s.get_atoms(), format="aims")
 
 
-def _do_full_enumeration(plat, trafo=None):
+def _do_full_enumeration(
+    plat: ParentLattice,
+    sc_sizes: Optional[List[int]],
+    nsubs_list: Optional[List[List[int]]],
+    dss_filepath: str = "dss.pickle",
+    trafo: List[List[int]] = None,
+) -> None:
 
     dsgen = DSGenerator(plat)
 
-    if 0:
-        dsgen.generate(
-            [1, 2, 3, 4, 5, 6, 7, 8],
-            [
-                [0, 1],  # 1
-                [1, 2],  # 2
-                [1, 2, 3],  # 3
-                [1, 2, 3, 4, 5],  # 4
-                [1, 2, 3, 4, 5, 6],  # 5
-                [1, 2, 3, 4, 5, 6, 7],  # 6
-                [1, 2, 3, 4, 5, 6, 7, 8],  # 7
-                [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],  # 8
-            ],
-            trafo=trafo,
-        )
+    dsgen.generate(
+        sc_sizes,
+        nsubs_list,
+        trafo=trafo,
+    )
 
-    if 0:
-        dsgen.generate(
-            [1, 2, 3, 4, 5],
-            [
-                [0, 1],  # 1
-                [1, 2],  # 2
-                [1, 2, 3],  # 3
-                [1, 2, 3, 4, 5],  # 4
-                [1, 2, 3, 4, 5, 6],  # 5
-            ],
-            trafo=trafo,
-        )
-
-    if 0:
-        dsgen.generate(
-            [1, 2, 3, 4],
-            [
-                [0, 1],  # 1
-                [1, 2],  # 2
-                [1, 2, 3],  # 3
-                [1, 2, 3, 4, 5],  # 4
-            ],
-            trafo=trafo,
-        )
-
-    if 1:
-        dsgen.generate(
-            [27],
-            [
-                [0, 1, 2, 3, 4],
-            ],
-            trafo=trafo,
-        )
-
-    with open("dss.pickle", "wb") as f:
+    with open(dss_filepath, "wb") as f:
         pickle.dump(dsgen, f)
 
 
-def _do_compute_properties(cem):
+def _do_compute_properties(
+    cem: Optional[Model] = None,
+    calculator: Optional[Calculator] = None,
+    property_solver: Optional[Callable[..., float]] = None,
+    property_solver_kwargs: Optional[dict] = None,
+    property_label: str = "property",
+    dss_filepath: str = "dss.pickle",
+    per_formula_unit: bool = False,
+    linear_reference: Optional[List[List[float]]] = None,
+) -> None:
 
-    with open("dss.pickle", "rb") as f:
-        dsgen = pickle.load(f)
+    with open(dss_filepath, "rb") as f:
+        dss = pickle.load(f)
 
-    dsgen.compute_properties("E_mix", cem)
+    if cem is not None:
+        dss.compute_properties(
+            property_label,
+            cemodel=cem,
+            per_formula_unit=per_formula_unit,
+            linear_reference=linear_reference,
+        )
+    elif calculator is not None:
+        dss.compute_properties(
+            property_label,
+            calculator=calculator,
+            per_formula_unit=per_formula_unit,
+            linear_reference=linear_reference,
+        )
+    elif property_solver is not None:
+        dss.compute_properties(
+            property_label,
+            property_solver=property_solver,
+            property_solver_kwargs=property_solver_kwargs,
+            per_formula_unit=per_formula_unit,
+            linear_reference=linear_reference,
+        )
 
-    with open("dss.pickle", "wb") as f:
-        pickle.dump(dsgen, f)
+    with open(dss_filepath, "wb") as f:
+        pickle.dump(dss, f)
 
 
-def _do_plot_properties(sset, cem):
-    with open("dss.pickle", "rb") as f:
+def _do_plot_properties(
+    dss_filepath, property_label: str = "property", sset=None, cem=None
+):
+    with open(dss_filepath, "rb") as f:
         dsgen = pickle.load(f)
 
     concentrations_enum = []
     properties_enum = []
     for i in range(len(dsgen.concentrations)):
-        for p, c in zip(dsgen.properties["E_mix"][i], dsgen.concentrations[i]):
+        print(dsgen.properties[property_label][i])
+        print(dsgen.concentrations[i])
+        for p, c in zip(dsgen.properties[property_label][i], dsgen.concentrations[i]):
             concentrations_enum.append(c)
             properties_enum.append(p)
 
@@ -159,6 +238,6 @@ def _do_plot_properties(sset, cem):
         show_loo_predictions=False,
         properties_enum=properties_enum,
         concentrations_enum=concentrations_enum,
-        property_name="E_mix",
+        property_name=property_label,
         cemodel=cem,
     )
