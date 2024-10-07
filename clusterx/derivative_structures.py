@@ -44,15 +44,20 @@ class DSGenerator:
         ``trafo``: 3x3 matrix or None
             if only decorations for a single supercell are wanted, specify it here.
         """
-        for sc_size, num_subs in zip(
-            supercell_sizes, num_subs_list
-        ):  # sc_size: number of unit cells in supercell
+
+        for i, num_subs in enumerate(num_subs_list):
+            # for sc_size, num_subs in zip(
+            #    supercell_sizes, num_subs_list
+            # ):
+            # sc_size: number of unit cells in supercell
             # unique_scs, unique_trafos = get_unique_supercells_large_angles(sc_size, self.plat, [-2,-1,0,1,2])
 
             if trafo is None:
+                sc_size = supercell_sizes[i]
                 unique_scs, unique_trafos = get_unique_supercells(sc_size, self.plat)
             else:
-                sc = SuperCell(parent_lattice=self.plat, p=trafo)
+                sc = SuperCell(parent_lattice=self.plat, p=trafo).get_cell()
+                sc_size = int(round(np.linalg.det(trafo)))
                 unique_scs = [sc]
                 unique_trafos = [trafo]
 
@@ -106,7 +111,16 @@ class DSGenerator:
                     self.num_subs.append(nsubs)
                     self.sigmas.append(list_sigmas)
 
-    def compute_properties(self, property_name, cemodel):
+    def compute_properties(
+        self,
+        property_name,
+        calculator=None,
+        cemodel=None,
+        property_solver=None,
+        property_solver_kwargs=None,
+        linear_reference=None,
+        per_formula_unit=False,
+    ):
         self.properties[property_name] = []
         self.concentrations = []
 
@@ -124,6 +138,9 @@ class DSGenerator:
             self.properties[property_name].append([])
             self.concentrations.append([])
 
+            scshape = np.array(scshape)
+            scshape0 = np.array(scshape0)
+
             if scsize != scsize0 or (scshape != scshape0).any():
                 scell = SuperCell(self.plat, p=scshape)
                 scsize0 = scsize
@@ -131,10 +148,31 @@ class DSGenerator:
 
             for sigma in sigmas:
                 struc = scell.gen_structure(sigmas=sigma)
-                conc = struc.get_fractional_concentrations()
-                pval = cemodel.predict(struc)
+                conc = struc.get_fractional_concentrations()[0][1]
+                self.concentrations[i].append(conc)
+
+                if calculator is not None:
+                    ats = struc.get_atoms()
+                    ats.calc = calculator
+                    pval = ats.get_potential_energy()
+                elif cemodel is not None:
+                    pval = cemodel.predict(struc)
+                elif property_solver is not None:
+                    pval = property_solver(
+                        struc, scshape, conc, **property_solver_kwargs
+                    )
+
+                if per_formula_unit:
+                    pval /= scsize
+
+                if linear_reference is not None:
+                    (x0, p0), (x1, p1) = linear_reference
+
+                    # g(x): straight line through (x0, f0) and (x1, f1)
+                    slope = (p1 - p0) / (x1 - x0)
+                    pval -= p0 + slope * (conc - x0)
+
                 self.properties[property_name][i].append(pval)
-                self.concentrations[i].append(conc[0][1])
 
 
 def _divisors(n):
