@@ -561,7 +561,11 @@ def plot_property_vs_concentration(
     if isinstance(refs, list):
         refs = np.array(refs, dtype=np.float_)
 
-    energies = np.array(sset.get_property_values(property_name=property_name))
+    energies = (
+        np.array(sset.get_property_values(property_name=property_name))
+        if sset is not None
+        else None
+    )
     predictions = (
         np.array(sset.get_predictions(cemodel)) if cemodel is not None else None
     )
@@ -571,8 +575,12 @@ def plot_property_vs_concentration(
         else properties_enum
     )
 
-    frconc = sset.get_concentrations(site_type, sigma)
-    vl_en = refs[0] * (1 - np.array(frconc)) + np.array(frconc) * refs[1]
+    frconc = sset.get_concentrations(site_type, sigma) if sset is not None else None
+    vl_en = (
+        refs[0] * (1 - np.array(frconc)) + np.array(frconc) * refs[1]
+        if sset is not None
+        else None
+    )
 
     frconc_enum = (
         sset_enum.get_concentrations(site_type, sigma)
@@ -604,7 +612,7 @@ def plot_property_vs_concentration(
     )
 
     data["concentration"] = frconc
-    data["property"] = energies - vl_en
+    data["property"] = energies - vl_en if sset is not None else None
     data["predicted-property"] = (
         predictions - vl_en if predictions is not None else None
     )
@@ -618,7 +626,11 @@ def plot_property_vs_concentration(
         pred_gss - vl_en_gss if pred_gss is not None else None
     )
 
-    scatter_plot(ax, frconc, energies - vl_en, "o", "k", "Calculated")
+    (
+        scatter_plot(ax, frconc, energies - vl_en, "o", "k", "Calculated")
+        if sset is not None
+        else None
+    )
     if predictions is not None:
         scatter_plot(ax, frconc, predictions - vl_en, ".", "r", "Predicted-fit")
     if pred_cv is not None:
@@ -630,8 +642,16 @@ def plot_property_vs_concentration(
     if pred_gss is not None:
         scatter_plot(ax, frconc_gss, pred_gss - vl_en_gss, "o", "green", "Predicted GS")
 
-    species_name = sset.get_parent_lattice().get_sublattice_types()[site_type][sigma]
-    xlabel = f"Concentration of {cs[species_name]}"
+    species_name = (
+        sset.get_parent_lattice().get_sublattice_types()[site_type][sigma]
+        if sset is not None
+        else 0
+    )
+    xlabel = (
+        f"Concentration of {cs[species_name]}"
+        if species_name != 0
+        else "Concentration of substituent"
+    )
     plt.xlabel(xlabel)
     plt.ylabel(yaxis_label if yaxis_label else property_name)
     data["xlabel"] = xlabel
