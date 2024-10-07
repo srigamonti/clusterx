@@ -21,7 +21,11 @@ def main():
     """
 
     # Check for cellinput.toml in the current working directory
-    toml_file_path = os.path.join(os.getcwd(), "cellinput.toml")
+    if len(sys.argv) == 3 and sys.argv[1] == "--input_file":
+        toml_file_path = sys.argv[2]
+    else:
+        toml_file_path = os.path.join(os.getcwd(), "cellinput.toml")
+
     custom_dir = os.getcwd()  # Default to CWD
 
     no_toml_file = True
@@ -39,7 +43,7 @@ def main():
         print(main.__doc__)
 
     config_dict = {}
-    if no_toml_file or len(sys.argv) > 1:
+    if no_toml_file or (len(sys.argv) > 1 and sys.argv[1] != "--input_file"):
         plac.call(cmds, sys.argv[1:])
     else:
         config_dict = read_toml_config(toml_file_path)
