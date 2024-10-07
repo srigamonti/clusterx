@@ -2,7 +2,7 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from typing import List, Tuple, Union, Optional
+from typing import List, Optional, Tuple, Union
 import plac
 from clusterx.structures_set import StructuresSet
 from clusterx.parent_lattice import ParentLattice
@@ -42,7 +42,9 @@ commands = ["build_cpool"]
         "For a precise definition look into the parameter p of the SuperCell class of CELL."
     ),
 )
-@plac.opt("method", help="Method to use to find clusters.", choices=[1, 2, 3])
+@plac.opt(
+    "method", abbrev="me", help="Method to use to find clusters.", choices=[1, 2, 3]
+)
 @plac.opt(
     "cpool_filepath", help="Filepath where to store the generated pool of clusters."
 )
@@ -52,6 +54,7 @@ commands = ["build_cpool"]
 )
 @plac.opt(
     "mlims",
+    abbrev="ml",
     help=(
         "Only clusters with multiplicity m larger or equal to nlims[0] and smaller or "
         "equal to nlims[1] are included in the built ClustersPool.",

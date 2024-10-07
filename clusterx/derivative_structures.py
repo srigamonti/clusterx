@@ -3,25 +3,25 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import numpy as np
-from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
 from clusterx.utils import _is_integer_matrix
-from sys import getsizeof
 from itertools import combinations
 import scipy
 from tqdm import tqdm
 
-class DSGenerator():
+
+class DSGenerator:
     """Generation of derivative structures
-    
-    A :class:`DSGenerator <clusterx.derivative_structure.DSGenerator>` object is used to generate 
-    derivative structures from a :class:`parent lattice <clusterx.parent_lattice.ParentLattice>`. 
+
+    A :class:`DSGenerator <clusterx.derivative_structure.DSGenerator>` object is used to generate
+    derivative structures from a :class:`parent lattice <clusterx.parent_lattice.ParentLattice>`.
 
     **Parameters:**
 
     ``parent_lattice``: :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` object
         Parent lattice object. Derivative structures originate from this parent lattice.
     """
+
     def __init__(self, parent_lattice):
         self.plat = parent_lattice
         self.scell_sizes = []
@@ -30,7 +30,7 @@ class DSGenerator():
         self.sigmas = []
         self.properties = {}
 
-    def generate(self, supercell_sizes, num_subs_list):
+    def generate(self, supercell_sizes, num_subs_list, trafo=None):
         """Generate derivative structures
 
         **Parameters:**
@@ -38,34 +38,55 @@ class DSGenerator():
         ``supercell_sizes``: list or array of int
             List  of integers indicating the number of unit cells in each derivative supercell
         ``num_subs_list``: ragged list of lists or arrays of integers
-            every list or array in the ragged list, indicate the number of substituents to be 
-            considered in a given supercell. The first dimension must coincide with the 
+            every list or array in the ragged list, indicate the number of substituents to be
+            considered in a given supercell. The first dimension must coincide with the
             dimension of ``supercell_sizes``.
+        ``trafo``: 3x3 matrix or None
+            if only decorations for a single supercell are wanted, specify it here.
         """
-        for sc_size, num_subs in zip(supercell_sizes, num_subs_list): # sc_size: number of unit cells in supercell
-            #unique_scs, unique_trafos = get_unique_supercells_large_angles(sc_size, self.plat, [-2,-1,0,1,2])
-            unique_scs, unique_trafos = get_unique_supercells(sc_size, self.plat)
+
+        for i, num_subs in enumerate(num_subs_list):
+            # for sc_size, num_subs in zip(
+            #    supercell_sizes, num_subs_list
+            # ):
+            # sc_size: number of unit cells in supercell
+            # unique_scs, unique_trafos = get_unique_supercells_large_angles(sc_size, self.plat, [-2,-1,0,1,2])
+
+            if trafo is None:
+                sc_size = supercell_sizes[i]
+                unique_scs, unique_trafos = get_unique_supercells(sc_size, self.plat)
+            else:
+                sc = SuperCell(parent_lattice=self.plat, p=trafo).get_cell()
+                sc_size = int(round(np.linalg.det(trafo)))
+                unique_scs = [sc]
+                unique_trafos = [trafo]
 
             for idx, t in enumerate(unique_trafos):
-                print(f'Start scell shape {idx+1} of {len(unique_trafos)}')
-                scell_fe = SuperCell(self.plat,t)
+                print(f"Start scell shape {idx+1} of {len(unique_trafos)}")
+                scell_fe = SuperCell(self.plat, t)
                 natoms = scell_fe.get_natoms()
-            
+
                 symper = scell_fe.get_sym_perm()
-            
+
                 for nsubs in num_subs:
 
                     full_list = set()
                     ssites = scell_fe.get_substitutional_sites()
 
-                    i=0
+                    i = 0
                     list_sigmas = []
 
                     n_max = int(scipy.special.binom(len(ssites), nsubs))
-                    print(f'Max nr of configurations for {nsubs} substitutions in {natoms}-atom size scell (no sym accounted): {n_max}')
+                    print(
+                        f"Max nr of configurations for {nsubs} substitutions in {natoms}-atom size scell (no sym accounted): {n_max}"
+                    )
 
-                    for con in tqdm(combinations(ssites,nsubs), total=n_max, desc="Finding unique sigmas"):
-                        sigmas = np.zeros(natoms, dtype = "int")
+                    for con in tqdm(
+                        combinations(ssites, nsubs),
+                        total=n_max,
+                        desc="Finding unique sigmas",
+                    ):
+                        sigmas = np.zeros(natoms, dtype="int")
                         np.put(sigmas, con, [1])
 
                         if tuple(sigmas.tolist()) not in full_list:
@@ -77,9 +98,9 @@ class DSGenerator():
                         sigmass = np.unique(_sigmass, axis=0)
                         for s_ in sigmass:
                             full_list.add(tuple(s_.tolist()))
-                            
-                        i = i+1
-                        
+
+                        i = i + 1
+
                         """if i == 10000:
                             print("SSET_Size = "+str(getsizeof(list_sigmas)))
                             print("full_list_Size = "+str(getsizeof(full_list)))
@@ -90,17 +111,35 @@ class DSGenerator():
                     self.num_subs.append(nsubs)
                     self.sigmas.append(list_sigmas)
 
-    def compute_properties(self, property_name, cemodel):
+    def compute_properties(
+        self,
+        property_name,
+        calculator=None,
+        cemodel=None,
+        property_solver=None,
+        property_solver_kwargs=None,
+        linear_reference=None,
+        per_formula_unit=False,
+    ):
         self.properties[property_name] = []
         self.concentrations = []
 
         scsize0 = self.scell_sizes[0]
         scshape0 = self.scell_shapes[0]
         scell = SuperCell(self.plat, p=scshape0)
-        for i, (scsize, scshape, nsubs, sigmas) in tqdm(enumerate(zip(self.scell_sizes, self.scell_shapes, self.num_subs, self.sigmas)), total=len(self.scell_sizes), desc="Computing properties"):
-            
+        for i, (scsize, scshape, nsubs, sigmas) in tqdm(
+            enumerate(
+                zip(self.scell_sizes, self.scell_shapes, self.num_subs, self.sigmas)
+            ),
+            total=len(self.scell_sizes),
+            desc="Computing properties",
+        ):
+
             self.properties[property_name].append([])
             self.concentrations.append([])
+
+            scshape = np.array(scshape)
+            scshape0 = np.array(scshape0)
 
             if scsize != scsize0 or (scshape != scshape0).any():
                 scell = SuperCell(self.plat, p=scshape)
@@ -108,13 +147,32 @@ class DSGenerator():
                 scshape0 = scshape
 
             for sigma in sigmas:
-                struc = scell.gen_structure(sigmas = sigma)
-                conc = struc.get_fractional_concentrations()
-                pval = cemodel.predict(struc)
+                struc = scell.gen_structure(sigmas=sigma)
+                conc = struc.get_fractional_concentrations()[0][1]
+                self.concentrations[i].append(conc)
+
+                if calculator is not None:
+                    ats = struc.get_atoms()
+                    ats.calc = calculator
+                    pval = ats.get_potential_energy()
+                elif cemodel is not None:
+                    pval = cemodel.predict(struc)
+                elif property_solver is not None:
+                    pval = property_solver(
+                        struc, scshape, conc, **property_solver_kwargs
+                    )
+
+                if per_formula_unit:
+                    pval /= scsize
+
+                if linear_reference is not None:
+                    (x0, p0), (x1, p1) = linear_reference
+
+                    # g(x): straight line through (x0, f0) and (x1, f1)
+                    slope = (p1 - p0) / (x1 - x0)
+                    pval -= p0 + slope * (conc - x0)
+
                 self.properties[property_name][i].append(pval)
-                self.concentrations[i].append(conc[0][1])
-
-
 
 
 def _divisors(n):
@@ -123,9 +181,9 @@ def _divisors(n):
     factors = {}
     nn = n
     i = 2
-    while i*i <= nn:
+    while i * i <= nn:
         while nn % i == 0:
-            if not i in factors:
+            if i not in factors:
                 factors[i] = 0
             factors[i] += 1
             nn //= i
@@ -140,7 +198,7 @@ def _divisors(n):
         if k == len(primes):
             yield 1
         else:
-            rest = generate(k+1)
+            rest = generate(k + 1)
             prime = primes[k]
             for factor in rest:
                 prime_to_i = 1
@@ -150,7 +208,7 @@ def _divisors(n):
                     prime_to_i *= prime
 
     # in python3, `yield from generate(0)` would also work
-    #for factor in generate(0):
+    # for factor in generate(0):
     #    yield factor
 
     r = []
@@ -159,7 +217,8 @@ def _divisors(n):
 
     return sorted(r)
 
-def get_unique_supercells(n,parent_lattice):
+
+def get_unique_supercells(n, parent_lattice):
     """Find full list of unique supercells of index n.
 
     Following Ref.[1], the complete set of symmetrically inequivalent HNFs of
@@ -244,16 +303,16 @@ def get_unique_supercells(n,parent_lattice):
     """
     pl_cell = parent_lattice.get_cell()
 
-    hnfs = get_HNFs(n,pbc=parent_lattice.get_pbc())
+    hnfs = get_HNFs(n, pbc=parent_lattice.get_pbc())
 
     all_scs = []
     for hnf in hnfs:
-        all_scs.append(np.dot(hnf,pl_cell))
+        all_scs.append(np.dot(hnf, pl_cell))
 
     n_scs = len(all_scs)
     unique_scs = []
     unique_trafos = []
-    sc_sg, sc_sym = parent_lattice.get_sym() # Scaled to parent_lattice
+    sc_sg, sc_sym = parent_lattice.get_sym()  # Scaled to parent_lattice
     nexts = np.asarray(np.arange(n_scs))
     unique_scs.append(all_scs[0])
     unique_trafos.append(hnfs[0])
@@ -261,14 +320,16 @@ def get_unique_supercells(n,parent_lattice):
     while len(nexts) > 1:
         i = nexts[0]
         the_list = nexts[1:]
-        nexts=[]
+        nexts = []
         bi = all_scs[i]
         for j in the_list:
             bj = all_scs[j]
             j_is_next = True
-            for r in sc_sym['rotations']:
-                rr = np.dot(pl_cell,np.dot(r,np.linalg.inv(pl_cell))) # Rotations are in lattice coordinates, so we have to transorm them to cartesian.
-                m = np.around(np.dot(np.linalg.inv(bi.T),np.dot(rr,bj.T)),5)
+            for r in sc_sym["rotations"]:
+                rr = np.dot(
+                    pl_cell, np.dot(r, np.linalg.inv(pl_cell))
+                )  # Rotations are in lattice coordinates, so we have to transorm them to cartesian.
+                m = np.around(np.dot(np.linalg.inv(bi.T), np.dot(rr, bj.T)), 5)
                 if _is_integer_matrix(m):
                     j_is_next = False
                     break
@@ -283,7 +344,7 @@ def get_unique_supercells(n,parent_lattice):
     return unique_scs, unique_trafos
 
 
-def get_HNFs(n,pbc=(1,1,1)):
+def get_HNFs(n, pbc=(1, 1, 1)):
     """Return complete set of Hermite normal form (HNF) :math:`3x3` matrices
     of index ``n``.
 
@@ -301,71 +362,73 @@ def get_HNFs(n,pbc=(1,1,1)):
 
     _hnfs = []
     for a in _divisors(n):
-        for c in _divisors(int(n/a)):
-            f = int(n/(a*c))
+        for c in _divisors(int(n / a)):
+            f = int(n / (a * c))
             for b in range(c):
                 for d in range(f):
                     for e in range(f):
                         hnf = []
-                        hnf.append([a,0,0])
-                        hnf.append([b,c,0])
-                        hnf.append([d,e,f])
+                        hnf.append([a, 0, 0])
+                        hnf.append([b, c, 0])
+                        hnf.append([d, e, f])
                         _hnfs.append(np.array(hnf).T)
 
     hnfs = []
     for hnf in _hnfs:
         include = True
         for i, bc in enumerate(pbc):
-            if not bc and (hnf[i] != np.identity(3,dtype="int")[i]).any():
+            if not bc and (hnf[i] != np.identity(3, dtype="int")[i]).any():
                 include = False
                 break
         if include:
             hnfs.append(hnf)
 
-    return(hnfs)
+    return hnfs
 
-def _get_minimal_trafo(h, all_matrices = None, cell = None):
+
+def _get_minimal_trafo(h, all_matrices=None, cell=None):
 
     def minimum_key(x):
         return max(_get_normalized_scalar_products(np.dot(x, cell)))
 
-    trafos = [np.dot(np.reshape(mat, (3,3)), h) for mat in all_matrices]
-    minimal = min(trafos, key = minimum_key)
+    trafos = [np.dot(np.reshape(mat, (3, 3)), h) for mat in all_matrices]
+    minimal = min(trafos, key=minimum_key)
     return minimal
+
 
 def _get_normalized_scalar_products(s: np.ndarray):
     """
     For a matrix of column vectors, return the normalized scalar products.
-    
+
     **Parameters:**
-    
+
     ``s``: numpy.ndarray
         matrix of transformed cell vectors as columns
-        
+
     **Returns:**
-    
+
     Normalized scalar products between unique vector pairs
     """
     p_ij = []
-    for i, j in [(0,1), (0,2), (1,2)]:
+    for i, j in [(0, 1), (0, 2), (1, 2)]:
         S_i = s.T[i]
         S_j = s.T[j]
         denominator = np.linalg.norm(S_i) * np.linalg.norm(S_j)
         nominator = abs(np.dot(S_i, S_j))
-        p_ij.append(nominator/denominator)
+        p_ij.append(nominator / denominator)
     p_ij = np.array(p_ij)
     return p_ij
 
 
 def get_unique_supercells_large_angles(n, parent_lattice: object, elements: list):
     """
-    Return all unique supercells with large angles. 
-    Transformation of those supercells is done by unimodal matrices with matrix elements given by the paramter ``elements``   
+    Return all unique supercells with large angles.
+    Transformation of those supercells is done by unimodal matrices with matrix elements given by the paramter ``elements``
 
     **Parameters:**
-    
+
     ``elements``: list[int]
-        transformation vector elements 
+        transformation vector elements
 
         example: [-3,-2,-1,0,1,2,3]
 
@@ -375,16 +438,28 @@ def get_unique_supercells_large_angles(n, parent_lattice: object, elements: list
 
     from itertools import product
     import multiprocessing
-    from clusterx.super_cell import SuperCell # needed by make_supercell
+    from clusterx.super_cell import SuperCell  # needed by make_supercell
     from functools import partial
 
     _, harray = get_unique_supercells(n, parent_lattice)
 
     parent_lattice_cell = parent_lattice.get_cell().array.T
 
-    all_matrices = list(filter(lambda x: abs(np.linalg.det(np.reshape(x, (3,3)))) == 1, product(elements, repeat = 9)))
+    all_matrices = list(
+        filter(
+            lambda x: abs(np.linalg.det(np.reshape(x, (3, 3)))) == 1,
+            product(elements, repeat=9),
+        )
+    )
 
     with multiprocessing.Pool() as pool:
-        small_angle_trafos = pool.map(partial(_get_minimal_trafo, all_matrices = all_matrices, cell = parent_lattice_cell), harray)
+        small_angle_trafos = pool.map(
+            partial(
+                _get_minimal_trafo, all_matrices=all_matrices, cell=parent_lattice_cell
+            ),
+            harray,
+        )
 
-    return [SuperCell(parent_lattice, p) for p in small_angle_trafos], small_angle_trafos
+    return [
+        SuperCell(parent_lattice, p) for p in small_angle_trafos
+    ], small_angle_trafos

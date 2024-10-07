@@ -2,37 +2,44 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-import numpy as np
 import os
 import copy
+import numpy as np
 from ase.data import chemical_symbols as cs
-from ase.build.supercells import clean_matrix, lattice_points_in_supercell # needed by make_supercell
+from ase.build.supercells import (
+    clean_matrix,
+    lattice_points_in_supercell,
+)  # needed by make_supercell
 from ase import Atoms
+
 
 class SupercellError(Exception):
     pass
 
+
 def findmax(*args):
     vals = []
     for v in args:
-        if hasattr(v,"__len__"):
+        if hasattr(v, "__len__"):
             vals.append(np.amax(v))
         else:
             vals.append(v)
 
     return np.amax(vals)
 
+
 def findmin(*args):
     vals = []
     for v in args:
-        if hasattr(v,"__len__"):
+        if hasattr(v, "__len__"):
             vals.append(np.amin(v))
         else:
             vals.append(v)
 
     return np.amin(vals)
-        
-def isclose(r1,r2,rtol=1e-4):
+
+
+def isclose(r1, r2, rtol=1e-4):
     """Determine whether two vectors are similar
 
     **Parameters:**
@@ -50,9 +57,9 @@ def isclose(r1,r2,rtol=1e-4):
     try:
         if len(r1) != len(r2):
             return False
-        return np.linalg.norm(np.subtract(r1,r2)) < rtol
+        return np.linalg.norm(np.subtract(r1, r2)) < rtol
     except:
-        return np.linalg.norm(np.subtract(r1,r2)) < rtol
+        return np.linalg.norm(np.subtract(r1, r2)) < rtol
 
 
 def dict_compare(d1, d2, tol=None):
@@ -91,32 +98,32 @@ def dict_compare(d1, d2, tol=None):
 
     for k in d1_keys:
         try:
-            for v1,v2 in zip(d1[k],d2[k]):
-                if (isinstance(v1, list)) or (isinstance(v1,np.ndarray)):
-                    for i,v in enumerate(v1):
+            for v1, v2 in zip(d1[k], d2[k]):
+                if (isinstance(v1, list)) or (isinstance(v1, np.ndarray)):
+                    for i, v in enumerate(v1):
                         if tol is None:
                             if v != v2[i]:
                                 return False
                         else:
-                            if not isclose(v ,v2[i], tol):
+                            if not isclose(v, v2[i], tol):
                                 return False
                 else:
                     if tol is None:
                         if v1 != v2:
                             return False
                     else:
-                        if not isclose(v1,v2,tol):
+                        if not isclose(v1, v2, tol):
                             return False
 
         except TypeError:
             try:
                 if _is_integrable(d1[k]):
-                    if not isclose(d1[k],d2[k],tol):
+                    if not isclose(d1[k], d2[k], tol):
                         return False
             except:
                 if type(d1[k]) is dict:
                     for subkeys in d1[k].keys():
-                        if not isclose(d1[k][subkeys],d2[k][subkeys],tol):
+                        if not isclose(d1[k][subkeys], d2[k][subkeys], tol):
                             return False
 
     return areeq
@@ -131,8 +138,9 @@ def sub_folders(root):
         path of the absolute folder for which you want to get the list of
         subfolders.
     """
-    #return os.walk(root).next()[1] #python 2.7
+    # return os.walk(root).next()[1] #python 2.7
     return next(os.walk(root))[1]
+
 
 def _is_integrable(s):
     """Determine whether argument is integer or can be converted to integer
@@ -149,7 +157,10 @@ def _is_integrable(s):
     except ValueError:
         return False
 
-def list_integer_named_folders(root=".", prefix='', suffix='', containing_files=[], not_containing_files=[]):
+
+def list_integer_named_folders(
+    root=".", prefix="", suffix="", containing_files=[], not_containing_files=[]
+):
     """Return array of integer named folders.
 
     Scans folders in ``root`` and detects those which are named
@@ -207,26 +218,26 @@ def list_integer_named_folders(root=".", prefix='', suffix='', containing_files=
     for folder in folders:
         include = True
         for fn in not_containing_files:
-            if os.path.exists(os.path.join(root,folder,fn)):
+            if os.path.exists(os.path.join(root, folder, fn)):
                 include = False
                 break
         if not include:
             continue
 
         for fn in containing_files:
-            if not os.path.exists(os.path.join(root,folder,fn)):
+            if not os.path.exists(os.path.join(root, folder, fn)):
                 include = False
                 break
         if not include:
             continue
 
-        if prefix == folder[:len(prefix)] and suffix == folder[-len(suffix):]:
+        if prefix == folder[: len(prefix)] and suffix == folder[-len(suffix) :]:
             if len(prefix) != 0 and len(suffix) != 0:
-                d = folder[len(prefix):][:-len(suffix)]
+                d = folder[len(prefix) :][: -len(suffix)]
             elif len(prefix) != 0 and len(suffix) == 0:
-                d = folder[len(prefix):]
+                d = folder[len(prefix) :]
             elif len(prefix) == 0 and len(suffix) != 0:
-                d = folder[:-len(suffix)]
+                d = folder[: -len(suffix)]
             else:
                 d = folder[:]
 
@@ -238,7 +249,7 @@ def list_integer_named_folders(root=".", prefix='', suffix='', containing_files=
 
     flist.sort()
 
-    if prefix != '' or suffix != '':
+    if prefix != "" or suffix != "":
         slist = []
         for f in flist:
             slist.append(prefix + str(f) + suffix)
@@ -249,8 +260,13 @@ def list_integer_named_folders(root=".", prefix='', suffix='', containing_files=
         return flist
 
 
-
-def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_lattice=None,pbc=None,wrap=True):
+def atat_to_cell(
+    file_path="lat.in",
+    interpret_as="parent_lattice",
+    parent_lattice=None,
+    pbc=None,
+    wrap=True,
+):
     """Parse a ``lat.in`` or ``str.out`` file from ``ATAT``.
 
     ``ATAT`` users may use the input files from ``ATAT`` to perform a cluster
@@ -325,6 +341,7 @@ def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_latti
     from ase.data import atomic_numbers
     from copy import deepcopy
     from ase import Atoms
+
     f = open(file_path)
     lines = f.readlines()
     f.close()
@@ -332,40 +349,42 @@ def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_latti
     lat = []
 
     lat.append([])
-    lnn=0
-    for ln,line in enumerate(lines):
+    lnn = 0
+    for ln, line in enumerate(lines):
         ls = line.split()
-        if len(ls)>0:
+        if len(ls) > 0:
             if ln < 3:
-                lat[0].append([float(ls[0]),float(ls[1]),float(ls[2])])
-            if ln == 2: lat.append([])
+                lat[0].append([float(ls[0]), float(ls[1]), float(ls[2])])
+            if ln == 2:
+                lat.append([])
             if ln > 2 and ln < 6:
-                lat[1].append([float(ls[0]),float(ls[1]),float(ls[2])])
-            if ln == 5: lat.append([])
+                lat[1].append([float(ls[0]), float(ls[1]), float(ls[2])])
+            if ln == 5:
+                lat.append([])
             if ln >= 6:
                 lat[2].append([])
-                s=''.join(ls[3:]).split(',')
-                lat[2][lnn].append([float(ls[0]),float(ls[1]),float(ls[2])])
+                s = "".join(ls[3:]).split(",")
+                lat[2][lnn].append([float(ls[0]), float(ls[1]), float(ls[2])])
                 lat[2][lnn].append(s)
                 lnn = lnn + 1
 
     struc = deepcopy(lat)
 
     # Write coordinate system
-    parent=[]
+    parent = []
     for i in range(3):
-            parent.append([struc[0][i][0],struc[0][i][1],struc[0][i][2]])
+        parent.append([struc[0][i][0], struc[0][i][1], struc[0][i][2]])
 
     # Write lattice
     scell = []
     for i in range(3):
-        scell.append([struc[1][i][0],struc[1][i][1],struc[1][i][2]])
+        scell.append([struc[1][i][0], struc[1][i][1], struc[1][i][2]])
 
     # Write atoms
     x = []
     species = []
     for i in range(len(struc[2])):
-        x.append([struc[2][i][0][0],struc[2][i][0][1],struc[2][i][0][2]])
+        x.append([struc[2][i][0][0], struc[2][i][0][1], struc[2][i][0][2]])
         nrs = []
         for sp in struc[2][i][1]:
             if sp == "Vac" or sp == "V":
@@ -381,57 +400,66 @@ def atat_to_cell(file_path="lat.in", interpret_as="parent_lattice", parent_latti
     # Calculate real cartesian coordinates
     if wrap:
         from clusterx.symmetry import wrap_scaled_positions
-        if pbc == None:
-            pbc = (1,1,1)
-        x = wrap_scaled_positions(x,pbc)
-    r = x*b
 
-    cell = a*b
+        if pbc == None:
+            pbc = (1, 1, 1)
+        x = wrap_scaled_positions(x, pbc)
+    r = x * b
+
+    cell = a * b
     if interpret_as == None:
         return cell, r, species
     if interpret_as == "parent_lattice":
         from clusterx.parent_lattice import ParentLattice
+
         nrs = np.zeros(len(species))
         for inr, nr in enumerate(species):
-            nrs[inr]=int(nr[0])
+            nrs[inr] = int(nr[0])
 
-        plat = ParentLattice(Atoms(positions=r,cell=cell,numbers=nrs,pbc=pbc),sites=species,pbc=pbc)
+        plat = ParentLattice(
+            Atoms(positions=r, cell=cell, numbers=nrs, pbc=pbc), sites=species, pbc=pbc
+        )
         return plat
     if interpret_as == "super_cell":
         from clusterx.structure import Structure
+
         pcell = parent_lattice.get_cell()
-        tmat = np.asarray(np.rint(np.dot(cell,np.linalg.inv(pcell))).astype(int))
+        tmat = np.asarray(np.rint(np.dot(cell, np.linalg.inv(pcell))).astype(int))
         from clusterx.super_cell import SuperCell
-        scell = SuperCell(parent_lattice,tmat)
+
+        scell = SuperCell(parent_lattice, tmat)
         return scell
     if interpret_as == "structure":
         from clusterx.structure import Structure
+
         pcell = parent_lattice.get_cell()
-        tmat = np.asarray(np.rint(np.dot(cell,np.linalg.inv(pcell))).astype(int))
+        tmat = np.asarray(np.rint(np.dot(cell, np.linalg.inv(pcell))).astype(int))
         from clusterx.super_cell import SuperCell
-        scell = SuperCell(parent_lattice,tmat)
+
+        scell = SuperCell(parent_lattice, tmat)
         pris = scell.get_pristine()
 
         pos = pris.get_positions()
         new_nrs = np.zeros(len(pos))
-        for ip,p in enumerate(r):
+        for ip, p in enumerate(r):
             nr = species[ip][0]
-            for i2,p2 in enumerate(pos):
-                if isclose(np.asarray(p).reshape(-1),p2):
+            for i2, p2 in enumerate(pos):
+                if isclose(np.asarray(p).reshape(-1), p2):
                     new_nrs[i2] = nr
 
-        struc = Structure(scell,decoration=new_nrs)
+        struc = Structure(scell, decoration=new_nrs)
         return struc
 
 
-def _is_integer_matrix(m,rnd=5):
-    mi = np.around(m,rnd)
+def _is_integer_matrix(m, rnd=5):
+    mi = np.around(m, rnd)
     for k in range(3):
         for l in range(3):
-            #if not round(m[k,l],rnd).is_integer():
-            if not mi[k,l].is_integer():
+            # if not round(m[k,l],rnd).is_integer():
+            if not mi[k, l].is_integer():
                 return False
     return True
+
 
 def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
     """Return atom indexes of cluster points in SuperCell
@@ -453,23 +481,29 @@ def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
         tolerance to determine whether cluster and atom positions are the same.
     """
     from scipy.spatial.distance import cdist
+
     sdistances = None
     method = 1
     if method == 0:
-        idxs = np.zeros(len(cl),dtype="int")
-        for icl,clp in enumerate(cl):
+        idxs = np.zeros(len(cl), dtype="int")
+        for icl, clp in enumerate(cl):
             for isc, scp in enumerate(sc):
-                if np.allclose(clp,scp,atol=tol):
+                if np.allclose(clp, scp, atol=tol):
                     idxs[icl] = isc
                     break
 
     if method == 1:
-        sdistances = cdist(cl, sc, metric='euclidean') # Evaluate all (scaled) distances between cluster points to scell sites
-        idxs = np.argwhere(np.abs(sdistances) < tol)[:,1] # Atom indexes of the transformed cluster
+        sdistances = cdist(
+            cl, sc, metric="euclidean"
+        )  # Evaluate all (scaled) distances between cluster points to scell sites
+        idxs = np.argwhere(np.abs(sdistances) < tol)[
+            :, 1
+        ]  # Atom indexes of the transformed cluster
 
     return idxs
 
-def add_noise(v,noise_level):
+
+def add_noise(v, noise_level):
     """Add randomly distributed noise to vector coordinates
 
     To each coordinate of the input vector ``v``, random noise uniformly
@@ -485,12 +519,14 @@ def add_noise(v,noise_level):
         Width of the uniform distribution used to add noise.
     """
     import random
+
     energies = []
     for e in v:
-        energies.append(e+random.uniform(-1,1)*noise_level)
+        energies.append(e + random.uniform(-1, 1) * noise_level)
     return energies
 
-def calculate_trafo_matrix(pcell,scell,rnd=5):
+
+def calculate_trafo_matrix(pcell, scell, rnd=5):
     """Calculate integer transformation matrix given a primitive cell and a super-cell
 
     If :math:`S` and :math:`V` are, respectively, a matrix whose rows are the cartesian coordinates
@@ -509,21 +545,23 @@ def calculate_trafo_matrix(pcell,scell,rnd=5):
     ``rnd``: integer (optional)
          The matrix :math:`P=SV^{-1}` is rounded to ``rnd`` decimal places and checked for integrity.
     """
-    tmat = np.dot(scell,np.linalg.inv(pcell))
-    if _is_integer_matrix(tmat,rnd):
+    tmat = np.dot(scell, np.linalg.inv(pcell))
+    if _is_integer_matrix(tmat, rnd):
         return np.asarray(np.rint(tmat).astype(int))
     else:
         return None
 
-def _str_grep(input_str, search_str, prepend=''):
-    out_str = ''
-    for l in input_str.split('\n'):
+
+def _str_grep(input_str, search_str, prepend=""):
+    out_str = ""
+    for l in input_str.split("\n"):
         if search_str in l:
-            out_str = out_str + prepend + l.strip() + '\n'
+            out_str = out_str + prepend + l.strip() + "\n"
 
     return out_str.rstrip()
 
-def mgrep(fpath, search_array, prepend='',root='.'):
+
+def mgrep(fpath, search_array, prepend="", root="."):
     """
     Grep strings in file and return matching lines.
 
@@ -538,21 +576,21 @@ def mgrep(fpath, search_array, prepend='',root='.'):
     ``root``: string
         File to grep should be in ``root/fpath``.
     """
-    abs_path = os.path.join(root,fpath)
-    out_str = ''
+    abs_path = os.path.join(root, fpath)
+    out_str = ""
     if os.path.isfile(abs_path):
         fstr = open(abs_path).read()
 
         for attr in search_array:
-            ostr = _str_grep(fstr,attr,prepend=prepend)
+            ostr = _str_grep(fstr, attr, prepend=prepend)
 
-            if ostr != '':
-                out_str = out_str + prepend + ostr.strip() + '\n'
+            if ostr != "":
+                out_str = out_str + prepend + ostr.strip() + "\n"
 
     return out_str.rstrip()
 
 
-def parent_lattice_to_atat(plat, out_fname="lat.in", for_str = False):
+def parent_lattice_to_atat(plat, out_fname="lat.in", for_str=False):
     """Serializes ParentLattice object to ATAT input file
 
     **Parameters:**
@@ -569,30 +607,31 @@ def parent_lattice_to_atat(plat, out_fname="lat.in", for_str = False):
     else:
         sites = plat.get_sites()
 
-    f = open(out_fname,'w+')
+    f = open(out_fname, "w+")
 
     for cellv in cell:
-        f.write(u"%2.12f\t%2.12f\t%2.12f\n"%(cellv[0],cellv[1],cellv[2]))
+        f.write("%2.12f\t%2.12f\t%2.12f\n" % (cellv[0], cellv[1], cellv[2]))
 
-    f.write(u"1.000000000000\t0.000000000000\t0.000000000000\n")
-    f.write(u"0.000000000000\t1.000000000000\t0.000000000000\n")
-    f.write(u"0.000000000000\t0.000000000000\t1.000000000000\n")
+    f.write("1.000000000000\t0.000000000000\t0.000000000000\n")
+    f.write("0.000000000000\t1.000000000000\t0.000000000000\n")
+    f.write("0.000000000000\t0.000000000000\t1.000000000000\n")
 
-    for i,pos in enumerate(positions):
-        stri = u"%2.12f\t%2.12f\t%2.12f\t"%(pos[0],pos[1],pos[2])
+    for i, pos in enumerate(positions):
+        stri = "%2.12f\t%2.12f\t%2.12f\t" % (pos[0], pos[1], pos[2])
         if for_str:
-            stri = stri + "%s\n"%cs[sites[i]]
+            stri = stri + "%s\n" % cs[sites[i]]
         else:
-            if len(sites[i])>1:
+            if len(sites[i]) > 1:
                 for z in sites[i][:-1]:
-                    stri = stri + "%s,"%cs[z]
-            stri = stri + "%s\n"%cs[sites[i][-1]]
+                    stri = stri + "%s," % cs[z]
+            stri = stri + "%s\n" % cs[sites[i][-1]]
 
         f.write(stri)
 
     f.close()
 
-class Exponential():
+
+class Exponential:
     """Basic exponential object of type ``coefficient`` * ``x`` ^ ``exponent`` . Numerically evalueted using the method ``evaluate`` ( ``x`` ) .
 
     **Parameters:**
@@ -603,12 +642,12 @@ class Exponential():
 
     """
 
-    def __init__(self, exponent, coefficient = 1):
+    def __init__(self, exponent, coefficient=1):
         self.exponent = exponent
         self.coefficient = coefficient
 
     def evaluate(self, x):
-        return self.coefficient * np.power(x,self.exponent)
+        return self.coefficient * np.power(x, self.exponent)
 
     def divide_scalar(self, value):
         self.coefficient = self.coefficient / value
@@ -617,15 +656,13 @@ class Exponential():
         self.coefficient = self.coefficient * scalar
 
 
-class PolynomialFunction():
-    """Polynomial function, build from ``Exponential()`` .
-    """
-
+class PolynomialFunction:
+    """Polynomial function, build from ``Exponential()`` ."""
 
     def __init__(self):
         self.exponentials = []
 
-    def add_exponential(self, order, coefficient = 1):
+    def add_exponential(self, order, coefficient=1):
         in_sum = False
         for exponential in self.exponentials:
             if exponential.exponent == order:
@@ -637,7 +674,7 @@ class PolynomialFunction():
 
     def clear_exponentials(self):
         for exponential in self.exponentials:
-            if abs(exponential.coefficient) < 10**(-15):
+            if abs(exponential.coefficient) < 10 ** (-15):
                 self.exponentials.remove(exponential)
 
     def evaluate(self, x):
@@ -661,14 +698,19 @@ class PolynomialFunction():
             self.add_exponential(exponential.exponent, exponential.coefficient)
 
     def print_polynomial(self):
-        outstring = ''
+        outstring = ""
         for exponential in self.exponentials:
-            outstring += str(exponential.coefficient) + ' *  x^' + str(exponential.exponent) + ' + '
+            outstring += (
+                str(exponential.coefficient)
+                + " *  x^"
+                + str(exponential.exponent)
+                + " + "
+            )
         outstring = outstring[:-3]
         print(outstring)
 
 
-class PolynomialBasis():
+class PolynomialBasis:
     """Polynomial basis, constructed from several ``PolynomialFunction()``.
     Constructs orthonormal basis sets using ``scalcar_product`` .
     When initialized, all orthonormal basis sets to the order ``max_order`` are generated.
@@ -681,11 +723,11 @@ class PolynomialBasis():
 
     """
 
-    def __init__(self, max_order = 10, symmetric = False):
+    def __init__(self, max_order=10, symmetric=False):
         self.m = max_order
         self.symmetric = symmetric
         self.basis_function_set = {}
-        for order in range(1,max_order+1):
+        for order in range(1, max_order + 1):
             self.basis_function_set[str(order)] = self.construct(order)
 
     def construct(self, m):
@@ -695,7 +737,7 @@ class PolynomialBasis():
             new_function.add_exponential(degree)
             chi = Exponential(degree)
             for basis_function in basis_functions:
-                overlap = self.scalar_product(basis_function.evaluate,chi.evaluate, m)
+                overlap = self.scalar_product(basis_function.evaluate, chi.evaluate, m)
                 overlap = overlap * (-1)
                 summand = copy.deepcopy(basis_function)
                 summand.multiply_scalar(overlap)
@@ -711,7 +753,7 @@ class PolynomialBasis():
         """
         scaling = 1 / m
         if self.symmetric:
-            sigmas = [x for x in range(-int(m/2), int(m/2)+1)]
+            sigmas = [x for x in range(-int(m / 2), int(m / 2) + 1)]
             if m % 2 == 0:
                 sigmas.remove(0)
         else:
@@ -739,10 +781,12 @@ def poppush(x, val):
     ``x``: numpy array
     ``val``: int or float
     """
-    x[:-1] = x[1:]; x[-1] = val
+    x[:-1] = x[1:]
+    x[-1] = val
     return x.mean()
 
-def sort_atoms(atoms, key = (2,1,0)):
+
+def sort_atoms(atoms, key=(2, 1, 0)):
     """Return atoms object with sorted atomic coordinates
 
     The default sorting is: increasing z-coordinate first, increasing
@@ -762,15 +806,20 @@ def sort_atoms(atoms, key = (2,1,0)):
         nrs = atoms.get_atomic_numbers()
         poss = atoms.get_positions()
         pn = []
-        for p,n in zip(poss,nrs):
-            pn.append([p[0],p[1],p[2],n])
+        for p, n in zip(poss, nrs):
+            pn.append([p[0], p[1], p[2], n])
         from operator import itemgetter
         import numpy as np
+
         _pn = sorted(pn, key=itemgetter(*key))
-        _poss = np.delete(np.array(_pn),3,1)
-        _nrs = np.delete(np.array(_pn),[0,1,2],1).flatten()
+        _poss = np.delete(np.array(_pn), 3, 1)
+        _nrs = np.delete(np.array(_pn), [0, 1, 2], 1).flatten()
         from ase import Atoms
-        return Atoms(positions=_poss, numbers=_nrs, cell=atoms.get_cell(), pbc=atoms.get_pbc())
+
+        return Atoms(
+            positions=_poss, numbers=_nrs, cell=atoms.get_cell(), pbc=atoms.get_pbc()
+        )
+
 
 def remove_vacancies(at):
     """Remove every Atom containing 'X' as species symbol or 0 as atomic number
@@ -783,6 +832,7 @@ def remove_vacancies(at):
         find cleaner way to do this...
     """
     from ase import Atoms
+
     positions = []
     numbers = []
     indices = []
@@ -793,28 +843,29 @@ def remove_vacancies(at):
     masses = []
     masses0 = at.get_masses()
 
-    for i,atom in enumerate(at):
-        nr = atom.get('number')
+    for i, atom in enumerate(at):
+        nr = atom.get("number")
         if nr != 0:
             indices.append(i)
-            positions.append(atom.get('position'))
+            positions.append(atom.get("position"))
             tags.append(tags0[i])
             momenta.append(momenta0[i])
             masses.append(masses0[i])
             numbers.append(nr)
 
-    return Atoms(cell=at.get_cell(),
-                 pbc=at.get_pbc(),
-                 numbers=numbers,
-                 positions=positions,
-                 calculator=at.get_calculator(),
-                 tags=tags,
-                 momenta=momenta,
-                 masses=masses,
-                 celldisp=at.get_celldisp(),
-                 constraint=at.constraints,
-                 info=at.info)
-
+    return Atoms(
+        cell=at.get_cell(),
+        pbc=at.get_pbc(),
+        numbers=numbers,
+        positions=positions,
+        calculator=at.get_calculator(),
+        tags=tags,
+        momenta=momenta,
+        masses=masses,
+        celldisp=at.get_celldisp(),
+        constraint=at.constraints,
+        info=at.info,
+    )
 
 
 def make_supercell(prim, P, wrap=True, tol=1e-5):
@@ -885,21 +936,22 @@ def make_supercell(prim, P, wrap=True, tol=1e-5):
 
     return superatoms
 
+
 def decorate_supercell(scell, atoms):
-    """ Create a Structure instance by decorating a SuperCell with an Atoms object from ASE.
-    """
+    """Create a Structure instance by decorating a SuperCell with an Atoms object from ASE."""
     from clusterx.structure import Structure
 
     ans = []
     for i1, p1 in enumerate(scell.get_positions()):
         for i2, p2 in enumerate(atoms.get_positions()):
-            if np.linalg.norm(p1-p2) < 1e-5:
+            if np.linalg.norm(p1 - p2) < 1e-5:
                 ans.append(atoms.get_atomic_numbers()[i2])
 
     return Structure(scell, ans)
 
+
 def super_structure(struc0, d):
-    """ Create a super structure
+    """Create a super structure
 
     This function takes a ``Structure`` instance (``struc0``) and creates a new structure
     which is obtained as the periodic repetition of the original structure
@@ -914,17 +966,16 @@ def super_structure(struc0, d):
         The super structure is obtained by the transformation d S, with d a
         3x3 matrix of integer and S the supercell cell vectors.
     """
-    from clusterx.structure import Structure
     from clusterx.super_cell import SuperCell
     from ase.build import make_supercell
 
     if np.shape(d) == ():
-        n = np.zeros((3,3), int)
-        np.fill_diagonal(n, [d,d,d])
+        n = np.zeros((3, 3), int)
+        np.fill_diagonal(n, [d, d, d])
     elif np.shape(d) == (3,):
-        n = np.zeros((3,3), int)
+        n = np.zeros((3, 3), int)
         np.fill_diagonal(n, d)
-    elif np.shape(d) == (3,3):
+    elif np.shape(d) == (3, 3):
         n = np.array(d)
     else:
         print("ERROR (clusterx.utils.super_structure()): ")
@@ -939,7 +990,15 @@ def super_structure(struc0, d):
 
     return decorate_supercell(scell1, atoms1)
 
-def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "trigonometric", comat = None, pretty_print = False):
+
+def sset_equivalence_check(
+    sset,
+    to_primitive=True,
+    cpool=None,
+    basis="trigonometric",
+    comat=None,
+    pretty_print=False,
+):
     """Find equivalent structures in a StructuresSet object
 
     Equivalence is determined *i)* in terms of symmetry between structures
@@ -997,10 +1056,14 @@ def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "tri
 
     if cpool is None and comat is None:
         from ase.utils.structure_comparator import SymmetryEquivalenceCheck
-        comp = SymmetryEquivalenceCheck(to_primitive = to_primitive)
+
+        comp = SymmetryEquivalenceCheck(to_primitive=to_primitive)
     elif comat is None:
         from clusterx.correlations import CorrelationsCalculator
-        ccalc = CorrelationsCalculator(basis = basis, parent_lattice = sset.get_parent_lattice(), clusters_pool = cpool)
+
+        ccalc = CorrelationsCalculator(
+            basis=basis, parent_lattice=sset.get_parent_lattice(), clusters_pool=cpool
+        )
         comat = ccalc.get_correlation_matrix(sset)
 
     nstr = len(sset)
@@ -1013,14 +1076,14 @@ def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "tri
             subset = [i]
 
             if comat is not None:
-                corr_i = comat[i,:]
+                corr_i = comat[i, :]
             else:
                 atoms_i = sset[i].get_atoms()
 
-            for j in range(i+1, nstr):
+            for j in range(i + 1, nstr):
 
                 if comat is not None:
-                    corr_j = comat[j,:]
+                    corr_j = comat[j, :]
                     check = isclose(corr_i, corr_j)
                 else:
                     atoms_j = sset[j].get_atoms()
@@ -1030,14 +1093,15 @@ def sset_equivalence_check(sset, to_primitive = True, cpool = None, basis = "tri
                     crossedout.append(j)
                     subset.append(j)
 
-            id_str_list[i] = np.array(subset, dtype='i4')
+            id_str_list[i] = np.array(subset, dtype="i4")
 
     if pretty_print:
         print(id_str_list)
 
     return id_str_list
 
-def atoms_equivalence_check(atoms, to_primitive = True, pretty_print = False):
+
+def atoms_equivalence_check(atoms, to_primitive=True, pretty_print=False):
     """Find equivalent structures in an array of Atoms objects
 
     Equivalence is determined in terms of symmetry between structures
@@ -1072,10 +1136,9 @@ def atoms_equivalence_check(atoms, to_primitive = True, pretty_print = False):
     """
     import numpy as np
 
-    from clusterx.utils import isclose
-
     from ase.utils.structure_comparator import SymmetryEquivalenceCheck
-    comp = SymmetryEquivalenceCheck(to_primitive = to_primitive)
+
+    comp = SymmetryEquivalenceCheck(to_primitive=to_primitive)
 
     nstr = len(atoms)
 
@@ -1088,7 +1151,7 @@ def atoms_equivalence_check(atoms, to_primitive = True, pretty_print = False):
 
             atoms_i = atoms[i]
 
-            for j in range(i+1, nstr):
+            for j in range(i + 1, nstr):
 
                 atoms_j = atoms[j]
                 check = comp.compare(atoms_i, atoms_j)
@@ -1097,7 +1160,7 @@ def atoms_equivalence_check(atoms, to_primitive = True, pretty_print = False):
                     crossedout.append(j)
                     subset.append(j)
 
-            id_str_list[i] = np.array(subset, dtype='i4')
+            id_str_list[i] = np.array(subset, dtype="i4")
 
     if pretty_print:
         print(id_str_list)
@@ -1105,7 +1168,9 @@ def atoms_equivalence_check(atoms, to_primitive = True, pretty_print = False):
     return id_str_list
 
 
-def report_sset_equivalence_check(sset, sset_equivalence_check_output, property_name = None, tol = 0.0):
+def report_sset_equivalence_check(
+    sset, sset_equivalence_check_output, property_name=None, tol=0.0
+):
     """Generate report of equivalent structures
 
     Writes to files: ``sset_unique_sym.json`` and ``sset_unique_gss.json``.
@@ -1129,48 +1194,48 @@ def report_sset_equivalence_check(sset, sset_equivalence_check_output, property_
         unique.append(v[0])
 
     sset_unique = sset.get_subset(unique)
-    sset_unique.serialize("sset_unique_sym.json", overwrite = True)
+    sset_unique.serialize("sset_unique_sym.json", overwrite=True)
 
-    unique_gss = [] # Collect the lowest energy structure from each subset
+    unique_gss = []  # Collect the lowest energy structure from each subset
     pvals = sset.get_property_values(property_name)
     for k, v in id_str_list.items():
         if len(v) > 1:
             pvals_subset = operator.itemgetter(*v)(pvals)
             i_min = np.argmin(pvals_subset)
-            #unique_gss.append(i_min)
+            # unique_gss.append(i_min)
             unique_gss.append(v[i_min])
         else:
             unique_gss.append(v[0])
 
     sset_unique_gss = sset.get_subset(unique_gss)
-    sset_unique_gss.serialize("sset_unique_gss.json", overwrite = True)
+    sset_unique_gss.serialize("sset_unique_gss.json", overwrite=True)
 
     decim = 5
     tol = tol
     print("Structure indices start from 1 (corresponding to sset[0]).")
-    print(f'floats shown below are rounded to {decim} decimals.')
-    print(f'Show only sets where maximum energy variation is larger than {tol}.')
+    print(f"floats shown below are rounded to {decim} decimals.")
+    print(f"Show only sets where maximum energy variation is larger than {tol}.")
     for k, v in id_str_list.items():
         subset = sset.get_subset(v)
         pvals = subset.get_property_values(property_name)
-        ediff = round(np.amax(pvals)-np.amin(pvals),decim)
-        if len(v) > 1 and ediff>=tol:
+        ediff = round(np.amax(pvals) - np.amin(pvals), decim)
+        if len(v) > 1 and ediff >= tol:
             print("\n========================================================")
-            #subset = sset.get_subset(v)
-            subset.serialize(f'repetitions-{k}.json')
-            #pvals = subset.get_property_values('energy_mixing_atom')
-            #print(k, pvals)
-            #print(k, round(np.amax(pvals)-np.amin(pvals),5), np.around(pvals, decimals = 5))
-            print(f'Found {len(pvals)} structures possibly equivalent to structure:')
-            print(k+1)
+            # subset = sset.get_subset(v)
+            subset.serialize(f"repetitions-{k}.json")
+            # pvals = subset.get_property_values('energy_mixing_atom')
+            # print(k, pvals)
+            # print(k, round(np.amax(pvals)-np.amin(pvals),5), np.around(pvals, decimals = 5))
+            print(f"Found {len(pvals)} structures possibly equivalent to structure:")
+            print(k + 1)
             print("List of str indices:")
-            print(np.array(id_str_list[k])+1)
+            print(np.array(id_str_list[k]) + 1)
             print("Energies for these structures:")
-            print(np.around(pvals, decimals = decim))
+            print(np.around(pvals, decimals=decim))
             print("Difference between maximum and minimum energies:")
-            #print(round(np.amax(pvals)-np.amin(pvals),decim))
+            # print(round(np.amax(pvals)-np.amin(pvals),decim))
             print(ediff)
             print("Folders:")
             print(operator.itemgetter(*id_str_list[k])(folders))
-            #print(folders)
-            #print(map(folders.__getitem__, np.array(id_str_list[k]).tolist()))
+            # print(folders)
+            # print(map(folders.__getitem__, np.array(id_str_list[k]).tolist()))

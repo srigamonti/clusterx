@@ -2,12 +2,14 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+from typing import Optional
 import plac
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.structures_set import StructuresSet
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.cli.config_utils import cmd_message
 from clusterx.model import ModelBuilder
+from clusterx.cli.config_utils import get_command_name
 
 commands = ["build_model"]
 
@@ -28,7 +30,7 @@ commands = ["build_model"]
 )
 @plac.opt(
     "cpool_filepath",
-    abbrev="ssf",
+    abbrev="cpf",
     help=("Path to a serialized ClustersPool object.",),
 )
 @plac.opt(
@@ -56,6 +58,12 @@ commands = ["build_model"]
     abbrev="eo",
     help=("Estimator options.",),
 )
+@plac.opt(
+    "plot_optimization_vs_sparsity",
+    abbrev="plotovsd",
+    help=("Dictionary.",),
+    type=dict,
+)
 def build_model(
     property_name: str,
     ccalc_filepath: str = "ccalc.pickle",
@@ -66,10 +74,12 @@ def build_model(
     selector_opts: dict = {"fit_intercept": True},
     estimator_type: str = "skl_LinearRegression",
     estimator_opts: dict = {"fit_intercept": True},
+    plot_optimization_vs_sparsity: Optional[dict] = None,
 ):
     """Compute CE model"""
     cmd_message("head")
 
+    print(f"Info({get_command_name()}): Initialization")
     ccalc = CorrelationsCalculator(filepath=ccalc_filepath)
     sset = StructuresSet(filepath=sset_filepath)
     cpool = ClustersPool(filepath=cpool_filepath)
@@ -81,6 +91,23 @@ def build_model(
         estimator_opts=estimator_opts,
     )
 
+    print(f"Info({get_command_name()}): Computing model")
     model = mb.build(sset, cpool, property_name, corrc=ccalc)
 
+    if plot_optimization_vs_sparsity is not None:
+        print(
+            f"Info({get_command_name()}): Generating plot of optimization vs sparsity"
+        )
+
+        from clusterx.visualization import plot_optimization_vs_sparsity as povs
+
+        povs(
+            mb.get_selector(),
+            show_plot=plot_optimization_vs_sparsity["show_plot"],
+            fname=plot_optimization_vs_sparsity["filepath"],
+        )
+
+    print(f"Info({get_command_name()}): Updating model and ccalc")
+
     model.serialize(filepath=model_filepath)
+    ccalc.serialize(filepath=ccalc_filepath)
