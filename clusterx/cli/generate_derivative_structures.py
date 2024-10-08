@@ -1,5 +1,8 @@
 from typing import Optional, List, Callable
 import pickle
+import importlib.util
+import sys
+import os
 import numpy as np
 from ase.calculators.calculator import Calculator
 from clusterx.structures_set import StructuresSet
@@ -54,9 +57,6 @@ def generate_derivative_structures(
 
         # Compute property using custom property solver
         case 3:
-            import importlib.util
-            import sys
-            import os
 
             module_path = os.path.join(os.getcwd(), property_solver["filename"])
             spec = importlib.util.spec_from_file_location(
@@ -66,9 +66,9 @@ def generate_derivative_structures(
             sys.modules["custom_property_solver"] = module
             spec.loader.exec_module(module)
 
-            PropertySolverClass = getattr(module, property_solver["classname"])
+            property_solver_class = getattr(module, property_solver["classname"])
 
-            property_solver_instance = PropertySolverClass()
+            property_solver_instance = property_solver_class()
 
             _do_compute_properties(
                 property_solver=property_solver_instance.compute_property,
