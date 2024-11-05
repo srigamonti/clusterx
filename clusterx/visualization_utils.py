@@ -1,17 +1,45 @@
 import numpy as np
 
 
-def scatter_plot(ax, x_data, y_data, marker, color, label):
+marker_styles = {
+    "Calculated": {"marker": "o", "color": "k", "size": 13, "linewidth": 0.65},
+    "Predicted-fit": {"marker": "o", "color": "k", "size": 6, "linewidth": 0.65},
+    "Predicted-CV": {"marker": "o", "color": "r", "size": 6, "linewidth": 0.65},
+    "Enumeration": {"marker": ".", "color": "gray", "size": 8, "linewidth": 0},
+    "Predicted-GS": {"marker": "o", "color": "green", "size": 6, "linewidth": 0.65},
+}
+
+
+def scatter_plot(
+    ax,
+    x_data,
+    y_data,
+    marker_style=None,
+    label=None,
+):
     """Helper function to create a scatter plot."""
-    ax.scatter(
-        x_data,
-        y_data,
-        marker=marker,
-        s=15,
-        edgecolors=color,
-        facecolors="none",
-        label=label,
-    )
+
+    # Default symbol configuration if none is provided
+    if marker_style is None:
+        marker_style = {"marker": ".", "color": "blue", "size": 15, "linewidth": 1.0}
+
+    scatter_args = {
+        "x": x_data,
+        "y": y_data,
+        "marker": marker_style["marker"],
+        "s": marker_style["size"],
+        "edgecolors": marker_style["color"],
+        "facecolors": "none",
+        "linewidth": marker_style["linewidth"],
+        "label": label,
+    }
+
+    # Adjust scatter arguments if the marker is "."
+    if marker_style["marker"] == ".":
+        scatter_args["facecolors"] = marker_style["color"]
+        scatter_args["edgecolors"] = "none"
+
+    ax.scatter(**scatter_args)
 
 
 def save_plot_data(data, filename):
@@ -72,6 +100,7 @@ def _set_rc_params():
     rcParams["ytick.minor.width"] = 0.6  # minor tick width in points
     rcParams["lines.linewidth"] = 2.0
     rcParams["lines.markersize"] = 6
+    rcParams["lines.markeredgewidth"] = 1
     rcParams["xtick.labelsize"] = 11
     rcParams["ytick.labelsize"] = 11
     rcParams["axes.formatter.useoffset"] = False
@@ -93,8 +122,6 @@ def _set_rc_params():
     rcParams["xtick.minor.width"] = 0.3  # minor tick width in points
     rcParams["ytick.major.width"] = 1.0  # major tick width in points
     rcParams["ytick.minor.width"] = 0.3  # minor tick width in points
-
-    rcParams["lines.markersize"] = 6
 
     rcParams["xtick.major.pad"] = 1.0
     rcParams["ytick.major.pad"] = 1.0
