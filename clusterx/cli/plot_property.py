@@ -7,7 +7,6 @@ import plac
 from clusterx.cli.config_utils import cmd_message
 from clusterx.visualization import plot_property_vs_concentration
 from clusterx.structures_set import StructuresSet
-from clusterx.model import Model
 
 commands = ["plot_property"]
 
