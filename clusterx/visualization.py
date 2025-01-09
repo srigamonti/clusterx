@@ -497,7 +497,7 @@ def plot_property_vs_concentration(
     concentrations_enum: Optional[np.ndarray] = None,
     sset_gss: Optional[StructuresSet] = None,
     show_plot: bool = True,
-    refs: Union[List[float], NDArray[np.float_]] = [0.0, 0.0],
+    refs: Union[List[float], NDArray[np.float64]] = [0.0, 0.0],
     yaxis_label: Optional[str] = None,
     show_yzero_axis: bool = True,
     data_fname: Optional[str] = None,
@@ -560,7 +560,7 @@ def plot_property_vs_concentration(
     fig, ax = plt.subplots()
 
     if isinstance(refs, list):
-        refs = np.array(refs, dtype=np.float_)
+        refs = np.array(refs, dtype=np.float64)
 
     energies = (
         np.array(sset.get_property_values(property_name=property_name))
