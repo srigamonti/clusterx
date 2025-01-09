@@ -7,6 +7,7 @@ import os
 import plac
 from clusterx.cli.config_utils import read_toml_config
 from clusterx.cli import commands as cmds
+from clusterx.cli.commands import import_custom_modules
 
 
 def main():
@@ -22,7 +23,7 @@ def main():
 
     # Check for cellinput.toml in the current working directory
     if len(sys.argv) == 3 and sys.argv[1] == "--input_file":
-        toml_file_path = sys.argv[2]
+        toml_file_path = os.path.join(os.getcwd(), sys.argv[2])
     else:
         toml_file_path = os.path.join(os.getcwd(), "cellinput.toml")
 
@@ -32,7 +33,8 @@ def main():
     if os.path.isfile(toml_file_path):
         config_dict = read_toml_config(toml_file_path)
         custom_dir = config_dict.get("custom_dir", os.getcwd())
-
+        custom_module_filenames = config_dict.get("custom_modules", [])
+        import_custom_modules(custom_module_filenames, custom_dir)
         # Add the custom directory to sys.path to import custom modules
         sys.path.append(custom_dir)
         no_toml_file = False
