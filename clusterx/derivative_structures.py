@@ -29,8 +29,9 @@ class DSGenerator:
         self.num_subs = []
         self.sigmas = []
         self.properties = {}
+        self.total_number_of_configurations = 0
 
-    def generate(self, supercell_sizes, num_subs_list, trafo=None):
+    def generate(self, supercell_sizes, num_subs_list, sc_shape=None):
         """Generate derivative structures
 
         **Parameters:**
@@ -41,28 +42,29 @@ class DSGenerator:
             every list or array in the ragged list, indicate the number of substituents to be
             considered in a given supercell. The first dimension must coincide with the
             dimension of ``supercell_sizes``.
-        ``trafo``: 3x3 matrix or None
+        ``sc_shape``: 3x3 matrix or None
             if only decorations for a single supercell are wanted, specify it here.
         """
 
+        total_number_of_conf = 0
         for i, num_subs in enumerate(num_subs_list):
             # for sc_size, num_subs in zip(
             #    supercell_sizes, num_subs_list
             # ):
             # sc_size: number of unit cells in supercell
-            # unique_scs, unique_trafos = get_unique_supercells_large_angles(sc_size, self.plat, [-2,-1,0,1,2])
+            # unique_scs, unique_sc_shapes = get_unique_supercells_large_angles(sc_size, self.plat, [-2,-1,0,1,2])
 
-            if trafo is None:
+            if sc_shape is None:
                 sc_size = supercell_sizes[i]
-                unique_scs, unique_trafos = get_unique_supercells(sc_size, self.plat)
+                unique_scs, unique_sc_shapes = get_unique_supercells(sc_size, self.plat)
             else:
-                sc = SuperCell(parent_lattice=self.plat, p=trafo).get_cell()
-                sc_size = int(round(np.linalg.det(trafo)))
+                sc = SuperCell(parent_lattice=self.plat, p=sc_shape).get_cell()
+                sc_size = int(round(np.linalg.det(sc_shape)))
                 unique_scs = [sc]
-                unique_trafos = [trafo]
+                unique_sc_shapes = [sc_shape]
 
-            for idx, t in enumerate(unique_trafos):
-                print(f"Start scell shape {idx+1} of {len(unique_trafos)}")
+            for idx, t in enumerate(unique_sc_shapes):
+                print(f"Start scell shape {idx+1} of {len(unique_sc_shapes)}")
                 scell_fe = SuperCell(self.plat, t)
                 natoms = scell_fe.get_natoms()
 
@@ -101,15 +103,19 @@ class DSGenerator:
 
                         i = i + 1
 
-                        """if i == 10000:
-                            print("SSET_Size = "+str(getsizeof(list_sigmas)))
-                            print("full_list_Size = "+str(getsizeof(full_list)))
-                            i=0
-                        """
+                    print(
+                        f"Found {len(list_sigmas)} unique configurations of {nsubs} substitutions in {natoms}-atom size scell.\n"
+                    )
+                    total_number_of_conf += len(list_sigmas)
                     self.scell_sizes.append(sc_size)
                     self.scell_shapes.append(t)
                     self.num_subs.append(nsubs)
                     self.sigmas.append(list_sigmas)
+
+            self.total_number_of_configurations = total_number_of_conf
+            print(
+                f"Enumeration complete. Found {total_number_of_conf} unique configurations.\n"
+            )
 
     def compute_properties(
         self,
@@ -264,10 +270,10 @@ def get_unique_supercells(n, parent_lattice):
 
         pl = ParentLattice(pris_fcc,sites=sites)
 
-        unique_scs, unique_trafos = utils.get_unique_supercells(4,pl)
+        unique_scs, unique_sc_shapes = utils.get_unique_supercells(4,pl)
 
         sset = StructuresSet(pl,filename="unique_supercells-fcc.json")
-        for t in unique_trafos:
+        for t in unique_sc_shapes:
             scell = SuperCell(pl,t)
             sset.add_structure(Structure(scell,scell.get_atomic_numbers()),write_to_db = True)
 
@@ -285,17 +291,17 @@ def get_unique_supercells(n, parent_lattice):
 
         pl = ParentLattice(pris, sites=sites, pbc=(1,1,0))
 
-        unique_scs, unique_trafos = utils.get_unique_supercells(4,pl)
+        unique_scs, unique_sc_shapes = utils.get_unique_supercells(4,pl)
 
         sset = StructuresSet(pl,filename="test_get_unique_supercells-square_lattice.json")
-        for t in unique_trafos:
+        for t in unique_sc_shapes:
             scell = SuperCell(pl,t)
             sset.add_structure(Structure(scell,scell.get_atomic_numbers()),write_to_db = True)
 
         #isok0 = len(unique_scs) == 4 and
         print("n: ",len(unique_scs))
         print("SCS: ", unique_scs)
-        print("TRA: ", unique_trafos)
+        print("TRA: ", unique_sc_shapes)
 
     The resulting supercells in this example correspond to Fig. 1 of
     Computational Materials Science 59 (2012) 101–107
@@ -311,11 +317,11 @@ def get_unique_supercells(n, parent_lattice):
 
     n_scs = len(all_scs)
     unique_scs = []
-    unique_trafos = []
+    unique_sc_shapes = []
     sc_sg, sc_sym = parent_lattice.get_sym()  # Scaled to parent_lattice
     nexts = np.asarray(np.arange(n_scs))
     unique_scs.append(all_scs[0])
-    unique_trafos.append(hnfs[0])
+    unique_sc_shapes.append(hnfs[0])
 
     while len(nexts) > 1:
         i = nexts[0]
@@ -339,9 +345,9 @@ def get_unique_supercells(n, parent_lattice):
 
         if len(nexts) > 0:
             unique_scs.append(all_scs[nexts[0]])
-            unique_trafos.append(hnfs[nexts[0]])
+            unique_sc_shapes.append(hnfs[nexts[0]])
 
-    return unique_scs, unique_trafos
+    return unique_scs, unique_sc_shapes
 
 
 def get_HNFs(n, pbc=(1, 1, 1)):
@@ -386,13 +392,13 @@ def get_HNFs(n, pbc=(1, 1, 1)):
     return hnfs
 
 
-def _get_minimal_trafo(h, all_matrices=None, cell=None):
+def _get_minimal_sc_shape(h, all_matrices=None, cell=None):
 
     def minimum_key(x):
         return max(_get_normalized_scalar_products(np.dot(x, cell)))
 
-    trafos = [np.dot(np.reshape(mat, (3, 3)), h) for mat in all_matrices]
-    minimal = min(trafos, key=minimum_key)
+    sc_shapes = [np.dot(np.reshape(mat, (3, 3)), h) for mat in all_matrices]
+    minimal = min(sc_shapes, key=minimum_key)
     return minimal
 
 
@@ -453,13 +459,15 @@ def get_unique_supercells_large_angles(n, parent_lattice: object, elements: list
     )
 
     with multiprocessing.Pool() as pool:
-        small_angle_trafos = pool.map(
+        small_angle_sc_shapes = pool.map(
             partial(
-                _get_minimal_trafo, all_matrices=all_matrices, cell=parent_lattice_cell
+                _get_minimal_sc_shape,
+                all_matrices=all_matrices,
+                cell=parent_lattice_cell,
             ),
             harray,
         )
 
     return [
-        SuperCell(parent_lattice, p) for p in small_angle_trafos
-    ], small_angle_trafos
+        SuperCell(parent_lattice, p) for p in small_angle_sc_shapes
+    ], small_angle_sc_shapes
