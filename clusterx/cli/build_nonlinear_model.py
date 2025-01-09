@@ -23,13 +23,13 @@ commands = ["build_nonlinear_model"]
     "property_name",
     help="Property to be modelled. Must be present in the StructuresSet object.",
 )
-@plac.pos(
+@plac.opt(
     "ccalc_filepath",
     help="Path to the pickle file of a serialized CorrelationsCalculator object.",
 )
-@plac.pos(
+@plac.opt(
     "xp_filepath",
-    help="Path to the npz file of a serialized matrix of correlations built with compute_comat().",
+    help='Path to the npz file of a serialized matrix of correlations built with "compute_comat" command.',
 )
 @plac.opt(
     "model_filepath",
