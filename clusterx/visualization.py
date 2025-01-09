@@ -14,6 +14,7 @@ from clusterx.visualization_utils import (
     save_plot_data,
     auto_scale_yaxis,
     _set_rc_params,
+    marker_styles,
 )
 
 
@@ -496,7 +497,7 @@ def plot_property_vs_concentration(
     concentrations_enum: Optional[np.ndarray] = None,
     sset_gss: Optional[StructuresSet] = None,
     show_plot: bool = True,
-    refs: Union[List[float], NDArray[np.float_]] = [0.0, 0.0],
+    refs: Union[List[float], NDArray[np.float64]] = [0.0, 0.0],
     yaxis_label: Optional[str] = None,
     show_yzero_axis: bool = True,
     data_fname: Optional[str] = None,
@@ -559,7 +560,7 @@ def plot_property_vs_concentration(
     fig, ax = plt.subplots()
 
     if isinstance(refs, list):
-        refs = np.array(refs, dtype=np.float_)
+        refs = np.array(refs, dtype=np.float64)
 
     energies = (
         np.array(sset.get_property_values(property_name=property_name))
@@ -626,21 +627,45 @@ def plot_property_vs_concentration(
         pred_gss - vl_en_gss if pred_gss is not None else None
     )
 
-    (
-        scatter_plot(ax, frconc, energies - vl_en, "o", "k", "Calculated")
+    _ = (
+        scatter_plot(
+            ax, frconc, energies - vl_en, marker_styles["Calculated"], "Calculated"
+        )
         if sset is not None
         else None
     )
     if predictions is not None:
-        scatter_plot(ax, frconc, predictions - vl_en, ".", "r", "Predicted-fit")
+        scatter_plot(
+            ax,
+            frconc,
+            predictions - vl_en,
+            marker_styles["Predicted-fit"],
+            "Predicted-fit",
+        )
     if pred_cv is not None:
-        scatter_plot(ax, frconc, pred_cv - vl_en, ".", "red", "Predicted-CV")
+        scatter_plot(
+            ax,
+            frconc,
+            pred_cv - vl_en,
+            marker_styles["Predicted-CV"],
+            "Predicted-CV",
+        )
     if pred_enum is not None:
         scatter_plot(
-            ax, frconc_enum, pred_enum - vl_en_enum, "o", "gray", "Enumeration"
+            ax,
+            frconc_enum,
+            pred_enum - vl_en_enum,
+            marker_styles["Enumeration"],
+            "Enumeration",
         )
     if pred_gss is not None:
-        scatter_plot(ax, frconc_gss, pred_gss - vl_en_gss, "o", "green", "Predicted GS")
+        scatter_plot(
+            ax,
+            frconc_gss,
+            pred_gss - vl_en_gss,
+            marker_styles["Predicted GS"],
+            "Predicted GS",
+        )
 
     species_name = (
         sset.get_parent_lattice().get_sublattice_types()[site_type][sigma]

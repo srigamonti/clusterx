@@ -2,14 +2,15 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from clusterx.correlations import CorrelationsCalculator
-from clusterx.estimators.estimator_factory import EstimatorFactory
-from clusterx.clusters_selector import ClustersSelector
-import numpy as np
+from typing import List, Optional
 import pickle
 import os
 import time
 import warnings
+import numpy as np
+from clusterx.correlations import CorrelationsCalculator
+from clusterx.estimators.estimator_factory import EstimatorFactory
+from clusterx.clusters_selector import ClustersSelector
 
 
 class Model:
@@ -30,106 +31,92 @@ class Model:
     filepath : str, optional
         Path to a JSON or pickle file containing a serialized Model object.
     standardize : bool, default=False
-        If True, standardizes property values using `sklearn.preprocessing.StandardScaler`.
+        If True, standardizes input using `sklearn.preprocessing.StandardScaler`.
     """
 
     def __new__(cls, *args, **kwargs):
         """Custom __new__ to allow object creation from file if filepath is provided."""
-        if len(args) == 0 and len(kwargs) == 0:
-            inst = super(Model, cls).__new__(cls, *args, **kwargs)
-            return inst
+        if not args and not kwargs:
+            return super(Model, cls).__new__(cls)
 
-        elif "filepath" in kwargs:
-            filepath = kwargs["filepath"]
+        filepath = kwargs.get("filepath")
+        if filepath:
+            file_ext = os.path.splitext(filepath)[1].lower()
 
-            fext = os.path.splitext(filepath)[1][1:]
-            if fext == "pickle":
-                with open(filepath, "rb") as f:
-                    inst = pickle.load(f)
+            if file_ext == ".pickle":
+                return cls._load_from_pickle(filepath)
 
+            elif file_ext == ".json":
+                inst = super(Model, cls).__new__(cls)
+                inst._load_from_json(filepath)
                 return inst
-        else:
-            inst = super(Model, cls).__new__(cls)
-            inst.initialize(*args, **kwargs)
-            return inst
+
+        return super(Model, cls).__new__(cls)
 
     def __init__(
         self,
-        corrc=None,
-        property_name=None,
-        estimator=None,
-        ecis=None,
-        filepath=None,
-        json_db_filepath=None,
-        standardize=False,
+        corrc: Optional[CorrelationsCalculator] = None,
+        property_name: Optional[str] = None,
+        estimator: Optional[object] = None,
+        ecis: Optional[List[float]] = None,
+        filepath: Optional[str] = None,
+        standardize: bool = False,
     ):
-        pass
+        if filepath:
+            # File-based initialization is handled in __new__
+            return
 
-    def initialize(
-        self,
-        corrc=None,
-        property_name=None,
-        estimator=None,
-        ecis=None,
-        filepath=None,
-        json_db_filepath=None,
-        standardize=False,
-    ):
-        self.pickle_file = None
-        self._filepath_corrc = None
-        self.estimator = None
+        self.corrc = corrc
+        self.property_name = property_name
+        self.estimator = estimator
+        self.ecis = ecis
+        self.standardize = standardize
+        self._basis = None
+        self._mc = False
+        self._num_mc_calls = 0
+        self._mc_nclusters = 0
+        self._mc_multiplicities: List[int] = []
+        self._mc_start_time = 0
+        self._mc_init_time = 0
+        self._mc_estimator_intercept = 0
+        self._mc_estimator_coef: List[float] = []
 
-        if filepath is not None:
-            fext = os.path.splitext(filepath)[1][1:]
+        if self.standardize:
+            from sklearn.preprocessing import StandardScaler
 
-            if fext == "pickle":
-                self.pickle_file = filepath
+            self.stdscaler = StandardScaler()
 
-            if fext == "json":
-                json_db_filepath = filepath
+        if corrc:
+            self._basis = corrc.get_basis()
 
-        if json_db_filepath is not None:
-            from ase.db import connect
+    @staticmethod
+    def _load_from_pickle(filepath: str) -> "Model":
+        """Load Model object from a pickle file."""
+        try:
+            with open(filepath, "rb") as f:
+                return pickle.load(f)
+        except (FileNotFoundError, pickle.UnpicklingError) as e:
+            raise ValueError(f"Error loading model from pickle file: {e}") from e
 
-            db = connect(json_db_filepath)
+    def _load_from_json(self, filepath: str):
+        """Load model data from a JSON file."""
+        from ase.db import connect
 
-            from clusterx.correlations import CorrelationsCalculator
+        try:
+            db = connect(filepath)
 
             self.corrc = CorrelationsCalculator(db=db)
 
             modict = db.metadata.get("model_parameters", None)
-            if modict is None:
-                import sys
-
-                sys.exit("Error: Initialization from json_db did not succeed.")
+            if not modict:
+                raise ValueError("Error: 'model_parameters' missing in JSON metadata.")
 
             self.ecis = modict.get("ECIs", [])
             self.property_name = modict.get("property_name", None)
-
             self.standardize = modict.get("standardize", False)
 
-        else:
-            self.corrc = corrc
-            self.ecis = ecis
-            self.property_name = property_name
-            self.standardize = standardize
-            if standardize:
-                from sklearn.preprocessing import StandardScaler
-
-                self.stdscaler = StandardScaler()
-
-        self._basis = None
-        self._delta_e_calc = None
-        if corrc is not None:
-            self._basis = corrc.get_basis()
-        if self.estimator is None:
-            self.estimator = estimator
-        self._mc = False
-        self._num_mc_calls = 0
-        self._mc_nclusters = 0
-        self._mc_multiplicities = []
-        self._mc_stime = 0
-        self._mc_init_time = 0
+        except Exception as e:
+            raise ValueError(f"Error loading model from JSON file: {e}") from e
 
     def reset_mc(self, mc=False):
         self._mc = mc
@@ -406,8 +393,9 @@ class Model:
 
         pv = 0
 
-        for i in range(len(corrs)):
-            pv = pv + self._mc_estimator_coef[i] * corrs[i]
+        for i, corr in enumerate(corrs):
+            pv += self._mc_estimator_coef[i] * corr
+
         return pv
 
     def _compute_delta_e(self, structure, ind, old_sigma, new_sigma):
@@ -471,23 +459,11 @@ class Model:
         print("\n+-----------------------------------------------------------+")
         print("|                Report of Fit and CV scores                |")
         print("+-----------------------------------------------------------+")
-        print("|{0:<19s}|{1:^19s}|{2:^19s}|".format("", "Fit", "CV"))
+        print(f"|{'':<19}|{'Fit':^19}|{'CV':^19}|")
         print("+-----------------------------------------------------------+")
-        print(
-            "|{0:^19s}|{1:^19.5f}|{2:^19.5f}|".format(
-                "RMSE", errfit["RMSE"], errcv["RMSE-CV"]
-            )
-        )
-        print(
-            "|{0:^19s}|{1:^19.5f}|{2:^19.5f}|".format(
-                "MAE", errfit["MAE"], errcv["MAE-CV"]
-            )
-        )
-        print(
-            "|{0:^19s}|{1:^19.5f}|{2:^19.5f}|".format(
-                "MaxAE", errfit["MaxAE"], errcv["MaxAE-CV"]
-            )
-        )
+        print(f"|{'RMSE':^19}|{errfit['RMSE']:^19.5f}|{errcv['RMSE-CV']:^19.5f}|")
+        print(f"|{'MAE':^19}|{errfit['MAE']:^19.5f}|{errcv['MAE-CV']:^19.5f}|")
+        print(f"|{'MaxAE':^19}|{errfit['MaxAE']:^19.5f}|{errcv['MaxAE-CV']:^19.5f}|")
         print("+-----------------------------------------------------------+\n")
 
     def get_errors(self, sset):
@@ -564,20 +540,20 @@ class Model:
         from sklearn.model_selection import cross_val_score, cross_val_predict
         from sklearn.model_selection import LeaveOneOut
 
-        X = self.corrc.get_correlation_matrix(sset)
+        x_mat = self.corrc.get_correlation_matrix(sset)
         y = sset.get_property_values(self.property_name)
 
         # cross_val_score internally clones the estimator, so the optimal one in Model is not changed.
         cvs = cross_val_score(
             self.estimator,
-            X,
+            x_mat,
             y,
             fit_params=fit_params,
             cv=LeaveOneOut(),
             scoring="neg_mean_squared_error",
         )
         pred_cv = cross_val_predict(
-            self.estimator, X, y, fit_params=fit_params, cv=LeaveOneOut()
+            self.estimator, x_mat, y, fit_params=fit_params, cv=LeaveOneOut()
         )
 
         absolute_errors = np.sqrt(-cvs)

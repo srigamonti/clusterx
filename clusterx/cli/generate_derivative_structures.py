@@ -83,7 +83,14 @@ def generate_derivative_structures(
         case 4:
             if sset_filepath is not None:
                 sset = StructuresSet(filepath=sset_filepath)
-                _do_plot_properties(dss_filepath, sset=sset, cem=model)
+                model = (
+                    Model(filepath=model_filepath)
+                    if model_filepath is not None
+                    else None
+                )
+                _do_plot_properties(
+                    dss_filepath, property_label=property_label, sset=sset, cem=model
+                )
             else:
                 _do_plot_properties(dss_filepath, property_label=property_label)
 
@@ -148,9 +155,9 @@ def _do_full_enumeration(
     dsgen = DSGenerator(plat)
 
     dsgen.generate(
-        sc_sizes,
-        nsubs_list,
-        trafo=trafo,
+        supercell_sizes=sc_sizes,
+        num_subs_list=nsubs_list,
+        sc_shape=trafo,
     )
 
     with open(dss_filepath, "wb") as f:

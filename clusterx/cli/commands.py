@@ -3,8 +3,6 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import sys
-import os
-import toml
 from os.path import dirname, basename, isfile
 import glob
 
@@ -31,17 +29,6 @@ modules = [
     and not f.endswith("config_utils.py")
 ]
 
-# Check for cellinput.toml in the current working directory
-toml_file_path = os.path.join(os.getcwd(), "cellinput.toml")
-custom_dir = os.getcwd()  # Default to CWD
-custom_modules = []
-
-if os.path.isfile(toml_file_path):
-    config_dict = toml.load(toml_file_path)
-    custom_modules = config_dict.get("custom_modules", [])
-    custom_dir = config_dict.get("custom_dir", os.getcwd())
-    sys.path.append(custom_dir)
-
 # Dynamically retrieve functions from modules in clusterx.cli,
 # and re-create them in the current module
 commands = []  # This array is needed by plac
@@ -57,19 +44,22 @@ for module in modules:
         )
 
 
-# Add custom modules
-for module in custom_modules:
-    module_name = module[:-3]  # Strip .py extension
-    custom_commands = getattr(
-        __import__(module_name, fromlist=[module_name]), "commands", []
-    )
-    for command in custom_commands:
-        commands.append(command)
-        setattr(
-            sys.modules[__name__],
-            command,
-            getattr(__import__(module_name, fromlist=[module_name]), command),
+def import_custom_modules(custom_module_filenames, custom_dir):
+    """Import custom modules"""
+    sys.path.append(custom_dir)
+    for module in custom_module_filenames:
+        module_name = module[:-3]  # Strip .py extension
+        custom_commands = getattr(
+            __import__(module_name, fromlist=[module_name]), "commands", []
         )
+        for command in custom_commands:
+            commands.append(command)
+            setattr(
+                sys.modules[__name__],
+                command,
+                getattr(__import__(module_name, fromlist=[module_name]), command),
+            )
+
 
 ##########################################
 
