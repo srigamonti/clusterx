@@ -31,7 +31,7 @@ class Model:
     filepath : str, optional
         Path to a JSON or pickle file containing a serialized Model object.
     standardize : bool, default=False
-        If True, standardizes property values using `sklearn.preprocessing.StandardScaler`.
+        If True, standardizes input using `sklearn.preprocessing.StandardScaler`.
     """
 
     def __new__(cls, *args, **kwargs):
