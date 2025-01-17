@@ -13,12 +13,6 @@ from clusterx.cli.commands import import_custom_modules
 def main():
     """
     CELL command line interface
-
-    This subpackage collects modules which define the commands
-    available in cell. Uses plac, based on argparse, for
-    command-line-argument parsing. Plac infers command options
-    from function declaration, making easy for developers to add
-    new commands, by just defining a function.
     """
 
     # Check for cellinput.toml in the current working directory
@@ -49,8 +43,15 @@ def main():
         plac.call(cmds, sys.argv[1:])
     else:
         config_dict = read_toml_config(toml_file_path)
+
         commands_ = [
-            key for key, value in config_dict.items() if isinstance(value, dict)
+            key
+            for key, value in config_dict.items()
+            if isinstance(value, dict)
+            or (
+                isinstance(value, list)
+                and all(isinstance(item, dict) for item in value)
+            )
         ]
         commands = config_dict.get("do", commands_)
         print("commands in cellinput.toml file are", commands)
@@ -62,7 +63,24 @@ def main():
                 func = getattr(cmds, command)
                 arg_dict_from_toml = config_dict[str(command)]
                 print("Argument dict from TOML file: ", arg_dict_from_toml)
-                func(**arg_dict_from_toml)
+
+                # Check if arg_dict_from_toml is a list of dictionaries
+                if isinstance(arg_dict_from_toml, list) and all(
+                    isinstance(item, dict) for item in arg_dict_from_toml
+                ):
+                    # Execute func for each dictionary in the list
+                    for params in arg_dict_from_toml:
+                        print(f"Executing {command} with params: {params}")
+                        func(**params)
+                elif isinstance(arg_dict_from_toml, dict):
+                    # Execute func with the single dictionary of parameters
+                    print(f"Executing {command} with params: {arg_dict_from_toml}")
+                    func(**arg_dict_from_toml)
+                else:
+                    print(
+                        f"Invalid format for arguments in command '{command}': {arg_dict_from_toml}"
+                    )
+                    sys.exit(1)
             else:
                 print(f"Unknown command: {command}")
                 sys.exit(1)
