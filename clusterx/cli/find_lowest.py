@@ -13,8 +13,8 @@ commands = ["find_lowest"]
 
 @plac.opt("sset_filepath")
 @plac.opt("property_name")
-@plac.opt("sset_higher_filepath")
-@plac.opt("sset_lowest_filepath")
+@plac.opt("sset_higher_filepath", abbrev="ssh")
+@plac.opt("sset_lowest_filepath", abbrev="ssl")
 def find_lowest(
     sset_filepath: str = "sset.json",
     property_name: Optional[str] = None,
