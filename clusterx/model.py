@@ -529,12 +529,12 @@ class Model:
         else:
             return straes
 
-    def get_cv_score(self, sset, fit_params=None):
+    def get_cv_score(self, sset, params=None):
         """Get leave-one-out cross-validation score over structures set.
 
         **Parameters:**
 
-        ``fit_params``: dictionary
+        ``params``: dictionary
             Parameters to pass to the fit method of the estimator.
         """
         from sklearn.model_selection import cross_val_score, cross_val_predict
@@ -548,12 +548,12 @@ class Model:
             self.estimator,
             x_mat,
             y,
-            fit_params=fit_params,
+            params=params,
             cv=LeaveOneOut(),
             scoring="neg_mean_squared_error",
         )
         pred_cv = cross_val_predict(
-            self.estimator, x_mat, y, fit_params=fit_params, cv=LeaveOneOut()
+            self.estimator, x_mat, y, params=params, cv=LeaveOneOut()
         )
 
         absolute_errors = np.sqrt(-cvs)
