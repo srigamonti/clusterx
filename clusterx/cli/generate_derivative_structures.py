@@ -22,6 +22,74 @@ from clusterx.cli.find_lowest import find_lowest
 commands = ["generate_derivative_structures"]
 
 
+@plac.opt("sc_sizes", abbrev="scsi", help="List of supercell sizes.", type=list)
+@plac.opt(
+    "nsubs_list",
+    abbrev="nsl",
+    help="""List of integer lists corresponding to every supercell 
+    size to indicate the number of substitutions used in every enumeration.""",
+)
+@plac.opt(
+    "sset_filepath",
+    abbrev="ssfp",
+    help="""Path to a serialized StructuresSet object. This is used in at least
+    some plotting tasks""",
+)
+@plac.opt(
+    "sset_gss_filepath",
+    abbrev="ssgss",
+    help="""Path to a serialized StructuresSet object containing ground state structures. 
+    This is used in at least
+    some plotting tasks""",
+)
+@plac.opt(
+    "model_filepath",
+    abbrev="mfp",
+    help="""Filepath of a serialized CE model object. This is used to evaluate the 
+    properties enumerated configurations in at least some plotting tasks.""",
+)
+@plac.opt(
+    "plat_filepath",
+    abbrev="plfp",
+    help="Filepath of a serialized ParentLattice object. This is needed to perform the enumerations.",
+)
+@plac.opt(
+    "dss_filepath",
+    abbrev="dssfp",
+    help="Filepath to either serialize or retrieve an enumeration of derivative structures.",
+)
+@plac.opt(
+    "property_label",
+    abbrev="plab",
+    help="Label of the property to be requested from the structures set, if present.",
+)
+@plac.opt(
+    "property_solver",
+    abbrev="psol",
+    help="A dictionary to specify parameters for the property solver. See documentation above.",
+    type=dict,
+)
+@plac.opt(
+    "sc_shape",
+    abbrev="scsh",
+    help="3x3 matrix of integers to specify supercell shape for fixed shape enumeration.",
+)
+@plac.flg(
+    "per_formula_unit",
+    abbrev="pfu",
+    help="to be changed to hanged to kwargs.",
+)
+@plac.opt(
+    "linear_reference",
+    abbrev="lref",
+    help="to be changed to hanged to kwargs.",
+)
+@plac.opt(
+    "task",
+    abbrev="task",
+    help="Task to perform.",
+    type=int,
+)
 def generate_derivative_structures(
     sc_sizes: Optional[List[int]] = None,
     nsubs_list: Optional[List[List[int]]] = None,
