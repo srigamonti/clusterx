@@ -21,33 +21,29 @@ commands = ["compute_comat"]
 @plac.opt(
     "sset_filepath",
     abbrev="ssf",
-    help=(
-        "Path to a serialized StructuresSet object. All cluster correlations "
-        "of all structures in this object are computed and saved to a"
-        "two dimensional array.",
-    ),
+    help="""
+        Path to a serialized StructuresSet object. All cluster correlations 
+        of all structures in this object are computed and saved to a
+        two dimensional array.
+    """,
 )
 @plac.opt(
     "comat_filepath",
     abbrev="cmf",
-    help=(
-        "Path to store correlations matrix. Extension is removed. File is "
-        "saved in formats txt and npz",
-    ),
+    help="""
+        Path to store correlations matrix. Extension is removed. File is
+        saved in formats txt and npz.
+    """,
 )
-@plac.opt(
-    "property_name",
-    abbrev="pn",
-    help=("Name of the property"),
-)
+@plac.opt("property_name", abbrev="pn", help="Name of the property")
 @plac.flg(
     "update_ccalc",
     abbrev="u",
-    help=(
-        "Overwrite the file 'ccalc_filepath' to remember the cluster orbits of the "
-        "supercells in contained in 'sset_filepath'. This leads to faster correlation "
-        "evaluations on future calculator use."
-    ),
+    help="""
+        Overwrite the file 'ccalc_filepath' to remember the cluster orbits of the 
+        supercells in contained in 'sset_filepath'. This leads to faster correlation 
+        evaluations on future calculator use.
+    """,
 )
 def compute_comat(
     ccalc_filepath: str = "ccalc.pickle",

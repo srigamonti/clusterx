@@ -1,7 +1,6 @@
 # Copyright (c) 2015-2024, CELL Developers.
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
-
 from typing import Optional
 import plac
 from clusterx.correlations import CorrelationsCalculator
@@ -26,42 +25,42 @@ commands = ["build_model"]
 @plac.opt(
     "sset_filepath",
     abbrev="ssf",
-    help=("Path to a serialized StructuresSet object.",),
+    help="Path to a serialized StructuresSet object.",
 )
 @plac.opt(
     "cpool_filepath",
     abbrev="cpf",
-    help=("Path to a serialized ClustersPool object.",),
+    help="Path to a serialized ClustersPool object.",
 )
 @plac.opt(
     "model_filepath",
     abbrev="mof",
-    help=("Path to serialize the created Model object.",),
+    help="Path to serialize the created Model object.",
 )
 @plac.opt(
     "selector_type",
     abbrev="st",
-    help=("Selector type.",),
+    help="Selector type.",
 )
 @plac.opt(
     "selector_opts",
     abbrev="so",
-    help=("Selector options.",),
+    help="Selector options.",
 )
 @plac.opt(
     "estimator_type",
     abbrev="et",
-    help=("Estimator type.",),
+    help="Estimator type.",
 )
 @plac.opt(
     "estimator_opts",
     abbrev="eo",
-    help=("Estimator options.",),
+    help="Estimator options.",
 )
 @plac.opt(
     "plot_optimization_vs_sparsity",
     abbrev="plotovsd",
-    help=("Dictionary.",),
+    help="Dictionary.",
     type=dict,
 )
 def build_model(

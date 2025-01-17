@@ -14,33 +14,33 @@ commands = ["compute_concentrations"]
 @plac.opt(
     "sset_filepath",
     abbrev="ssf",
-    help=(
-        "Path to a serialized StructuresSet object. All cluster correlations "
-        "of all structures in this object are computed and saved to a"
-        "two dimensional array.",
-    ),
+    help="""
+        Path to a serialized StructuresSet object. All cluster correlations 
+        of all structures in this object are computed and saved to a
+        "wo dimensional array.
+    """,
 )
 @plac.opt(
     "site_type",
     abbrev="st",
-    help=(
-        "Path to store correlations matrix. Extension is removed. File is "
-        "saved in formats txt and npz",
-    ),
+    help="""
+        Path to store correlations matrix. Extension is removed. File is 
+        saved in formats txt and npz
+    """,
 )
 @plac.opt(
     "sigma",
     abbrev="si",
-    help=("Name of the property"),
+    help="Name of the property",
 )
 @plac.opt(
     "conc_filepath",
     abbrev="cof",
-    help=(
-        "Overwrite the file 'ccalc_filepath' to remember the cluster orbits of the "
-        "supercells in contained in 'sset_filepath'. This leads to faster correlation "
-        "evaluations on future calculator use."
-    ),
+    help="""
+        Overwrite the file 'ccalc_filepath' to remember the cluster orbits of the 
+        supercells in contained in 'sset_filepath'. This leads to faster correlation 
+        evaluations on future calculator use.
+    """,
 )
 def compute_concentrations(
     sset_filepath: str = "sset.json",

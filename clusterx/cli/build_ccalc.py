@@ -14,11 +14,10 @@ commands = ["build_ccalc"]
 @plac.opt(
     "basis",
     abbrev="b",
-    help=(
-        "cluster basis to be used. Possible values are: indicator-binary, trigonometric, "
-        "polynomial, and chebyshev. For a precise definition look into the parameter "
-        "'basis' of the CorrelationsCalculator class of CELL."
-    ),
+    help="""cluster basis to be used. Possible values are: indicator-binary, trigonometric, 
+        polynomial, and chebyshev. For a precise definition look into the parameter 
+        'basis' of the CorrelationsCalculator class of CELL.
+    """,
 )
 @plac.opt(
     "plat_filepath",

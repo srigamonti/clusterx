@@ -34,25 +34,25 @@ commands = ["build_nonlinear_model"]
 @plac.opt(
     "model_filepath",
     abbrev="mof",
-    help=("Path to serialize the created Model object.",),
+    help="Path to serialize the created Model object.",
 )
 @plac.opt(
     "regression_model",
     abbrev="rm",
-    help=("Estimator options.",),
+    help="Estimator options.",
     type=dict,
 )
 @plac.opt(
     "nonlinear_transformation",
     abbrev="nt",
-    help=("Estimator options.",),
+    help="Estimator options.",
     type=dict,
 )
 @plac.opt(
-    "weights",
-    help=(
-        "Sample weights for fitting the model and evaluating the weighted mean squared error."
-    ),
+    "weights_filepath",
+    help="""
+        Sample weights for fitting the model and evaluating the weighted mean squared error.
+    """,
 )
 @plac.flg("standardize", abbrev="std", help="Standardize the input data.")
 def build_nonlinear_model(

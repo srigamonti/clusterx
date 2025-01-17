@@ -23,7 +23,7 @@ commands = ["build_cpool"]
 
 
 @plac.pos("npoints", help="The number of points in the clusters being built.")
-@plac.pos("radii", help="Corresponting cluster radii.")
+@plac.pos("radii", help="Corresponding cluster radii.")
 @plac.opt(
     "sset_filepath",
     abbrev="ssf",
@@ -37,10 +37,10 @@ commands = ["build_cpool"]
 @plac.opt(
     "psc",
     abbrev="p",
-    help=(
-        "Definition of a super cell where to find clusters, in terms of the parent lattice. "
-        "For a precise definition look into the parameter p of the SuperCell class of CELL."
-    ),
+    help="""
+        Definition of a super cell where to find clusters, in terms of the parent lattice. 
+        For a precise definition look into the parameter p of the SuperCell class of CELL.
+    """,
 )
 @plac.opt(
     "method", abbrev="me", help="Method to use to find clusters.", choices=[1, 2, 3]
@@ -55,10 +55,10 @@ commands = ["build_cpool"]
 @plac.opt(
     "mlims",
     abbrev="ml",
-    help=(
-        "Only clusters with multiplicity m larger or equal to nlims[0] and smaller or "
-        "equal to nlims[1] are included in the built ClustersPool.",
-    ),
+    help="""
+        Only clusters with multiplicity m larger or equal to nlims[0] and smaller or 
+        equal to nlims[1] are included in the built ClustersPool.
+    """,
 )
 def build_cpool(
     npoints: Union[List[int], str],

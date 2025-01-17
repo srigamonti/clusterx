@@ -31,10 +31,17 @@ commands = ["plot_property"]
 @plac.flg(
     "mark_min",
     abbrev="mm",
-    help=(
-        "Mark data points with lowest property value. This is useful, for instance, "
-        "to indicate ground-state structures if the property is the energy."
-    ),
+    help="""
+        Mark data points with lowest property value. This is useful, for instance, 
+        to indicate ground-state structures if the property is the energy.
+    """,
+)
+@plac.flg(
+    "show_loo_predictions",
+    abbrev="loo",
+    help="""
+        Show test predictions from CV - LeaveOneOut approach.
+    """,
 )
 def plot_property(
     sset_filepath: str,
