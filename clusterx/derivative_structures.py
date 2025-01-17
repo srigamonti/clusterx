@@ -278,7 +278,7 @@ def get_unique_supercells(n, parent_lattice):
             sset.add_structure(Structure(scell,scell.get_atomic_numbers()),write_to_db = True)
 
     The generated structures are the same as those found in Fig. 2 and Table IV
-    of Phys. Rev. B 77, 224115 2008.
+    of Phys. Rev. B 77, 224115 2008.
 
     The next example, shows a case of reduced dimensionality, that of a 2D
     square lattice::
