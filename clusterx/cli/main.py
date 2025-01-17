@@ -13,6 +13,11 @@ from clusterx.cli.commands import import_custom_modules
 def main():
     """
     CELL command line interface
+
+    Parameters can be passed with an input file in TOML format, e.g.
+
+    cell --input_file [cellinput].toml
+
     """
 
     # Check for cellinput.toml in the current working directory
