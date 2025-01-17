@@ -1,4 +1,9 @@
+# Copyright (c) 2015-2024, CELL Developers.
+# This work is licensed under the terms of the Apache 2.0 license
+# See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
+
 from typing import Optional, List, Callable
+import plac
 import pickle
 import importlib.util
 import sys
@@ -32,7 +37,7 @@ def generate_derivative_structures(
     linear_reference: Optional[List[List[float]]] = None,
     task: int = 1,
 ):
-    """Generate full enumeration"""
+    """Generate derivative structures"""
 
     match task:
         # Find derivative structures
