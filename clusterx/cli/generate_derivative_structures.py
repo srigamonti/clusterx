@@ -27,7 +27,7 @@ def generate_derivative_structures(
     dss_filepath: Optional[str] = None,
     property_label: Optional[str] = None,
     property_solver: Optional[dict] = None,
-    trafo: Optional[List[List[float]]] = None,
+    sc_shape: Optional[List[List[float]]] = None,
     per_formula_unit: bool = False,
     linear_reference: Optional[List[List[float]]] = None,
     task: int = 1,
@@ -39,7 +39,7 @@ def generate_derivative_structures(
         case 1:
             plat = ParentLattice(filepath=plat_filepath)
             _do_full_enumeration(
-                plat, sc_sizes, nsubs_list, dss_filepath=dss_filepath, trafo=trafo
+                plat, sc_sizes, nsubs_list, dss_filepath=dss_filepath, sc_shape=sc_shape
             )
 
         # Compute property with CE model
@@ -105,7 +105,7 @@ def generate_derivative_structures(
             plat = ParentLattice(filepath=plat_filepath)
             sset = StructuresSet(filepath=sset_filepath)
 
-            _do_full_enumeration(plat, trafo=trafo)
+            _do_full_enumeration(plat, sc_shape=sc_shape)
             _do_compute_properties(model)
             _do_plot_properties(sset, model)
 
@@ -149,7 +149,7 @@ def _do_full_enumeration(
     sc_sizes: Optional[List[int]],
     nsubs_list: Optional[List[List[int]]],
     dss_filepath: str = "dss.pickle",
-    trafo: List[List[int]] = None,
+    sc_shape: List[List[int]] = None,
 ) -> None:
 
     dsgen = DSGenerator(plat)
@@ -157,7 +157,7 @@ def _do_full_enumeration(
     dsgen.generate(
         supercell_sizes=sc_sizes,
         num_subs_list=nsubs_list,
-        sc_shape=trafo,
+        sc_shape=sc_shape,
     )
 
     with open(dss_filepath, "wb") as f:
