@@ -44,7 +44,8 @@ def get_nomad_oasis_access_token(path_to_dotenv=None, username=None, userpasswor
     else:
         myname = username
         mypassword = userpassword
-        response_to_authentification = requests.get(
+    
+    response_to_authentification = requests.get(
             'https://nomad-lab.eu/prod/v1/staging/api/v1/auth/token',
             params={"username": myname, "password": mypassword}
             )
