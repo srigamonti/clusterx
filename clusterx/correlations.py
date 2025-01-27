@@ -277,7 +277,11 @@ class CorrelationsCalculator:
             """
             return self._trigo_basis_function(alpha, sigma, m)
 
-        if self.basis == "binary-linear" or self.basis == "indicator-binary":
+        if (
+            self.basis == "binary-linear"
+            or self.basis == "indicator-binary"
+            or self.basis == "indicator_binary"
+        ):
             # Only for binary alloys. Allows for simple interpretation of cluster interactions.
             return sigma
 
