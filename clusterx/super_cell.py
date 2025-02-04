@@ -2,8 +2,9 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-import numpy as np
+import warnings
 import sys
+import numpy as np
 from ase.visualize import view
 
 # from ase.build import make_supercell
@@ -63,10 +64,13 @@ class SuperCell(ParentLattice):
             sp = sorted(p, key=itemgetter(2,1,0))
 
         here p is a Nx3 array of vector coordinates.
+    ``filepath``: string (default: None)
+        The path of a JSON file containing a serialized SuperCell object, as generated
+        by the ``SuperCell.serialize()`` method. This is the preferred argument.
+
     ``json_db_filepath``: string (default: None)
-        Overrides all the above. Used to initialize from file. Path of a json
-        file containing a serialized superCell object, as generated
-        by the ``SuperCell.serialize()`` method.
+        **Deprecated.** Use ``filepath`` instead. If provided, this argument will still be accepted but a
+        deprecation warning will be issued.
 
     .. todo::
         Proper check of pbc when building the super cell. Either ignore
@@ -82,11 +86,22 @@ class SuperCell(ParentLattice):
         parent_lattice=None,
         p=None,
         sort_key=None,
+        filepath=None,
         json_db_filepath=None,
         sym_table=False,
     ):
 
+        # Check for deprecated json_db_filepath argument
         if json_db_filepath is not None:
+            warnings.warn(
+                "The argument 'json_db_filepath' is deprecated. Please use 'filepath' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if filepath is None:
+                filepath = json_db_filepath
+
+        if filepath is not None:
             db = connect(json_db_filepath)
 
             plat_dict = db.metadata.get("parent_lattice", {})
