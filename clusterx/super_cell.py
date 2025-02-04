@@ -102,7 +102,7 @@ class SuperCell(ParentLattice):
                 filepath = json_db_filepath
 
         if filepath is not None:
-            db = connect(json_db_filepath)
+            db = connect(filepath)
 
             plat_dict = db.metadata.get("parent_lattice", {})
             self._plat = ParentLattice.plat_from_dict(plat_dict)
