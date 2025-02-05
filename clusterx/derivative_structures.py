@@ -425,7 +425,7 @@ class DSGenerator:
             ignore_index=True,
         )
 
-    def generate(self, supercell_sizes, num_subs_list, sc_shape=None):
+    def generate(self, supercell_sizes=None, num_subs_list=None, sc_shape=None):
         """Generate derivative structures
 
         **Parameters:**
