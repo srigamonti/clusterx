@@ -688,10 +688,10 @@ def plot_property_vs_concentration(
 
     plt.legend()
     save_plot_data(data, data_fname)
-    if show_plot:
-        plt.show()
     if fig_fname is not None:
         plt.savefig(fig_fname)
+    if show_plot:
+        plt.show()
 
     plt.close()
     return data
