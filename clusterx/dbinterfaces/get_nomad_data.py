@@ -1,6 +1,6 @@
 """"
 This module is designed to extract data from NOMAD or
-a NOMAD OASIS database (such as total values, structures, etc.)
+a NOMAD OASIS database (such as total energy values, structures, etc.)
 and use this data to generate structure sets along with their
 associated properties in CELL, which can then be used to create models.
 
@@ -12,11 +12,10 @@ import json
 import requests
 import numpy as np
 from ase import Atoms
+from scipy.constants import electron_volt 
 
 
 BASE_URL_NOMAD = 'http://nomad-lab.eu/prod/v1/api/v1/'
-e = 1.602176634*10**(-19)  # elementary charge in C
-# as defined in NOMAD constants_en.txt for unit conversions
 
 
 class SingleEntry:
@@ -28,28 +27,28 @@ class SingleEntry:
     ``entry_id``: *string*
         ID of the entry in the ONOMAD database
 
-    ``token``: *string* 
-        Default ''
+    ``token``: *string*
+        Default: None
         This only has to be overwritten if you want to access a NOMAD OASIS
         database instead of NOMAD.
         Refers to the access token for the OASIS which you can
         create if you have a registered account that has access to
         the OASIS.
-        You may use the function get_access_token to retrieve it or
+        You may use the function get_nomad_oasis_access_token to retrieve it or
         create the token by using
         'https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#/auth/get_token_via_query_auth_token_get'
 
     ``base_url``: *string*
-        base url of the OASIS database
-        The default is the base url for NOMAD:
+        base URL of the OASIS database
+        The default is the base URL for NOMAD:
         'http://nomad-lab.eu/prod/v1/api/v1/'
-        You may use the base url of your OASIS instead.
+        You may use the base URL of your OASIS instead.
     """
-    def __init__(self, entry_id, token='', base_url=BASE_URL_NOMAD):
+    def __init__(self, entry_id, token=None, base_url=BASE_URL_NOMAD):
         self.entry_id = entry_id
         self.token = token
         self.base_url = base_url
-        self.headers = {'Authorization': f'Bearer {self.token}'}
+        self.headers = {'Authorization': f'Bearer {self.token}'} if self.token is not None else {}
 
     def get_archive(self):
         """"
@@ -63,10 +62,10 @@ class SingleEntry:
         # queried according to the query_type to get a repsonse.
         # The section archive of the data of the response is stored as json
         # in archive.
-        f_string = f'{self.base_url}entries/{self.entry_id}/archive/query'
+        request_url = f'{self.base_url}entries/{self.entry_id}/archive/query'
         try:
             response = requests.post(
-                                f_string,
+                                request_url,
                                 headers=self.headers,
                                 json=query_type
                                 )
@@ -79,6 +78,7 @@ class SingleEntry:
         
         except requests.exceptions.RequestException as error:
             print('The request was not successful. Check the NOMAD docs:')
+            # check post /entries/{entry_id}/archive/query for explanation of error codes
             print('https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#')
             print(f'The following error occured: {error}')
 
@@ -102,7 +102,7 @@ class SingleEntry:
         if 'total' not in result['energy']:
             result = archive['run'][0]['calculation'][-2]
         # convert the total energy value to eV
-        total_energy_ev = result['energy']['total']['value']*1/e
+        total_energy_ev = result['energy']['total']['value']*1/electron_volt
         return total_energy_ev
 
     def get_atoms_object(self):
@@ -133,9 +133,9 @@ class SingleEntry:
             Name of the structure object json file.
             Default: 'structure.json'
         """
-        f_string = f'{self.base_url}entries/{self.entry_id}/raw/{filename}'
+        request_url = f'{self.base_url}entries/{self.entry_id}/raw/{filename}'
         try:
-            response = requests.get(f_string,
+            response = requests.get(request_url,
                                     headers=self.headers)
             # check for HTTPErrors
             response.raise_for_status()
@@ -209,13 +209,13 @@ class Dataset:
             'query': {'datasets.dataset_id': self.dataset_id},
             'pagination': {'page_size': self.pagination_page_size}
         }
-        f_string = f'{self.base_url}entries/archive/query'
+        request_url = f'{self.base_url}entries/archive/query'
 
         try:
             # The OASIS entries are queried according to the query_type above
             # The response is then stored as json
             # The section data is returned
-            response = requests.post(f_string,
+            response = requests.post(request_url,
                                      headers=self.headers,
                                      json=query_type)
             response.raise_for_status()
@@ -263,10 +263,10 @@ class Dataset:
         # (it could be a DOS calculation instead)
         # access the result from the previous calculation
             if 'energy' in result and 'total' in result['energy']:
-                total_energy = result['energy']['total']['value'] * 1/e
+                total_energy = result['energy']['total']['value'] * 1/electron_volt
             else:
                 result = entry['archive']['run'][0]['calculation'][-2]
-                total_energy = result['energy']['total']['value'] * 1/e
+                total_energy = result['energy']['total']['value'] * 1/electron_volt
             energy_values_ev.append(total_energy)
         return energy_values_ev
 
@@ -285,8 +285,8 @@ class Dataset:
         list_of_structures = []
         try:
             for entry_id in (list_of_entry_ids):
-                f_string = f'{self.base_url}entries/{entry_id}/raw/{filename}'
-                response = requests.get(f_string,
+                request_url = f'{self.base_url}entries/{entry_id}/raw/{filename}'
+                response = requests.get(request_url,
                                         headers=self.headers)
                 # check for HTTPErrors
                 response.raise_for_status()
