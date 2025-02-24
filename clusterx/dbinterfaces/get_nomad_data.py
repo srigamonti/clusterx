@@ -75,19 +75,13 @@ class SingleEntry:
             response_json = response.json()
             archive = response_json['data']['archive']
             return archive
-        
+      
         except requests.exceptions.RequestException as error:
-            print('The request was not successful. Check the NOMAD docs:')
+            print('The request was not successful.'
+                  'Check the NOMAD docs for information on the error code:')
             # check post /entries/{entry_id}/archive/query for explanation of error codes
             print('https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#')
             print(f'The following error occured: {error}')
-
-    def download_archive(self):
-        """
-        Downloads the archive section of data of a single entry
-        """
-        self.download = self.get_archive()
-        return self.download
 
     def get_total_energy(self):
         """"
@@ -122,9 +116,9 @@ class SingleEntry:
         )
         return atoms
 
-    def get_structure_object(self, filename='structure.json'):
+    def get_structure_object(self, filename: str='structure.json') -> dict:
         """
-        Returns the structure object as json file.
+        Returns the structure object as json file (dictionary).
         This requires that the structure object is saved as json file in the
         same directory as the associated run before uploading to NOMAD.
 
@@ -141,9 +135,10 @@ class SingleEntry:
             response.raise_for_status()
             structure_json = json.loads(response.text)
             return structure_json
-        
+      
         except requests.exceptions.RequestException as error:
-            print('The request was not successful. Check the NOMAD docs:')
+            print('The request was not successful.'
+                  'Check the NOMAD docs for information on the error code:')
             print('https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#')
             print(f'The following error occured: {error}')
 
@@ -223,7 +218,8 @@ class Dataset:
             return dataset['data']
 
         except requests.exceptions.RequestException as error:
-            print('The request was not successful. Check the NOMAD docs:')
+            print('The request was not successful.'
+                  'Check the NOMAD docs for information on the error code:')
             print('https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#')
             print(f'The following error occured: {error}')
 
@@ -294,8 +290,9 @@ class Dataset:
                 structure_json = json.loads(response.text)
                 list_of_structures.append(structure_json)
             return list_of_structures
-        
+      
         except requests.exceptions.RequestException as error:
-            print('The request was not successful. Check the NOMAD docs:')
+            print('The request was not successful.'
+                  'Check the NOMAD docs for information on the error code:')
             print('https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#')
             print(f'The following error occured: {error}')
