@@ -182,6 +182,10 @@ def generate_derivative_structures(
             _do_plot_properties2(
                 dss_filepath, mask_name=mask_name, property_names=[property_label]
             )
+        case "plot_property_vs_concentration3":
+            _do_plot_properties3(
+                dss_filepath, mask_name=mask_name, property_names=[property_label]
+            )
         case "mark_lowest_property_per_concentration":
             _do_mark_lowest(property_label, mask_name, dss_filepath)
 
