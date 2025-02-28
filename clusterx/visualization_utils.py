@@ -48,10 +48,10 @@ def save_plot_data(data, filename):
         np.savez(
             filename,
             concentrations_property=data["concentration"],
+            concentrations_enum=data["concentration-enum"],
             property=data["property"],
             predictions=data["predicted-property"],
             predictions_cv=data["predicted-property-cv"],
-            concentrations_enum=data["concentration-enum"],
             predictions_enum=data["predicted-property-enumeration"],
         )
 

@@ -18,6 +18,12 @@ def main():
 
     cell --input_file [cellinput].toml
 
+    If run without arguments, cell searches for file cellinput.toml in cwd. If present, take it as input file.
+
+    Custom commands can be indicated by placing the file "custom_cell_commands.toml" in your working directory. The file should contain the following attributes:
+    custom_dir = "path/to/my/custom/commands/folder/" # specify the custom directory
+    custom_modules = ['custom_command1.py', 'custom_command2.py', ...]  # Specify the modules containing commands, these files should be present in custom_dir
+
     """
 
     # Check for cellinput.toml in the current working directory
@@ -27,6 +33,14 @@ def main():
         toml_file_path = os.path.join(os.getcwd(), "cellinput.toml")
 
     custom_dir = os.getcwd()  # Default to CWD
+
+    if os.path.isfile("custom_cell_commands.toml"):
+        config_dict = read_toml_config("custom_cell_commands.toml")
+        custom_dir = config_dict.get("custom_dir", os.getcwd())
+        custom_module_filenames = config_dict.get("custom_modules", [])
+        import_custom_modules(custom_module_filenames, custom_dir)
+        # Add the custom directory to sys.path to import custom modules
+        sys.path.append(custom_dir)
 
     no_toml_file = True
     if os.path.isfile(toml_file_path):

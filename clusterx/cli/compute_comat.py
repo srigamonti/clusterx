@@ -40,8 +40,8 @@ commands = ["compute_comat"]
     "update_ccalc",
     abbrev="u",
     help="""
-        Overwrite the file 'ccalc_filepath' to remember the cluster orbits of the 
-        supercells in contained in 'sset_filepath'. This leads to faster correlation 
+        Overwrite  file 'ccalc_filepath' to keep the cluster orbits of the 
+        supercells contained in 'sset_filepath'. This leads to faster correlation 
         evaluations on future calculator use.
     """,
 )

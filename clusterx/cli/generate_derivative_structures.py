@@ -98,7 +98,6 @@ def generate_derivative_structures(
     sc_sizes: Optional[List[int]] = None,
     nsubs_list: Optional[List[List[int]]] = None,
     sset_filepath: Optional[str] = None,
-    sset_lowest_filepath: Optional[str] = None,
     model_filepath: Optional[str] = None,
     plat_filepath: Optional[str] = None,
     dss_filepath: Optional[str] = None,

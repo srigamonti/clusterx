@@ -24,6 +24,7 @@ setup(
         "ipywidgets",
         "pytest-html",
         "tqdm",
+        "pandas",
     ],
     entry_points={"console_scripts": ["cell=clusterx.cli.main:main"]},
     flake8={"max-line-length": 120},

@@ -107,29 +107,29 @@ def get_command_name():
     return inspect.stack()[1].function
 
 
-def inspect_function_signature(func, verbose=False):
-    signature = inspect.signature(func)
+# def inspect_function_signature(func, verbose=False):
+#     signature = inspect.signature(func)
 
-    # Initialize lists for parameters with and without default values
-    params_without_defaults = []
-    params_with_defaults = []
-    defaults = []
+#     # Initialize lists for parameters with and without default values
+#     params_without_defaults = []
+#     params_with_defaults = []
+#     defaults = []
 
-    # Iterate over the parameters
-    for name, param in signature.parameters.items():
-        if param.default == inspect.Parameter.empty:
-            params_without_defaults.append(name)
-        else:
-            params_with_defaults.append(name)
-            defaults.append(param.default)
+#     # Iterate over the parameters
+#     for name, param in signature.parameters.items():
+#         if param.default == inspect.Parameter.empty:
+#             params_without_defaults.append(name)
+#         else:
+#             params_with_defaults.append(name)
+#             defaults.append(param.default)
 
-    if verbose:
-        # Print the results
-        print("Parameters without default values:", params_without_defaults)
-        print("Parameters with default values:", params_with_defaults)
-        print("Default values:", defaults)
+#     if verbose:
+#         # Print the results
+#         print("Parameters without default values:", params_without_defaults)
+#         print("Parameters with default values:", params_with_defaults)
+#         print("Default values:", defaults)
 
-    return params_without_defaults, params_with_defaults, defaults
+#     return params_without_defaults, params_with_defaults, defaults
 
 
 def dict_to_argv(params_without_defaults, params_with_defaults, defaults, param_dict):
@@ -165,14 +165,14 @@ def dict_to_argv(params_without_defaults, params_with_defaults, defaults, param_
     return output
 
 
-def generate_argv(func, config_dict):
-    params_without_defaults, params_with_defaults, defaults = (
-        inspect_function_signature(func)
-    )
-    argv_list = dict_to_argv(
-        params_without_defaults, params_with_defaults, defaults, config_dict
-    )
-    return argv_list
+# def generate_argv(func, config_dict):
+#     params_without_defaults, params_with_defaults, defaults = (
+#         inspect_function_signature(func)
+#     )
+#     argv_list = dict_to_argv(
+#         params_without_defaults, params_with_defaults, defaults, config_dict
+#     )
+#     return argv_list
 
 
 def cmd_message(msglbl):
