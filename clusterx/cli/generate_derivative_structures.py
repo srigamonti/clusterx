@@ -107,6 +107,8 @@ def generate_derivative_structures(
     per_formula_unit: bool = False,
     linear_reference: Optional[List[List[float]]] = None,
     mask_name: Optional[str] = None,
+    n_lowest: Optional[int] = 1,
+    n_random: Optional[int] = 0,
     task: str = "do_full_enumeration",
 ):
     """Generate derivative structures"""
@@ -188,6 +190,9 @@ def generate_derivative_structures(
         case "mark_lowest_property_per_concentration":
             _do_mark_lowest(property_label, mask_name, dss_filepath)
 
+        case "mark_lowest_and_random_properties_per_concentration":
+            _do_mark_lowest_and_random(property_label, mask_name, dss_filepath, n_lowest, n_random)
+
         case "convert_to_sset":
             # Requires
             # task = "convert_to_sset"
@@ -259,6 +264,38 @@ def _do_mark_lowest(property_name, mask_name, dss_filepath):
     with open(dss_filepath, "wb") as f:
         pickle.dump(dss, f)
 
+def _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest, n_random):
+    """
+    Group by fractional concentration;
+    then mark the n_lowest configurations with lowest properties per concentration and 
+    n_random configurations per concentration.
+    This function is intended to be used with binary materials only
+
+    Creates a mask in the DSS object
+    """
+    import pandas as pd
+    with open(dss_filepath, "rb") as f:
+        dss = pickle.load(f)
+
+    dss.add_fractional_concentration_binary()
+    df = dss.configurations
+
+    # Group by 'fronc_binary' and sort each group by 'property'
+    grouped = df.groupby("frconc_binary", group_keys=False)
+    sorted_groups = grouped.apply(lambda x: x.sort_values(property_name))
+
+    # select the n_lowest configurations with lowest property values per concentration
+    marked_ids = sorted_groups.groupby("frconc_binary").head(n_lowest)["config_id"]
+    # sample selects n_random random configurations; If for a specific concentration there is less than
+    # n_random configurations the number of available configurations is chosen for n
+    marked_ids2 = sorted_groups.groupby("frconc_binary").apply(lambda x: x.sample(n=min(n_random, len(x))))["config_id"]
+    # concatenate the marked ids and exclude duplicates
+    combined_ids = pd.concat([marked_ids, marked_ids2]).drop_duplicates()
+
+    dss.masks[mask_name] = combined_ids.to_numpy()
+
+    with open(dss_filepath, "wb") as f:
+        pickle.dump(dss, f)
 
 def _do_full_enumeration(
     plat: ParentLattice,
