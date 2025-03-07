@@ -488,14 +488,11 @@ class ClustersPool:
             desc="INFO(clusters_pool): Finding wyckoff sites",
             disable=disable_tqdm,
         ):
-            sigmas = np.zeros(natoms, dtype="int")
-            np.put(sigmas, idx, [1])
-
             if idx not in full_list:
                 wyck_idxs.add(idx)
 
             for per in symper:
-                full_list.add(sigmas[np.ix_(per)].nonzero()[0][0])
+                full_list.add(per[idx])
 
         # Determine set of indices compatible with given radii
         idxs_sets = []
@@ -932,7 +929,7 @@ class ClustersPool:
           symmetries of the space group of the parent lattice, but only those which correspond to
           configurations that can be relized in the supercell.
 
-        The output verifies the relation :math:`n_{SC} m_r = \sum_i w_i`,
+        The output verifies the relation :math:`n_{SC} m_r = \\sum_i w_i`,
         with :math:`n_{SC}` the "index" of the supercell (*i.e.* :math:`n_{SC}=N_{SC}/N_{pl}`, with
         :math:`N_{SC}` the number of atoms in the supercell and :math:`N_{pl}` the number of atoms in the
         parent lattice), :math:`m_r` the reduced
@@ -1064,7 +1061,6 @@ class ClustersPool:
         rtol = 1e-3
         cld = self.get_cpool_dict()
         prim_cell = self._plat.get_cell()
-        # scell = self.get_containing_supercell()
         scell = self._cpool_scell
 
         call(["rm", "-f", fname])
@@ -1274,7 +1270,7 @@ class ClusterOrbit(ClustersPool):
           symmetries of the space group of the parent lattice, but only those which correspond to
           configurations that can be relized in the supercell.
 
-        The output verifies the relation :math:`n_{SC} m_r = \sum_i w_i`,
+        The output verifies the relation :math:`n_{SC} m_r = \\sum_i w_i`,
         with :math:`n_{SC}` the "index" of the supercell (*i.e.* :math:`n_{SC}=N_{SC}/N_{pl}`, with
         :math:`N_{SC}` the number of atoms in the supercell and :math:`N_{pl}` the number of atoms in the
         parent lattice), :math:`m_r` the reduced
@@ -1452,7 +1448,7 @@ class ClusterOrbit(ClustersPool):
           symmetries of the space group of the parent lattice, but only those which correspond to
           configurations that can be relized in the supercell.
 
-        The output verifies the relation :math:`n_{SC} m_r = \sum_i w_i`,
+        The output verifies the relation :math:`n_{SC} m_r = \\sum_i w_i`,
         with :math:`n_{SC}` the "index" of the supercell (*i.e.* :math:`n_{SC}=N_{SC}/N_{pl}`, with
         :math:`N_{SC}` the number of atoms in the supercell and :math:`N_{pl}` the number of atoms in the
         parent lattice), :math:`m_r` the reduced
