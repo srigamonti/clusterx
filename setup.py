@@ -9,6 +9,7 @@ setup(
     author_email="srigamonti@physik.hu-berlin.de",
     license="http://www.apache.org/licenses/LICENSE-2.0",
     packages=find_packages(),
+    python_requires='>=3.10',
     install_requires=[
         "numpy",
         "scipy",
