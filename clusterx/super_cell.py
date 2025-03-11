@@ -207,7 +207,6 @@ class SuperCell(ParentLattice):
         tra = sym["translations"]
 
         _sym_perm = []
-        # for r,t_ in zip(rot,internal_trans):
         for r, t_ in zip(rot, tra):
             t = np.round(t_, decimals=8)
             ts = np.tile(
@@ -235,7 +234,6 @@ class SuperCell(ParentLattice):
             self.sym_perm = np.unique(_sym_perm, axis=0)
         else:
             self.sym_perm_platt = np.unique(_sym_perm, axis=0)
-        # self.sym_perm = _sym_perm
 
     def get_sym_perm(self, include_sc_trans=True):
         if include_sc_trans:
@@ -252,7 +250,7 @@ class SuperCell(ParentLattice):
                 return self.sym_perm_platt
 
     def get_sym(self):
-        """Get space symmetry of a ParentLattice object."""
+        """Get space symmetry of the super cell."""
         try:
             return self.sc_sg, self.sc_sym
         except:
@@ -260,7 +258,7 @@ class SuperCell(ParentLattice):
             return self.sc_sg, self.sc_sym
 
     def get_sym_platt(self):
-        """Get space symmetry of a ParentLattice object."""
+        """Get space symmetry of the parent lattice."""
         try:
             return self.sc_sg_pl, self.sc_sym_pl
         except:
