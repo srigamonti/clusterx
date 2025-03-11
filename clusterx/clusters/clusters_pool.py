@@ -143,10 +143,10 @@ class ClustersPool:
             self._cpool_dict = {}
 
             # Determine which supercell will be used to build the clusters pool
-            if isinstance(super_cell, SuperCell) or isinstance(
-                super_cell, ParentLattice
-            ):
+            if isinstance(super_cell, SuperCell):
                 self._cpool_scell = super_cell
+            elif isinstance(super_cell, ParentLattice):
+                self._cpool_scell = SuperCell(parent_lattice, np.diag([1, 1, 1]))
             elif (self._npoints < 2).all():
                 self._cpool_scell = SuperCell(parent_lattice, np.diag([1, 1, 1]))
             elif super_cell is None and len(radii) != 0:
@@ -173,7 +173,6 @@ class ClustersPool:
 
     def set_radii(self, npoints=[], radii=[]):
         eps = 1.0e-8
-        scell = self._cpool_scell
         self._radii = np.array(radii, dtype=float)
 
         dmax = np.around(np.amax(self._sdistances), decimals=3)
