@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021, CELL Developers.
+# Copyright (c) 2015-2025, CELL Developers.
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
@@ -7,19 +7,23 @@ from ase import Atoms
 import numpy as np
 from ase.data import atomic_numbers as an
 
+from ase.io import write
+import warnings
+
+
 class Structure(SuperCell):
     """Structure class
 
     A ``Structure`` object is a :class:`SuperCell <clusterx.super_cell.SuperCell>` object augmented by an array of species numbers (or symbols). This array
     indicates a particular configuration of the :class:`SuperCell <clusterx.super_cell.SuperCell>` (a *"decoration"*), in a way which is compatible with
-    the sublattices defined in the :class:`SuperCell <clusterx.super_cell.SuperCell>` object. 
+    the sublattices defined in the :class:`SuperCell <clusterx.super_cell.SuperCell>` object.
 
     The ``Structure`` class inherits from the :class:`SuperCell <clusterx.super_cell.SuperCell>` class. Therefore, all methods available to the
-    :class:`SuperCell <clusterx.super_cell.SuperCell>` class (and to the :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` 
+    :class:`SuperCell <clusterx.super_cell.SuperCell>` class (and to the :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>`
     class, from which :class:`SuperCell <clusterx.super_cell.SuperCell>` inherits) are available
-    to the ``Structure`` class. Therefore, look at the documentation of the classes :class:`SuperCell <clusterx.super_cell.SuperCell>` 
+    to the ``Structure`` class. Therefore, look at the documentation of the classes :class:`SuperCell <clusterx.super_cell.SuperCell>`
     and :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` for additional methods for the ``Structure`` class.
-   
+
     **Parameters:**
 
     ``super_cell``: SuperCell object
@@ -34,13 +38,13 @@ class Structure(SuperCell):
         representation of a *decoration* is by indicating the ordinal number of the
         corresponding species. For instance, if the "sites"-based representation of the SuperCell
         is ``{0: [10,11], 1: [25], 2: [12,25]}`` (*), then equivalent structures are obtained with
-        ``decoration = [10,25,25]`` or ``decoration_symbols = ["Ne","Mn","Mn"]`` or ``sigmas = [0,0,1]``. 
+        ``decoration = [10,25,25]`` or ``decoration_symbols = ["Ne","Mn","Mn"]`` or ``sigmas = [0,0,1]``.
         If not ``None``, ``sigmas`` overrides ``decoration`` and ``decoration_symbols``.
     ``mc``: Boolean (default: ``False``)
         whether the initialization of the ``Structure`` object is in the context of a Monte Carlo (MC) run. Setting it to ``True``
         affects the behavior of the method :py:meth:`Structure.swap_random_binary() <clusterx.structure.Structure.swap_random_binary>`
 
-        (*) This means, crystal site ``0`` can host any of the species ``10`` (Neon) or ``11`` (Sodium), etc. 
+        (*) This means, crystal site ``0`` can host any of the species ``10`` (Neon) or ``11`` (Sodium), etc.
         See, e.g., :py:meth:`ParentLattice.get_sites() <clusterx.parent_lattice.ParentLattice.get_sites()>`.
 
     .. todo::
@@ -48,7 +52,8 @@ class Structure(SuperCell):
 
     **Methods:**
     """
-    def __init__(self, super_cell, decoration = None, decoration_symbols=None, sigmas = None, mc = False):
+
+    def __init__(self, super_cell, decoration=None, decoration_symbols=None, sigmas=None, mc=False):
         self.scell = super_cell
         self.sites = super_cell.get_sites()
         self._pbc = super_cell.get_pbc()
@@ -62,8 +67,8 @@ class Structure(SuperCell):
                     self.decor.append(an[s])
                 decoration = self.decor
 
-            self.sigmas = np.zeros(len(decoration),dtype=np.int8)
-            self.ems = np.zeros(len(decoration),dtype=np.int8)
+            self.sigmas = np.zeros(len(decoration), dtype=np.int8)
+            self.ems = np.zeros(len(decoration), dtype=np.int8)
 
             for idx, species in enumerate(decoration):
                 if species not in self.sites[idx]:
@@ -73,17 +78,22 @@ class Structure(SuperCell):
                 self.sigmas[idx] = np.argwhere(self.sites[idx] == species)
                 self.ems[idx] = len(self.sites[idx])
         else:
-            self.decor = np.zeros(len(sigmas),dtype=np.int8)
-            self.ems = np.zeros(len(sigmas),dtype=np.int8)
+            self.decor = np.zeros(len(sigmas), dtype=np.int8)
+            self.ems = np.zeros(len(sigmas), dtype=np.int8)
             self.sigmas = sigmas
             for idx, sigma in enumerate(sigmas):
                 self.decor[idx] = self.sites[idx][sigma]
                 self.ems[idx] = len(self.sites[idx])
 
-
-        self.atoms = Atoms(numbers = self.decor, positions = super_cell.get_positions(), tags = super_cell.get_tags(), cell = super_cell.get_cell(),pbc = super_cell.get_pbc())
-        super(Structure,self).__init__(super_cell.get_parent_lattice(),super_cell.get_transformation())
-        #self.set_atomic_numbers(self.decor)
+        self.atoms = Atoms(
+            numbers=self.decor,
+            positions=super_cell.get_positions(),
+            tags=super_cell.get_tags(),
+            cell=super_cell.get_cell(),
+            pbc=super_cell.get_pbc(),
+        )
+        super(Structure, self).__init__(super_cell.get_parent_lattice(), super_cell.get_transformation())
+        # self.set_atomic_numbers(self.decor)
 
         self._mc = mc
 
@@ -91,48 +101,48 @@ class Structure(SuperCell):
             self._idxs = {}
             self._comps = {}
 
-            tags=self.get_tags()
+            tags = self.get_tags()
             sublats = self.get_idx_subs()
             for key in sublats.keys():
-                idxs=[]
-                lens=[]
-                for i,el in enumerate(sublats[key]):
-                    idx =  [index for index in range(len(self.decor)) if self.sigmas[index] == i and tags[index] == key]
+                idxs = []
+                lens = []
+                for i, el in enumerate(sublats[key]):
+                    idx = [index for index in range(len(self.decor)) if self.sigmas[index] == i and tags[index] == key]
                     l = len(idx)
                     idxs.append(idx)
                     lens.append(l)
-                self._idxs.update({key:idxs})
-                self._comps.update({key:lens})
-                
+                self._idxs.update({key: idxs})
+                self._comps.update({key: lens})
+
         self.precision_positions = 5
 
     def _get_roundpos(self):
-        return np.around(self.get_positions(),decimals=self.precision_positions)
+        return np.around(self.get_positions(), decimals=self.precision_positions)
 
     def _get_roundcell(self):
-        return np.around(self.get_cell(),decimals=self.precision_positions)
+        return np.around(self.get_cell(), decimals=self.precision_positions)
 
     def __repr__(self):
         tokens = []
 
-        tokens.append('pbc={0}'.format(self._pbc))
-        
+        tokens.append("pbc={0}".format(self._pbc))
+
         cell = self._get_roundcell()
-        tokens.append('cell={0}'.format(cell.tolist()))
+        tokens.append("cell={0}".format(cell.tolist()))
 
         pos = self._get_roundpos()
-        tokens.append('pos_car={0}'.format(pos.tolist()))
+        tokens.append("pos_car={0}".format(pos.tolist()))
 
         decor = self.decor
-        tokens.append('at_nrs={0}'.format(decor))
-        
-        return '{0}({1})'.format(self.__class__.__name__, ', '.join(tokens))
-        
+        tokens.append("at_nrs={0}".format(decor))
+
+        return "{0}({1})".format(self.__class__.__name__, ", ".join(tokens))
+
     def __hash__(self):
-        #sp = self._get_roundpos()
-        #fingerprint = str(list(zip(sp,self.decor)))
+        # sp = self._get_roundpos()
+        # fingerprint = str(list(zip(sp,self.decor)))
         return hash(self.__repr__())
-    
+
     def __eq__(self, other):
         spbc = self.pbc
         opbc = other.pbc
@@ -140,17 +150,18 @@ class Structure(SuperCell):
         ocell = other._get_roundcell()
         spos = self._get_roundpos()
         opos = other._get_roundpos()
-        
-        return (self.__class__ == other.__class__ and
-                np.array_equal(spbc,opbc) and
-                np.array_equal(scell,ocell) and
-                np.array_equal(spos,opos) and
-                np.array_equal(self.decor,other.decor))
+
+        return (
+            self.__class__ == other.__class__
+            and np.array_equal(spbc, opbc)
+            and np.array_equal(scell, ocell)
+            and np.array_equal(spos, opos)
+            and np.array_equal(self.decor, other.decor)
+        )
 
     def set_calculator(self, calculator):
-        """Set Calculator object for structure.
-        """
-        #super(Structure,self).set_calculator(calculator)
+        """Set Calculator object for structure."""
+        # super(Structure,self).set_calculator(calculator)
         self._calc = calculator
         self.atoms.set_calculator(calculator)
 
@@ -158,28 +169,23 @@ class Structure(SuperCell):
         return super(Structure, self).get_positions(wrap, **wrap_kw)
 
     def get_sigmas(self):
-        """Return decoration array in terms of sigma variables.
-        """
+        """Return decoration array in terms of sigma variables."""
         return self.sigmas
 
     def get_supercell(self):
-        """Return SuperCell member of the Structure
-        """
+        """Return SuperCell member of the Structure"""
         return self.scell
 
     def get_atoms(self):
-        """Get Atoms object corresponding to the Structure object
-        """
+        """Get Atoms object corresponding to the Structure object"""
         return self.atoms
 
     def get_atomic_numbers(self):
-        """Get decoration array
-        """
+        """Get decoration array"""
         return self.atoms.get_atomic_numbers()
 
     def get_chemical_symbols(self):
-        """Get decoration array
-        """
+        """Get decoration array"""
         return self.atoms.get_chemical_symbols()
 
     """
@@ -190,33 +196,34 @@ class Structure(SuperCell):
     """
 
     def serialize(self, fmt="json", filepath="structure.json", fname=None):
-        """Serialize structure object
+        """Save the structure to a file in the specified format.
 
-        Wrapper for ASEs write method.
+        Parameters
+        ----------
+        fmt : str, optional
+            File format for output (default is "json"). All formats supported by
+            ``ase.io.write()`` are accepted. See:
+            https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write
 
-        **Parameters:**
+        filepath : str, optional
+            Path to the output file (default is "structure.json").
 
-        ``fmt``: string (default: ``json``)
-            Indicate the file format of the output file. All the formats
-            accepted by ``ase.io.write()`` method are valid (see corresponding
-            documentation in https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write).
-
-        ``filepath``: string (default: ``structure.json``)
-            absolute or relative path where serialized structure is saved.
-
-        ``fname``: string (default: ``None``)
-            DEPRECATED, use filepath instead. File name (may includ absolute or relative path).
+        fname : str, optional
+            DEPRECATED. Use ``filepath`` instead. This argument will be removed in
+            a future version.
         """
-        from ase.io import write
-
         if fname is not None:
+            warnings.warn(
+                "'fname' is deprecated and will be removed in a future version. " "Please use 'filepath' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             filepath = fname
-        
-        write(filepath,images=self.atoms,format=fmt)
 
+        write(filepath, images=self.atoms, format=fmt)
         self._fname = filepath
 
-    def swap_random_binary(self, site_type, sigma_swap = [0,1]):
+    def swap_random_binary(self, site_type, sigma_swap=[0, 1]):
         """Swap two randomly selected atoms in given sub-lattice.
 
         **Parameters:**
@@ -226,7 +233,7 @@ class Structure(SuperCell):
 
         ``sigma_swap``: two-component integer array (default: ``[0,1]``)
             Indicate which atomic species (represented by sigma variables) in the sublattice
-            are swapped. E.g., in the case of a binary, this can only be ``[0,1]``, while 
+            are swapped. E.g., in the case of a binary, this can only be ``[0,1]``, while
             for a ternary, this can be ``[0,1]``, ``[0,2]``, ``[1,2]`` (and, obviously, the exchanged ones, e.g. ``[1,0]``).
 
         **Return:**
@@ -236,19 +243,27 @@ class Structure(SuperCell):
             rind2 = np.random.choice(range(self._comps[site_type][sigma_swap[1]]))
             ridx1 = self._idxs[site_type][sigma_swap[0]][rind1]
             ridx2 = self._idxs[site_type][sigma_swap[1]][rind2]
-            rindices = [sigma_swap,[rind1,rind2]]
-            self.swap(ridx1, ridx2, site_type = site_type,rindices = rindices)
+            rindices = [sigma_swap, [rind1, rind2]]
+            self.swap(ridx1, ridx2, site_type=site_type, rindices=rindices)
 
-            return ridx1,ridx2,site_type,rindices
+            return ridx1, ridx2, site_type, rindices
         else:
-            tags=self.get_tags()
-            idx1 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[0] and tags[index] == site_type]
-            idx2 = [index for index in range(len(self.decor)) if self.sigmas[index] == sigma_swap[1] and tags[index] == site_type]
+            tags = self.get_tags()
+            idx1 = [
+                index
+                for index in range(len(self.decor))
+                if self.sigmas[index] == sigma_swap[0] and tags[index] == site_type
+            ]
+            idx2 = [
+                index
+                for index in range(len(self.decor))
+                if self.sigmas[index] == sigma_swap[1] and tags[index] == site_type
+            ]
             ridx1 = np.random.choice(idx1)
             ridx2 = np.random.choice(idx2)
-            self.swap(ridx1,ridx2)
-            
-            return ridx1,ridx2
+            self.swap(ridx1, ridx2)
+
+            return ridx1, ridx2
 
     def swap_random(self, site_types):
         """Swap two randomly selected atoms in randomly selected sub-lattice.
@@ -276,11 +291,11 @@ class Structure(SuperCell):
         else:
             sigma_swap = np.arange(len_subs)
 
-        return self.swap_random_binary(site_type, sigma_swap = sigma_swap)
+        return self.swap_random_binary(site_type, sigma_swap=sigma_swap)
 
-    def swap(self, ridx1, ridx2, site_type = None, rindices = None):
-        sigma1=self.sigmas[ridx1]
-        sigma2=self.sigmas[ridx2]
+    def swap(self, ridx1, ridx2, site_type=None, rindices=None):
+        sigma1 = self.sigmas[ridx1]
+        sigma2 = self.sigmas[ridx2]
 
         self.sigmas[ridx1] = sigma2
         self.sigmas[ridx2] = sigma1
@@ -293,9 +308,8 @@ class Structure(SuperCell):
             self._idxs[site_type][rindices[0][0]][rindices[1][0]] = ridx2
             self._idxs[site_type][rindices[0][1]][rindices[1][1]] = ridx1
 
-            #a = sorted(self._idxs[site_type][rindices[0][0]])
-            #b = sorted(self._idxs[site_type][rindices[0][1]])
-
+            # a = sorted(self._idxs[site_type][rindices[0][0]])
+            # b = sorted(self._idxs[site_type][rindices[0][1]])
 
     def update_decoration(self, decoration):
         """Update decoration of the structure object
@@ -305,7 +319,7 @@ class Structure(SuperCell):
         ``decoration``:
         """
         self.decor = decoration
-        self.sigmas = np.zeros(len(decoration),dtype=np.int8)
+        self.sigmas = np.zeros(len(decoration), dtype=np.int8)
         for idx, species in enumerate(decoration):
             self.sigmas[idx] = np.argwhere(self.sites[idx] == species)
 
@@ -326,15 +340,15 @@ class Structure(SuperCell):
         up to :math:`1`.
         """
 
-        #scell = self.get_supercell()
-        #plat = scell.get_parent_lattice()
+        # scell = self.get_supercell()
+        # plat = scell.get_parent_lattice()
 
         concentration = {}
 
         substutitional_site_types = self.get_substitutional_tags()
         idx_subs = self.get_idx_subs()
         nsites_per_type = self.get_nsites_per_type()
-        #sigmas = self.get_sigmas()
+        # sigmas = self.get_sigmas()
         numbers = self.get_atomic_numbers()
 
         for site_type in substutitional_site_types:
@@ -343,6 +357,6 @@ class Structure(SuperCell):
             atom_indices = self.get_atom_indices_for_site_type(site_type)
             for spnr in idx_subs[site_type]:
                 n = np.array(numbers[atom_indices]).tolist().count(spnr)
-                concentration[site_type].append(n/nsites)
+                concentration[site_type].append(n / nsites)
 
         return concentration
