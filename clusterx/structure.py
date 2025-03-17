@@ -14,15 +14,20 @@ import warnings
 class Structure(SuperCell):
     """Structure class
 
-    A ``Structure`` object is a :class:`SuperCell <clusterx.super_cell.SuperCell>` object augmented by an array of species numbers (or symbols). This array
-    indicates a particular configuration of the :class:`SuperCell <clusterx.super_cell.SuperCell>` (a *"decoration"*), in a way which is compatible with
+    A ``Structure`` object is a :class:`SuperCell <clusterx.super_cell.SuperCell>` object augmented by
+    an array of species numbers (or symbols). This array indicates a particular configuration of
+    the :class:`SuperCell <clusterx.super_cell.SuperCell>` (a *"decoration"*), in a way which is compatible with
     the sublattices defined in the :class:`SuperCell <clusterx.super_cell.SuperCell>` object.
 
-    The ``Structure`` class inherits from the :class:`SuperCell <clusterx.super_cell.SuperCell>` class. Therefore, all methods available to the
-    :class:`SuperCell <clusterx.super_cell.SuperCell>` class (and to the :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>`
+    The ``Structure`` class inherits from the :class:`SuperCell <clusterx.super_cell.SuperCell>` class.
+    Therefore, all methods available to the
+    :class:`SuperCell <clusterx.super_cell.SuperCell>` class
+    (and to the :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>`
     class, from which :class:`SuperCell <clusterx.super_cell.SuperCell>` inherits) are available
-    to the ``Structure`` class. Therefore, look at the documentation of the classes :class:`SuperCell <clusterx.super_cell.SuperCell>`
-    and :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` for additional methods for the ``Structure`` class.
+    to the ``Structure`` class. Therefore, look at the documentation of the classes :class:`SuperCell
+    <clusterx.super_cell.SuperCell>`
+    and :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` for additional methods for the
+    ``Structure`` class.
 
     **Parameters:**
 
@@ -41,14 +46,17 @@ class Structure(SuperCell):
         ``decoration = [10,25,25]`` or ``decoration_symbols = ["Ne","Mn","Mn"]`` or ``sigmas = [0,0,1]``.
         If not ``None``, ``sigmas`` overrides ``decoration`` and ``decoration_symbols``.
     ``mc``: Boolean (default: ``False``)
-        whether the initialization of the ``Structure`` object is in the context of a Monte Carlo (MC) run. Setting it to ``True``
-        affects the behavior of the method :py:meth:`Structure.swap_random_binary() <clusterx.structure.Structure.swap_random_binary>`
+        whether the initialization of the ``Structure`` object is in the context of a Monte Carlo (MC) run.
+        Setting it to ``True``
+        affects the behavior of the method :py:meth:`Structure.swap_random_binary()
+        <clusterx.structure.Structure.swap_random_binary>`
 
         (*) This means, crystal site ``0`` can host any of the species ``10`` (Neon) or ``11`` (Sodium), etc.
         See, e.g., :py:meth:`ParentLattice.get_sites() <clusterx.parent_lattice.ParentLattice.get_sites()>`.
 
     .. todo::
-        * check input. If a structure is initialized with a non-allowed substitutional species, and error should be raised.
+        * check input. If a structure is initialized with a non-allowed substitutional species, and error
+        should be raised.
 
     **Methods:**
     """
@@ -108,9 +116,9 @@ class Structure(SuperCell):
                 lens = []
                 for i, el in enumerate(sublats[key]):
                     idx = [index for index in range(len(self.decor)) if self.sigmas[index] == i and tags[index] == key]
-                    l = len(idx)
+                    lidx = len(idx)
                     idxs.append(idx)
-                    lens.append(l)
+                    lens.append(lidx)
                 self._idxs.update({key: idxs})
                 self._comps.update({key: lens})
 
@@ -224,7 +232,7 @@ class Structure(SuperCell):
         self._fname = filepath
 
     def swap_random_binary(self, site_type, sigma_swap=[0, 1]):
-        """Swap two randomly selected atoms in given sub-lattice.
+        r"""Swap two randomly selected atoms in given sub-lattice.
 
         **Parameters:**
 
@@ -234,11 +242,12 @@ class Structure(SuperCell):
         ``sigma_swap``: two-component integer array (default: ``[0,1]``)
             Indicate which atomic species (represented by sigma variables) in the sublattice
             are swapped. E.g., in the case of a binary, this can only be ``[0,1]``, while
-            for a ternary, this can be ``[0,1]``, ``[0,2]``, ``[1,2]`` (and, obviously, the exchanged ones, e.g. ``[1,0]``).
+            for a ternary, this can be ``[0,1]``, ``[0,2]``, ``[1,2]`` (and, obviously,
+            the exchanged ones, e.g. ``[1,0]``).
 
         **Return:**
         """
-        if self._mc == True:
+        if self._mc is True:
             rind1 = np.random.choice(range(self._comps[site_type][sigma_swap[0]]))
             rind2 = np.random.choice(range(self._comps[site_type][sigma_swap[1]]))
             ridx1 = self._idxs[site_type][sigma_swap[0]][rind1]
@@ -326,7 +335,7 @@ class Structure(SuperCell):
         self.atoms.set_atomic_numbers(self.decor)
 
     def get_fractional_concentrations(self):
-        """Get fractional concentration of each species on each sublattice
+        r"""Get fractional concentration of each species on each sublattice
 
         This function returns a dictionary. The keys of the dictionary, denoted
         with :math:`t`, are the site types that admit substitution (i.e., those returned
