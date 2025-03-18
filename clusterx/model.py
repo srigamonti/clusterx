@@ -29,7 +29,7 @@ class Model:
     ecis : List[float], optional
         Effective cluster interactions (multiplied by multiplicities). Overrides `estimator`.
     filepath : str, optional
-        Path to a JSON or pickle file containing a serialized Model object.
+        Path to a serialized model file (.json or .pickle). If provided, all other arguments are ignored.
     standardize : bool, default=False
         If True, standardizes input using `sklearn.preprocessing.StandardScaler`.
     """
@@ -261,9 +261,7 @@ class Model:
 
             return pv
 
-    def predict_swap(
-        self, structure, ind1=None, ind2=None, correlation=False, site_types=[0]
-    ):
+    def predict_swap(self, structure, ind1=None, ind2=None, correlation=False, site_types=[0]):
         """Predict property difference with the optimal cluster expansion model.
 
         **Parameters:**
@@ -317,9 +315,7 @@ class Model:
                     self._clusters_list[icl]["cluster_index"] = cluster_index
                     self._clusters_list[icl]["cluster_sites"] = cluster.get_idxs()
                     self._clusters_list[icl]["cluster_funcs"] = cluster.alphas
-                    self._clusters_list[icl]["cluster_ems"] = self._ems.take(
-                        cluster.get_idxs()
-                    )
+                    self._clusters_list[icl]["cluster_ems"] = self._ems.take(cluster.get_idxs())
 
                     icl += 1
 
@@ -333,9 +329,9 @@ class Model:
                 for icl in range(len(self._clusters_list)):
                     if ind in self._clusters_list[icl]["cluster_sites"]:
                         self._interactions_dict[ind]["interactions_list"].append(icl)
-                        self._interactions_dict[ind][
-                            "cluster_sites_index_for_ind"
-                        ].append(self._clusters_list[icl]["cluster_sites"].index(ind))
+                        self._interactions_dict[ind]["cluster_sites_index_for_ind"].append(
+                            self._clusters_list[icl]["cluster_sites"].index(ind)
+                        )
 
             if self.estimator is not None:
                 self._mc_estimator_intercept = self.estimator.intercept_
@@ -418,13 +414,9 @@ class Model:
                 if i == cluster_sites.index(ind):
                     cf *= self.corrc.site_basis_function(
                         cluster_funcs[i], new_sigma, cluster_ems[i]
-                    ) - self.corrc.site_basis_function(
-                        cluster_funcs[i], old_sigma, cluster_ems[i]
-                    )
+                    ) - self.corrc.site_basis_function(cluster_funcs[i], old_sigma, cluster_ems[i])
                 else:
-                    cf *= self.corrc.site_basis_function(
-                        cluster_funcs[i], sigmas[i], cluster_ems[i]
-                    )
+                    cf *= self.corrc.site_basis_function(cluster_funcs[i], sigmas[i], cluster_ems[i])
 
             corrs[cluster_index] += cf
 
@@ -434,10 +426,7 @@ class Model:
 
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
-            pv = (
-                self.estimator.predict(corrs.reshape(1, -1))[0]
-                - self.estimator.intercept_
-            )
+            pv = self.estimator.predict(corrs.reshape(1, -1))[0] - self.estimator.intercept_
             return pv
         else:
             pv = 0
@@ -552,9 +541,7 @@ class Model:
             cv=LeaveOneOut(),
             scoring="neg_mean_squared_error",
         )
-        pred_cv = cross_val_predict(
-            self.estimator, x_mat, y, params=params, cv=LeaveOneOut()
-        )
+        pred_cv = cross_val_predict(self.estimator, x_mat, y, params=params, cv=LeaveOneOut())
 
         absolute_errors = np.sqrt(-cvs)
         cv = np.sqrt(-np.mean(cvs))
@@ -750,21 +737,15 @@ class ModelBuilder:
 
         # Select optimal clusters using the clusters_selector module
         if self.selector != "identity":
-            self.selector = ClustersSelector(
-                basis=self.basis, method=self.selector_type, **self.selector_opts
-            )
-            self.opt_cpool = self.selector.select_clusters(
-                sset, cpool, prop, comat=self.ini_comat
-            )
+            self.selector = ClustersSelector(basis=self.basis, method=self.selector_type, **self.selector_opts)
+            self.opt_cpool = self.selector.select_clusters(sset, cpool, prop, comat=self.ini_comat)
             self.opt_comat = self.selector.optimal_comat
 
         self.opt_corrc = CorrelationsCalculator(self.basis, self.plat, self.opt_cpool)
 
         # Find out the ECIs using an estimator
         if not self.standardize:
-            self.opt_estimator = EstimatorFactory.create(
-                self.estimator_type, **self.estimator_opts
-            )
+            self.opt_estimator = EstimatorFactory.create(self.estimator_type, **self.estimator_opts)
         else:
             from sklearn.preprocessing import StandardScaler
             from sklearn.pipeline import make_pipeline
