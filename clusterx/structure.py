@@ -2,13 +2,20 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from clusterx.super_cell import SuperCell
-from ase import Atoms
-import numpy as np
-from ase.data import atomic_numbers as an
+from __future__ import annotations
 
-from ase.io import write
+import os
+import pickle
 import warnings
+
+import numpy as np
+from ase import Atoms
+from ase.data import atomic_numbers as an
+from ase.db import connect
+from ase.io import write
+
+from clusterx.parent_lattice import ParentLattice
+from clusterx.super_cell import SuperCell
 
 
 class Structure(SuperCell):
@@ -80,7 +87,7 @@ class Structure(SuperCell):
 
             for idx, species in enumerate(decoration):
                 if species not in self.sites[idx]:
-                    raise AttributeError("CELL: decoration not compatible with parent lattice definition.")
+                    raise AttributeError("Error (Structure): decoration not compatible with parent lattice definition.")
 
             for idx, species in enumerate(decoration):
                 self.sigmas[idx] = np.argwhere(self.sites[idx] == species)
@@ -101,7 +108,6 @@ class Structure(SuperCell):
             pbc=super_cell.get_pbc(),
         )
         super(Structure, self).__init__(super_cell.get_parent_lattice(), super_cell.get_transformation())
-        # self.set_atomic_numbers(self.decor)
 
         self._mc = mc
 
@@ -123,6 +129,33 @@ class Structure(SuperCell):
                 self._comps.update({key: lens})
 
         self.precision_positions = 5
+
+    @classmethod
+    def from_file(cls, filepath: str) -> Structure:
+        file_ext = os.path.splitext(filepath)[1].lower()
+        if file_ext == ".pickle":
+            return cls._load_from_pickle(filepath)
+        elif file_ext == ".json":
+            return cls._load_from_json(filepath)
+        else:
+            raise ValueError(f"Unsupported file format: {file_ext}")
+
+    @staticmethod
+    def _load_from_pickle(filepath: str) -> Structure:
+        with open(filepath, "rb") as f:
+            return pickle.load(f)
+
+    @classmethod
+    def _load_from_json(cls, filepath: str) -> Structure:
+        from ase.db import connect
+
+        db = connect(filepath)
+        parent_lattice = ParentLattice.plat_from_dict(db.metadata.get("parent_lattice"))
+        tmat = db.get(id=1).data.tmat
+        super_cell = SuperCell(parent_lattice=parent_lattice, p=tmat)
+        numbers = db.get(id=1).toatoms().get_atomic_numbers()
+
+        return cls(super_cell=super_cell, decoration=numbers)
 
     def _get_roundpos(self):
         return np.around(self.get_positions(), decimals=self.precision_positions)
@@ -203,7 +236,7 @@ class Structure(SuperCell):
         return _atoms.get_potential_energy()
     """
 
-    def serialize(self, fmt="json", filepath="structure.json", fname=None):
+    def serialize(self, filepath="structure.json", fmt=None, fname=None):
         """Save the structure to a file in the specified format.
 
         Parameters
@@ -228,7 +261,21 @@ class Structure(SuperCell):
             )
             filepath = fname
 
-        write(filepath, images=self.atoms, format=fmt)
+        file_ext = os.path.splitext(filepath)[1].lower().lstrip(".")  # remove leading dot
+        fmt = fmt or file_ext  # use file extension as format if fmt is not provided
+
+        if fmt == "json":
+            db = connect(filepath, type="json", append=False)
+            data = {}
+            data["tmat"] = self.get_transformation()
+            db.write(self.atoms, data=data)
+            db.metadata = {"parent_lattice": self._plat.as_dict()}
+        elif fmt == "pickle":
+            with open(filepath, "wb") as f:
+                pickle.dump(self, f)
+        else:
+            write(filepath, images=self.atoms, format=fmt)
+
         self._fname = filepath
 
     def swap_random_binary(self, site_type, sigma_swap=[0, 1]):
