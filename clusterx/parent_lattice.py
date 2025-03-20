@@ -2,12 +2,14 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from ase import Atoms
-import numpy as np
 import copy
-from ase.db import connect
-from clusterx.symmetry import get_spacegroup
 import warnings
+
+import numpy as np
+from ase import Atoms
+from ase.db import connect
+
+from clusterx.symmetry import get_spacegroup
 
 
 def unique_non_sorted(a):
@@ -208,9 +210,7 @@ class ParentLattice(Atoms):
                     try:
                         unique_sites = np.unique(np.array(sites, dtype=object))
                     except AttributeError:
-                        raise AttributeError(
-                            "sites array has problems, look at the documentation."
-                        )
+                        raise AttributeError("sites array has problems, look at the documentation.")
 
             tags = np.zeros(self._natoms).astype(int)
             for ius, us in enumerate(unique_sites):
@@ -269,9 +269,7 @@ class ParentLattice(Atoms):
 
     def copy(self):
         """Return a copy."""
-        pl = self.__class__(
-            atoms=self._atoms, substitutions=self._subs, pbc=self.get_pbc()
-        )
+        pl = self.__class__(atoms=self._atoms, substitutions=self._subs, pbc=self.get_pbc())
 
         pl.arrays = {}
         for name, a in self.arrays.items():
@@ -305,8 +303,7 @@ class ParentLattice(Atoms):
             for atoms in substitutions:
                 if self._natoms != len(atoms):
                     raise ValueError(
-                        "Substitutions array has wrong length: %d != %d."
-                        % (len(self._atoms), len(substitutions))
+                        "Substitutions array has wrong length: %d != %d." % (len(self._atoms), len(substitutions))
                     )
                 else:
                     self._subs.append(atoms)
@@ -401,9 +398,7 @@ class ParentLattice(Atoms):
         unique_subs, tags = np.unique(all_numbers, axis=0, return_inverse=True)
         self.set_tags(tags)
 
-        self.idx_subs = {
-            i: unique_non_sorted(unique_subs[i]) for i in range(len(unique_subs))
-        }
+        self.idx_subs = {i: unique_non_sorted(unique_subs[i]) for i in range(len(unique_subs))}
         self.sites = {i: self.idx_subs[j] for i, j in enumerate(tags)}
 
     def get_substitutional_sites(self):
@@ -588,31 +583,15 @@ class ParentLattice(Atoms):
 
         sld = self.idx_subs
         cs = np.array(cs)
-        print(
-            "\n+--------------------------------------------------------------------+"
-        )
-        print(
-            "|{0:^68s}|".format(
-                "The structure consists of " + str(len(sld)) + " sublattices"
-            )
-        )
+        print("\n+--------------------------------------------------------------------+")
+        print("|{0:^68s}|".format("The structure consists of " + str(len(sld)) + " sublattices"))
         print("+--------------------------------------------------------------------+")
-        print(
-            "|{0:^17s}|{1:^30s}|{2:^19s}|".format(
-                "Sublattice type", "Chemical symbols", "Atomic numbers"
-            )
-        )
+        print("|{0:^17s}|{1:^30s}|{2:^19s}|".format("Sublattice type", "Chemical symbols", "Atomic numbers"))
         print("+--------------------------------------------------------------------+")
 
         for slind, slsps in self.idx_subs.items():
-            print(
-                "|{0:^17s}|{1:^30s}|{2:^19s}|".format(
-                    str(slind), str(cs[slsps]), str(slsps)
-                )
-            )
-        print(
-            "+--------------------------------------------------------------------+\n"
-        )
+            print("|{0:^17s}|{1:^30s}|{2:^19s}|".format(str(slind), str(cs[slsps]), str(slsps)))
+        print("+--------------------------------------------------------------------+\n")
 
     # Deprecated, use get_sublattice_types instead
     def get_idx_subs(self):
@@ -647,12 +626,12 @@ class ParentLattice(Atoms):
         prist = Atoms(positions=positions, numbers=numbers_pris, cell=cell, pbc=pbc)
         return ParentLattice(atoms=prist, numbers=numbers, pbc=pbc)
 
-    def plat_from_dict(dict):
+    def plat_from_dict(platdict):
         """Generates ParentLattice object from a dictionary as returned by ParentLattice.as_dict()"""
-        cell = np.array(dict["unit_cell"])
-        pbc = dict["pbc"]
-        positions = np.array(dict["positions"])
-        _numbers = dict["numbers"]
+        cell = np.array(platdict["unit_cell"])
+        pbc = platdict["pbc"]
+        positions = np.array(platdict["positions"])
+        _numbers = platdict["numbers"]
 
         numbers = np.zeros(len(positions), dtype=int)
         for site_index, nrs in _numbers.items():
