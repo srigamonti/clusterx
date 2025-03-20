@@ -10,6 +10,7 @@ import warnings
 
 import numpy as np
 from ase import Atoms
+from ase.cell import Cell
 from ase.data import atomic_numbers as an
 from ase.db import connect
 from ase.io import write
@@ -132,6 +133,31 @@ class Structure(SuperCell):
 
     @classmethod
     def from_file(cls, filepath: str) -> Structure:
+        """
+        Load a Structure object from a serialized file.
+
+        Supports both binary and JSON-based serialization formats. The file is expected
+        to have been created using the `Structure.serialize()` method.
+
+        Supported formats:
+        - `.pickle`: Full Python object serialization using `pickle`.
+        - `.json`  : ASE-compatible JSON database file.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the serialized file. The format is inferred from the file extension.
+
+        Returns
+        -------
+        Structure
+            A reconstructed Structure object based on the contents of the file.
+
+        Raises
+        ------
+        ValueError
+            If the file extension is not supported.
+        """
         file_ext = os.path.splitext(filepath)[1].lower()
         if file_ext == ".pickle":
             return cls._load_from_pickle(filepath)
@@ -154,6 +180,82 @@ class Structure(SuperCell):
         tmat = db.get(id=1).data.tmat
         super_cell = SuperCell(parent_lattice=parent_lattice, p=tmat)
         numbers = db.get(id=1).toatoms().get_atomic_numbers()
+
+        return cls(super_cell=super_cell, decoration=numbers)
+
+    @staticmethod
+    def _decode_ase_dict(d):
+        """
+        Recursively decode a dictionary exported from an ASE JSON database.
+
+        This method handles the reconstruction of NumPy arrays and ASE Cell objects
+        encoded using special keys such as ``"__ndarray__"`` and ``"__ase_objtype__"``.
+        It also converts string keys that represent integers back to integers where applicable.
+
+        Parameters
+        ----------
+        d : dict, list, or primitive
+            The object to decode. Can be a nested structure of dictionaries, lists, or
+            primitive types.
+
+        Returns
+        -------
+        Decoded Python object
+            A structure where all encoded NumPy arrays and ASE Cell objects are restored.
+        """
+        if isinstance(d, dict):
+            # Handle encoded NumPy arrays
+            if "__ndarray__" in d:
+                shape, dtype, flat_data = d["__ndarray__"]
+                return np.array(flat_data, dtype=dtype).reshape(shape)
+
+            # Handle ASE Cell object
+            if d.get("__ase_objtype__") == "cell":
+                array_data = Structure._decode_ase_dict(d["array"])
+                return Cell(array_data)
+
+            # Recursively decode nested dicts, and convert keys if possible
+            result = {}
+            for k, v in d.items():
+                try:
+                    k_int = int(k)
+                except (ValueError, TypeError):
+                    k_int = k
+                result[k_int] = Structure._decode_ase_dict(v)
+            return result
+
+        elif isinstance(d, list):
+            return [Structure._decode_ase_dict(item) for item in d]
+
+        else:
+            return d
+
+    @classmethod
+    def from_dict(cls, structure_dict: dict) -> Structure:
+        """
+        Create a Structure object from a dictionary object.
+
+        This method is used to reconstruct a Structure from a Python dictionary
+        that was obtained by loading a JSON file previously created using the
+        `Structure.serialize()` method.
+
+        Parameters
+        ----------
+        structure_dict : dict
+            A dictionary containing the deserialized structure data.
+
+        Returns
+        -------
+        Structure
+            An instance of the Structure class initialized with the given data.
+        """
+
+        structure_dict = Structure._decode_ase_dict(structure_dict)
+        parent_lattice = ParentLattice.plat_from_dict(structure_dict["metadata"]["parent_lattice"])
+        tmat = structure_dict[1]["data"]["tmat"]
+        numbers = structure_dict[1]["numbers"]
+
+        super_cell = SuperCell(parent_lattice=parent_lattice, p=tmat)
 
         return cls(super_cell=super_cell, decoration=numbers)
 
