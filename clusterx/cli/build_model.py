@@ -2,13 +2,14 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 from typing import Optional
+
 import plac
-from clusterx.correlations import CorrelationsCalculator
-from clusterx.structures_set import StructuresSet
+
+from clusterx.cli.config_utils import cmd_message, get_command_name
 from clusterx.clusters.clusters_pool import ClustersPool
-from clusterx.cli.config_utils import cmd_message
+from clusterx.correlations import CorrelationsCalculator
 from clusterx.model import ModelBuilder
-from clusterx.cli.config_utils import get_command_name
+from clusterx.structures_set import StructuresSet
 
 commands = ["build_model"]
 
@@ -94,9 +95,7 @@ def build_model(
     model = mb.build(sset, cpool, property_name, corrc=ccalc)
 
     if plot_optimization_vs_sparsity is not None:
-        print(
-            f"Info({get_command_name()}): Generating plot of optimization vs sparsity"
-        )
+        print(f"Info({get_command_name()}): Generating plot of optimization vs sparsity")
 
         from clusterx.visualization import plot_optimization_vs_sparsity as povs
 
