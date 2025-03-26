@@ -12,7 +12,8 @@ import json
 import requests
 import numpy as np
 from ase import Atoms
-from scipy.constants import electron_volt 
+from scipy.constants import electron_volt
+from clusterx.structure import Structure
 
 
 BASE_URL_NOMAD = 'http://nomad-lab.eu/prod/v1/api/v1/'
@@ -75,7 +76,7 @@ class SingleEntry:
             response_json = response.json()
             archive = response_json['data']['archive']
             return archive
-      
+   
         except requests.exceptions.RequestException as error:
             print('The request was not successful.'
                   'Check the NOMAD docs for information on the error code:')
@@ -116,9 +117,9 @@ class SingleEntry:
         )
         return atoms
 
-    def get_structure_object(self, filename: str='structure.json') -> dict:
+    def get_structure_object(self, filename: str = 'structure.json'):
         """
-        Returns the structure object as json file (dictionary).
+        Returns the CELL structure object of the entry.
         This requires that the structure object is saved as json file in the
         same directory as the associated run before uploading to NOMAD.
 
@@ -133,21 +134,16 @@ class SingleEntry:
                                     headers=self.headers)
             # check for HTTPErrors
             response.raise_for_status()
-            structure_json = json.loads(response.text)
-            return structure_json
-      
+            # load json file as json dictionary
+            structure_json_dict = json.loads(response.text)
+            # build structures object from json dictionary
+            structure_object = Structure.from_dict(structure_json_dict)
+            return structure_object
         except requests.exceptions.RequestException as error:
             print('The request was not successful.'
                   'Check the NOMAD docs for information on the error code:')
             print('https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#')
             print(f'The following error occured: {error}')
-
-        # note:
-        # Currently there is not yet an option in CELL to load a
-        # structures object via Structure(filepath="structure.json")
-        # When this is implemented the code here will be altered
-        # to return the structures object using the json file
-        # instead of just returning the contents of the json file
 
 
 class Dataset:
@@ -268,9 +264,13 @@ class Dataset:
 
     def get_structure_objects(self, filename='structure.json'):
         """
-        Returns the structure objects as list of json files.
-        This requires that the structure object is saved as json file in the
-        same directory as the associated run before uploading to NOMAD.
+        Returns a list of structure objects for the entrys in the dataset.
+        This requires that the structure objects are saved as json files in the
+        same directory as the associated runs before uploading to NOMAD.
+        The structure objects can also have a different filename, but it has to be 
+        the same filename for every entry in the dataset. If it is not, please use
+        get_structure_object of the SingleEntry class and specify the filename for 
+        each entry separately.
 
         **Parameters:**
         ``filename``: *string*
@@ -286,11 +286,13 @@ class Dataset:
                                         headers=self.headers)
                 # check for HTTPErrors
                 response.raise_for_status()
-                # load response content as json
-                structure_json = json.loads(response.text)
-                list_of_structures.append(structure_json)
+                # load response content as json dictionary
+                structure_json_dict = json.loads(response.text)
+                # build structure object from json dictionary
+                structure_object = Structure.from_dict(structure_json_dict)
+                # append structure to list of structures of the dataset
+                list_of_structures.append(structure_object)
             return list_of_structures
-      
         except requests.exceptions.RequestException as error:
             print('The request was not successful.'
                   'Check the NOMAD docs for information on the error code:')
