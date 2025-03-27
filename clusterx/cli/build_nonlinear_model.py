@@ -2,59 +2,31 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from typing import Optional
 import importlib
-import plac
-import numpy as np
-from clusterx.correlations import CorrelationsCalculator
-from clusterx.cli.config_utils import cmd_message
-from clusterx.cli.config_utils import get_command_name
-from clusterx.model import Model
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import (
-    StandardScaler,
-)
+from typing import Optional
 
+import numpy as np
+import plac
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+from clusterx.cli.config_utils import cmd_message, get_command_name
+from clusterx.correlations import CorrelationsCalculator
+from clusterx.model import Model
 
 commands = ["build_nonlinear_model"]
 
 
-@plac.pos(
-    "property_name",
-    help="Property to be modelled. Must be present in the StructuresSet object.",
+@plac.annotations(
+    property_name=("Property to be modelled. Must be present in the StructuresSet object.", "positional", None, str),
+    ccalc_filepath=("Path to the pickle file of a serialized CorrelationsCalculator object.", "option", None, str),
+    xp_filepath=("Path to the npz file of a serialized correlation matrix (from compute_comat).", "option", None, str),
+    model_filepath=("Path to serialize the created Model object.", "option", "mof", str),
+    regression_model=("Dictionary of estimator options.", "option", "rm", dict),
+    nonlinear_transformation=("Dictionary of nonlinear transformation settings.", "option", "nt", dict),
+    weights_filepath=("Sample weights for fitting and evaluating the weighted MSE.", "option", None, str),
+    standardize=("Standardize the input data.", "flag", "std", bool),
 )
-@plac.opt(
-    "ccalc_filepath",
-    help="Path to the pickle file of a serialized CorrelationsCalculator object.",
-)
-@plac.opt(
-    "xp_filepath",
-    help='Path to the npz file of a serialized matrix of correlations built with "compute_comat" command.',
-)
-@plac.opt(
-    "model_filepath",
-    abbrev="mof",
-    help="Path to serialize the created Model object.",
-)
-@plac.opt(
-    "regression_model",
-    abbrev="rm",
-    help="Estimator options.",
-    type=dict,
-)
-@plac.opt(
-    "nonlinear_transformation",
-    abbrev="nt",
-    help="Estimator options.",
-    type=dict,
-)
-@plac.opt(
-    "weights_filepath",
-    help="""
-        Sample weights for fitting the model and evaluating the weighted mean squared error.
-    """,
-)
-@plac.flg("standardize", abbrev="std", help="Standardize the input data.")
 def build_nonlinear_model(
     property_name: str,
     ccalc_filepath: str = "ccalc.pickle",

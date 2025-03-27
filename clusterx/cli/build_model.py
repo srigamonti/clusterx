@@ -14,55 +14,17 @@ from clusterx.structures_set import StructuresSet
 commands = ["build_model"]
 
 
-@plac.pos(
-    "property_name",
-    help="Property to be modelled. Must be present in the StructuresSet object.",
-)
-@plac.opt(
-    "ccalc_filepath",
-    abbrev="ccf",
-    help="Path to the pickle file of a serialized CorrelationsCalculator object.",
-)
-@plac.opt(
-    "sset_filepath",
-    abbrev="ssf",
-    help="Path to a serialized StructuresSet object.",
-)
-@plac.opt(
-    "cpool_filepath",
-    abbrev="cpf",
-    help="Path to a serialized ClustersPool object.",
-)
-@plac.opt(
-    "model_filepath",
-    abbrev="mof",
-    help="Path to serialize the created Model object.",
-)
-@plac.opt(
-    "selector_type",
-    abbrev="st",
-    help="Selector type.",
-)
-@plac.opt(
-    "selector_opts",
-    abbrev="so",
-    help="Selector options.",
-)
-@plac.opt(
-    "estimator_type",
-    abbrev="et",
-    help="Estimator type.",
-)
-@plac.opt(
-    "estimator_opts",
-    abbrev="eo",
-    help="Estimator options.",
-)
-@plac.opt(
-    "plot_optimization_vs_sparsity",
-    abbrev="plotovsd",
-    help="Dictionary.",
-    type=dict,
+@plac.annotations(
+    property_name=("Property to be modelled.", "positional", None, str),
+    ccalc_filepath=("Path to CorrelationsCalculator object.", "option", "ccf", str),
+    sset_filepath=("Path to StructuresSet object.", "option", "ssf", str),
+    cpool_filepath=("Path to ClustersPool object.", "option", "cpf", str),
+    model_filepath=("Output Model file path.", "option", "mof", str),
+    selector_type=("Selector type.", "option", "st", str),
+    selector_opts=("Selector options.", "option", "so", dict),
+    estimator_type=("Estimator type.", "option", "et", str),
+    estimator_opts=("Estimator options.", "option", "eo", dict),
+    plot_optimization_vs_sparsity=("Plot config.", "option", "plotovsd", dict),
 )
 def build_model(
     property_name: str,

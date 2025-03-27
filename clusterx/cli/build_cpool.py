@@ -2,22 +2,17 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from typing import List, Optional, Tuple, Union
 import plac
-from clusterx.structures_set import StructuresSet
-from clusterx.parent_lattice import ParentLattice
-from clusterx.super_cell import SuperCell
-from clusterx.clusters.clusters_pool import ClustersPool
-from clusterx.cli.config_utils import convert_to_float_list, convert_to_int_list
-from clusterx.cli.config_utils import cmd_message
 
-Int2DArray = List[List[int]]
-Int3Vector = Tuple[int, int, int]
-Int3Array = List[int]
-Int2x2Matrix = List[List[int]]
-Int3x3Matrix = List[List[int]]
-# Define the alias for the psc type
-PscType = Union[str, int, Int2DArray, Int3Vector, Int3Array, Int2x2Matrix, Int3x3Matrix]
+from clusterx.cli.config_utils import (
+    cmd_message,
+    convert_to_float_list,
+    convert_to_int_list,
+)
+from clusterx.clusters.clusters_pool import ClustersPool
+from clusterx.parent_lattice import ParentLattice
+from clusterx.structures_set import StructuresSet
+from clusterx.super_cell import SuperCell
 
 commands = ["build_cpool"]
 
@@ -42,12 +37,8 @@ commands = ["build_cpool"]
         For a precise definition look into the parameter p of the SuperCell class of CELL.
     """,
 )
-@plac.opt(
-    "method", abbrev="me", help="Method to use to find clusters.", choices=[1, 2, 3]
-)
-@plac.opt(
-    "cpool_filepath", help="Filepath where to store the generated pool of clusters."
-)
+@plac.opt("method", abbrev="me", help="Method to use to find clusters.", choices=[1, 2, 3])
+@plac.opt("cpool_filepath", help="Filepath where to store the generated pool of clusters.")
 @plac.opt(
     "vacancy_atomic_number",
     help="Look documentation for variable vacancy_atomic_number in ClustersPool class.",
@@ -61,17 +52,39 @@ commands = ["build_cpool"]
     """,
 )
 def build_cpool(
-    npoints: Union[List[int], str],
-    radii: Union[List[float], str],
-    sset_filepath: Optional[str] = None,
-    plat_filepath: Optional[str] = None,
-    psc: PscType = 1,
-    method: int = 1,
-    cpool_filepath: str = "cpool.json",
-    vacancy_atomic_number: int = 0,
-    mlims: Optional[List[int]] = None,
+    npoints,  # List[int] or str
+    radii,  # List[float] or str
+    sset_filepath=None,  # Optional[str]
+    plat_filepath=None,  # Optional[str]
+    psc=1,  # PscType (assumed int-like)
+    method=1,  # int
+    cpool_filepath="cpool.json",  # str
+    vacancy_atomic_number=0,  # int
+    mlims=None,  # Optional[List[int]]
 ):
-    """Build a pool of clusters"""
+    """
+    Build a pool of clusters.
+
+    Parameters:
+        npoints: A list of integers or a string representation of the list.
+        radii: A list of floats or a string representation of the list.
+        sset_filepath: Path to the structure set file (optional).
+        plat_filepath: Path to the platform file (optional).
+        psc: Point symmetry class or identifier (default: 1).
+        method: Method ID used to construct clusters (default: 1).
+        cpool_filepath: Output filepath for the cluster pool (default: "cpool.json").
+        vacancy_atomic_number: Atomic number for vacancy site (default: 0).
+        mlims: Limits on magnetic moments (optional list of ints).
+
+    Notes:
+        This function is exposed via the CLI and is parsed by the `plac` library.
+        For compatibility with `plac`, avoid using advanced type hints such as:
+            - typing.Union
+            - typing.Optional
+            - typing.List or other typing containers
+
+        Use plain Python types or default values instead.
+    """
     if isinstance(npoints, str):
         npoints = convert_to_int_list(npoints)
 
@@ -88,9 +101,7 @@ def build_cpool(
         plat = ParentLattice(filepath=plat_filepath)
 
     scell = SuperCell(plat, p=psc)
-    cpool = ClustersPool(
-        plat, npoints=npoints, radii=radii, super_cell=scell, method=method
-    )
+    cpool = ClustersPool(plat, npoints=npoints, radii=radii, super_cell=scell, method=method)
 
     if mlims is not None:
         multiplicities = cpool.get_multiplicities()
@@ -102,6 +113,4 @@ def build_cpool(
         cpool = cpool.get_subpool(cidxs)
 
     cpool.print_info()
-    cpool.serialize(
-        filepath=cpool_filepath, vacancy_atomic_number=vacancy_atomic_number
-    )
+    cpool.serialize(filepath=cpool_filepath, vacancy_atomic_number=vacancy_atomic_number)

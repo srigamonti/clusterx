@@ -3,18 +3,22 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 from typing import Optional
-import plac
+
 import numpy as np
-from clusterx.structures_set import StructuresSet
+import plac
+
 from clusterx.cli.config_utils import cmd_message
+from clusterx.structures_set import StructuresSet
 
 commands = ["find_lowest"]
 
 
-@plac.opt("sset_filepath")
-@plac.opt("property_name")
-@plac.opt("sset_higher_filepath", abbrev="ssh")
-@plac.opt("sset_lowest_filepath", abbrev="ssl")
+@plac.annotations(
+    sset_filepath=("Path to the serialized StructuresSet object.", "option", None, str),
+    property_name=("Name of the property used to determine the lowest structure(s).", "option", None, str),
+    sset_higher_filepath=("Path to store StructuresSet with non-lowest structures.", "option", "ssh", str),
+    sset_lowest_filepath=("Path to store StructuresSet with lowest structures.", "option", "ssl", str),
+)
 def find_lowest(
     sset_filepath: str = "sset.json",
     property_name: Optional[str] = None,

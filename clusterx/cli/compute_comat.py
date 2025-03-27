@@ -3,47 +3,33 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 from typing import Optional
-import plac
+
 import numpy as np
+import plac
+
+from clusterx.cli.config_utils import cmd_message, remove_trailing_extension
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.structures_set import StructuresSet
-from clusterx.cli.config_utils import cmd_message
-from clusterx.cli.config_utils import remove_trailing_extension
 
 commands = ["compute_comat"]
 
 
-@plac.opt(
-    "ccalc_filepath",
-    abbrev="ccf",
-    help="Path to the pickle file of a serialized CorrelationsCalculator object.",
-)
-@plac.opt(
-    "sset_filepath",
-    abbrev="ssf",
-    help="""
-        Path to a serialized StructuresSet object. All cluster correlations 
-        of all structures in this object are computed and saved to a
-        two dimensional array.
-    """,
-)
-@plac.opt(
-    "comat_filepath",
-    abbrev="cmf",
-    help="""
-        Path to store correlations matrix. Extension is removed. File is
-        saved in formats txt and npz.
-    """,
-)
-@plac.opt("property_name", abbrev="pn", help="Name of the property")
-@plac.flg(
-    "update_ccalc",
-    abbrev="u",
-    help="""
-        Overwrite  file 'ccalc_filepath' to keep the cluster orbits of the 
-        supercells contained in 'sset_filepath'. This leads to faster correlation 
-        evaluations on future calculator use.
-    """,
+@plac.annotations(
+    ccalc_filepath=("Path to the pickle file of a serialized CorrelationsCalculator object.", "option", "ccf", str),
+    sset_filepath=(
+        "Path to a serialized StructuresSet object. Correlations of all structures are computed and saved as a 2D array.",
+        "option",
+        "ssf",
+        str,
+    ),
+    comat_filepath=(
+        "Path to store correlations matrix (extension removed, saved as .txt and .npz).",
+        "option",
+        "cmf",
+        str,
+    ),
+    property_name=("Name of the property.", "option", "pn", str),
+    update_ccalc=("Overwrite ccalc file to keep supercell cluster orbits for future reuse.", "flag", "u", bool),
 )
 def compute_comat(
     ccalc_filepath: str = "ccalc.pickle",
@@ -67,9 +53,7 @@ def compute_comat(
     if property_name is not None:
         pvals = sset.get_property_values(property_name=property_name)
 
-        arrays_dict[f"property_{property_name}"] = (
-            pvals  # dynamically pass keyword to savez from string property_name
-        )
+        arrays_dict[f"property_{property_name}"] = pvals  # dynamically pass keyword to savez from string property_name
 
     np.savez(f"{filepath}.npz", **arrays_dict)
 

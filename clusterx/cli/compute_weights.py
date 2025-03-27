@@ -3,17 +3,25 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 from typing import Optional
-import plac
+
 import numpy as np
-from clusterx.structures_set import StructuresSet
+import plac
+
 from clusterx.cli.config_utils import cmd_message, remove_trailing_extension
 from clusterx.cli.find_lowest import find_lowest
+from clusterx.structures_set import StructuresSet
 
 commands = ["compute_weights"]
 
 
-@plac.opt("sset_filepath")
-@plac.opt("sset_gss_filepath")
+@plac.annotations(
+    sset_filepath=("Path to serialized StructuresSet object.", "option", None, str),
+    sset_gss_filepath=("Path to serialized StructuresSet object for GS structures.", "option", "gss", str),
+    weights_filepath=("Output path for weights (e.g., weights.npz).", "option", None, str),
+    property_name=("Name of the property to use for weights.", "option", None, str),
+    temperature=("Temperature value used for Boltzmann weighting.", "option", None, float),
+    kind=("Weighting method ID (e.g., 1 for Boltzmann).", "option", None, int),
+)
 def compute_weights(
     sset_filepath: str = "sset.json",
     sset_gss_filepath: Optional[str] = None,

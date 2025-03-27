@@ -2,97 +2,42 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from typing import Optional, List, Callable
-import plac
-import pickle
 import importlib.util
-import sys
 import os
+import pickle
+import sys
+from typing import Callable, List, Optional
+
+import plac
 from ase.calculators.calculator import Calculator
+
+from clusterx.derivative_structures import DSGenerator
+from clusterx.model import Model
+from clusterx.parent_lattice import ParentLattice
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
-from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.model import Model
-from clusterx.derivative_structures import DSGenerator
 from clusterx.visualization import plot_property_vs_concentration
 
 commands = ["generate_derivative_structures"]
 
 
-@plac.opt("sc_sizes", abbrev="scsi", help="List of supercell sizes.", type=list)
-@plac.opt(
-    "nsubs_list",
-    abbrev="nsl",
-    help="""List of integer lists corresponding to every supercell 
-    size to indicate the number of substitutions used in every enumeration.""",
-)
-@plac.opt(
-    "sset_filepath",
-    abbrev="ssfp",
-    help="""Path to a serialized StructuresSet object. This is used in at least
-    some plotting tasks""",
-)
-@plac.opt(
-    "sset_lowest_filepath",
-    abbrev="sslowest",
-    help="""Path to a serialized StructuresSet object containing ground state structures. 
-    This is used in at least
-    some plotting tasks""",
-)
-@plac.opt(
-    "model_filepath",
-    abbrev="mfp",
-    help="""Filepath of a serialized CE model object. This is used to evaluate the 
-    properties enumerated configurations in at least some plotting tasks.""",
-)
-@plac.opt(
-    "plat_filepath",
-    abbrev="plfp",
-    help="Filepath of a serialized ParentLattice object. This is needed to perform the enumerations.",
-)
-@plac.opt(
-    "dss_filepath",
-    abbrev="dssfp",
-    help="Filepath to either serialize or retrieve an enumeration of derivative structures.",
-)
-@plac.opt(
-    "property_label",
-    abbrev="plab",
-    help="Label of the property to be requested from the structures set, if present.",
-)
-@plac.opt(
-    "property_solver",
-    abbrev="psol",
-    help="A dictionary to specify parameters for the property solver. See documentation above.",
-    type=dict,
-)
-@plac.opt(
-    "sc_shape",
-    abbrev="scsh",
-    help="3x3 matrix of integers to specify supercell shape for fixed shape enumeration.",
-)
-@plac.flg(
-    "per_formula_unit",
-    abbrev="pfu",
-    help="to be changed to hanged to kwargs.",
-)
-@plac.opt(
-    "linear_reference",
-    abbrev="lref",
-    help="to be changed to hanged to kwargs.",
-)
-@plac.opt(
-    "mask_name",
-    abbrev="mn",
-    help="For tasks that create or use a mask, name of the mask.",
-    type=str,
-)
-@plac.opt(
-    "task",
-    abbrev="task",
-    help="Task to perform.",
-    type=str,
+@plac.annotations(
+    sc_sizes=("List of supercell sizes.", "option", "scsi", list),
+    nsubs_list=("List of lists indicating number of substitutions for each supercell.", "option", "nsl", list),
+    sset_filepath=("Path to a serialized StructuresSet object.", "option", "ssfp", str),
+    model_filepath=("Filepath of a serialized CE model object.", "option", "mfp", str),
+    plat_filepath=("Filepath of a serialized ParentLattice object.", "option", "plfp", str),
+    dss_filepath=("Filepath to serialize or retrieve derivative structures.", "option", "dssfp", str),
+    property_label=("Label of the property to request from the structures set.", "option", "plab", str),
+    property_solver=("Dictionary of parameters for the property solver.", "option", "psol", dict),
+    sc_shape=("3x3 integer matrix to specify supercell shape.", "option", "scsh", list),
+    per_formula_unit=("Flag: compute per formula unit.", "flag", "pfu", bool),
+    linear_reference=("Linear reference for property correction.", "option", "lref", list),
+    mask_name=("Name of the mask for applicable tasks.", "option", "mn", str),
+    n_lowest=("Number of lowest-energy structures to include.", "option", None, int),
+    n_random=("Number of random structures to include.", "option", None, int),
+    task=("Task to perform.", "option", "task", str),
 )
 def generate_derivative_structures(
     sc_sizes: Optional[List[int]] = None,
@@ -128,9 +73,7 @@ def generate_derivative_structures(
 
         # Compute property with CE model
         case "compute_property_with_ce_model":
-            model = (
-                Model(filepath=model_filepath) if model_filepath is not None else None
-            )
+            model = Model(filepath=model_filepath) if model_filepath is not None else None
             _do_compute_properties(
                 cem=model,
                 property_label=property_label,
@@ -143,9 +86,7 @@ def generate_derivative_structures(
         case "compute_property_with_custom_solver":
 
             module_path = os.path.join(os.getcwd(), property_solver["filename"])
-            spec = importlib.util.spec_from_file_location(
-                "custom_property_solver", module_path
-            )
+            spec = importlib.util.spec_from_file_location("custom_property_solver", module_path)
             module = importlib.util.module_from_spec(spec)
             sys.modules["custom_property_solver"] = module
             spec.loader.exec_module(module)
@@ -167,26 +108,14 @@ def generate_derivative_structures(
         case "plot_property_vs_concentration":
             if sset_filepath is not None:
                 sset = StructuresSet(filepath=sset_filepath)
-                model = (
-                    Model(filepath=model_filepath)
-                    if model_filepath is not None
-                    else None
-                )
-                _do_plot_properties(
-                    dss_filepath, property_label=property_label, sset=sset, cem=model
-                )
+                model = Model(filepath=model_filepath) if model_filepath is not None else None
+                _do_plot_properties(dss_filepath, property_label=property_label, sset=sset, cem=model)
             else:
-                _do_plot_properties(
-                    dss_filepath, property_label=property_label, mask_name=mask_name
-                )
+                _do_plot_properties(dss_filepath, property_label=property_label, mask_name=mask_name)
         case "plot_property_vs_concentration2":
-            _do_plot_properties2(
-                dss_filepath, mask_name=mask_name, property_names=[property_label]
-            )
+            _do_plot_properties2(dss_filepath, mask_name=mask_name, property_names=[property_label])
         case "plot_property_vs_concentration3":
-            _do_plot_properties3(
-                dss_filepath, mask_name=mask_name, property_names=[property_label]
-            )
+            _do_plot_properties3(dss_filepath, mask_name=mask_name, property_names=[property_label])
         case "mark_lowest_property_per_concentration":
             _do_mark_lowest(property_label, mask_name, dss_filepath)
 
@@ -220,18 +149,14 @@ def generate_derivative_structures(
 
             for i in range(nstruc):
                 sigma = data.iloc[i]["sigma"]
-                sc_shape = sc_shapes.loc[
-                    sc_shapes["shape_id"] == data.iloc[i]["shape_id"], "shape"
-                ].iloc[0]
+                sc_shape = sc_shapes.loc[sc_shapes["shape_id"] == data.iloc[i]["shape_id"], "shape"].iloc[0]
                 scell = SuperCell(plat, sc_shape)
                 sset.add_structure(Structure(scell, sigmas=sigma), mask=mask_name)
 
             sset.serialize(filepath=sset_filepath, overwrite=True)
 
         case 100:
-            model = (
-                Model(filepath=model_filepath) if model_filepath is not None else None
-            )
+            model = Model(filepath=model_filepath) if model_filepath is not None else None
             plat = ParentLattice(filepath=plat_filepath)
             sset = StructuresSet(filepath=sset_filepath)
 
@@ -264,16 +189,18 @@ def _do_mark_lowest(property_name, mask_name, dss_filepath):
     with open(dss_filepath, "wb") as f:
         pickle.dump(dss, f)
 
+
 def _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest, n_random):
     """
     Group by fractional concentration;
-    then mark the n_lowest configurations with lowest properties per concentration and 
+    then mark the n_lowest configurations with lowest properties per concentration and
     n_random configurations per concentration.
     This function is intended to be used with binary materials only
 
     Creates a mask in the DSS object
     """
     import pandas as pd
+
     with open(dss_filepath, "rb") as f:
         dss = pickle.load(f)
 
@@ -296,6 +223,7 @@ def _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest,
 
     with open(dss_filepath, "wb") as f:
         pickle.dump(dss, f)
+
 
 def _do_full_enumeration(
     plat: ParentLattice,
@@ -358,9 +286,7 @@ def _do_compute_properties(
         pickle.dump(dss, f)
 
 
-def _do_plot_properties(
-    dss_filepath, property_label: str = "property", sset=None, cem=None, mask_name=None
-):
+def _do_plot_properties(dss_filepath, property_label: str = "property", sset=None, cem=None, mask_name=None):
     with open(dss_filepath, "rb") as f:
         dsgen = pickle.load(f)
 
@@ -447,9 +373,9 @@ def _do_plot_properties3(dss_filepath, mask_name=None, property_names=[]):
 
 
 def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
-    from bokeh.plotting import figure, show
     from bokeh.models import ColumnDataSource, HoverTool
     from bokeh.palettes import Category10
+    from bokeh.plotting import figure, show
 
     with open(dss_filepath, "rb") as f:
         dsgen = pickle.load(f)
@@ -461,9 +387,7 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
 
     # Prepare data sources
     source = ColumnDataSource(configurations)
-    mask1_source = ColumnDataSource(
-        configurations[configurations["config_id"].isin(masks[mask_name])]
-    )
+    mask1_source = ColumnDataSource(configurations[configurations["config_id"].isin(masks[mask_name])])
 
     # Create a Bokeh figure
     p = figure(
@@ -512,9 +436,7 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
     )
 
     # Add hover tool to display config_id
-    hover = HoverTool(
-        tooltips=[("Config ID", "@config_id"), ("frconc_binary", "@frconc_binary")]
-    )
+    hover = HoverTool(tooltips=[("Config ID", "@config_id"), ("frconc_binary", "@frconc_binary")])
     p.add_tools(hover)
 
     # Style the plot

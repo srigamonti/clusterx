@@ -2,27 +2,67 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-import sys
 import os
+import sys
+
 import plac
-from clusterx.cli.config_utils import read_toml_config
+
 from clusterx.cli import commands as cmds
 from clusterx.cli.commands import import_custom_modules
+from clusterx.cli.config_utils import read_toml_config
 
 
 def main():
     """
-    CELL command line interface
+    CELL Command Line Interface
 
-    Parameters can be passed with an input file in TOML format, e.g.
+    Usage:
+        Parameters can be passed as command-line flags, for example:
 
-    cell --input_file [cellinput].toml
+            cell command -opt1=val1 -opt2=val2 --flag1
 
-    If run without arguments, cell searches for file cellinput.toml in cwd. If present, take it as input file.
+        Alternatively, you can use an input file in TOML format:
 
-    Custom commands can be indicated by placing the file "custom_cell_commands.toml" in your working directory. The file should contain the following attributes:
-    custom_dir = "path/to/my/custom/commands/folder/" # specify the custom directory
-    custom_modules = ['custom_command1.py', 'custom_command2.py', ...]  # Specify the modules containing commands, these files should be present in custom_dir
+            cell --input_file cellinput.toml
+
+        If no arguments are provided, CELL will automatically look for a file named
+        `cellinput.toml` in the current working directory and use it if found.
+
+    TOML Input File:
+        Using a TOML file has the advantage of supporting multiple commands in a single run,
+        which is more powerful and flexible than the command-line interface alone.
+
+        Example of a TOML file with multiple commands:
+
+            [command1]
+            opt1 = "val1"
+            opt2 = "val2"
+            flag1 = true
+
+            [command2]
+            opt1 = "val1"
+            opt2 = "val2"
+            flag1 = true
+
+        You can also run the same command repeatedly with different parameters
+        using TOML arrays of tables:
+
+            [[command1]]
+            opt1 = "val1A"
+            opt2 = "val2A"
+
+            [[command1]]
+            opt1 = "val1B"
+            opt2 = "val2B"
+
+    Custom Commands:
+        You can extend CELL by placing a file named `custom_cell_commands.toml` in your
+        working directory. This file should contain the following attributes:
+
+            custom_dir = "path/to/my/custom/commands/folder/"      # Directory containing custom commands
+            custom_modules = ["custom_command1.py", "custom_command2.py"]  # Python modules to load from that directory
+
+        Each listed module must be located in the specified `custom_dir`.
 
     """
 
@@ -66,11 +106,7 @@ def main():
         commands_ = [
             key
             for key, value in config_dict.items()
-            if isinstance(value, dict)
-            or (
-                isinstance(value, list)
-                and all(isinstance(item, dict) for item in value)
-            )
+            if isinstance(value, dict) or (isinstance(value, list) and all(isinstance(item, dict) for item in value))
         ]
         commands = config_dict.get("do", commands_)
         print("commands in cellinput.toml file are", commands)
@@ -84,9 +120,7 @@ def main():
                 print("Argument dict from TOML file: ", arg_dict_from_toml)
 
                 # Check if arg_dict_from_toml is a list of dictionaries
-                if isinstance(arg_dict_from_toml, list) and all(
-                    isinstance(item, dict) for item in arg_dict_from_toml
-                ):
+                if isinstance(arg_dict_from_toml, list) and all(isinstance(item, dict) for item in arg_dict_from_toml):
                     # Execute func for each dictionary in the list
                     for params in arg_dict_from_toml:
                         print(f"Executing {command} with params: {params}")
@@ -96,9 +130,7 @@ def main():
                     print(f"Executing {command} with params: {arg_dict_from_toml}")
                     func(**arg_dict_from_toml)
                 else:
-                    print(
-                        f"Invalid format for arguments in command '{command}': {arg_dict_from_toml}"
-                    )
+                    print(f"Invalid format for arguments in command '{command}': {arg_dict_from_toml}")
                     sys.exit(1)
             else:
                 print(f"Unknown command: {command}")
