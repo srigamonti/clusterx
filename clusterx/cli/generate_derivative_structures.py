@@ -60,7 +60,7 @@ def generate_derivative_structures(
 
     match task:
         # Find derivative structures
-        case "do_full_enumeration":
+        case "do_full_enumeration" | "find_derivative_structures":
             plat = ParentLattice(filepath=plat_filepath)
 
             _do_full_enumeration(
@@ -72,7 +72,7 @@ def generate_derivative_structures(
             )
 
         # Compute property with CE model
-        case "compute_property_with_ce_model":
+        case "compute_property_with_ce_model" | "compute_property_ce":
             model = Model(filepath=model_filepath) if model_filepath is not None else None
             _do_compute_properties(
                 cem=model,
@@ -105,7 +105,7 @@ def generate_derivative_structures(
             )
 
         # Plot properties of derivative structures
-        case "plot_property_vs_concentration":
+        case "plot_property_vs_concentration" | "plot_property":
             if sset_filepath is not None:
                 sset = StructuresSet(filepath=sset_filepath)
                 model = Model(filepath=model_filepath) if model_filepath is not None else None
