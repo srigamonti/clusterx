@@ -2,7 +2,7 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from typing import Set, Tuple, List
+from typing import Set, Tuple, List, Optional
 import numpy as np
 import pandas as pd
 from clusterx.super_cell import SuperCell
@@ -11,6 +11,9 @@ from itertools import combinations
 import scipy
 from tqdm import tqdm
 import logging
+import random
+from random import sample
+
 
 # Configure logging
 logging.basicConfig(
@@ -425,7 +428,7 @@ class DSGenerator:
             ignore_index=True,
         )
 
-    def generate(self, supercell_sizes=None, num_subs_list=None, sc_shape=None):
+    def generate(self, supercell_sizes=None, num_subs_list=None, sc_shape=None, n_random=None, random_state=None):
         """Generate derivative structures
 
         **Parameters:**
@@ -438,7 +441,15 @@ class DSGenerator:
             dimension of ``supercell_sizes``.
         ``sc_shape``: 3x3 matrix or None
             if only decorations for a single supercell are wanted, specify it here.
+       ``n_random``: int or None
+            If provided, generate only this number of random configurations per (shape, nsubs).
+        ``random_state``: int or None
+            If provided, used to seed the random number generators for reproducibility.
         """
+
+        if random_state is not None:
+            random.seed(random_state)
+            np.random.seed(random_state)
 
         for i, num_subs in enumerate(num_subs_list):
 
@@ -455,13 +466,25 @@ class DSGenerator:
                 )
 
                 for nsubs in num_subs:
-                    self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs)
+                    self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs, n_random=n_random)
+
+        if n_random is not None and num_subs_list is None and sc_shape is not None:
+            
+            sc_size = int(round(np.linalg.det(sc_shape)))
+
+            print(
+                f"Start generation of random structures. Supercell size: {sc_size}."
+            )
+
+            for nsubs in num_subs:
+                self.generate_for_shape_nsubs(sc_shape=sc_shape, nsubs=nsubs, n_random=n_random)
+
 
         print(
             f"Enumeration complete. Found {len(self.configurations)} unique configurations.\n"
         )
 
-    def generate_for_shape_nsubs(self, sc_shape: List[List[int]], nsubs: int):
+    def generate_for_shape_nsubs(self, sc_shape: List[List[int]], nsubs: Optional[int] = None, n_random: Optional[int] = None):
         """
         Generate derivative structures.
 
@@ -471,22 +494,19 @@ class DSGenerator:
             Shape of the supercell (3x3 list or array of integers).
         nsubs: int
             Number of substitutions.
+        n_random: Optional[int]
+            If provided, generate only this number of random configurations.
 
         Returns:
         --------
         List[np.ndarray]
             List of unique sigma configurations.
         """
-        # Validate inputs
         self._validate_inputs(sc_shape, nsubs)
-
         shape_id = self.add_scell_shape(shape=sc_shape)
 
-        logging.info(
-            "Start enum for supercell size: %s, nsubs: %s",
-            self.get_scell_size(shape_id),
-            nsubs,
-        )
+        logging.info("Start enum for supercell size: %s, nsubs: %s",
+                    self.get_scell_size(shape_id), nsubs)
 
         scell = SuperCell(self.plat, sc_shape)
         natoms = scell.get_natoms()
@@ -497,36 +517,50 @@ class DSGenerator:
             logging.error("nsubs cannot exceed the number of substitutional sites.")
             raise ValueError("nsubs cannot exceed the number of substitutional sites.")
 
+        if n_random is None:
+            self._generate_all_configurations(ssites, nsubs, natoms, shape_id, symper)
+        else:
+            self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
+
+        logging.info("Found %s unique configurations of %s substitutions in %s-atom size scell.",
+                    len(self.configurations), nsubs, natoms)
+
+    def _generate_all_configurations(self, ssites, nsubs, natoms, shape_id, symper):
         n_max = int(scipy.special.binom(len(ssites), nsubs))
-        logging.info(
-            "Max number of configurations for %s substitutions in %s-atom size scell (no sym accounted): %s",
-            nsubs,
-            natoms,
-            n_max,
-        )
+        logging.info("Max number of configurations for %s substitutions in %s-atom size scell (no sym accounted): %s",
+                    nsubs, natoms, n_max)
 
         full_list: Set[Tuple[int, ...]] = set()
-
-        # Find unique configurations
         logging.info("Starting to find unique configurations...")
 
-        for con in tqdm(
-            combinations(ssites, nsubs), total=n_max, desc="Finding unique sigmas"
-        ):
+        for con in tqdm(combinations(ssites, nsubs), total=n_max, desc="Finding unique sigmas"):
+            sigma = self._create_sigma_array(natoms, con)
+            if tuple(sigma) not in full_list:
+                self.add_configuration(sigma=sigma, shape_id=shape_id)
+                self._update_full_list(sigma, symper, full_list)
+
+    def _generate_random_configurations(self, ssites, nsubs, natoms, shape_id, symper, n_random):
+
+        full_list: Set[Tuple[int, ...]] = set()
+        attempts = 0
+        max_attempts = n_random * 10  # Limit attempts to avoid infinite loops
+
+        logging.info("Starting to generate %s random unique configurations...", n_random)
+
+        while len(self.configurations) < n_random and attempts < max_attempts:
+            con = tuple(sorted(sample(ssites, nsubs)))
             sigma = self._create_sigma_array(natoms, con)
 
             if tuple(sigma) not in full_list:
                 self.add_configuration(sigma=sigma, shape_id=shape_id)
-
-                # Process symmetric permutations
                 self._update_full_list(sigma, symper, full_list)
+            
+            attempts += 1
 
-        logging.info(
-            "Found %s unique configurations of %s substitutions in %s-atom size scell.",
-            len(self.configurations),
-            nsubs,
-            natoms,
-        )
+        if len(self.configurations) < n_random:
+            logging.warning("Only %s unique configurations could be generated after %s attempts.",
+                            len(self.configurations), attempts)
+
 
     def _validate_inputs(self, sc_shape, nsubs):
         if not (

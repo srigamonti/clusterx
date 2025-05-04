@@ -6,7 +6,7 @@ import importlib.util
 import os
 import pickle
 import sys
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Union
 
 import plac
 from ase.calculators.calculator import Calculator
@@ -18,6 +18,7 @@ from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
 from clusterx.visualization import plot_property_vs_concentration
+from clusterx.utils import normalize_shape_input
 
 commands = ["generate_derivative_structures"]
 
@@ -37,6 +38,7 @@ commands = ["generate_derivative_structures"]
     mask_name=("Name of the mask for applicable tasks.", "option", "mn", str),
     n_lowest=("Number of lowest-energy structures to include.", "option", None, int),
     n_random=("Number of random structures to include.", "option", None, int),
+    random_state=("Seed for random number generators.", "option", None, int),
     task=("Task to perform.", "option", "task", str),
 )
 def generate_derivative_structures(
@@ -48,17 +50,35 @@ def generate_derivative_structures(
     dss_filepath: Optional[str] = None,
     property_label: Optional[str] = None,
     property_solver: Optional[dict] = None,
-    sc_shape: Optional[List[List[int]]] = None,
+    sc_shape: Optional[Union[int, List[int], List[List[int]]]] = None,
     per_formula_unit: bool = False,
     linear_reference: Optional[List[List[float]]] = None,
     mask_name: Optional[str] = None,
     n_lowest: Optional[int] = 1,
     n_random: Optional[int] = 0,
+    random_state: Optional[int] = None,
     task: str = "do_full_enumeration",
 ):
     """Generate derivative structures"""
 
     match task:
+        # Generate random structures
+        case "random":
+            plat = ParentLattice(filepath=plat_filepath)
+            dsgen = DSGenerator(plat)
+            sc_shape = normalize_shape_input(sc_shape)
+            dsgen.generate(
+                num_subs_list=nsubs_list,
+                supercell_sizes=sc_sizes,
+                sc_shape=sc_shape,
+                n_random=n_random, 
+                random_state=random_state
+            )
+
+            with open(dss_filepath, "wb") as f:
+                pickle.dump(dsgen, f)
+
+
         # Find derivative structures
         case "do_full_enumeration" | "find_derivative_structures":
             plat = ParentLattice(filepath=plat_filepath)
