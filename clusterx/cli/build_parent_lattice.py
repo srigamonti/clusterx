@@ -1,21 +1,14 @@
 import plac
 from ase.build import bulk
+
 from clusterx.parent_lattice import ParentLattice
 
 commands = ["build_parent_lattice"]
 
 
-@plac.opt(
-    "species",
-    abbrev="s",
-    help="""Comma-separated list of species, e.g., Si,Ge
-    """,
-)
-@plac.opt(
-    "filepath",
-    abbrev="f",
-    help="""File path where to serialize the generated parent lattice
-    """,
+@plac.annotations(
+    species=("Comma-separated list of species, e.g., Si,Ge", "option", "s", str),
+    filepath=("File path where to serialize the generated parent lattice", "option", "f", str),
 )
 def build_parent_lattice(species: str = "Si,Ge", filepath="plat.json"):
     """Build parent lattice

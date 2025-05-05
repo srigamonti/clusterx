@@ -2,23 +2,22 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from typing import Set, Tuple, List, Optional
-import numpy as np
-import pandas as pd
-from clusterx.super_cell import SuperCell
-from clusterx.utils import _is_integer_matrix
-from itertools import combinations
-import scipy
-from tqdm import tqdm
 import logging
 import random
+from itertools import combinations
 from random import sample
+from typing import List, Optional, Set, Tuple
 
+import numpy as np
+import pandas as pd
+import scipy
+from tqdm import tqdm
+
+from clusterx.super_cell import SuperCell
+from clusterx.utils import _is_integer_matrix
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 class DSGenerator:
@@ -50,9 +49,7 @@ class DSGenerator:
 
     def get_configurations(self, mask_name=None):
         if mask_name is not None:
-            return self.configurations[
-                self.configurations["config_id"] in self.get_mask(mask_name)
-            ]
+            return self.configurations[self.configurations["config_id"] in self.get_mask(mask_name)]
         return self.configurations
 
     def get_property(self, config_id, property_name):
@@ -71,9 +68,7 @@ class DSGenerator:
         result = self.configurations[self.configuration["config_id"] == config_id]
         if not result.empty:
             if property_name not in self.configurations.columns:
-                raise ValueError(
-                    f"Property '{property_name}' does not exist in the configurations DataFrame."
-                )
+                raise ValueError(f"Property '{property_name}' does not exist in the configurations DataFrame.")
 
             return result.iloc[0][property_name]
         raise KeyError(f"Shape ID {shape_id} not found.")
@@ -91,13 +86,14 @@ class DSGenerator:
         Raises:
         KeyError: If the shape_id is not found.
         """
-        result = self.configurations[self.configuration["config_id"] == config_id]
+        result = self.configurations[self.configurations["config_id"] == config_id]
         if not result.empty:
             column_name = "frconc_binary"
 
             if column_name not in self.configurations.columns:
                 self.add_fractional_concentration_binary()
 
+            result = self.configurations[self.configurations["config_id"] == config_id]
             return result.iloc[0][column_name]
         raise KeyError(f"Shape ID {shape_id} not found.")
 
@@ -194,9 +190,7 @@ class DSGenerator:
         round_precision = 6
         # Check if the parent lattice corresponds to a binary compound
         if not self.plat.is_nary(2):
-            raise ValueError(
-                "The system should be a binary for this function to be used."
-            )
+            raise ValueError("The system should be a binary for this function to be used.")
 
         # Dictionary to cache fractional concentration values
         frconc_dict = {}
@@ -231,6 +225,7 @@ class DSGenerator:
 
             # Get fractional concentration
             conc = struc.get_fractional_concentrations()[sublattice_id][1]
+
             if do_round:
                 conc = round(conc, round_precision)
 
@@ -254,15 +249,11 @@ class DSGenerator:
         column_name = property_name
 
         if column_name in self.configurations.columns:
-            raise ValueError(
-                f"Column '{column_name}' already exists in the configurations DataFrame."
-            )
+            raise ValueError(f"Column '{column_name}' already exists in the configurations DataFrame.")
 
         self.configurations[column_name] = default_value
 
-    def set_property_values_iteratively(
-        self, property_name, value_func, create_if_missing=True, **kwargs
-    ):
+    def set_property_values_iteratively(self, property_name, value_func, create_if_missing=True, **kwargs):
         """
         Sets property values iteratively using a function to compute values on the fly.
 
@@ -295,21 +286,13 @@ class DSGenerator:
         if column_name not in self.configurations.columns:
             if create_if_missing:
                 self.configurations[column_name] = None
-                print(
-                    f"Created new column '{column_name}' in the configurations DataFrame."
-                )
+                print(f"Created new column '{column_name}' in the configurations DataFrame.")
             else:
-                raise ValueError(
-                    f"Column '{column_name}' does not exist in the configurations DataFrame."
-                )
+                raise ValueError(f"Column '{column_name}' does not exist in the configurations DataFrame.")
 
-        self.configurations[column_name] = self.configurations.apply(
-            lambda row: value_func(row, **kwargs), axis=1
-        )
+        self.configurations[column_name] = self.configurations.apply(lambda row: value_func(row, **kwargs), axis=1)
 
-    def set_property_values_from_array(
-        self, property_name, values, create_if_missing=True
-    ):
+    def set_property_values_from_array(self, property_name, values, create_if_missing=True):
         """
         Sets property values using a provided array of values.
 
@@ -327,13 +310,9 @@ class DSGenerator:
         if column_name not in self.configurations.columns:
             if create_if_missing:
                 self.configurations[column_name] = None
-                print(
-                    f"Created new column '{column_name}' in the configurations DataFrame."
-                )
+                print(f"Created new column '{column_name}' in the configurations DataFrame.")
             else:
-                raise ValueError(
-                    f"Column '{column_name}' does not exist in the configurations DataFrame."
-                )
+                raise ValueError(f"Column '{column_name}' does not exist in the configurations DataFrame.")
 
         if len(values) != len(self.configurations):
             raise ValueError(
@@ -355,9 +334,7 @@ class DSGenerator:
 
         sc_size = int(round(np.linalg.det(shape)))
 
-        match = self.scell_shapes[
-            self.scell_shapes["shape"].apply(lambda x: np.array_equal(x, shape))
-        ]
+        match = self.scell_shapes[self.scell_shapes["shape"].apply(lambda x: np.array_equal(x, shape))]
         if not match.empty:
             return match.iloc[0]["shape_id"]
 
@@ -365,9 +342,7 @@ class DSGenerator:
         self.scell_shapes = pd.concat(
             [
                 self.scell_shapes,
-                pd.DataFrame(
-                    {"shape_id": [new_id], "shape": [shape], "size": [sc_size]}
-                ),
+                pd.DataFrame({"shape_id": [new_id], "shape": [shape], "size": [sc_size]}),
             ],
             ignore_index=True,
         )
@@ -421,9 +396,7 @@ class DSGenerator:
         self.configurations = pd.concat(
             [
                 self.configurations,
-                pd.DataFrame(
-                    {"config_id": [new_id], "sigma": [sigma], "shape_id": [shape_id]}
-                ),
+                pd.DataFrame({"config_id": [new_id], "sigma": [sigma], "shape_id": [shape_id]}),
             ],
             ignore_index=True,
         )
@@ -431,20 +404,20 @@ class DSGenerator:
     def generate(self, supercell_sizes=None, num_subs_list=None, sc_shape=None, n_random=None, random_state=None):
         """Generate derivative structures
 
-        **Parameters:**
+         **Parameters:**
 
-        ``supercell_sizes``: list or array of int
-            List  of integers indicating the number of unit cells in each derivative supercell
-        ``num_subs_list``: ragged list of lists or arrays of integers
-            every list or array in the ragged list, indicate the number of substituents to be
-            considered in a given supercell. The first dimension must coincide with the
-            dimension of ``supercell_sizes``.
-        ``sc_shape``: 3x3 matrix or None
-            if only decorations for a single supercell are wanted, specify it here.
-       ``n_random``: int or None
-            If provided, generate only this number of random configurations per (shape, nsubs).
-        ``random_state``: int or None
-            If provided, used to seed the random number generators for reproducibility.
+         ``supercell_sizes``: list or array of int
+             List  of integers indicating the number of unit cells in each derivative supercell
+         ``num_subs_list``: ragged list of lists or arrays of integers
+             every list or array in the ragged list, indicate the number of substituents to be
+             considered in a given supercell. The first dimension must coincide with the
+             dimension of ``supercell_sizes``.
+         ``sc_shape``: 3x3 matrix or None
+             if only decorations for a single supercell are wanted, specify it here.
+        ``n_random``: int or None
+             If provided, generate only this number of random configurations per (shape, nsubs).
+         ``random_state``: int or None
+             If provided, used to seed the random number generators for reproducibility.
         """
 
         if random_state is not None:
@@ -468,23 +441,11 @@ class DSGenerator:
                 for nsubs in num_subs:
                     self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs, n_random=n_random)
 
-        if n_random is not None and num_subs_list is None and sc_shape is not None:
-            
-            sc_size = int(round(np.linalg.det(sc_shape)))
+        print(f"Enumeration complete. Found {len(self.configurations)} unique configurations.\n")
 
-            print(
-                f"Start generation of random structures. Supercell size: {sc_size}."
-            )
-
-            for nsubs in num_subs:
-                self.generate_for_shape_nsubs(sc_shape=sc_shape, nsubs=nsubs, n_random=n_random)
-
-
-        print(
-            f"Enumeration complete. Found {len(self.configurations)} unique configurations.\n"
-        )
-
-    def generate_for_shape_nsubs(self, sc_shape: List[List[int]], nsubs: Optional[int] = None, n_random: Optional[int] = None):
+    def generate_for_shape_nsubs(
+        self, sc_shape: List[List[int]], nsubs: Optional[int] = None, n_random: Optional[int] = None
+    ):
         """
         Generate derivative structures.
 
@@ -505,8 +466,7 @@ class DSGenerator:
         self._validate_inputs(sc_shape, nsubs)
         shape_id = self.add_scell_shape(shape=sc_shape)
 
-        logging.info("Start enum for supercell size: %s, nsubs: %s",
-                    self.get_scell_size(shape_id), nsubs)
+        logging.info("Start enum for supercell size: %s, nsubs: %s", self.get_scell_size(shape_id), nsubs)
 
         scell = SuperCell(self.plat, sc_shape)
         natoms = scell.get_natoms()
@@ -518,26 +478,37 @@ class DSGenerator:
             raise ValueError("nsubs cannot exceed the number of substitutional sites.")
 
         if n_random is None:
-            self._generate_all_configurations(ssites, nsubs, natoms, shape_id, symper)
+            num_conf = self._generate_all_configurations(ssites, nsubs, natoms, shape_id, symper)
         else:
-            self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
+            num_conf = self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
 
-        logging.info("Found %s unique configurations of %s substitutions in %s-atom size scell.",
-                    len(self.configurations), nsubs, natoms)
+        logging.info(
+            "Found %s unique configurations of %s substitutions in %s-atom size scell.",
+            num_conf,
+            nsubs,
+            natoms,
+        )
 
     def _generate_all_configurations(self, ssites, nsubs, natoms, shape_id, symper):
         n_max = int(scipy.special.binom(len(ssites), nsubs))
-        logging.info("Max number of configurations for %s substitutions in %s-atom size scell (no sym accounted): %s",
-                    nsubs, natoms, n_max)
+        logging.info(
+            "Max number of configurations for %s substitutions in %s-atom size scell (no sym accounted): %s",
+            nsubs,
+            natoms,
+            n_max,
+        )
 
         full_list: Set[Tuple[int, ...]] = set()
         logging.info("Starting to find unique configurations...")
 
+        num_conf_start = len(self.configurations)
         for con in tqdm(combinations(ssites, nsubs), total=n_max, desc="Finding unique sigmas"):
             sigma = self._create_sigma_array(natoms, con)
             if tuple(sigma) not in full_list:
                 self.add_configuration(sigma=sigma, shape_id=shape_id)
                 self._update_full_list(sigma, symper, full_list)
+
+        return len(self.configurations) - num_conf_start
 
     def _generate_random_configurations(self, ssites, nsubs, natoms, shape_id, symper, n_random):
 
@@ -547,26 +518,30 @@ class DSGenerator:
 
         logging.info("Starting to generate %s random unique configurations...", n_random)
 
-        while len(self.configurations) < n_random and attempts < max_attempts:
+        num_conf_start = len(self.configurations)
+        while len(self.configurations) - num_conf_start < n_random and attempts < max_attempts:
             con = tuple(sorted(sample(ssites, nsubs)))
             sigma = self._create_sigma_array(natoms, con)
 
             if tuple(sigma) not in full_list:
                 self.add_configuration(sigma=sigma, shape_id=shape_id)
                 self._update_full_list(sigma, symper, full_list)
-            
+
             attempts += 1
 
-        if len(self.configurations) < n_random:
-            logging.warning("Only %s unique configurations could be generated after %s attempts.",
-                            len(self.configurations), attempts)
+        num_conf = len(self.configurations) - num_conf_start
 
+        if num_conf < n_random:
+            logging.warning(
+                "Only %s unique configurations could be generated after %s attempts.",
+                num_conf,
+                attempts,
+            )
+        return num_conf
 
     def _validate_inputs(self, sc_shape, nsubs):
         if not (
-            isinstance(sc_shape, (list, np.ndarray))
-            and len(sc_shape) == 3
-            and all(len(row) == 3 for row in sc_shape)
+            isinstance(sc_shape, (list, np.ndarray)) and len(sc_shape) == 3 and all(len(row) == 3 for row in sc_shape)
         ):
             raise ValueError("sc_shape must be a 3x3 list or array of integers.")
         if not isinstance(nsubs, int) or nsubs < 0:
@@ -845,10 +820,11 @@ def get_unique_supercells_large_angles(n, parent_lattice: object, elements: list
 
     """
 
-    from itertools import product
     import multiprocessing
-    from clusterx.super_cell import SuperCell  # needed by make_supercell
     from functools import partial
+    from itertools import product
+
+    from clusterx.super_cell import SuperCell  # needed by make_supercell
 
     _, harray = get_unique_supercells(n, parent_lattice)
 
@@ -871,6 +847,4 @@ def get_unique_supercells_large_angles(n, parent_lattice: object, elements: list
             harray,
         )
 
-    return [
-        SuperCell(parent_lattice, p) for p in small_angle_sc_shapes
-    ], small_angle_sc_shapes
+    return [SuperCell(parent_lattice, p) for p in small_angle_sc_shapes], small_angle_sc_shapes

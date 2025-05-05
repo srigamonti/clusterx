@@ -2,15 +2,17 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-import os
 import copy
+import os
+from typing import List, Optional, Union
+
 import numpy as np
-from ase.data import chemical_symbols as cs
-from ase.build.supercells import (
+from ase import Atoms
+from ase.build.supercells import (  # needed by make_supercell
     clean_matrix,
     lattice_points_in_supercell,
-)  # needed by make_supercell
-from ase import Atoms
+)
+from ase.data import chemical_symbols as cs
 
 
 class SupercellError(Exception):
@@ -158,9 +160,7 @@ def _is_integrable(s):
         return False
 
 
-def list_integer_named_folders(
-    root=".", prefix="", suffix="", containing_files=[], not_containing_files=[]
-):
+def list_integer_named_folders(root=".", prefix="", suffix="", containing_files=[], not_containing_files=[]):
     """Return array of integer named folders.
 
     Scans folders in ``root`` and detects those which are named
@@ -338,9 +338,10 @@ def atat_to_cell(
         a*b and not b as it is now.
 
     """
-    from ase.data import atomic_numbers
     from copy import deepcopy
+
     from ase import Atoms
+    from ase.data import atomic_numbers
 
     f = open(file_path)
     lines = f.readlines()
@@ -416,9 +417,7 @@ def atat_to_cell(
         for inr, nr in enumerate(species):
             nrs[inr] = int(nr[0])
 
-        plat = ParentLattice(
-            Atoms(positions=r, cell=cell, numbers=nrs, pbc=pbc), sites=species, pbc=pbc
-        )
+        plat = ParentLattice(Atoms(positions=r, cell=cell, numbers=nrs, pbc=pbc), sites=species, pbc=pbc)
         return plat
     if interpret_as == "super_cell":
         from clusterx.structure import Structure
@@ -496,9 +495,7 @@ def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
         sdistances = cdist(
             cl, sc, metric="euclidean"
         )  # Evaluate all (scaled) distances between cluster points to scell sites
-        idxs = np.argwhere(np.abs(sdistances) < tol)[
-            :, 1
-        ]  # Atom indexes of the transformed cluster
+        idxs = np.argwhere(np.abs(sdistances) < tol)[:, 1]  # Atom indexes of the transformed cluster
 
     return idxs
 
@@ -700,12 +697,7 @@ class PolynomialFunction:
     def print_polynomial(self):
         outstring = ""
         for exponential in self.exponentials:
-            outstring += (
-                str(exponential.coefficient)
-                + " *  x^"
-                + str(exponential.exponent)
-                + " + "
-            )
+            outstring += str(exponential.coefficient) + " *  x^" + str(exponential.exponent) + " + "
         outstring = outstring[:-3]
         print(outstring)
 
@@ -809,6 +801,7 @@ def sort_atoms(atoms, key=(2, 1, 0)):
         for p, n in zip(poss, nrs):
             pn.append([p[0], p[1], p[2], n])
         from operator import itemgetter
+
         import numpy as np
 
         _pn = sorted(pn, key=itemgetter(*key))
@@ -816,9 +809,7 @@ def sort_atoms(atoms, key=(2, 1, 0)):
         _nrs = np.delete(np.array(_pn), [0, 1, 2], 1).flatten()
         from ase import Atoms
 
-        return Atoms(
-            positions=_poss, numbers=_nrs, cell=atoms.get_cell(), pbc=atoms.get_pbc()
-        )
+        return Atoms(positions=_poss, numbers=_nrs, cell=atoms.get_cell(), pbc=atoms.get_pbc())
 
 
 def remove_vacancies(at):
@@ -926,9 +917,7 @@ def make_supercell(prim, P, wrap=True, tol=1e-5):
     # check number of atoms is correct
     n_target = np.abs(int(np.round(np.linalg.det(supercell_matrix) * len(prim))))
     if n_target != len(superatoms):
-        msg = "Number of atoms in supercell: {}, expected: {}".format(
-            n_target, len(superatoms)
-        )
+        msg = "Number of atoms in supercell: {}, expected: {}".format(n_target, len(superatoms))
         raise SupercellError(msg)
 
     if wrap:
@@ -966,8 +955,9 @@ def super_structure(struc0, d):
         The super structure is obtained by the transformation d S, with d a
         3x3 matrix of integer and S the supercell cell vectors.
     """
-    from clusterx.super_cell import SuperCell
     from ase.build import make_supercell
+
+    from clusterx.super_cell import SuperCell
 
     if np.shape(d) == ():
         n = np.zeros((3, 3), int)
@@ -1061,9 +1051,7 @@ def sset_equivalence_check(
     elif comat is None:
         from clusterx.correlations import CorrelationsCalculator
 
-        ccalc = CorrelationsCalculator(
-            basis=basis, parent_lattice=sset.get_parent_lattice(), clusters_pool=cpool
-        )
+        ccalc = CorrelationsCalculator(basis=basis, parent_lattice=sset.get_parent_lattice(), clusters_pool=cpool)
         comat = ccalc.get_correlation_matrix(sset)
 
     nstr = len(sset)
@@ -1135,7 +1123,6 @@ def atoms_equivalence_check(atoms, to_primitive=True, pretty_print=False):
       equivalence only if ``cpool`` and ``comat`` are None.
     """
     import numpy as np
-
     from ase.utils.structure_comparator import SymmetryEquivalenceCheck
 
     comp = SymmetryEquivalenceCheck(to_primitive=to_primitive)
@@ -1168,9 +1155,7 @@ def atoms_equivalence_check(atoms, to_primitive=True, pretty_print=False):
     return id_str_list
 
 
-def report_sset_equivalence_check(
-    sset, sset_equivalence_check_output, property_name=None, tol=0.0
-):
+def report_sset_equivalence_check(sset, sset_equivalence_check_output, property_name=None, tol=0.0):
     """Generate report of equivalent structures
 
     Writes to files: ``sset_unique_sym.json`` and ``sset_unique_gss.json``.
@@ -1240,6 +1225,7 @@ def report_sset_equivalence_check(
             # print(folders)
             # print(map(folders.__getitem__, np.array(id_str_list[k]).tolist()))
 
+
 def normalize_shape_input(sc_shape):
     """
     Normalize the supercell shape input into a 3x3 matrix.
@@ -1260,7 +1246,52 @@ def normalize_shape_input(sc_shape):
         return np.diag([sc_shape] * 3)
     elif isinstance(sc_shape, (list, tuple)) and len(sc_shape) == 3 and all(isinstance(x, int) for x in sc_shape):
         return np.diag(sc_shape)
-    elif isinstance(sc_shape, (list, tuple)) and len(sc_shape) == 3 and all(isinstance(row, (list, tuple)) and len(row) == 3 for row in sc_shape):
+    elif (
+        isinstance(sc_shape, (list, tuple))
+        and len(sc_shape) == 3
+        and all(isinstance(row, (list, tuple)) and len(row) == 3 for row in sc_shape)
+    ):
         return np.array(sc_shape)
     else:
         raise ValueError("Invalid sc_shape format: must be None, int, 3-vector of ints, or 3x3 matrix of ints.")
+
+
+def normalize_nsubs_list(nsubs_list: Optional[Union[int, List[int], List[List[int]]]]) -> Optional[List[List[int]]]:
+    """
+    Normalize the input `nsubs_list` into a list of lists of integers.
+
+    Parameters:
+        nsubs_list (Optional[Union[int, List[int], List[List[int]]]]):
+            The input to normalize. It can be:
+            - An integer (e.g., 3)
+            - A list of integers (e.g., [3, 4, 7])
+            - A list of lists of integers (e.g., [[3, 4, 7], [1, 2]])
+            - None
+
+    Returns:
+        Optional[List[List[int]]]:
+            The normalized list of lists of integers, or None if input is None.
+
+    Examples:
+        >>> normalize_nsubs_list(3)
+        [[3]]
+
+        >>> normalize_nsubs_list([3, 4, 7])
+        [[3, 4, 7]]
+
+        >>> normalize_nsubs_list([[3, 4, 7], [1, 2]])
+        [[3, 4, 7], [1, 2]]
+
+        >>> normalize_nsubs_list(None)
+        None
+    """
+    if nsubs_list is None:
+        return None
+    if isinstance(nsubs_list, int):
+        return [[nsubs_list]]
+    if isinstance(nsubs_list, list):
+        if all(isinstance(i, int) for i in nsubs_list):
+            return [nsubs_list]
+        if all(isinstance(i, list) and all(isinstance(j, int) for j in i) for i in nsubs_list):
+            return nsubs_list
+    raise ValueError("Invalid format for nsubs_list")
