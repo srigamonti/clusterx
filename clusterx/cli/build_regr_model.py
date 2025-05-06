@@ -26,7 +26,7 @@ commands = ["build_regr_model"]
     weights_filepath=("Sample weights for fitting and evaluating the weighted MSE.", "option", None, str),
     standardize=("Standardize the input data.", "flag", "std", bool),
 )
-def build_nonlinear_model(
+def build_regr_model(
     property_name: str,
     ccalc_filepath: str = "ccalc.pickle",
     xp_filepath: str = "xp.npz",
@@ -35,7 +35,7 @@ def build_nonlinear_model(
     weights_filepath: Optional[str] = None,
     standardize: bool = False,
 ):
-    """Compute nonlinear CE model"""
+    """Build CE model with arbitrary estimator."""
     cmd_message("head")
 
     print(f"Info({get_command_name()}): Initialization")
