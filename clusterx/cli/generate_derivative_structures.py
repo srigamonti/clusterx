@@ -6,7 +6,7 @@ import importlib.util
 import os
 import pickle
 import sys
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Union
 
 import plac
 from ase.calculators.calculator import Calculator
@@ -17,6 +17,7 @@ from clusterx.parent_lattice import ParentLattice
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
+from clusterx.utils import normalize_nsubs_list, normalize_shape_input
 from clusterx.visualization import plot_property_vs_concentration
 
 commands = ["generate_derivative_structures"]
@@ -37,28 +38,87 @@ commands = ["generate_derivative_structures"]
     mask_name=("Name of the mask for applicable tasks.", "option", "mn", str),
     n_lowest=("Number of lowest-energy structures to include.", "option", None, int),
     n_random=("Number of random structures to include.", "option", None, int),
+    random_state=("Seed for random number generators.", "option", None, int),
     task=("Task to perform.", "option", "task", str),
 )
 def generate_derivative_structures(
     sc_sizes: Optional[List[int]] = None,
-    nsubs_list: Optional[List[List[int]]] = None,
+    nsubs_list: Optional[Union[int, List[int], List[List[int]]]] = None,
     sset_filepath: Optional[str] = None,
     model_filepath: Optional[str] = None,
     plat_filepath: Optional[str] = None,
     dss_filepath: Optional[str] = None,
     property_label: Optional[str] = None,
     property_solver: Optional[dict] = None,
-    sc_shape: Optional[List[List[int]]] = None,
+    sc_shape: Optional[Union[int, List[int], List[List[int]]]] = None,
     per_formula_unit: bool = False,
     linear_reference: Optional[List[List[float]]] = None,
     mask_name: Optional[str] = None,
     n_lowest: Optional[int] = 1,
     n_random: Optional[int] = 0,
+    random_state: Optional[int] = None,
     task: str = "do_full_enumeration",
 ):
-    """Generate derivative structures"""
+    """Generate derivative structures
+
+    Examples:
+
+    The following input toml file creates a set of unique random structures and
+    stores it into the file dss_filepath
+
+    [generate_derivative_structures]
+    task = "random"
+    plat_filepath = "plat.json"
+    sc_shape = 2
+    nsubs_list = [0,2,4,6,8]
+    n_random = 5
+    random_state = 1
+    dss_filepath = "random_structures.pickle"
+
+    The following input computes a property for every derivative structure in dss_filepath
+
+    [generate_derivative_structures]
+    task = "compute_property_with_custom_solver"
+    plat_filepath = "plat.json"
+    property_solver = {filename = "path/to/my_custom_solver_module.py", classname = "MySolver", kwargs = {"arg1"= 5.724589, "arg2"= 6.016160}}
+    #dss_filepath = "dss_scsize1-3.pickle"
+    dss_filepath = "dss_scsize1-2_new.pickle"
+    #property_label = "total_energy_mace_cell_relaxed"
+    property_label = "total_energy_mace_vegards"
+    per_formula_unit = true
+    linear_reference = [[0.0, -13.08516],[1.0, -11.302472]]
+
+    The class MySolver in file "path/to/my_custom_solver_module.py" __must__ define
+    a method named compute_property, which takes a CELL structure object, a shape specification,
+    the concentration of substituents, and any number of keyword arguments
+
+    class MySolver:
+        def __init__(self):
+            pass
+
+        def compute_property(self, struc, shape, conc, arg1=None, arg2=None, ...):
+            return 0
+
+    """
 
     match task:
+        # Generate random structures
+        case "random":
+            plat = ParentLattice(filepath=plat_filepath)
+            dsgen = DSGenerator(plat)
+            sc_shape = normalize_shape_input(sc_shape)
+            nsubs_list = normalize_nsubs_list(nsubs_list)
+            dsgen.generate(
+                num_subs_list=nsubs_list,
+                supercell_sizes=sc_sizes,
+                sc_shape=sc_shape,
+                n_random=n_random,
+                random_state=random_state,
+            )
+
+            with open(dss_filepath, "wb") as f:
+                pickle.dump(dsgen, f)
+
         # Find derivative structures
         case "do_full_enumeration" | "find_derivative_structures":
             plat = ParentLattice(filepath=plat_filepath)
@@ -97,7 +157,7 @@ def generate_derivative_structures(
 
             _do_compute_properties(
                 property_solver=property_solver_instance.compute_property,
-                property_solver_kwargs=property_solver["kwargs"],
+                property_solver_kwargs=property_solver.get("kwargs", {}),
                 property_label=property_label,
                 dss_filepath=dss_filepath,
                 per_formula_unit=per_formula_unit,
@@ -193,7 +253,15 @@ def _do_mark_lowest(property_name, mask_name, dss_filepath):
 def _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest, n_random):
     """
     Group by fractional concentration;
-    then mark the n_lowest configurations with lowest properties per concentration and
+    then mark the n_lowest configurations with lowest properties per concentration andmodule_path = os.path.join(os.getcwd(), property_solver["filename"])
+            spec = importlib.util.spec_from_file_location("custom_property_solver", module_path)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules["custom_property_solver"] = module
+            spec.loader.exec_module(module)
+
+            property_solver_class = getattr(module, property_solver["classname"])
+
+            property_solver_instance = property_solver_class()
     n_random configurations per concentration.
     This function is intended to be used with binary materials only
 

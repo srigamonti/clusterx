@@ -56,7 +56,7 @@ def build_cpool(
     radii,  # List[float] or str
     sset_filepath=None,  # Optional[str]
     plat_filepath=None,  # Optional[str]
-    psc=1,  # PscType (assumed int-like)
+    psc=1,  # Supercell definition
     method=1,  # int
     cpool_filepath="cpool.json",  # str
     vacancy_atomic_number=0,  # int
@@ -70,7 +70,7 @@ def build_cpool(
         radii: A list of floats or a string representation of the list.
         sset_filepath: Path to the structure set file (optional).
         plat_filepath: Path to the platform file (optional).
-        psc: Point symmetry class or identifier (default: 1).
+        psc: Supercell definition (default: 1).
         method: Method ID used to construct clusters (default: 1).
         cpool_filepath: Output filepath for the cluster pool (default: "cpool.json").
         vacancy_atomic_number: Atomic number for vacancy site (default: 0).
