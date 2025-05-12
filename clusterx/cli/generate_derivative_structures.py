@@ -8,6 +8,8 @@ import pickle
 import sys
 from typing import Callable, List, Optional, Union
 
+import matplotlib.pyplot as plt
+import numpy as np
 import plac
 from ase.calculators.calculator import Calculator
 
@@ -30,7 +32,8 @@ commands = ["generate_derivative_structures"]
     model_filepath=("Filepath of a serialized CE model object.", "option", "mfp", str),
     plat_filepath=("Filepath of a serialized ParentLattice object.", "option", "plfp", str),
     dss_filepath=("Filepath to serialize or retrieve derivative structures.", "option", "dssfp", str),
-    property_label=("Label of the property to request from the structures set.", "option", "plab", str),
+    property_name=("Name of the property to request from the structures set.", "option", "plab", str),
+    property_names=("Names of the property to request from the structures set.", "option", "plab", list),
     property_solver=("Dictionary of parameters for the property solver.", "option", "psol", dict),
     sc_shape=("3x3 integer matrix to specify supercell shape.", "option", "scsh", list),
     per_formula_unit=("Flag: compute per formula unit.", "flag", "pfu", bool),
@@ -48,16 +51,21 @@ def generate_derivative_structures(
     model_filepath: Optional[str] = None,
     plat_filepath: Optional[str] = None,
     dss_filepath: Optional[str] = None,
-    property_label: Optional[str] = None,
+    property_name: Optional[str] = None,
+    property_names: Optional[List[str]] = None,
     property_solver: Optional[dict] = None,
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = None,
     per_formula_unit: bool = False,
-    linear_reference: Optional[List[List[float]]] = None,
+    linear_reference: Optional[Union[List[List[float]], List[dict]]] = None,
     mask_name: Optional[str] = None,
     n_lowest: Optional[int] = 1,
     n_random: Optional[int] = 0,
     random_state: Optional[int] = None,
     task: str = "do_full_enumeration",
+    plotdata_filepath=None,
+    colors=None,
+    markers=None,
+    sizes=None,
 ):
     """Generate derivative structures
 
@@ -83,10 +91,10 @@ def generate_derivative_structures(
     property_solver = {filename = "path/to/my_custom_solver_module.py", classname = "MySolver", kwargs = {"arg1"= 5.724589, "arg2"= 6.016160}}
     #dss_filepath = "dss_scsize1-3.pickle"
     dss_filepath = "dss_scsize1-2_new.pickle"
-    #property_label = "total_energy_mace_cell_relaxed"
-    property_label = "total_energy_mace_vegards"
+    #property_name = "total_energy_mace_cell_relaxed"
+    property_name = "total_energy_mace_vegards"
     per_formula_unit = true
-    linear_reference = [[0.0, -13.08516],[1.0, -11.302472]]
+    linear_reference = [{x=0.0, y=-13.08516},{x=1.0, y=-11.302472}]
 
     The class MySolver in file "path/to/my_custom_solver_module.py" __must__ define
     a method named compute_property, which takes a CELL structure object, a shape specification,
@@ -136,7 +144,7 @@ def generate_derivative_structures(
             model = Model(filepath=model_filepath) if model_filepath is not None else None
             _do_compute_properties(
                 cem=model,
-                property_label=property_label,
+                property_name=property_name,
                 dss_filepath=dss_filepath,
                 per_formula_unit=per_formula_unit,
                 linear_reference=linear_reference,
@@ -158,7 +166,7 @@ def generate_derivative_structures(
             _do_compute_properties(
                 property_solver=property_solver_instance.compute_property,
                 property_solver_kwargs=property_solver.get("kwargs", {}),
-                property_label=property_label,
+                property_name=property_name,
                 dss_filepath=dss_filepath,
                 per_formula_unit=per_formula_unit,
                 linear_reference=linear_reference,
@@ -169,18 +177,36 @@ def generate_derivative_structures(
             if sset_filepath is not None:
                 sset = StructuresSet(filepath=sset_filepath)
                 model = Model(filepath=model_filepath) if model_filepath is not None else None
-                _do_plot_properties(dss_filepath, property_label=property_label, sset=sset, cem=model)
+                _do_plot_properties(dss_filepath, property_name=property_name, sset=sset, cem=model)
             else:
-                _do_plot_properties(dss_filepath, property_label=property_label, mask_name=mask_name)
+                # _do_plot_properties(dss_filepath, property_name=property_name, mask_name=mask_name)
+                with open(dss_filepath, "rb") as f:
+                    dsgen = pickle.load(f)
+
+                dsgen.add_fractional_concentration_binary()
+                x = dsgen.configurations["frconc_binary"].to_numpy()
+
+                if property_name is not None and property_names is not None:
+                    raise ValueError("Only one of 'property_name' or 'property_names' should be provided, not both.")
+
+                if property_name is not None:
+                    property_names = [property_name]
+
+                ys = []
+                for property_name in property_names:
+                    ys.append(dsgen.configurations[property_name].to_numpy())
+
+                _plot_multiple_scatter(x, ys, colors, markers, sizes, save_filepath=plotdata_filepath)
+
         case "plot_property_vs_concentration2":
-            _do_plot_properties2(dss_filepath, mask_name=mask_name, property_names=[property_label])
+            _do_plot_properties2(dss_filepath, mask_name=mask_name, property_names=[property_name])
         case "plot_property_vs_concentration3":
-            _do_plot_properties3(dss_filepath, mask_name=mask_name, property_names=[property_label])
+            _do_plot_properties3(dss_filepath, mask_name=mask_name, property_names=[property_name])
         case "mark_lowest_property_per_concentration":
-            _do_mark_lowest(property_label, mask_name, dss_filepath)
+            _do_mark_lowest(property_name, mask_name, dss_filepath)
 
         case "mark_lowest_and_random_properties_per_concentration":
-            _do_mark_lowest_and_random(property_label, mask_name, dss_filepath, n_lowest, n_random)
+            _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest, n_random)
 
         case "convert_to_sset":
             # Requires
@@ -313,37 +339,56 @@ def _do_full_enumeration(
         pickle.dump(dsgen, f)
 
 
+def process_linear_reference(
+    linear_reference: Optional[Union[List[List[float]], List[dict]]] = None,
+) -> Optional[List[List[float]]]:
+    if linear_reference is None:
+        return None
+
+    # If it's a list of dicts, convert to list of [x, y]
+    if isinstance(linear_reference, list) and all(isinstance(item, dict) for item in linear_reference):
+        try:
+            return [[item["x"], item["y"]] for item in linear_reference]
+        except KeyError as e:
+            raise ValueError(f"Missing expected key in one of the dictionaries: {e}")
+
+    # If already list of lists, return as is
+    return linear_reference
+
+
 def _do_compute_properties(
     cem: Optional[Model] = None,
     calculator: Optional[Calculator] = None,
     property_solver: Optional[Callable[..., float]] = None,
     property_solver_kwargs: Optional[dict] = None,
-    property_label: str = "property",
+    property_name: str = "property",
     dss_filepath: str = "dss.pickle",
     per_formula_unit: bool = False,
-    linear_reference: Optional[List[List[float]]] = None,
+    linear_reference: Optional[Union[List[List[float]], List[dict]]] = None,
 ) -> None:
+
+    linear_reference = process_linear_reference(linear_reference)
 
     with open(dss_filepath, "rb") as f:
         dss = pickle.load(f)
 
     if cem is not None:
         dss.compute_properties(
-            property_label,
+            property_name,
             cemodel=cem,
             per_formula_unit=per_formula_unit,
             linear_reference=linear_reference,
         )
     elif calculator is not None:
         dss.compute_properties(
-            property_label,
+            property_name,
             calculator=calculator,
             per_formula_unit=per_formula_unit,
             linear_reference=linear_reference,
         )
     elif property_solver is not None:
         dss.compute_properties(
-            property_label,
+            property_name,
             property_solver=property_solver,
             property_solver_kwargs=property_solver_kwargs,
             per_formula_unit=per_formula_unit,
@@ -354,7 +399,56 @@ def _do_compute_properties(
         pickle.dump(dss, f)
 
 
-def _do_plot_properties(dss_filepath, property_label: str = "property", sset=None, cem=None, mask_name=None):
+def _plot_multiple_scatter(
+    x: Union[List[float], np.ndarray],
+    ys: List[Union[List[float], np.ndarray]],
+    colors: Optional[List[str]] = None,
+    markers: Optional[List[str]] = None,
+    sizes: Optional[List[float]] = None,
+    save_filepath: Optional[str] = None,
+):
+    x = np.array(x)
+    num_series = len(ys)
+
+    # Set default styling if not provided
+    if colors is None:
+        colors = plt.cm.get_cmap("tab10").colors[:num_series]
+    if markers is None:
+        markers = ["o"] * num_series
+    if sizes is None:
+        sizes = [20] * num_series
+
+    plt.figure(figsize=(8, 6))
+
+    for i, y in enumerate(ys):
+        y = np.array(y)
+        plt.scatter(
+            x,
+            y,
+            color=colors[i % len(colors)],
+            marker=markers[i % len(markers)],
+            s=sizes[i % len(sizes)],
+            label=f"Series {i+1}",
+        )
+
+    plt.xlabel("X")
+    plt.ylabel("Y")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    # Optionally save data
+    if save_filepath:
+        if not save_filepath.endswith(".npz"):
+            save_filepath += ".npz"
+        data_dict = {"x": x}
+        for i, y in enumerate(ys):
+            data_dict[f"y_{i}"] = np.array(y)
+        np.savez(save_filepath, **data_dict)
+
+
+def _do_plot_properties(dss_filepath, property_name: str = "property", sset=None, cem=None, mask_name=None):
     with open(dss_filepath, "rb") as f:
         dsgen = pickle.load(f)
 
@@ -362,9 +456,9 @@ def _do_plot_properties(dss_filepath, property_label: str = "property", sset=Non
     plot_property_vs_concentration(
         sset,
         show_loo_predictions=False,
-        properties_enum=dsgen.configurations[property_label].to_numpy(),
+        properties_enum=dsgen.configurations[property_name].to_numpy(),
         concentrations_enum=dsgen.configurations["frconc_binary"].to_numpy(),
-        property_name=property_label,
+        property_name=property_name,
         cemodel=cem,
     )
 
