@@ -2,11 +2,11 @@ import numpy as np
 
 
 marker_styles = {
-    "Calculated": {"marker": "o", "color": "k", "size": 13, "linewidth": 0.65},
-    "Predicted-fit": {"marker": "o", "color": "k", "size": 6, "linewidth": 0.65},
-    "Predicted-CV": {"marker": "o", "color": "r", "size": 6, "linewidth": 0.65},
-    "Enumeration": {"marker": ".", "color": "gray", "size": 8, "linewidth": 0},
-    "Predicted-GS": {"marker": "o", "color": "green", "size": 6, "linewidth": 0.65},
+    "Calculated": {"marker": "o", "edgecolor": "k", "facecolor": "none", "size": 20, "linewidth": 0.65},
+    "Predicted-fit": {"marker": "o", "edgecolor": "none", "facecolor": "k", "size": 10, "linewidth": 0.65},
+    "Predicted-CV": {"marker": "o", "edgecolor": "r", "facecolor": "none", "size": 10, "linewidth": 0.65},
+    "Enumeration": {"marker": ".", "edgecolor": "gray", "facecolor": "none", "size": 10, "linewidth": 0},
+    "Predicted-GS": {"marker": "o", "edgecolor": "green", "facecolor": "none", "size": 6, "linewidth": 0.65},
 }
 
 
@@ -28,15 +28,15 @@ def scatter_plot(
         "y": y_data,
         "marker": marker_style["marker"],
         "s": marker_style["size"],
-        "edgecolors": marker_style["color"],
-        "facecolors": "none",
+        "edgecolors": marker_style["edgecolor"],
+        "facecolors": marker_style["facecolor"],
         "linewidth": marker_style["linewidth"],
         "label": label,
     }
 
     # Adjust scatter arguments if the marker is "."
     if marker_style["marker"] == ".":
-        scatter_args["facecolors"] = marker_style["color"]
+        scatter_args["facecolors"] = marker_style["facecolor"]
         scatter_args["edgecolors"] = "none"
 
     ax.scatter(**scatter_args)
