@@ -47,17 +47,21 @@ def build_nonlinear_model(
     pvals = np.load(xp_filepath)[f"property_{property_name}"]
 
     if regression_model is None:
-        regression_model = {"kind": "LinearRegression", "args": {}}
+        regression_model = {
+            "module": "sklearn.linear_model",
+            "class": "LinearRegression",
+            "args": {}}
     if nonlinear_transformation is None:
-        nonlinear_transformation = {"kind": "PolynomialFeatures", "args": {"degree": 1}}
+        nonlinear_transformation = {
+            "module": "sklearn.preprocessing",
+            "class": "PolynomialFeatures",
+            "args": {"degree": 1}}
 
     print(f"Info({get_command_name()}): Computing model")
 
     reg = _build_pipeline(
-        regression_model["kind"],
-        regression_model["args"],
-        nonlinear_transformation["kind"],
-        nonlinear_transformation["args"],
+        regression_model,
+        nonlinear_transformation,
         standardize=standardize,
     )
 
@@ -69,7 +73,7 @@ def build_nonlinear_model(
     else:
         reg.fit(comat, pvals)
 
-    if regression_model["kind"] == "LassoCV":
+    if regression_model["class"] == "LassoCV":
         lasso_cv = reg.named_steps["lassocv"]
         cv_scores = lasso_cv.mse_path_
         alphas = lasso_cv.alphas_
@@ -94,33 +98,24 @@ def build_nonlinear_model(
 
 
 def _build_pipeline(
-    rm_kind: str = "LinearRegression",
-    rm_args: Optional[dict] = None,
-    ft_kind: str = "PolynomialFeatures",
-    ft_args: Optional[dict] = None,
+    regression_model: dict,
+    nonlinear_transformation: dict,
     standardize: bool = False,
 ):
     """Create pipeline
 
     Parameters:
 
-        rm_conf(dict): Regression model configuration
-
-        ft_conf(dict): Function transformer configuration
+        regression_model(dict): Regression model configuration
+        nonlinear_transformation(dict): nonlinear feature configuration
     """
-    if rm_args is None:
-        rm_args = {"kind": "linreg", "alpha": 0.0}
-    if ft_args is None:
-        ft_args = {"degree": 2, "include_bias": False}
+    module = importlib.import_module(regression_model["module"])
+    rm_class = getattr(module, regression_model["class"])
+    rm = rm_class(**regression_model["args"])
 
-    module = importlib.import_module("sklearn.linear_model")
-    rm_class = getattr(module, rm_kind)
-
-    module = importlib.import_module("sklearn.preprocessing")
-    ft_class = getattr(module, ft_kind)
-
-    rm = rm_class(**rm_args)
-    ft = ft_class(**ft_args)
+    module = importlib.import_module(nonlinear_transformation["module"])
+    ft_class = getattr(module, nonlinear_transformation["class"])
+    ft = ft_class(**nonlinear_transformation["args"])
 
     pipeline_steps = [ft, rm]
 
