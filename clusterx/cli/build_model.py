@@ -4,7 +4,7 @@
 from typing import Optional
 
 import plac
-
+import numpy as np
 from clusterx.cli.config_utils import cmd_message, get_command_name
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
@@ -25,6 +25,7 @@ commands = ["build_model"]
     estimator_type=("Estimator type.", "option", "et", str),
     estimator_opts=("Estimator options.", "option", "eo", dict),
     plot_optimization_vs_sparsity=("Plot config.", "option", "plotovsd", dict),
+    weights_filepath=("Path to npz file containing weights.", "option", "wf", str)
 )
 def build_model(
     property_name: str,
@@ -37,6 +38,7 @@ def build_model(
     estimator_type: str = "skl_LinearRegression",
     estimator_opts: dict = {"fit_intercept": True},
     plot_optimization_vs_sparsity: Optional[dict] = None,
+    weights_filepath: Optional[str] = None
 ):
     """Compute CE model"""
     cmd_message("head")
@@ -46,6 +48,10 @@ def build_model(
     sset = StructuresSet(filepath=sset_filepath)
     cpool = ClustersPool(filepath=cpool_filepath)
 
+    if weights_filepath is not None:
+        weights = np.load(weights_filepath)["weights"]
+        kwargs = {"sample_weight": weights}
+
     mb = ModelBuilder(
         selector_type=selector_type,
         selector_opts=selector_opts,
@@ -54,7 +60,7 @@ def build_model(
     )
 
     print(f"Info({get_command_name()}): Computing model")
-    model = mb.build(sset, cpool, property_name, corrc=ccalc)
+    model = mb.build(sset, cpool, property_name, corrc=ccalc, **kwargs)
 
     if plot_optimization_vs_sparsity is not None:
         print(f"Info({get_command_name()}): Generating plot of optimization vs sparsity")

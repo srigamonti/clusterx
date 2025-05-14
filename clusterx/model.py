@@ -532,6 +532,7 @@ class Model:
         x_mat = self.corrc.get_correlation_matrix(sset)
         y = sset.get_property_values(self.property_name)
 
+
         # cross_val_score internally clones the estimator, so the optimal one in Model is not changed.
         cvs = cross_val_score(
             self.estimator,
@@ -690,7 +691,7 @@ class ModelBuilder:
         """Return estimator object used to create the optimal model"""
         return self.opt_estimator
 
-    def build(self, sset, cpool, prop, corrc=None, verbose=False):
+    def build(self, sset, cpool, prop, corrc=None, verbose=False, **kwargs):
         """Build optimal cluster expansion model
 
         Acts as a Model factory.
@@ -711,6 +712,7 @@ class ModelBuilder:
         ``corrc``: CorrelationsCalculator object (default: None)
             If not None, cpool and basis are overriden
 
+        ``kwargs``: Keyword arguments passed to the fit method of the estimator.
         """
         self.sset = sset
         self.plat = cpool.get_plat()
@@ -755,7 +757,7 @@ class ModelBuilder:
                 EstimatorFactory.create(self.estimator_type, **self.estimator_opts),
             )
 
-        self.opt_estimator.fit(self.opt_comat, self.target)
+        self.opt_estimator.fit(self.opt_comat, self.target, **kwargs)
         return Model(
             self.opt_corrc,
             prop,
