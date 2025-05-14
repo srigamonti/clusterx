@@ -5,7 +5,7 @@ marker_styles = {
     "Calculated": {"marker": "o", "edgecolor": "k", "facecolor": "none", "size": 20, "linewidth": 0.65},
     "Predicted-fit": {"marker": "o", "edgecolor": "none", "facecolor": "k", "size": 10, "linewidth": 0.65},
     "Predicted-CV": {"marker": "o", "edgecolor": "r", "facecolor": "none", "size": 10, "linewidth": 0.65},
-    "Enumeration": {"marker": ".", "edgecolor": "gray", "facecolor": "none", "size": 10, "linewidth": 0},
+    "Enumeration": {"marker": ".", "edgecolor": "none", "facecolor": "gray", "size": 10, "linewidth": 0},
     "Predicted-GS": {"marker": "o", "edgecolor": "green", "facecolor": "none", "size": 6, "linewidth": 0.65},
 }
 
