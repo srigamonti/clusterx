@@ -279,15 +279,7 @@ def _do_mark_lowest(property_name, mask_name, dss_filepath):
 def _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest, n_random):
     """
     Group by fractional concentration;
-    then mark the n_lowest configurations with lowest properties per concentration andmodule_path = os.path.join(os.getcwd(), property_solver["filename"])
-            spec = importlib.util.spec_from_file_location("custom_property_solver", module_path)
-            module = importlib.util.module_from_spec(spec)
-            sys.modules["custom_property_solver"] = module
-            spec.loader.exec_module(module)
-
-            property_solver_class = getattr(module, property_solver["classname"])
-
-            property_solver_instance = property_solver_class()
+    then mark the n_lowest configurations with lowest properties per concentration and
     n_random configurations per concentration.
     This function is intended to be used with binary materials only
 
