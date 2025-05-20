@@ -3,10 +3,11 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import logging
+import pickle
 import random
-from itertools import combinations
+from itertools import combinations, product
 from random import sample
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -40,6 +41,10 @@ class DSGenerator:
         self.configurations = pd.DataFrame(columns=["config_id", "sigma", "shape_id"])
 
         self.masks = {}
+
+    def serialize(self, filepath):
+        with open(filepath, "wb") as f:
+            pickle.dump(self, f)
 
     def add_mask(self, mask_name, config_id_list):
         self.masks[mask_name] = config_id_list
@@ -401,19 +406,23 @@ class DSGenerator:
             ignore_index=True,
         )
 
-    def generate(self, supercell_sizes=None, num_subs_list=None, sc_shape=None, n_random=None, random_state=None):
+    def generate(
+        self, supercell_sizes=None, num_subs_list=None, sc_shape=None, sc_shapes=None, n_random=None, random_state=None
+    ):
         """Generate derivative structures
 
          **Parameters:**
 
          ``supercell_sizes``: list or array of int
              List  of integers indicating the number of unit cells in each derivative supercell
-         ``num_subs_list``: ragged list of lists or arrays of integers
+         ``num_subs_list``: ragged list of lists or arrays of integers, or list of dict for multilattice case
              every list or array in the ragged list, indicate the number of substituents to be
              considered in a given supercell. The first dimension must coincide with the
              dimension of ``supercell_sizes``.
          ``sc_shape``: 3x3 matrix or None
              if only decorations for a single supercell are wanted, specify it here.
+         ``sc_shapes``: list of 3x3 matrix or None
+             list of sc_shapes to generate decorations.
         ``n_random``: int or None
              If provided, generate only this number of random configurations per (shape, nsubs).
          ``random_state``: int or None
@@ -425,13 +434,16 @@ class DSGenerator:
             np.random.seed(random_state)
 
         for i, num_subs in enumerate(num_subs_list):
-
-            if sc_shape is None:
+            if sc_shape is None and sc_shapes is None:
                 sc_size = supercell_sizes[i]
                 _, unique_sc_shapes = get_unique_supercells(sc_size, self.plat)
-            else:
+            elif sc_shapes is None:
                 sc_size = int(round(np.linalg.det(sc_shape)))
                 unique_sc_shapes = [sc_shape]
+
+            else:
+                sc_size = int(round(np.linalg.det(sc_shapes[i])))
+                unique_sc_shapes = [sc_shapes[i]]
 
             for idx, t in enumerate(unique_sc_shapes):
                 print(
@@ -444,7 +456,7 @@ class DSGenerator:
         print(f"Enumeration complete. Found {len(self.configurations)} unique configurations.\n")
 
     def generate_for_shape_nsubs(
-        self, sc_shape: List[List[int]], nsubs: Optional[int] = None, n_random: Optional[int] = None
+        self, sc_shape: List[List[int]], nsubs: Optional[Union[int, dict]] = None, n_random: Optional[int] = None
     ):
         """
         Generate derivative structures.
@@ -473,14 +485,20 @@ class DSGenerator:
         symper = scell.get_sym_perm()
         ssites = scell.get_substitutional_sites()
 
-        if nsubs > len(ssites):
-            logging.error("nsubs cannot exceed the number of substitutional sites.")
-            raise ValueError("nsubs cannot exceed the number of substitutional sites.")
+        if isinstance(nsubs, int):
+            if nsubs > len(ssites):
+                logging.error("nsubs cannot exceed the number of substitutional sites.")
+                raise ValueError("nsubs cannot exceed the number of substitutional sites.")
 
-        if n_random is None:
-            num_conf = self._generate_all_configurations(ssites, nsubs, natoms, shape_id, symper)
-        else:
-            num_conf = self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
+            if n_random is None:
+                num_conf = self._generate_all_configurations(ssites, nsubs, natoms, shape_id, symper)
+            else:
+                num_conf = self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
+        elif isinstance(nsubs, dict):
+            tags = scell.get_tags()
+            sltypes = scell.get_sublattice_types()
+
+            num_conf = self._generate_all_configurations_multilattice(nsubs, natoms, shape_id, symper, tags, sltypes)
 
         logging.info(
             "Found %s unique configurations of %s substitutions in %s-atom size scell.",
@@ -509,6 +527,85 @@ class DSGenerator:
                 self._update_full_list(sigma, symper, full_list)
 
         return len(self.configurations) - num_conf_start
+
+    def _generate_all_configurations_multilattice(self, nsubs, natoms, shape_id, symper, tags, sublattice_types):
+
+        full_list: Set[Tuple[int, ...]] = set()
+        logging.info("Starting to find unique configurations...")
+
+        sigmas = np.zeros(natoms, dtype="int")
+        num_conf_start = len(self.configurations)
+
+        configurations = DSGenerator._generate_multilattice_configurations(natoms, tags, sublattice_types, nsubs)
+
+        for sigma in configurations:
+            if tuple(sigma) not in full_list:
+                self.add_configuration(sigma=sigma, shape_id=shape_id)
+                self._update_full_list(sigma, symper, full_list)
+
+        return len(self.configurations) - num_conf_start
+
+    @staticmethod
+    def _generate_multilattice_configurations(n, tags, sublattice_types, nsubs):
+        tags = np.array(tags)
+
+        # Map ems key -> list of positions in `tags` that match that ems key
+        sublattice_positions = {
+            sublattice_type: list(np.where(tags == sublattice_type)[0]) for sublattice_type in nsubs
+        }
+
+        # Create generators for each domain
+
+        sublattice_labelings = {
+            sublattice_type: DSGenerator._generate_labelings_for_sublattice(
+                n, sublattice_positions[sublattice_type], nsubs[sublattice_type]
+            )
+            for sublattice_type in nsubs
+        }
+
+        # Use product of generators
+        for combo in product(*sublattice_labelings.values()):
+            combined = np.zeros(n, dtype=int)
+            for arr in combo:
+                combined += arr  # safe because positions are disjoint
+            yield combined
+
+    @staticmethod
+    def _generate_labelings_for_sublattice(n, sublattice_positions, nsubs):
+        """
+        Returns generator of labelings for a sublattice
+
+        e.g.
+        sublattice_positions = [3,5,6,7,9]
+        nsubs = [3,1]
+
+        [(0,[3,5,9]),(1,[7])]
+
+        Parameters:
+        -----------
+            positions: list
+                index of atomic positions to allocate substitutions
+            nsubs: list
+                number of substitutions of every kind
+        """
+
+        def recursive_build(level, used_indices):
+            if level == len(nsubs):
+                yield []
+                return
+
+            available = [i for i in sublattice_positions if i not in used_indices]
+            for indices in combinations(available, nsubs[level]):
+                new_used = used_indices | set(indices)
+                for rest in recursive_build(level + 1, new_used):
+                    yield [(level + 1, indices)] + rest
+
+        for assignment in recursive_build(0, set()):
+            full_arr = np.zeros(n, dtype=int)
+            for value, idxs in assignment:
+                for idx in idxs:
+                    full_arr[idx] = value
+            yield full_arr
 
     def _generate_random_configurations(self, ssites, nsubs, natoms, shape_id, symper, n_random):
 
@@ -544,13 +641,18 @@ class DSGenerator:
             isinstance(sc_shape, (list, np.ndarray)) and len(sc_shape) == 3 and all(len(row) == 3 for row in sc_shape)
         ):
             raise ValueError("sc_shape must be a 3x3 list or array of integers.")
-        if not isinstance(nsubs, int) or nsubs < 0:
-            raise ValueError("nsubs must be a non-negative integer.")
 
-    def _create_sigma_array(self, natoms: int, con: Tuple[int]) -> np.ndarray:
+        if not (isinstance(nsubs, dict) or (isinstance(nsubs, int) and nsubs >= 0)):
+            raise ValueError("nsubs must be a dict or a non-negative integer.")
+
+    def _create_sigma_array(
+        self, natoms: int, con: Tuple[int], sigma: int = 1, sigmas: np.ndarray = None
+    ) -> np.ndarray:
         """Create a sigma array from a combination."""
-        sigmas = np.zeros(natoms, dtype="int")
-        np.put(sigmas, con, 1)
+        if sigmas is None:
+            sigmas = np.zeros(natoms, dtype="int")
+
+        np.put(sigmas, con, sigma)
         return sigmas
 
     def _update_full_list(self, sigmas, symper, full_list):
@@ -804,9 +906,9 @@ def _get_normalized_scalar_products(s: np.ndarray):
     return p_ij
 
 
-def get_unique_supercells_large_angles(n, parent_lattice: object, elements: list):
+def get_unique_supercells_small_angles(n, parent_lattice: object, elements: list):
     """
-    Return all unique supercells with large angles.
+    Return all unique supercells with small angles.
     Transformation of those supercells is done by unimodal matrices with matrix elements given by the paramter ``elements``
 
     **Parameters:**
@@ -847,4 +949,5 @@ def get_unique_supercells_large_angles(n, parent_lattice: object, elements: list
             harray,
         )
 
+    return [SuperCell(parent_lattice, p) for p in small_angle_sc_shapes], small_angle_sc_shapes
     return [SuperCell(parent_lattice, p) for p in small_angle_sc_shapes], small_angle_sc_shapes
