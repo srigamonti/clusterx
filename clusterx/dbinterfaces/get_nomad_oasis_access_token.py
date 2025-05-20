@@ -33,7 +33,7 @@ def get_nomad_oasis_access_token(path_to_dotenv=None, username=None, userpasswor
         instead of writing the username in the code visibly.
 
     ``userpassword``: *string*
-        The username to the OASIS.
+        The password to the OASIS.
         It is strongly advised to use environment variables
         instead of writing the password in the code visibly.
     """

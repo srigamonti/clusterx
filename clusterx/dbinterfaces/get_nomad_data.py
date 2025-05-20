@@ -88,7 +88,7 @@ class SingleEntry:
         """"
         Returns the total energy value in eV for a single entry in NOMAD
         """
-        archive = self.download_archive()
+        archive = self.get_archive()
         # To get the converged energy result access the last calculation
         result = archive['run'][0]['calculation'][-1]
         # if the last calculation does not calculate the total energy
@@ -104,7 +104,7 @@ class SingleEntry:
         """"
         Returns an ase Atoms object from the data stored in a NOMAD entry
         """
-        archive = self.download_archive()
+        archive = self.get_archive()
         # get the last entry for system to ensure to get the relaxed geometry
         nomad_atoms = archive['run'][0]['system'][-1]['atoms']
         positions_meter = nomad_atoms['positions']
