@@ -43,8 +43,33 @@ class DSGenerator:
         self.masks = {}
 
     def serialize(self, filepath):
+        """
+        Serialize the current instance to a binary file using pickle.
+
+        Args:
+            filepath (str): Path to the file where the object will be saved.
+        """
         with open(filepath, "wb") as f:
             pickle.dump(self, f)
+
+    @classmethod
+    def from_file(cls, filepath):
+        """
+        Deserialize an instance of DSGenerator from a binary file using pickle.
+
+        Args:
+            filepath (str): Path to the file from which the object will be loaded.
+
+        Returns:
+            DSGenerator: An instance of the class loaded from the file.
+        """
+        with open(filepath, "rb") as f:
+            dss = pickle.load(f)
+
+        if not isinstance(dss, cls):
+            raise TypeError(f"Expected object of type {cls.__name__}, but got {type(dss).__name__}")
+
+        return dss
 
     def add_mask(self, mask_name, config_id_list):
         self.masks[mask_name] = config_id_list
@@ -59,13 +84,16 @@ class DSGenerator:
 
     def get_property(self, config_id, property_name):
         """
-        Retrieve a fractional concentration of configuration by its config_id.
+        Retrieve property value of a configuration by its config_id.
 
         Parameters:
         config_id (int): The ID of the configuration to retrieve.
 
+        property_name (str):
+        the name of the property
+
         Returns:
-        float: The fractional concentration
+        float: The value of the property
 
         Raises:
         KeyError: If the shape_id is not found.
