@@ -46,16 +46,23 @@ def build_nonlinear_model(
     comat = np.load(xp_filepath)["comat"]
     pvals = np.load(xp_filepath)[f"property_{property_name}"]
 
+    default_regression_model = {
+        "module": "sklearn.linear_model",
+        "class": "LinearRegression",
+        "args": {},
+    }
     if regression_model is None:
-        regression_model = {
-            "module": "sklearn.linear_model",
-            "class": "LinearRegression",
-            "args": {}}
+        regression_model = {}
+    regression_model = {**default_regression_model, **regression_model}
+
+    default_nonlinear_transformation = {
+        "module": "sklearn.preprocessing",
+        "class": "PolynomialFeatures",
+        "args": {"degree": 1},
+    }
     if nonlinear_transformation is None:
-        nonlinear_transformation = {
-            "module": "sklearn.preprocessing",
-            "class": "PolynomialFeatures",
-            "args": {"degree": 1}}
+        nonlinear_transformation = {}
+    nonlinear_transformation = {**default_nonlinear_transformation, **nonlinear_transformation}
 
     print(f"Info({get_command_name()}): Computing model")
 
