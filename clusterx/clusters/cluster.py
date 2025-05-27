@@ -2,8 +2,6 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from collections import Counter
-from clusterx.symmetry import get_scaled_positions
 import numpy as np
 
 class Cluster():
@@ -47,7 +45,7 @@ class Cluster():
         if len(atom_indexes)!=0:
             try:
                 self.ais,self.ans = list(zip(*sorted(zip(np.array(atom_indexes),np.array(atom_numbers)))))
-            except:
+            except: # TODO: specify exception, when does this happen? Or delete try-except?
                 raise ValueError("Cluster initialization failed")
 
         else:
@@ -64,7 +62,6 @@ class Cluster():
             self.alphas = np.zeros(len(atom_indexes),dtype=int)
             self.site_type = np.zeros(len(atom_indexes),dtype=int)
             sites = super_cell.get_sites()
-            idx_subs = super_cell.get_idx_subs()
             tags = super_cell.get_tags()
 
             self.positions_cartesian = np.zeros((self.npoints,3))
@@ -204,7 +201,7 @@ class Cluster():
             The parameter ``cell`` contains row-wise the corresponding cartesian
             coordinates of the cell vectors.
         """
-        from clusterx.symmetry import get_scaled_positions, get_internal_translations, wrap_scaled_positions
+        from clusterx.symmetry import get_scaled_positions
 
         orbit = []
         for r,t in zip(rr,tt):

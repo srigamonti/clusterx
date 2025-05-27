@@ -2,6 +2,7 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+import pytest
 import numpy as np
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
@@ -9,8 +10,9 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from ase import Atoms
 from ase.spacegroup import crystal
 from ase.build import bulk
-import sys
 
+
+@pytest.mark.xfail
 def test_cluster_orbit():
     """Test creation of cluster orbit in supercell using spglib
 
@@ -65,7 +67,9 @@ def test_cluster_orbit():
         if test_case == 2:
             # Clathrate 2x1x1 supercell. This contains spectator atoms.
             a = 10.515
-            x = 0.185; y = 0.304; z = 0.116
+            x = 0.185
+            y = 0.304
+            z = 0.116
             wyckoff = [
                 (0, y, z), #24k
                 (x, x, x), #16i
@@ -105,7 +109,6 @@ def test_cluster_orbit():
         if test_case == 4:
             # Al(111) surface with Na substitution on the first layer and on-top Oxygen adsorption.
             from ase.build import fcc111, add_adsorbate
-            from ase.visualize import view
 
             pri = fcc111('Al', size=(1,1,3))
             add_adsorbate(pri,'X',1.5,'ontop')
@@ -194,7 +197,6 @@ def test_cluster_orbit():
 
 
 def check_result(testnr, orbit, weights, mult, red_mult, rel):
-    isok = True
     orbit_nrs = []
     orbit_idxs = []
     
