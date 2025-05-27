@@ -3,7 +3,28 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import pytest
+import numpy as np
+
 from clusterx.clusters.cluster import Cluster
+from clusterx.test.defaults import get_clathrate_supercell
+
+
+def test_init_supercell():
+    """Test initialization of Cluster with SuperCell"""
+    sc = get_clathrate_supercell()
+    c = Cluster([0,1,2,3],[13,14,15,16], super_cell=sc)
+
+
+def test_init_index():
+    """Test initialization of Cluster without SuperCell"""
+    c = Cluster([0,1,2,3],[13,14,15,16])
+    np.testing.assert_array_equal(c.ais, np.array([0,1,2,3]))
+    np.testing.assert_array_equal(c.ans, np.array([13,14,15,16]))
+    assert c.npoints == 4
+    assert c.positions_cartesian is None
+    assert c.alphas is None
+    assert c.radius is None
+    assert c.myhash is not None
 
 
 def test_equal():
