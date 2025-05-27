@@ -28,7 +28,7 @@ commands = ["compute_comat"]
     dss_filepath=(
         "Path to a serialized DerivativeStructures object. Correlations of all structures are computed and saved as a 2D array.",
         "option",
-        "ssf",
+        "dsf",
         str,
     ),
     comat_filepath=(
