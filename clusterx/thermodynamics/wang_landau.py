@@ -745,7 +745,7 @@ class WangLandau():
             nproc=0,
             **kwargs
     ):
-        """Perform Wang Landau simulation
+        r"""Perform Wang Landau simulation
 
         **Description**: 
             The Wang-Landau algorithm uses the fact that a Markov chain with transition probability 

@@ -17,7 +17,7 @@ from clusterx.structure import Structure
 
 
 class MonteCarlo:
-    """Monte Carlo class
+    r"""Monte Carlo class
 
     **Description**:
         Objects of this class are used to perform Monte Carlo samplings.
@@ -173,7 +173,7 @@ class MonteCarlo:
         filename=None,
         **kwargs
     ):
-        """Perform Monte-Carlo Metropolis simulation
+        r"""Perform Monte-Carlo Metropolis simulation
 
         **Description**:
             Perfom Monte-Carlo Metropolis sampling for
