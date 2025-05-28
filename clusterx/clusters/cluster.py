@@ -71,7 +71,7 @@ class Cluster():
                 self.positions_cartesian[ip] = super_cell.get_positions()[idx]
                 #self.positions_scaled[ip] = super_cell.get_scaled_positions(wrap=True)[idx]
                 self.site_type[ip] = tags[idx]
-                self.alphas[ip] = np.argwhere(sites[idx] == self.ans[ip])
+                self.alphas[ip] = np.argwhere(sites[idx] == self.ans[ip])[0, 0]
 
             """
             # Set radius
