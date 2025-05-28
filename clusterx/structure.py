@@ -306,7 +306,7 @@ class Structure(SuperCell):
         """Set Calculator object for structure."""
         # super(Structure,self).set_calculator(calculator)
         self._calc = calculator
-        self.atoms.set_calculator(calculator)
+        self.atoms.calc = calculator
 
     def get_positions(self, wrap=False, **wrap_kw):
         return super(Structure, self).get_positions(wrap, **wrap_kw)

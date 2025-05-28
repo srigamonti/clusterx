@@ -849,7 +849,7 @@ def remove_vacancies(at):
         pbc=at.get_pbc(),
         numbers=numbers,
         positions=positions,
-        calculator=at.get_calculator(),
+        calculator=at.calc,
         tags=tags,
         momenta=momenta,
         masses=masses,
