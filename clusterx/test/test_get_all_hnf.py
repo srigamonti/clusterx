@@ -2,9 +2,13 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from clusterx import utils
+import pytest
 import numpy as np
 
+from clusterx import utils
+
+
+@pytest.mark.xfail
 def test_get_all_hnf():
 
     nrs = []

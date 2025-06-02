@@ -53,7 +53,7 @@ def test_emt2_calculator():
     strset.serialize(path="test_cluster_expansion_structures_set.json")
 
     strset.set_calculator(EMT2())
-    energies = strset.calculate_property()
+    energies = strset.compute_property_values()
 
     # Generate output
     print ("\n\n========Test writes========")
@@ -64,5 +64,7 @@ def test_emt2_calculator():
 
     print ("========Asserts========")
 
-    assert np.allclose( [ 420.02464215,  11.85279614, 200.11679975,  27.15487534, 162.41156144, 193.56777501,  11.85279614,  35.84803264, 585.51975722, 213.05311213], energies,atol=1e-5)
+    np.testing.assert_allclose(
+        [ 420.02464215,  11.85279614, 200.11679975,  27.15487534, 162.41156144, 193.56777501,  11.85279614,  35.84803264, 585.51975722, 213.05311213],
+        energies, atol=1e-5)
     #print(comat)

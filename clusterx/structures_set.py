@@ -492,7 +492,7 @@ class StructuresSet():
         for folder in self._folders:
             os.chdir(folder)
             atoms = read(structure_fname)
-            atoms.set_calculator(calculator)
+            atoms.calc = calculator
             erg = atoms.get_potential_energy()
             f = open(os.path.join("energy.dat"),"w+")
             f.write(str(erg))

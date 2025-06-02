@@ -60,7 +60,7 @@ def test_structure_selector():
     ntrainingstr = 14
 
     for idx in range(ntrainingstr):
-        training_set.add_structure(scell.gen_random(nsubs={0:[5]}))
+        training_set.add_structure(scell.gen_random_structure(nsubs={0:[5]}))
 
     training_set.serialize(path="test_structure_selection_training_set.json", overwrite=True)
 
@@ -120,7 +120,7 @@ def test_structure_selector():
     candidate_set = StructuresSet(plat)
     ncandidatestr = 6
     for idx in range(ncandidatestr):
-        candidate_set.add_structure(scell.gen_random(nsubs={0:[5]}))
+        candidate_set.add_structure(scell.gen_random_structure(nsubs={0:[5]}))
 
     candidate_set.serialize(path="test_structure_selection_candidate_set.json", overwrite=False, rm_vac=False)
 

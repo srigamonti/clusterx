@@ -5,8 +5,11 @@
 import numpy as np
 from ase.build import bulk
 from ase.spacegroup import crystal
+
 from clusterx.parent_lattice import ParentLattice
 from clusterx.utils import dict_compare
+from clusterx.super_cell import SuperCell
+
 
 def test_parent_lattice_creation():
     """Test creation of a parent lattice for a fictitious quaternary zincblende crystal and for a Ternary clathrate.
@@ -43,7 +46,7 @@ def test_parent_lattice_creation():
     print(parent_lattice1.get_sublattice_types(pretty_print=True))
     parent_lattice1.serialize(fname="test_parent_lattice_creation_1.json")
 
-    parent_lattice2 = ParentLattice(json_db_filepath="test_parent_lattice_creation_1.json")
+    parent_lattice2 = ParentLattice(filepath="test_parent_lattice_creation_1.json")
 
 
     print ("\n\n========Test writes========")
@@ -274,3 +277,37 @@ def check_result(parent_lattice, case):
                 return False
 
     return isok
+
+def test_is_nary():
+    """Test ParentLattice.is_nary() method
+    """
+    cu = bulk("Cu","fcc")
+    au = bulk("Au","fcc")
+    ag = bulk("Ag","fcc")
+
+    plat = ParentLattice(atoms=cu, substitutions=[au,ag])
+
+    scell = SuperCell(plat, [[2,2,-2],[2,-2,2],[-2,2,2]])
+
+    s = scell.gen_random_structure(nsubs={0:[10,3]})
+
+    isok1 = (s.is_nary(3) is True) and (s.is_nary(4) is False)
+
+    plat2 = ParentLattice(atoms=cu, site_symbols=[["Cu","Au","Ag","X"]])
+
+    isok2 = (plat2.is_nary(2) is False) and (plat2.is_nary(4) is True)
+
+    cuau = bulk("CuAu","zincblende",a=3.0)
+    cuag = bulk("CuAg","zincblende",a=3.0)
+
+    plat3 = ParentLattice(atoms=cuau, substitutions=[cuag])
+    isok3 = (plat3.is_nary(2) is True) and (plat3.is_nary(4) is False)
+
+    cuau = bulk("CuAu","zincblende",a=3.0)
+    cuag = bulk("CuAg","zincblende",a=3.0)
+    siau = bulk("SiAu","zincblende",a=3.0)
+
+    plat4 = ParentLattice(atoms=cuau, substitutions=[cuag,siau])
+    isok4 = (plat4.is_nary(2) is False) and (plat4.is_nary(3) is False) and (plat4.is_nary(4) is False)
+
+    assert (isok1 and isok2 and isok3 and isok4)

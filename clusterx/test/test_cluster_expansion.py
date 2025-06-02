@@ -2,18 +2,21 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-import clusterx as c
+from ase import Atoms
+import numpy as np
+from sklearn.model_selection import LeaveOneOut
+from sklearn.model_selection import cross_val_score
+from sklearn import linear_model
+from sklearn.metrics import mean_squared_error
+
+from clusterx.calculators.emt import EMT2
+from clusterx.utils import isclose
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
-#from clusterx.model import ModelConstructor
-from ase import Atoms
-import numpy as np
-from clusterx.calculators.emt import EMT2
-from clusterx.utils import isclose
 
 
 def test_cluster_expansion():
@@ -77,18 +80,13 @@ def test_cluster_expansion():
     # Get the DATA(comat) + TARGET(energies)
     comat = corrcal.get_correlation_matrix(strset)
     strset.set_calculator(EMT2())
-    energies = strset.calculate_property()
+    energies = strset.compute_property_values()
 
     #fitter_model = Fitter(method = "skl_LinearRegression")
 
     clsets = cpool.get_clusters_sets(grouping_strategy = "size")
 
-    from sklearn.model_selection import LeaveOneOut
-    from sklearn.model_selection import cross_val_score
-    from sklearn import linear_model
-    from sklearn.metrics import make_scorer, r2_score, mean_squared_error
-
-    fitter_cv = linear_model.LinearRegression(fit_intercept=True, normalize=False)
+    fitter_cv = linear_model.LinearRegression(fit_intercept=True)
     #fitter_cv = linear_model.LinearRegression(fit_intercept=False, normalize=False)
 
     cv = []
