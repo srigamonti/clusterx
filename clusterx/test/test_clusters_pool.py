@@ -15,7 +15,7 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.super_cell import SuperCell
 from clusterx.test.defaults import get_clathrate_plat
 
-
+# TODO: fix reference/expected values
 def test_2D_radii():
     cell = [
         [3,0,0],

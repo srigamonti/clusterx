@@ -11,6 +11,7 @@ from ase.spacegroup import crystal
 from ase.build import bulk
 import sys
 
+# TODO: Can this be deleted? The slow version is only kept for legacy reasons?
 def test_cluster_orbit2():
     """Test creation of cluster orbit in supercell using spglib
 
