@@ -42,9 +42,9 @@ class ClustersPool:
         (Note: Experimental feature.  The generated multiplicities may not be
         valid for clusters larger than half the size of the supercell. Use
         ``radii`` to get accurate multiplicities.)
-    ``method``: integer (1 or 2)
-        If 1, an elimination method is used to build the clusters pool. If 2, an
-        incremental method is used instead. Use method 2 only if ``super_cell`` is
+    ``method``: integer (0 or 1)
+        If 0, an elimination method is used to build the clusters pool. If 1, an
+        incremental method is used instead. Use method 1 only if ``super_cell`` is
         ``None``.
     ``filepath``: string (default: None)
         Overrides all the above. Used to initialize from file. Path of a json

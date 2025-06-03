@@ -15,6 +15,38 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.super_cell import SuperCell
 from clusterx.test.defaults import get_clathrate_plat
 
+
+def test_methods():
+    cp_list = []
+    for method in [0, 1]:
+        cell = [
+            [3,0,0],
+            [0,1,0],
+            [0,0,5]]
+        positions = [
+            [0,0,0],
+            [1,0,0],
+            [2,0,0]]
+        pbc = [True,True,False]
+
+        pri = Atoms(['H','H','H'], positions=positions, cell=cell, pbc=pbc)
+        su1 = Atoms(['C','H','H'], positions=positions, cell=cell, pbc=pbc)
+        su2 = Atoms(['H','He','H'], positions=positions, cell=cell, pbc=pbc)
+        su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
+
+        pl = ParentLattice(pri, substitutions=[su1, su2, su3], pbc=pbc)
+        cp = ClustersPool(
+            pl, npoints=[1, 2], radii=[0, 2.1], method=method)
+        cp_list.append(cp.get_cpool_list())
+    for cp in cp_list:
+        cp.sort()
+    for cp0, cp1 in zip(cp_list[0], cp_list[1]):
+        print("0: ", cp0)
+        print("1: ", cp1)
+        print("Equal: ", cp0 == cp1)
+        assert cp0 == cp1
+
+
 # TODO: fix reference/expected values
 def test_2D_radii():
     cell = [
@@ -33,7 +65,7 @@ def test_2D_radii():
     su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
 
     pl = ParentLattice(pri, substitutions=[su1,su2,su3], pbc=pbc)
-    cp = ClustersPool(pl, npoints=[1,2,3], radii=[0,2.1,2.1])
+    cp = ClustersPool(pl, npoints=[1, 2, 3], radii=[0, 2.1, 2.1])
     cp.write_clusters_db(db_name="test_clusters_generation_1.json")
     cp.get_multiplicities()
     atom_idxs, atom_nrs = cp.get_cpool_arrays()
