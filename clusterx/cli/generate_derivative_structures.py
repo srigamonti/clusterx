@@ -33,7 +33,7 @@ commands = ["generate_derivative_structures"]
     plat_filepath=("Filepath of a serialized ParentLattice object.", "option", "plfp", str),
     dss_filepath=("Filepath to serialize or retrieve derivative structures.", "option", "dssfp", str),
     property_name=("Name of the property to request from the structures set.", "option", "plab", str),
-    property_names=("Names of the property to request from the structures set.", "option", "plab", list),
+    property_names=("Names of the property to request from the structures set.", "option", "plabs", list),
     property_solver=("Dictionary of parameters for the property solver.", "option", "psol", dict),
     sc_shape=("3x3 integer matrix to specify supercell shape.", "option", "scsh", list),
     per_formula_unit=("Flag: compute per formula unit.", "flag", "pfu", bool),
@@ -233,12 +233,20 @@ def generate_derivative_structures(
 
             nstruc = len(data)
 
+            print("Creating sset object")
+            scell_cache = {}
             for i in range(nstruc):
                 sigma = data.iloc[i]["sigma"]
-                sc_shape = sc_shapes.loc[sc_shapes["shape_id"] == data.iloc[i]["shape_id"], "shape"].iloc[0]
-                scell = SuperCell(plat, sc_shape)
+                shape_id = data.iloc[i]["shape_id"]
+
+                if shape_id not in scell_cache:
+                    sc_shape = sc_shapes.loc[sc_shapes["shape_id"] == shape_id, "shape"].iloc[0]
+                    scell_cache[shape_id] = SuperCell(plat, sc_shape)
+
+                scell = scell_cache[shape_id]
                 sset.add_structure(Structure(scell, sigmas=sigma), mask=mask_name)
 
+            print("serializing sset to json")
             sset.serialize(filepath=sset_filepath, overwrite=True)
 
         case 100:
