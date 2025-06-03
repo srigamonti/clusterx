@@ -52,8 +52,6 @@ def test_metropolis():
     cp = cpool._cpool
     cpsc = cpool.get_cpool_scell()
     s = cn["Al"]
-    cpool.add_cluster(Cluster([],[],cpsc))
-    cpool.add_cluster(Cluster([0],[s],cpsc))
     cpool.add_cluster(Cluster([24],[s],cpsc))
     cpool.add_cluster(Cluster([40],[s],cpsc))
     cpool.add_cluster(Cluster([6,4],[s,s],cpsc))
@@ -113,7 +111,7 @@ def test_metropolis():
         0.004843235304331
     ]
 
-    cpoolBonds = ClustersPool(plat, npoints=[0,1], radii=[0,0])
+    cpoolBonds = ClustersPool(plat, npoints=[1], radii=[0])
     corcBonds = CorrelationsCalculator("binary-linear", plat, cpoolBonds)
 
     multB=[1,24,16,6]
@@ -294,7 +292,7 @@ def test_metropolis():
     idx_subs = scellE2.get_idx_subs()
     print("Sublattices with corresponding atomic numbers: ",idx_subs)
 
-    cpoolE2 = ClustersPool(plat2, npoints=[0,1], radii=[0,0])
+    cpoolE2 = ClustersPool(plat2, npoints=[1], radii=[0])
     corcE2 = CorrelationsCalculator("trigonometric", plat2, cpoolE2)
 
     multT2=cpoolE2.get_multiplicities()

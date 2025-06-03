@@ -106,7 +106,7 @@ def test_fcc_radii():
     sites = [[an["Cu"], an["Au"]]]
     pl = ParentLattice(pris,sites=sites)
 
-    cp = ClustersPool(pl, npoints=[0,1,2,3], radii=[0,0,5.0,5.0])
+    cp = ClustersPool(pl, npoints=[1,2,3], radii=[0,5.0,5.0])
     cp.write_clusters_db(db_name="test_clusters_generation_3.json")
 
     mult = cp.get_multiplicities()
@@ -141,7 +141,6 @@ def test_2D_acute_angle():
     pris = Atoms(cell=cell*a,positions=positions*a,pbc=pbc)
     pl = ParentLattice(pris,sites=sites,pbc=pbc)
 
-    #cp = ClustersPool(pl,npoints=[0,1,2,3],radii=[0,0,4.5*a,4.5*a])
     cp = ClustersPool(pl,npoints=[2],radii=[2.0*a])
     atoms = cp.get_cpool_scell().get_pristine_structure().get_atoms()
     write(
@@ -173,9 +172,7 @@ def test_pt_111():
     pris = Atoms(cell=cell,positions=positions,pbc=pbc)
     pl = ParentLattice(pris,sites=sites,pbc=pbc)
 
-    cp = ClustersPool(pl,npoints=[0,1,2,3],radii=[0,0,3.3,3.0])
-    #cp = ClustersPool(pl,npoints=[0,1,2],radii=[0,0,3.3])
-    #write(filename="test_clusters_generation_scell_part5.json",images=cp.get_cpool_scell().get_atoms(),format="json")
+    cp = ClustersPool(pl,npoints=[1,2,3],radii=[0,3.3,3.0])
     cp.write_clusters_db(db_name="test_clusters_generation_5.json")
 
     mult = cp.get_multiplicities()
@@ -205,7 +202,7 @@ def test_clathrate():
     plat = get_clathrate_plat()
 
     #cp = ClustersPool(plat,npoints=[1,2],radii=[0,5.7],super_cell=SuperCell(plat,np.diag([2,1,1])))
-    cp = ClustersPool(plat,npoints=[0,1,2],radii=[0,0,5.0])
+    cp = ClustersPool(plat,npoints=[1,2],radii=[0,5.0])
     cp.write_clusters_db(db_name="test_clusters_generation_6.json")
 
     mult = cp.get_multiplicities()
@@ -236,7 +233,7 @@ def test_negative_radii():
 
     scell = SuperCell(plat,np.array([(6,0,0),(0,6,0),(0,0,1)]))
     cp = ClustersPool(
-        plat, npoints=[0,1,2,3,4], radii=[0,0,-1,4.1,2.9], super_cell=scell)
+        plat, npoints=[1,2,3,4], radii=[0,-1,4.1,2.9], super_cell=scell)
     cp.write_clusters_db(db_name="test_clusters_generation_7.json")
 
     mult = cp.get_multiplicities()

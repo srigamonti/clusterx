@@ -47,8 +47,7 @@ def test_clusters_selector_lasso():
     su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
 
     plat = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
-    cpool = ClustersPool(plat, npoints=[0,1,2,3,4], radii=[0,0,2.3,2.3,2.3])
-    #cpool = ClustersPool(plat, npoints=[1,2,3,4], radii=[0,2.3,1.42,1.42])
+    cpool = ClustersPool(plat, npoints=[1,2,3,4], radii=[0,2.3,2.3,2.3])
     cpool.write_clusters_db(cpool.get_cpool(),cpool.get_cpool_scell(),"cpool.json")
     corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
 

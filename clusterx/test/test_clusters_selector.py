@@ -46,16 +46,12 @@ def test_clusters_selector():
     su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
 
     plat = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
-    cpool = ClustersPool(plat, npoints=[0,1,2,3,4], radii=[0,0,2.3,2.3,1.42])
-    #cpool = ClustersPool(plat, npoints=[1,2,3,4], radii=[0,2.3,1.42,1.42])
+    cpool = ClustersPool(plat, npoints=[1,2,3,4], radii=[0,2.3,2.3,1.42])
     cpool.write_clusters_db(cpool.get_cpool(),cpool.get_cpool_scell(),"cpool.json")
     corrcal = CorrelationsCalculator("trigonometric", plat, cpool)
 
     scell = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
     strset = StructuresSet(plat)
-    nstr = 20
-    #for i in range(nstr):
-    #    strset.add_structure(scell.gen_random(nsubs={}))
     strset.add_structure(Structure(scell,[1,2,1,6,7,1,1,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,1,1,1,1,1,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,2,1,1,7,1,6,7,1]),write_to_db=True)
