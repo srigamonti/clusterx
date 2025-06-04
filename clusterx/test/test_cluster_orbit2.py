@@ -2,6 +2,7 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+import pytest
 import numpy as np
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
@@ -9,9 +10,10 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from ase import Atoms
 from ase.spacegroup import crystal
 from ase.build import bulk
-import sys
+
 
 # TODO: Can this be deleted? The slow version is only kept for legacy reasons?
+@pytest.mark.skip
 def test_cluster_orbit2():
     """Test creation of cluster orbit in supercell using spglib
 

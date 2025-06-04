@@ -506,7 +506,7 @@ class WangLandau():
             self,
             energy_model,
             energy_factor=1.0,
-            scell = None,
+            scell = None,# TODO: this should not have a default value, but be required
             nsubs = None,
             ensemble = "canonical",
             sublattice_indices = [],
