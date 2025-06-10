@@ -16,6 +16,32 @@ from clusterx.super_cell import SuperCell
 from clusterx.test.defaults import get_clathrate_plat
 
 
+@pytest.fixture
+def cpool():
+    cell = [
+        [3,0,0],
+        [0,1,0],
+        [0,0,5]]
+    positions = [
+        [0,0,0],
+        [1,0,0],
+        [2,0,0]]
+    pbc = [True,True,False]
+
+    pri = Atoms(['H','H','H'], positions=positions, cell=cell, pbc=pbc)
+    su1 = Atoms(['C','H','H'], positions=positions, cell=cell, pbc=pbc)
+    su2 = Atoms(['H','He','H'], positions=positions, cell=cell, pbc=pbc)
+    su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
+
+    pl = ParentLattice(pri, substitutions=[su1,su2,su3], pbc=pbc)
+    return ClustersPool(pl, npoints=[1, 2, 3], radii=[0, 2.1, 2.1])
+
+
+def test_serialize_load(cpool):
+    cpool.serialize(filepath='cpool.json')
+    _ = ClustersPool(filepath='cpool.json')
+
+
 def test_0_point_raises():
     """Test that ClustersPool raises an error when npoints is set to 0."""
     cell = [
