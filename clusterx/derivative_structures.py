@@ -21,6 +21,13 @@ from clusterx.utils import _is_integer_matrix
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
+def _filter_property_names(property_name, property_names):
+    if property_name and property_names:
+        raise ValueError("Only one of property_name or property_names can be provided.")
+    if not (property_name or property_names):
+        raise ValueError("At least one of property_name or property_names must be provided.")
+
+
 class DSGenerator:
     """Generation of derivative structures
 
@@ -96,7 +103,7 @@ class DSGenerator:
         float: The value of the property
 
         Raises:
-        KeyError: If the shape_id is not found.
+        KeyError: If the config_id is not found.
         """
         result = self.configurations[self.configuration["config_id"] == config_id]
         if not result.empty:
@@ -104,7 +111,7 @@ class DSGenerator:
                 raise ValueError(f"Property '{property_name}' does not exist in the configurations DataFrame.")
 
             return result.iloc[0][property_name]
-        raise KeyError(f"Shape ID {shape_id} not found.")
+        raise KeyError(f"Shape ID {config_id} not found.")
 
     def get_fractional_concentration_binary(self, config_id):
         """
@@ -117,7 +124,7 @@ class DSGenerator:
         float: The fractional concentration
 
         Raises:
-        KeyError: If the shape_id is not found.
+        KeyError: If the config_id is not found.
         """
         result = self.configurations[self.configurations["config_id"] == config_id]
         if not result.empty:
@@ -128,11 +135,12 @@ class DSGenerator:
 
             result = self.configurations[self.configurations["config_id"] == config_id]
             return result.iloc[0][column_name]
-        raise KeyError(f"Shape ID {shape_id} not found.")
+        raise KeyError(f"Shape ID {config_id} not found.")
 
     def compute_properties(
         self,
-        property_name,
+        property_name=None,
+        property_names=None,
         ase_calculator=None,
         cemodel=None,
         property_solver=None,
@@ -141,7 +149,7 @@ class DSGenerator:
         per_formula_unit=False,
     ):
         """Compute properties"""
-
+        _filter_property_names(property_name, property_names)
         scell_cache = {}
 
         def _get_structure_object(row):
@@ -179,6 +187,8 @@ class DSGenerator:
                     conc,
                     **property_solver_kwargs,
                 )
+        #else: # TODO: add this in a later version
+        #    raise ValueError("At least one of ase_calculator, cemodel, or property_solver must be provided.")
 
         if per_formula_unit:
 
@@ -206,7 +216,14 @@ class DSGenerator:
 
             _value_func = _subtract_linear_reference(_value_func)
 
-        self.set_property_values_iteratively(property_name, _value_func)
+        if property_name: # single property is computed
+            self.set_property_values_iteratively(
+                property_name=property_name,
+                value_func=_value_func)
+        elif property_names: # multiple properties are computed
+            self.set_property_values_iteratively(
+                property_names=property_names,
+                value_func=_value_func)
 
     def add_fractional_concentration_binary(self, recompute=False):
         """
@@ -266,7 +283,9 @@ class DSGenerator:
             frconc_dict[key] = conc
             return conc
 
-        self.set_property_values_iteratively("frconc_binary", _compute_frcon)
+        self.set_property_values_iteratively(
+            value_func=_compute_frcon,
+            property_name="frconc_binary")
 
     def add_property_column(self, property_name, default_value=None):
         """
@@ -286,16 +305,27 @@ class DSGenerator:
 
         self.configurations[column_name] = default_value
 
-    def set_property_values_iteratively(self, property_name, value_func, create_if_missing=True, **kwargs):
+    def set_property_values_iteratively(
+        self,
+        value_func,
+        property_name=None,
+        property_names=None,
+        create_if_missing=True,
+        **kwargs
+    ):
         """
         Sets property values iteratively using a function to compute values on the fly.
 
         **Parameters:**
 
-        property_name : str
-            The name of the property whose values are to be set.
         value_func : callable
             A function that takes a row of the DataFrame and optional keyword arguments, returning the value for the property.
+        property_name : str
+            The name of the property whose values are to be set.
+            Either this or property_names must be provided.
+        property_names : list(str)
+            The name of the properties whose values are to be set.
+            Either this or property_name must be provided.
         create_if_missing : bool, optional
             If True, creates the column if it does not exist. Defaults to True.
         kwargs : dict
@@ -307,23 +337,35 @@ class DSGenerator:
             return row["sigma"] * multiplier + offset
 
         generator.set_property_values_iteratively(
-            "example_property",
             compute_value_with_args,
+            property_name="example_property",
             multiplier=2,
             offset=5
         )
         ```
         """
-        column_name = property_name
+        _filter_property_names(property_name, property_names)
+        if property_name:
+            column_names = [property_name]
+        elif property_names:
+            column_names = property_names
 
-        if column_name not in self.configurations.columns:
-            if create_if_missing:
-                self.configurations[column_name] = None
-                print(f"Created new column '{column_name}' in the configurations DataFrame.")
-            else:
-                raise ValueError(f"Column '{column_name}' does not exist in the configurations DataFrame.")
+        for column_name in column_names:
+            if column_name not in self.configurations.columns:
+                if create_if_missing:
+                    self.configurations[column_name] = None
+                    print(f"Created new column '{column_name}' in the configurations DataFrame.")
+                else:
+                    raise ValueError(f"Column '{column_name}' does not exist in the configurations DataFrame.")
 
-        self.configurations[column_name] = self.configurations.apply(lambda row: value_func(row, **kwargs), axis=1)
+        if len(column_names) == 1:
+            self.configurations[column_names[0]] = self.configurations.apply(
+                lambda row: value_func(row, **kwargs), axis=1)
+        else:
+            self.configurations[column_names] = self.configurations.apply(
+                lambda row: value_func(row, **kwargs),
+                axis=1,
+                result_type="expand")
 
     def set_property_values_from_array(self, property_name, values, create_if_missing=True):
         """
@@ -456,7 +498,8 @@ class DSGenerator:
          ``random_state``: int or None
              If provided, used to seed the random number generators for reproducibility.
         """
-
+        # TODO: make supercell_sizes positional and required argument, as this
+        # method does not work without it.
         if random_state is not None:
             random.seed(random_state)
             np.random.seed(random_state)
@@ -561,7 +604,6 @@ class DSGenerator:
         full_list: Set[Tuple[int, ...]] = set()
         logging.info("Starting to find unique configurations...")
 
-        sigmas = np.zeros(natoms, dtype="int")
         num_conf_start = len(self.configurations)
 
         configurations = DSGenerator._generate_multilattice_configurations(natoms, tags, sublattice_types, nsubs)
