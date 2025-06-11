@@ -167,6 +167,7 @@ def generate_derivative_structures(
                 property_solver=property_solver_instance.compute_property,
                 property_solver_kwargs=property_solver.get("kwargs", {}),
                 property_name=property_name,
+                property_names=property_names,
                 dss_filepath=dss_filepath,
                 per_formula_unit=per_formula_unit,
                 linear_reference=linear_reference,
@@ -362,6 +363,7 @@ def _do_compute_properties(
     property_solver: Optional[Callable[..., float]] = None,
     property_solver_kwargs: Optional[dict] = None,
     property_name: str = "property",
+    property_names: str = None,
     dss_filepath: str = "dss.pickle",
     per_formula_unit: bool = False,
     linear_reference: Optional[Union[List[List[float]], List[dict]]] = None,
@@ -374,21 +376,24 @@ def _do_compute_properties(
 
     if cem is not None:
         dss.compute_properties(
-            property_name,
+            property_name=property_name,
+            property_names=property_names,
             cemodel=cem,
             per_formula_unit=per_formula_unit,
             linear_reference=linear_reference,
         )
     elif calculator is not None:
         dss.compute_properties(
-            property_name,
+            property_name=property_name,
+            property_names=property_names,
             calculator=calculator,
             per_formula_unit=per_formula_unit,
             linear_reference=linear_reference,
         )
     elif property_solver is not None:
         dss.compute_properties(
-            property_name,
+            property_name=property_name,
+            property_names=property_names,
             property_solver=property_solver,
             property_solver_kwargs=property_solver_kwargs,
             per_formula_unit=per_formula_unit,
