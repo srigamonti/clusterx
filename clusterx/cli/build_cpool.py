@@ -75,6 +75,7 @@ def build_cpool(
         cpool_filepath: Output filepath for the cluster pool (default: "cpool.json").
         vacancy_atomic_number: Atomic number for vacancy site (default: 0).
         mlims: Limits on magnetic moments (optional list of ints).
+        # TODO(SR): Clarify, what does this have to do with magnetic moements?
 
     Notes:
         This function is exposed via the CLI and is parsed by the `plac` library.
@@ -99,6 +100,9 @@ def build_cpool(
 
     if plat_filepath is not None:
         plat = ParentLattice(filepath=plat_filepath)
+    if not (plat_filepath or sset_filepath):
+        raise ValueError(
+            "Either sset_filepath or plat_filepath must be provided.")
 
     scell = SuperCell(plat, p=psc)
     cpool = ClustersPool(plat, npoints=npoints, radii=radii, super_cell=scell, method=method)

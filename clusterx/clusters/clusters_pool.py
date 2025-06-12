@@ -796,6 +796,7 @@ class ClustersPool:
 
         call(["rm", "-f", db_name])
         atoms_db = JSONDatabase(filename=db_name)
+        #atoms_db = connect(db_name, append=False) # for future reference
 
         cpool_atoms = self.get_cpool_atoms(
             orbit=orbit,
