@@ -2,6 +2,7 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+import pytest
 import numpy as np
 from ase.build import bulk
 from ase.spacegroup import crystal
@@ -9,6 +10,23 @@ from ase.spacegroup import crystal
 from clusterx.parent_lattice import ParentLattice
 from clusterx.utils import dict_compare
 from clusterx.super_cell import SuperCell
+
+
+@pytest.fixture
+def pristine():
+    return bulk('Cu', 'fcc', a=3.6)
+
+
+def test_with_symbols(pristine):
+    symbols = [['Cu', 'Au']]
+    plat = ParentLattice(atoms=pristine, symbols=symbols)
+    plat = ParentLattice(atoms=pristine, site_symbols=symbols)
+    np.testing.assert_array_equal(plat.get_sublattice_types()[0], [29, 79])
+
+
+def test_with_numbers(pristine):
+    plat = ParentLattice(atoms=pristine, numbers=[[29, 79]])
+    np.testing.assert_array_equal(plat.get_sublattice_types()[0], [29, 79])
 
 
 def test_parent_lattice_creation():
@@ -28,7 +46,7 @@ def test_parent_lattice_creation():
     parent_lattice0.serialize(fname="test_parent_lattice_creation_0.json")
     # Clathrate
     a = 10.515
-    x = 0.185; y = 0.304; z = 0.116
+    x, y, z = 0.185, 0.304, 0.116
     wyckoff = [
         (0, y, z), #24k
         (x, x, x), #16i
@@ -43,7 +61,7 @@ def test_parent_lattice_creation():
     sub3 = crystal(['Si','Si','Si','Sr','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
 
     parent_lattice1 = ParentLattice(atoms=pri,substitutions=[sub1,sub2,sub3])
-    print(parent_lattice1.get_sublattice_types(pretty_print=True))
+    parent_lattice1.print_sublattice_types()
     parent_lattice1.serialize(fname="test_parent_lattice_creation_1.json")
 
     parent_lattice2 = ParentLattice(filepath="test_parent_lattice_creation_1.json")
