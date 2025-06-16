@@ -37,7 +37,7 @@ commands = ["generate_derivative_structures"]
     property_solver=("Dictionary of parameters for the property solver.", "option", "psol", dict),
     sc_shape=("3x3 integer matrix to specify supercell shape.", "option", "scsh", list),
     per_formula_unit=("Flag: compute per formula unit.", "flag", "pfu", bool),
-    linear_reference=("Linear reference for property correction.", "option", "lref", list),
+    linear_reference=("Linear reference for property correction.", "option", "lref", list | str),
     mask_name=("Name of the mask for applicable tasks.", "option", "mn", str),
     n_lowest=("Number of lowest-energy structures to include.", "option", None, int),
     n_random=("Number of random structures to include.", "option", None, int),
@@ -56,7 +56,7 @@ def generate_derivative_structures(
     property_solver: Optional[dict] = None,
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = None,
     per_formula_unit: bool = False,
-    linear_reference: Optional[Union[List[List[float]], List[dict]]] = None,
+    linear_reference: Optional[Union[List[List[float]], List[dict], str]] = None,
     mask_name: Optional[str] = None,
     n_lowest: Optional[int] = 1,
     n_random: Optional[int] = 0,
@@ -353,7 +353,7 @@ def process_linear_reference(
         except KeyError as e:
             raise ValueError(f"Missing expected key in one of the dictionaries: {e}")
 
-    # If already list of lists, return as is
+    # If already list of lists, or string, return as is
     return linear_reference
 
 
