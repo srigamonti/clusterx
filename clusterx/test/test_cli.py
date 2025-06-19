@@ -42,7 +42,6 @@ def run_build_cpool(path):
         "--method=1 "
         f"-cpool_filepath={path / 'cpool.json'} "
         "--vacancy_atomic_number 0 "
-        "--mlims=1,5"
     )
     response = run_command(command)
     assert response.returncode == 0, err_str(command, response)
