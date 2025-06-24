@@ -209,7 +209,7 @@ def generate_derivative_structures(
         case "mark_lowest_and_random_properties_per_concentration":
             _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest, n_random)
 
-        case "convert_to_sset":
+        case "to_sset" | "convert_to_sset":
             # Requires
             # task = "convert_to_sset"
             # plat_filepath
