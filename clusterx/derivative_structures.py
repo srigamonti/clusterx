@@ -595,7 +595,13 @@ class DSGenerator:
             tags = scell.get_tags()
             sltypes = scell.get_sublattice_types()
 
-            num_conf = self._generate_all_configurations_multilattice(nsubs, natoms, shape_id, symper, tags, sltypes)
+            if n_random is None:
+                num_conf = self._generate_all_configurations_multilattice(
+                    nsubs, natoms, shape_id, symper, tags, sltypes
+                )
+            else:
+                raise NotImplementedError()
+                # num_conf = self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
 
         logging.info(
             "Found %s unique configurations of %s substitutions in %s-atom size scell.",
