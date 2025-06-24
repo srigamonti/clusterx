@@ -51,6 +51,8 @@ def build_model(
     if weights_filepath is not None:
         weights = np.load(weights_filepath)["weights"]
         kwargs = {"sample_weight": weights}
+    else:
+        kwargs = {}
 
     mb = ModelBuilder(
         selector_type=selector_type,
