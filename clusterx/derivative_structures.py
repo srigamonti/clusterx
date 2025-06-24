@@ -2,10 +2,10 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-import warnings
 import logging
 import pickle
 import random
+import warnings
 from itertools import combinations, product
 from random import sample
 from typing import List, Optional, Set, Tuple, Union
@@ -50,6 +50,8 @@ class DSGenerator:
 
         self.masks = {}
 
+        self.property_names = set()
+
     def serialize(self, filepath):
         """
         Serialize the current instance to a binary file using pickle.
@@ -84,6 +86,10 @@ class DSGenerator:
 
     def get_mask(self, mask_name):
         return self.masks[mask_name]
+
+    def get_property_names(self):
+        """Return the set of property column names."""
+        return self.property_names.copy()
 
     def get_configurations(self, mask_name=None):
         if mask_name is not None:
@@ -188,7 +194,8 @@ class DSGenerator:
                     conc,
                     **property_solver_kwargs,
                 )
-        #else: # TODO: add this in a later version
+
+        # else: # TODO: add this in a later version
         #    raise ValueError("At least one of ase_calculator, cemodel, or property_solver must be provided.")
 
         if per_formula_unit:
@@ -217,24 +224,20 @@ class DSGenerator:
 
             _value_func = _subtract_linear_reference(_value_func)
 
-        if property_name: # single property is computed
-            self.set_property_values_iteratively(
-                property_name=property_name,
-                value_func=_value_func)
-        elif property_names: # multiple properties are computed
-            self.set_property_values_iteratively(
-                property_names=property_names,
-                value_func=_value_func)
+        if property_name:  # single property is computed
+            self.set_property_values_iteratively(property_name=property_name, value_func=_value_func)
+        elif property_names:  # multiple properties are computed
+            self.set_property_values_iteratively(property_names=property_names, value_func=_value_func)
 
         if linear_reference == "least-squares":
             # get linear reference from linear fit with y = a * conc + b
             if property_name:
                 property_names = [property_name]
             self.add_fractional_concentration_binary()
-            concentrations = self.configurations['frconc_binary']
+            concentrations = self.configurations["frconc_binary"]
             for column in property_names:
                 values = self.configurations[column]
-                a, b = np.polyfit(concentrations, values, deg=1) # might raise warning if only one unique value
+                a, b = np.polyfit(concentrations, values, deg=1)  # might raise warning if only one unique value
                 linref = a * concentrations + b
                 self.set_property_values_from_array(column, values - linref)
         elif linear_reference == "concentration-endpoints":
@@ -242,7 +245,7 @@ class DSGenerator:
             if property_name:
                 property_names = [property_name]
             self.add_fractional_concentration_binary()
-            concentrations = self.configurations['frconc_binary']
+            concentrations = self.configurations["frconc_binary"]
             i0, i1 = np.argmin(concentrations), np.argmax(concentrations)
             x0, x1 = concentrations[i0], concentrations[i1]
             for column in property_names:
@@ -309,9 +312,7 @@ class DSGenerator:
             frconc_dict[key] = conc
             return conc
 
-        self.set_property_values_iteratively(
-            value_func=_compute_frcon,
-            property_name="frconc_binary")
+        self.set_property_values_iteratively(value_func=_compute_frcon, property_name="frconc_binary")
 
     def add_property_column(self, property_name, default_value=None):
         """
@@ -332,12 +333,7 @@ class DSGenerator:
         self.configurations[column_name] = default_value
 
     def set_property_values_iteratively(
-        self,
-        value_func,
-        property_name=None,
-        property_names=None,
-        create_if_missing=True,
-        **kwargs
+        self, value_func, property_name=None, property_names=None, create_if_missing=True, **kwargs
     ):
         """
         Sets property values iteratively using a function to compute values on the fly.
@@ -380,18 +376,19 @@ class DSGenerator:
             if column_name not in self.configurations.columns:
                 if create_if_missing:
                     self.configurations[column_name] = None
+                    self.property_names.add(column_name)
                     print(f"Created new column '{column_name}' in the configurations DataFrame.")
                 else:
                     raise ValueError(f"Column '{column_name}' does not exist in the configurations DataFrame.")
 
         if len(column_names) == 1:
             self.configurations[column_names[0]] = self.configurations.apply(
-                lambda row: value_func(row, **kwargs), axis=1)
+                lambda row: value_func(row, **kwargs), axis=1
+            )
         else:
             self.configurations[column_names] = self.configurations.apply(
-                lambda row: value_func(row, **kwargs),
-                axis=1,
-                result_type="expand")
+                lambda row: value_func(row, **kwargs), axis=1, result_type="expand"
+            )
 
     def set_property_values_from_array(self, property_name, values, create_if_missing=True):
         """
@@ -411,6 +408,7 @@ class DSGenerator:
         if column_name not in self.configurations.columns:
             if create_if_missing:
                 self.configurations[column_name] = None
+                self.property_names.add(column_name)
                 print(f"Created new column '{column_name}' in the configurations DataFrame.")
             else:
                 raise ValueError(f"Column '{column_name}' does not exist in the configurations DataFrame.")

@@ -246,6 +246,9 @@ def generate_derivative_structures(
 
                 scell = scell_cache[shape_id]
                 sset.add_structure(Structure(scell, sigmas=sigma), mask=mask_name)
+                
+            for property_name in dss.get_property_names():
+                sset.set_property_values(property_name=property_name, property_vals=data[property_name].tolist())
 
             print("serializing sset to json")
             sset.serialize(filepath=sset_filepath, overwrite=True)
