@@ -257,7 +257,6 @@ class ParentLattice(Atoms):
         s1 = self.get_substitutions()
         s2 = other.get_substitutions()
 
-        areeq = True
         if a1 != a2:
             return False
 
@@ -398,7 +397,7 @@ class ParentLattice(Atoms):
         unique_subs, tags = np.unique(all_numbers, axis=0, return_inverse=True)
         self.set_tags(tags)
 
-        self.idx_subs = {i: unique_non_sorted(unique_subs[i]) for i in range(len(unique_subs))}
+        self.idx_subs = {i: unique_non_sorted(unique_subs[i]).tolist() for i in range(len(unique_subs))}
         self.sites = {i: self.idx_subs[j] for i, j in enumerate(tags)}
 
     def get_substitutional_sites(self):
@@ -600,9 +599,9 @@ class ParentLattice(Atoms):
     def as_dict(self):
         """Return dictionary with object definition"""
         dict = {}
-        dict.update({"unit_cell": self.get_cell()})
-        dict.update({"pbc": self.get_pbc()})
-        dict.update({"positions": self.get_positions()})
+        dict.update({"unit_cell": self.get_cell().array.tolist()})
+        dict.update({"pbc": self.get_pbc().tolist()})
+        dict.update({"positions": self.get_positions().tolist()})
         dict.update({"numbers": self.get_sites()})
 
         return dict
