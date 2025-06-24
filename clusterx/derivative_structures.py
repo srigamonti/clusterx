@@ -2,6 +2,7 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+import warnings
 import logging
 import pickle
 import random
@@ -201,7 +202,7 @@ class DSGenerator:
 
             _value_func = _normalize_per_fu(_value_func)
 
-        if linear_reference is not None:
+        if isinstance(linear_reference, list):
 
             def _subtract_linear_reference(f):
                 def _wrapper(row):
@@ -224,6 +225,31 @@ class DSGenerator:
             self.set_property_values_iteratively(
                 property_names=property_names,
                 value_func=_value_func)
+
+        if linear_reference == "least-squares":
+            # get linear reference from linear fit with y = a * conc + b
+            if property_name:
+                property_names = [property_name]
+            self.add_fractional_concentration_binary()
+            concentrations = self.configurations['frconc_binary']
+            for column in property_names:
+                values = self.configurations[column]
+                a, b = np.polyfit(concentrations, values, deg=1) # might raise warning if only one unique value
+                linref = a * concentrations + b
+                self.set_property_values_from_array(column, values - linref)
+        elif linear_reference == "concentration-endpoints":
+            # get linear reference from highest and lowest concentration points
+            if property_name:
+                property_names = [property_name]
+            self.add_fractional_concentration_binary()
+            concentrations = self.configurations['frconc_binary']
+            i0, i1 = np.argmin(concentrations), np.argmax(concentrations)
+            x0, x1 = concentrations[i0], concentrations[i1]
+            for column in property_names:
+                values = self.configurations[column]
+                p0, p1 = values[i0], values[i1]
+                linref = p0 + (p1 - p0) * (concentrations - x0) / (x1 - x0)
+                self.set_property_values_from_array(column, values - linref)
 
     def add_fractional_concentration_binary(self, recompute=False):
         """
@@ -569,7 +595,13 @@ class DSGenerator:
             tags = scell.get_tags()
             sltypes = scell.get_sublattice_types()
 
-            num_conf = self._generate_all_configurations_multilattice(nsubs, natoms, shape_id, symper, tags, sltypes)
+            if n_random is None:
+                num_conf = self._generate_all_configurations_multilattice(
+                    nsubs, natoms, shape_id, symper, tags, sltypes
+                )
+            else:
+                raise NotImplementedError()
+                # num_conf = self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
 
         logging.info(
             "Found %s unique configurations of %s substitutions in %s-atom size scell.",

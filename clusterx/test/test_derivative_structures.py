@@ -1,7 +1,6 @@
 """Test the derivative structures module."""
 
 import pytest
-
 from ase import Atoms
 import numpy as np
 import pandas as pd
@@ -89,14 +88,31 @@ def solver_single_properties_dummy():
     return _solver
 
 
-def test_compute_properties_single(ds_generator_full, solver_single_properties_dummy):
+@pytest.fixture
+def solver_single_properties_rand():
+    def _solver(*args, **kwargs):
+        return np.random.rand()
+    return _solver
+
+
+@pytest.mark.parametrize(
+    "lin_ref",
+    [
+        None,
+        'least-squares',
+        'concentration-endpoints',
+        [[0., 1.], [1., 2.]],
+    ]
+)
+def test_compute_properties_single(
+    ds_generator_full, solver_single_properties_rand, lin_ref):
     ds_generator_full.compute_properties(
         property_name="dummy",
         ase_calculator=None,
         cemodel=None,
-        property_solver=solver_single_properties_dummy,
+        property_solver=solver_single_properties_rand,
         property_solver_kwargs={},
-        linear_reference=None,
+        linear_reference=lin_ref,
         per_formula_unit=False)
     assert "dummy" in ds_generator_full.configurations.columns
 
@@ -108,14 +124,31 @@ def solver_multi_properties_dummy():
     return _solver
 
 
-def test_compute_properties_multi(ds_generator_full, solver_multi_properties_dummy):
+@pytest.fixture
+def solver_multi_properties_rand():
+    def _solver(*args, **kwargs):
+        return np.random.rand(), np.random.rand() # Return multiple dummy properties
+    return _solver
+
+
+@pytest.mark.parametrize(
+    "lin_ref",
+    [
+        None,
+        'least-squares',
+        'concentration-endpoints',
+        [[0., 1.], [1., 2.]],
+    ]
+)
+def test_compute_properties_multi(
+    ds_generator_full, solver_multi_properties_rand, lin_ref):
     ds_generator_full.compute_properties(
         property_names=["dummy1", "dummy2"],
         ase_calculator=None,
         cemodel=None,
-        property_solver=solver_multi_properties_dummy,
+        property_solver=solver_multi_properties_rand,
         property_solver_kwargs={},
-        linear_reference=None,
+        linear_reference=lin_ref,
         per_formula_unit=False)
     assert "dummy1" in ds_generator_full.configurations.columns
     assert "dummy2" in ds_generator_full.configurations.columns

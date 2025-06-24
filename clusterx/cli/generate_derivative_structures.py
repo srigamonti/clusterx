@@ -56,7 +56,7 @@ def generate_derivative_structures(
     property_solver: Optional[dict] = None,
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = None,
     per_formula_unit: bool = False,
-    linear_reference: Optional[Union[List[List[float]], List[dict]]] = None,
+    linear_reference: Optional[Union[List[List[float]], List[dict], str]] = None,
     mask_name: Optional[str] = None,
     n_lowest: Optional[int] = 1,
     n_random: Optional[int] = 0,
@@ -209,7 +209,7 @@ def generate_derivative_structures(
         case "mark_lowest_and_random_properties_per_concentration":
             _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest, n_random)
 
-        case "convert_to_sset":
+        case "to_sset" | "convert_to_sset":
             # Requires
             # task = "convert_to_sset"
             # plat_filepath
@@ -353,7 +353,7 @@ def process_linear_reference(
         except KeyError as e:
             raise ValueError(f"Missing expected key in one of the dictionaries: {e}")
 
-    # If already list of lists, return as is
+    # If already list of lists, or string, return as is
     return linear_reference
 
 
