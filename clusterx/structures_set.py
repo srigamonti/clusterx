@@ -597,7 +597,7 @@ class StructuresSet:
     def write_to_db(self, path="sset.json", overwrite=False, rm_vac=False):
         self.serialize(path=path, overwrite=overwrite, rm_vac=rm_vac)
 
-    def serialize(self, filepath="sset.db", ase_db_type="db", overwrite=False, rm_vac=False):
+    def serialize(self, filepath="sset.db", ase_db_type=None, overwrite=False, rm_vac=False):
         """Serialize StructuresSet object
 
         The serialization creates an ASE database object, with added metadata needed by CELL.
@@ -624,7 +624,7 @@ class StructuresSet:
         ``filepath``: string
             Output file name.
 
-        ``ase_db_type``: string or None, default is ``'db'``
+        ``ase_db_type``: string or None, default is None
             Accepted values for the ASE database type:
 
             - ``'json'``: JSON format (saves to human readable json file. Serialization in this format can be extremely slow for medium to large sets)
@@ -650,10 +650,8 @@ class StructuresSet:
         """
         import os
 
-        from ase.io import write
-
-        if path is not None:
-            filepath = path
+        if ase_db_type is None:
+            ase_db_type = "extract_from_name"
 
         self._db_fname = filepath
         nstr = self.get_nstr()
