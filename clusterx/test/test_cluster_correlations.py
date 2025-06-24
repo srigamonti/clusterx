@@ -196,6 +196,16 @@ def scell131(plat_quaternary):
     return SuperCell(plat_quaternary, np.array([(1, 0, 0), (0, 3, 0), (0, 0, 1)]))
 
 
+@pytest.fixture
+def ccalc(plat_quaternary, cpool):
+    return CorrelationsCalculator("trigonometric", plat_quaternary, cpool)
+
+
+def test_serialize_load(ccalc):
+    ccalc.serialize(filepath='CCALC.pickle', fmt='pickle')
+    ccalc_loaded = CorrelationsCalculator('CCALC.pickle')
+
+
 def test_binary_linear_basis(primitive_lattice, sub, scell131):
     bin_plat = ParentLattice(primitive_lattice, substitutions=[sub], pbc=[True]*3)
     bin_cpool = ClustersPool(bin_plat, npoints=[1, 2], radii=[0, 1.2])

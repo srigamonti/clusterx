@@ -43,14 +43,6 @@ commands = ["build_cpool"]
     "vacancy_atomic_number",
     help="Look documentation for variable vacancy_atomic_number in ClustersPool class.",
 )
-@plac.opt(
-    "mlims",
-    abbrev="ml",
-    help="""
-        Only clusters with multiplicity m larger or equal to nlims[0] and smaller or 
-        equal to nlims[1] are included in the built ClustersPool.
-    """,
-)
 def build_cpool(
     npoints,  # List[int] or str
     radii,  # List[float] or str
@@ -60,7 +52,6 @@ def build_cpool(
     method=1,  # int
     cpool_filepath="cpool.json",  # str
     vacancy_atomic_number=0,  # int
-    mlims=None,  # Optional[List[int]]
 ):
     """
     Build a pool of clusters.
@@ -69,21 +60,12 @@ def build_cpool(
         npoints: A list of integers or a string representation of the list.
         radii: A list of floats or a string representation of the list.
         sset_filepath: Path to the structure set file (optional).
-        plat_filepath: Path to the platform file (optional).
+        plat_filepath: Path to the parent lattice file (optional).
         psc: Supercell definition (default: 1).
         method: Method ID used to construct clusters (default: 1).
         cpool_filepath: Output filepath for the cluster pool (default: "cpool.json").
         vacancy_atomic_number: Atomic number for vacancy site (default: 0).
-        mlims: Limits on magnetic moments (optional list of ints).
 
-    Notes:
-        This function is exposed via the CLI and is parsed by the `plac` library.
-        For compatibility with `plac`, avoid using advanced type hints such as:
-            - typing.Union
-            - typing.Optional
-            - typing.List or other typing containers
-
-        Use plain Python types or default values instead.
     """
     if isinstance(npoints, str):
         npoints = convert_to_int_list(npoints)
@@ -99,18 +81,12 @@ def build_cpool(
 
     if plat_filepath is not None:
         plat = ParentLattice(filepath=plat_filepath)
+    if not (plat_filepath or sset_filepath):
+        raise ValueError(
+            "Either sset_filepath or plat_filepath must be provided.")
 
     scell = SuperCell(plat, p=psc)
     cpool = ClustersPool(plat, npoints=npoints, radii=radii, super_cell=scell, method=method)
-
-    if mlims is not None:
-        multiplicities = cpool.get_multiplicities()
-        cidxs = []
-        for ic, m in enumerate(multiplicities):
-            if m >= mlims[0] and m <= mlims[1]:
-                cidxs.append(ic)
-
-        cpool = cpool.get_subpool(cidxs)
 
     cpool.print_info()
     cpool.serialize(filepath=cpool_filepath, vacancy_atomic_number=vacancy_atomic_number)

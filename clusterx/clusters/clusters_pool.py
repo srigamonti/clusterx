@@ -160,7 +160,9 @@ class ClustersPool:
                 self._cpool_scell.get_substitutional_atoms().get_all_distances(mic=True)
             )
             self.set_radii(npoints=npoints, radii=radii)
-
+            if 0 in self._npoints:
+                raise ValueError("npoints cannot contain 0,\
+                zero-point clusters are deprecated. Use fit intercept instead.")
             if self._npoints.size != 0:
                 self.gen_clusters(method=method)
 
@@ -794,6 +796,7 @@ class ClustersPool:
 
         call(["rm", "-f", db_name])
         atoms_db = JSONDatabase(filename=db_name)
+        #atoms_db = connect(db_name, append=False) # for future reference
 
         cpool_atoms = self.get_cpool_atoms(
             orbit=orbit,

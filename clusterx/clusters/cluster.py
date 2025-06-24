@@ -145,6 +145,8 @@ class Cluster():
         return np.linalg.norm(self.ais)
 
     def __lt__(self,other):
+        # TODO: fix ordering? This seems not a good ordering, some inequivalent
+        # clusters may have the same norm.
         if self.npoints == other.npoints and abs(self.radius-other.radius)<1e-5:
             ns = self._get_idxs_norm()
             no = other._get_idxs_norm()

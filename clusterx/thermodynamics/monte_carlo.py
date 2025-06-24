@@ -264,9 +264,9 @@ class MonteCarlo:
 
         else:
             if self._nsubs is not None:
-                struc = self._scell.gen_random(self._nsubs, mc=True)
+                struc = self._scell.gen_random_structure(self._nsubs, mc=True)
             else:
-                struc = self._scell.gen_random(mc=True)
+                struc = self._scell.gen_random_structure(mc=True)
 
         self._em.corrc.reset_mc(mc=True)
         e = self._em.predict(struc)

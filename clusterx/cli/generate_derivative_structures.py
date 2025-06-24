@@ -56,7 +56,7 @@ def generate_derivative_structures(
     property_solver: Optional[dict] = None,
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = None,
     per_formula_unit: bool = False,
-    linear_reference: Optional[Union[List[List[float]], List[dict]]] = None,
+    linear_reference: Optional[Union[List[List[float]], List[dict], str]] = None,
     mask_name: Optional[str] = None,
     n_lowest: Optional[int] = 1,
     n_random: Optional[int] = 0,
@@ -167,6 +167,7 @@ def generate_derivative_structures(
                 property_solver=property_solver_instance.compute_property,
                 property_solver_kwargs=property_solver.get("kwargs", {}),
                 property_name=property_name,
+                property_names=property_names,
                 dss_filepath=dss_filepath,
                 per_formula_unit=per_formula_unit,
                 linear_reference=linear_reference,
@@ -208,7 +209,7 @@ def generate_derivative_structures(
         case "mark_lowest_and_random_properties_per_concentration":
             _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest, n_random)
 
-        case "convert_to_sset":
+        case "to_sset" | "convert_to_sset":
             # Requires
             # task = "convert_to_sset"
             # plat_filepath
@@ -352,7 +353,7 @@ def process_linear_reference(
         except KeyError as e:
             raise ValueError(f"Missing expected key in one of the dictionaries: {e}")
 
-    # If already list of lists, return as is
+    # If already list of lists, or string, return as is
     return linear_reference
 
 
@@ -362,6 +363,7 @@ def _do_compute_properties(
     property_solver: Optional[Callable[..., float]] = None,
     property_solver_kwargs: Optional[dict] = None,
     property_name: str = "property",
+    property_names: str = None,
     dss_filepath: str = "dss.pickle",
     per_formula_unit: bool = False,
     linear_reference: Optional[Union[List[List[float]], List[dict]]] = None,
@@ -374,21 +376,24 @@ def _do_compute_properties(
 
     if cem is not None:
         dss.compute_properties(
-            property_name,
+            property_name=property_name,
+            property_names=property_names,
             cemodel=cem,
             per_formula_unit=per_formula_unit,
             linear_reference=linear_reference,
         )
     elif calculator is not None:
         dss.compute_properties(
-            property_name,
+            property_name=property_name,
+            property_names=property_names,
             calculator=calculator,
             per_formula_unit=per_formula_unit,
             linear_reference=linear_reference,
         )
     elif property_solver is not None:
         dss.compute_properties(
-            property_name,
+            property_name=property_name,
+            property_names=property_names,
             property_solver=property_solver,
             property_solver_kwargs=property_solver_kwargs,
             per_formula_unit=per_formula_unit,

@@ -9,6 +9,72 @@ from clusterx.clusters.cluster import Cluster
 from clusterx.test.defaults import get_clathrate_supercell
 
 
+cluster_list = [
+    Cluster([0,1,2],[13,14,15]),
+    Cluster([0],[13])
+]
+
+
+@pytest.mark.xfail(reason="incomplete order relation")
+@pytest.mark.parametrize("a", cluster_list)
+def test_order_reflexive(a):
+    assert a <= a, "Reflexive property of order relation failed"
+
+
+@pytest.mark.xfail(reason="incomplete order relation")
+@pytest.mark.parametrize("a", cluster_list)
+def test_order_strict_irreflexive(a):
+    assert not a < a, "Irreflexive property of strict order relation failed"
+
+
+@pytest.mark.xfail(reason="incomplete order relation")
+@pytest.mark.parametrize("a", cluster_list)
+@pytest.mark.parametrize("b", cluster_list)
+@pytest.mark.parametrize("c", cluster_list)
+def test_order_transitive(a, b, c):
+    if a <= b and b <= c:
+        assert a <= c, "Transitive property of order relation failed"
+
+
+@pytest.mark.xfail(reason="incomplete order relation")
+@pytest.mark.parametrize("a", cluster_list)
+@pytest.mark.parametrize("b", cluster_list)
+def test_order_strict_transitive(a, b, c):
+    if a < b and b < c:
+        assert a < c, "Transitive property of strict order relation failed"
+
+
+@pytest.mark.xfail(reason="incomplete order relation")
+@pytest.mark.parametrize("a", cluster_list)
+@pytest.mark.parametrize("b", cluster_list)
+def test_order_antisymmetric(a, b):
+    if a <= b and b <= a:
+        assert a == b, "Antisymmetric property of order relation failed"
+
+
+@pytest.mark.xfail(reason="incomplete order relation")
+@pytest.mark.parametrize("a", cluster_list)
+@pytest.mark.parametrize("b", cluster_list)
+def test_order_strict_asymmetric(a, b):
+    if a < b:
+        assert not b < a, "Asymmetric property of strict order relation failed"
+
+
+@pytest.mark.xfail(reason="incomplete order relation")
+@pytest.mark.parametrize("a", cluster_list)
+@pytest.mark.parametrize("b", cluster_list)
+def test_order_totality(a, b):
+    assert a <= b or b <= a, "Totality property of order relation failed"
+
+
+@pytest.mark.xfail(reason="incomplete order relation")
+@pytest.mark.parametrize("a", cluster_list)
+@pytest.mark.parametrize("b", cluster_list)
+def test_order_strict_totality(a, b):
+    if a != b:
+        assert a < b or b < a, "Totality property of strict order relation failed"
+
+
 def test_init_supercell():
     """Test initialization of Cluster with SuperCell"""
     sc = get_clathrate_supercell()
