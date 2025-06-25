@@ -36,9 +36,6 @@ class StructuresSet:
         by ``StructuresSet.serialize()`` or ``StructuresSet.write_files()``. In this case,
         the ``parent_lattice`` argument can be ommited (if present, it is overriden).
 
-    ``json_db_filepath``: String
-        Deprecated, use ``filepath`` instead. If set, overrides ``filepath``
-
     ``calculator``: ASE calculator object (default: None)
 
     ``quick_parse``: Boolean (default: ``False``)
@@ -48,10 +45,6 @@ class StructuresSet:
         every structure in the structures set being parsed. This leads to a slower parsing
         but safer if not sure how the file was built.
 
-    **Deprecated parameters:**
-
-    ``db_fname``: replaced by ``json_db_filepath``
-
     **Examples:**
 
     .. todo::
@@ -60,12 +53,7 @@ class StructuresSet:
     **Methods:**
     """
 
-    def __init__(
-        self, parent_lattice=None, filepath=None, json_db_filepath=None, calculator=None, quick_parse=False, **sset_opts
-    ):
-
-        if json_db_filepath is not None:
-            filepath = json_db_filepath
+    def __init__(self, parent_lattice=None, filepath=None, calculator=None, quick_parse=False, **sset_opts):
 
         self._iter = 0
         self._parent_lattice = parent_lattice
@@ -597,11 +585,11 @@ class StructuresSet:
                     write(path, atoms, format)
 
         db_path = os.path.join(root, prefix + "0" + "-" + str(self.get_nstr() - 1) + suffix + ".json")
-        self.serialize(path=db_path, overwrite=True)
+        self.serialize(filepath=db_path, overwrite=True)
 
     # Deprecated
-    def write_to_db(self, path="sset.json", overwrite=False, rm_vac=False):
-        self.serialize(path=path, overwrite=overwrite, rm_vac=rm_vac)
+    def write_to_db(self, filepath="sset.json", overwrite=False, rm_vac=False):
+        self.serialize(filepath=path, overwrite=overwrite, rm_vac=rm_vac)
 
     def serialize(self, filepath="sset.db", ase_db_type=None, overwrite=False, rm_vac=False):
         """Serialize StructuresSet object
