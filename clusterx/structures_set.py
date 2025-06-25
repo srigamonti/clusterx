@@ -141,10 +141,19 @@ class StructuresSet:
         return self._nstructures
 
     def __add__(self, anothersset):
+        if not isinstance(anothersset, StructuresSet):
+            raise TypeError("Can only add another StructuresSet.")
+
         sset_union = StructuresSet(parent_lattice=self._parent_lattice)
         sset_union.add_structures(self)
         sset_union.add_structures(anothersset)
         return sset_union
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            return self.get_subset(structure_indices=range(*key.indices(len(self))), transfer_properties=True)
+        else:
+            return self._structures[key]
 
     def get_nstr(self):
         """Return number of structures in the structures set."""
@@ -293,9 +302,6 @@ class StructuresSet:
     def iterimages(self):
         # Allows trajectory to convert NEB into several images
         return iter(self._structures)
-
-    def __getitem__(self, i=-1):
-        return self._structures[i]
 
     def get_images(self, rm_vac=True, n=None):
         """
