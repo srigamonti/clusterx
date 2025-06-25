@@ -78,10 +78,20 @@ def test_add_sets_new(parent_lattice, super_cell):
     np.testing.assert_array_equal(sset3.get_property_values("set_prop"), n_structures * [1.0] + n_structures * [2.0])
 
 
-def test_serialize_load(structures_set):
+def test_serialize_load_json(structures_set):
     structures_set.set_property_values(property_name="set_prop", property_vals=[1.0] * len(structures_set))
-    structures_set.serialize(path="sset.json", overwrite=True, rm_vac=False)
-    _ = StructuresSet(db_fname="sset.json")
+    structures_set.serialize(filepath="sset.json", ase_db_type="json", overwrite=True, rm_vac=False)
+    sset_loaded = StructuresSet(filepath="sset.json")
+    assert len(sset_loaded) == len(structures_set)
+    np.testing.assert_array_equal(sset_loaded.get_property_values("set_prop"), [1.0] * len(structures_set))
+
+
+def test_serialize_load_sqlite(structures_set):
+    structures_set.set_property_values(property_name="set_prop", property_vals=[1.0] * len(structures_set))
+    structures_set.serialize(filepath="sset.db", ase_db_type="db", overwrite=True, rm_vac=False)
+    sset_loaded = StructuresSet(filepath="sset.json")
+    assert len(sset_loaded) == len(structures_set)
+    np.testing.assert_array_equal(sset_loaded.get_property_values("set_prop"), [1.0] * len(structures_set))
 
 
 def test_init(parent_lattice):
