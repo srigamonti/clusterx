@@ -298,3 +298,73 @@ class Dataset:
                   'Check the NOMAD docs for information on the error code:')
             print('https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#')
             print(f'The following error occured: {error}')
+
+    def get_atoms_objects(self):
+        """"
+        Returns a list of ase Atoms object for the dataset
+        """
+        list_of_atoms_objects = []
+        #list_of_entry_ids = self.get_entry_ids()
+        #for entry_id in (list_of_entry_ids):
+        #    entry = SingleEntry(entry_id=entry_id, token=self.token)
+        for entry in self.download_data():
+            # To get the converged energy result access the last calculation
+            nomad_atoms = entry['archive']['run'][0]['system'][-1]['atoms']
+            positions_meter = nomad_atoms['positions']
+            cell_meter = nomad_atoms['lattice_vectors']
+            atoms = Atoms(
+                symbols=nomad_atoms['labels'],
+                positions=np.array(positions_meter)*10**10,  # convert to Angstrom
+                cell=np.array(cell_meter)*10**10,  # convert to Angstrom
+                pbc=nomad_atoms['periodic']
+            )
+            list_of_atoms_objects.append(atoms)
+        return list_of_atoms_objects
+
+    def get_lattice_constants(self):
+        """"
+        Returns three lists; one for each lattice constant for entries in the dataset
+        """
+        list_of_lattice_constant_a = []
+        list_of_lattice_constant_b = []
+        list_of_lattice_constant_c = []
+        list_of_atoms_objects = self.get_atoms_objects()
+        list_of_structures = self.get_structure_objects()
+        list_of_indices = []
+        for structure in list_of_structures:
+            list_of_indices.append(structure.index)
+        for atoms_object in list_of_atoms_objects:
+            cell = atoms_object.cell
+            lattice_constant_1 = np.sqrt(cell[0][0]**2+cell[0][1]**2+cell[0][2]**2)
+            lattice_constant_2 = np.sqrt(cell[1][0]**2+cell[1][1]**2+cell[1][2]**2)
+            lattice_constant_3 = np.sqrt(cell[2][0]**2+cell[2][1]**2+cell[2][2]**2)
+            a, b, c = np.sort([lattice_constant_1, lattice_constant_2, lattice_constant_3])
+            list_of_lattice_constant_a.append(a)
+            list_of_lattice_constant_b.append(b)
+            list_of_lattice_constant_c.append(c)
+        return list_of_lattice_constant_a, list_of_lattice_constant_b, list_of_lattice_constant_c
+
+    def get_normalized_lattice_constants(self):
+        """"
+        Returns three lists; one for each lattice constant for entries in the dataset
+        """
+        list_of_lattice_constant_a = []
+        list_of_lattice_constant_b = []
+        list_of_lattice_constant_c = []
+        list_of_atoms_objects = self.get_atoms_objects()
+        list_of_structures = self.get_structure_objects()
+        list_of_indices = []
+        for structure in list_of_structures:
+            list_of_indices.append(structure.index)
+        for structure, atoms_object in zip(list_of_structures, list_of_atoms_objects):
+            cell = atoms_object.cell
+            transformation_matrix = structure.get_supercell().get_transformation()
+            normalized_cell = np.dot(np.linalg.inv(transformation_matrix), cell)
+            lattice_constant_1 = np.sqrt(normalized_cell[0][0]**2+normalized_cell[0][1]**2+normalized_cell[0][2]**2)
+            lattice_constant_2 = np.sqrt(normalized_cell[1][0]**2+normalized_cell[1][1]**2+normalized_cell[1][2]**2)
+            lattice_constant_3 = np.sqrt(normalized_cell[2][0]**2+normalized_cell[2][1]**2+normalized_cell[2][2]**2)
+            a, b, c = np.sort([lattice_constant_1, lattice_constant_2, lattice_constant_3])
+            list_of_lattice_constant_a.append(a)
+            list_of_lattice_constant_b.append(b)
+            list_of_lattice_constant_c.append(c)
+        return list_of_lattice_constant_a, list_of_lattice_constant_b, list_of_lattice_constant_c
