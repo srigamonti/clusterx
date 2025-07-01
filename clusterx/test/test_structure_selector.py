@@ -115,7 +115,8 @@ def test_tau_selection(seed, method, plat, scell, cpool, structure_selector, tra
     tau = np.zeros(n_candidates)
     for candidate_idx in range(n_candidates):
         candidate = candidate_set.get_structure(candidate_idx)
-        dummy_set = training_set + [candidate]
+        dummy_set = training_set[:]
+        dummy_set.add_structure(candidate)
         dummy_structure_selector = StructureSelector(
             cluster_pool=cpool, training_set=dummy_set)
         tau[candidate_idx] = dummy_structure_selector.calculate_population_variance(
