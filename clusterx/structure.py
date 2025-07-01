@@ -91,7 +91,7 @@ class Structure(SuperCell):
                     raise AttributeError("Error (Structure): decoration not compatible with parent lattice definition.")
 
             for idx, species in enumerate(decoration):
-                self.sigmas[idx] = np.argwhere(self.sites[idx] == species)[0, 0]
+                self.sigmas[idx] = np.argwhere(np.array(self.sites[idx], dtype=int) == species)[0, 0]
                 self.ems[idx] = len(self.sites[idx])
         else:
             self.decor = np.zeros(len(sigmas), dtype=np.int8)
