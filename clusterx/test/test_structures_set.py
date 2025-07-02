@@ -2,6 +2,8 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+import os
+
 import numpy as np
 import pytest
 from ase.build import bulk
@@ -35,6 +37,28 @@ def structures_set(structures_set_empty, super_cell):
     for i in range(nstr1):
         structures_set_empty.add_structure(super_cell.gen_random_structure())
     return structures_set_empty
+
+
+def test_write_input_files_defaults(structures_set):
+    n = len(structures_set)
+    structures_set.write_input_files()
+    for i in range(n):
+        os.path.exists(f'{i}/geometry.json')
+
+
+def test_write_input_files_custom(structures_set):
+    n = len(structures_set)
+    structures_set.write_input_files(
+        root="root",
+        prefix="prefix",
+        suffix="suffix",
+        fnames=[str(i)+'.json' for i in range(n)],
+        formats=[],
+        overwrite=True,
+        rm_vac=False
+    )
+    for i in range(n):
+        os.path.exists(f'root/prefix{i}suffix/{i}.json')
 
 
 def test_compute_property_values(structures_set):
