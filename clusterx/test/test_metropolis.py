@@ -146,7 +146,7 @@ def cemodel_full_sub():
 
 
 
-@pytest.mark.xfail(raises=AssertionError)
+@pytest.mark.xfail(raises=AssertionError, reason="Ref values not updated")
 def test_metropolis_clathrate_Si_Al(
     wyckoff_sites,
     pristine_crystal,
@@ -399,7 +399,7 @@ def test_metropolis_clathrate_Si_Al(
     assert(isok3)
 
 
-@pytest.mark.xfail(raises=AssertionError)
+@pytest.mark.xfail(raises=AssertionError, reason="Ref values not updated")
 def test_metropolis_clathrate_full_subs(
     pristine_crystal,
     sub_Al,
@@ -503,7 +503,7 @@ def test_metropolis_clathrate_full_subs(
     assert dict_compare(last_entry2,rlast_entry2, tol=float(1e-7))
 
 
-@pytest.mark.xfail
+@pytest.mark.xfail(reason="maybe this test is not needed anymore")
 def test_metropolis_extra():
     # Sampling in the sublattices with indizes 0 and 1 - ternary sampling in sublattice 0 and binary sampling in sublattice 1
     print("\nStart sampling in the two sublattices with indices 0 and 1:")

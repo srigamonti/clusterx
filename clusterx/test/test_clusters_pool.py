@@ -63,7 +63,10 @@ def test_0_point_raises():
         ClustersPool(pl, npoints=[0, 1], radii=[0, .1])
 
 
-@pytest.mark.xfail
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="methods are known to produce different results"
+)
 def test_methods():
     cp_list = []
     for method in [0, 1]:
@@ -89,13 +92,9 @@ def test_methods():
     for cp in cp_list:
         cp.sort()
     for cp0, cp1 in zip(cp_list[0], cp_list[1]):
-        print("0: ", cp0)
-        print("1: ", cp1)
-        print("Equal: ", cp0 == cp1)
         assert cp0 == cp1
 
 
-# TODO: fix reference/expected values
 def test_2D_radii():
     cell = [
         [3,0,0],
@@ -134,7 +133,6 @@ def test_2D_radii():
         1.41421356 , 1.41421356 , 1.41421356 , 2.         , 2.         ,
         2.         , 2.         , 2.         , 2.         , 2.         ,
         2.         , 2.         , 2.         , 2.         , 2.])
-    print(radii)
     np.testing.assert_array_equal(mult, mult_ref)
     np.testing.assert_array_equal(npoints, npoints_ref)
     np.testing.assert_array_almost_equal(radii, radii_ref)
