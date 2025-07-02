@@ -50,7 +50,8 @@ def test_emt2_calculator():
     strset.add_structure(Structure(scell,[1,1,1,1,7,1,6,7,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,2,1,6,2,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,6,2,1,1,1,1]),write_to_db=True)
-    strset.serialize(path="test_cluster_expansion_structures_set.json")
+    strset.serialize(
+        filepath="test_cluster_expansion_structures_set.json", overwrite=True)
 
     strset.set_calculator(EMT2())
     energies = strset.compute_property_values()
