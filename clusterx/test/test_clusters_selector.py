@@ -63,7 +63,8 @@ def test_clusters_selector_execute(method):
     strset.add_structure(Structure(scell,[6,2,1,6,1,1,6,7,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,7,1,1,1,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,1,7,1,1,1,1]),write_to_db=True)
-    strset.serialize(path="test_cluster_selector_structures_set.json", overwrite=True)
+    strset.serialize(
+        filepath="test_cluster_selector_structures_set.json", overwrite=True)
     # Get the DATA(comat) + TARGET(energies)
     strset.set_calculator(EMT2())
     strset.calculate_property() # calculate 'energy' property
@@ -71,7 +72,10 @@ def test_clusters_selector_execute(method):
     clsel.select_clusters(strset,cpool,"energy")
 
 
-@pytest.mark.xfail(reason="Reference values need to be updated")
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="Reference values need to be updated"
+)
 def test_clusters_selector_compare_ref():
     """Test model optimization
 
@@ -123,7 +127,8 @@ def test_clusters_selector_compare_ref():
     strset.add_structure(Structure(scell,[6,2,1,6,1,1,6,7,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[1,7,1,1,1,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,1,7,1,1,1,1]),write_to_db=True)
-    strset.serialize(path="test_cluster_selector_structures_set.json", overwrite=True)
+    strset.serialize(
+        filepath="test_cluster_selector_structures_set.json", overwrite=True)
     # Get the DATA(comat) + TARGET(energies)
     comat = corrcal.get_correlation_matrix(strset)
     strset.set_calculator(EMT2())

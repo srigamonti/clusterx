@@ -76,7 +76,8 @@ def test_cluster_expansion():
     strset.add_structure(Structure(scell,[1,7,1,1,1,1,6,2,1]),write_to_db=True)
     strset.add_structure(Structure(scell,[6,1,1,1,7,1,1,1,1]),write_to_db=True)
 
-    strset.serialize(path="test_cluster_expansion_structures_set.json", overwrite=True)
+    strset.serialize(
+        filepath="test_cluster_expansion_structures_set.json", overwrite=True)
     # Get the DATA(comat) + TARGET(energies)
     comat = corrcal.get_correlation_matrix(strset)
     strset.set_calculator(EMT2())
