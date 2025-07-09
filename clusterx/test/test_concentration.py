@@ -56,7 +56,8 @@ def test_concentration():
         {1: [0.33333, 0.66666, 0.0], 2: [0.33333, 0.66666]},
         {1: [0.33333, 0.33333, 0.33333], 2: [0.0, 1.0]}
     ]
-    strset.serialize(path="test_cluster_selector_structures_set.json")
+    strset.serialize(
+        filepath="test_cluster_selector_structures_set.json", overwrite=True)
     isok = True
     for i,s in enumerate(strset):
         fc = s.get_fractional_concentrations()

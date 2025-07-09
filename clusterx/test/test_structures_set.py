@@ -2,60 +2,159 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from clusterx.parent_lattice import ParentLattice
-from clusterx.super_cell import SuperCell
-from clusterx.structures_set import StructuresSet
+import os
+
 import numpy as np
+import pytest
 from ase.build import bulk
-import sys
+from ase.calculators.emt import EMT
+
+from clusterx.parent_lattice import ParentLattice
+from clusterx.structures_set import StructuresSet
+from clusterx.super_cell import SuperCell
 
 
-def test_structures_set():
-    """Test creation, union, serialization, and parsing of structures sets.
-    """
-
+@pytest.fixture
+def parent_lattice():
     cu = bulk("Cu")
-    plat = ParentLattice(atoms=cu, symbols=[["Cu","Au"]])
-    scell1 = SuperCell(plat, 3)
+    return ParentLattice(atoms=cu, symbols=[["Cu", "Au"]])
 
-    sset1 = StructuresSet(parent_lattice=plat)
+
+@pytest.fixture
+def super_cell(parent_lattice):
+    return SuperCell(parent_lattice, 3)
+
+
+@pytest.fixture
+def structures_set_empty(parent_lattice):
+    return StructuresSet(parent_lattice=parent_lattice)
+
+
+@pytest.fixture
+def structures_set(structures_set_empty, super_cell):
     np.random.seed(10)
-
     nstr1 = 10
-
     for i in range(nstr1):
-        sset1.add_structure(scell1.gen_random())
+        structures_set_empty.add_structure(super_cell.gen_random_structure())
+    return structures_set_empty
 
-    from ase.calculators.emt import EMT
-    sset1.set_calculator(EMT())
-    print(sset1.calculate_property(prop_name="tote"))
 
-    def a_prop(structure):
+def test_write_input_files_defaults(structures_set):
+    n = len(structures_set)
+    structures_set.write_input_files()
+    for i in range(n):
+        os.path.exists(f'{i}/geometry.json')
+
+
+def test_write_input_files_custom(structures_set):
+    n = len(structures_set)
+    structures_set.write_input_files(
+        root="root",
+        prefix="prefix",
+        suffix="suffix",
+        fnames=[str(i)+'.json' for i in range(n)],
+        formats=[],
+        overwrite=True,
+        rm_vac=False
+    )
+    for i in range(n):
+        os.path.exists(f'root/prefix{i}suffix/{i}.json')
+
+
+def test_compute_property_values(structures_set):
+    structures_set.set_calculator(EMT())
+    structures_set.compute_property_values(property_name="tote")
+
+    def a_prop(i, structure, **kwargs):
         at = structure.get_atoms()
-        at.set_calculator(EMT())
-        return at.get_potential_energy()*0.1-10
+        at.calc = EMT()
+        return at.get_potential_energy() * 0.1 - 10
 
-    sset1.calculate_property(prop_name="a_prop0", prop_func=a_prop)
-    sset1.calculate_property(prop_name="a_prop1", prop_func=a_prop)
-    #sset1.calculate_property(prop_name="tote2")
-
-    sset1.serialize(path="sset1.json", overwrite=True)
-
-    scell2 = SuperCell(plat, 2)
-    nstr2 = 5
-    sset2 = StructuresSet(parent_lattice=plat)
-
-    sset2.calculate_property(prop_name="a_prop1", prop_func=a_prop)
-    sset2.calculate_property(prop_name="a_prop2", prop_func=a_prop)
-
-    for i in range(nstr2):
-        sset2.add_structure(scell2.gen_random())
+    structures_set.compute_property_values(property_name="a_prop0", property_calc=a_prop)
+    structures_set.compute_property_values(property_name="a_prop1", property_calc=a_prop)
 
 
+def test_set_property_values(structures_set):
+    structures_set.set_property_values(property_name="set_prop", property_vals=[1.0] * len(structures_set))
+    np.testing.assert_array_equal(structures_set.get_property_values("set_prop"), np.ones(len(structures_set)))
 
+
+def test_slicing_addition(structures_set):
+    sset1 = structures_set[:5]
+    sset2 = structures_set[5:]
     sset3 = sset1 + sset2
+    assert isinstance(sset3, StructuresSet)
+    assert len(sset3) == len(sset1) + len(sset2)
 
-    sset3.serialize(path="sset3.json", overwrite=True, rm_vac=False)
 
-    sset4 = StructuresSet(db_fname="sset3.json")
-    sset4.serialize(path="sset4.json", overwrite=True, rm_vac=False)
+def test_property_transfer_addition(parent_lattice, super_cell):
+    n_structures = 5
+    sset1 = StructuresSet(parent_lattice)
+    sset2 = StructuresSet(parent_lattice)
+    sset3 = StructuresSet(parent_lattice)
+    for i in range(n_structures):
+        sset1.add_structure(super_cell.gen_random_structure())
+        sset2.add_structure(super_cell.gen_random_structure())
+        sset3.add_structure(super_cell.gen_random_structure())
+    sset1.set_property_values(property_name="set_prop", property_vals=[1.0] * n_structures)
+    sset3.set_property_values(property_name="set_prop", property_vals=[2.0] * n_structures)
+    sset4 = sset1 + sset2 + sset3
+    assert isinstance(sset4, StructuresSet)
+    assert len(sset4) == len(sset1) + len(sset2) + len(sset3)
+    np.testing.assert_array_equal(
+        sset4.get_property_values("set_prop"), n_structures * [1.0] + n_structures * [None] + n_structures * [2.0]
+    )
+
+
+def test_serialize_load_json(structures_set):
+    structures_set.set_property_values(property_name="set_prop", property_vals=[1.0] * len(structures_set))
+    structures_set.serialize(filepath="sset.json", ase_db_type="json", overwrite=True, rm_vac=False)
+    sset_loaded = StructuresSet(filepath="sset.json")
+    assert len(sset_loaded) == len(structures_set)
+    np.testing.assert_array_equal(sset_loaded.get_property_values("set_prop"), [1.0] * len(structures_set))
+
+
+def test_serialize_load_sqlite(structures_set):
+    structures_set.set_property_values(property_name="set_prop", property_vals=[1.0] * len(structures_set))
+    structures_set.serialize(filepath="sset.db", ase_db_type="db", overwrite=True, rm_vac=False)
+    sset_loaded = StructuresSet(filepath="sset.json")
+    assert len(sset_loaded) == len(structures_set)
+    np.testing.assert_array_equal(sset_loaded.get_property_values("set_prop"), [1.0] * len(structures_set))
+
+
+def test_property_calculation_with_ase_calculator(structures_set):
+    """Test calculation of properties with custom property solver ASE calculator"""
+    structures_set.set_calculator(EMT())
+    structures_set.compute_property_values(property_name="tote")
+
+    tote_list = []
+    for s in structures_set:
+        ats = s.get_atoms().copy()
+        ats.calc = EMT()
+        tote_list.append(ats.get_potential_energy())
+
+    np.testing.assert_array_equal(structures_set.get_property_values("tote"), tote_list)
+
+
+def test_property_calculation_with_custom_solver(structures_set):
+    """Test calculation of properties with custom property solver"""
+
+    compute_ref_value = False
+
+    def custom_prop(i, structure, **kwargs):
+        par1 = kwargs["par1"]
+        par2 = kwargs["par2"]
+        e = (i * par1 - par2) * len(structure)
+        return e
+
+    structures_set.compute_property_values(property_name="cprop", property_calc=custom_prop, par1=3, par2=5)
+
+    if compute_ref_value:
+        custom_prop_list = []
+        for i in range(len(structures_set)):
+            custom_prop_list.append(custom_prop(i, structures_set[i], par1=3, par2=5))
+        print(custom_prop_list)
+    else:
+        custom_prop_list = [-135, -54, 27, 108, 189, 270, 351, 432, 513, 594]
+
+    np.testing.assert_array_equal(structures_set.get_property_values("cprop"), custom_prop_list)

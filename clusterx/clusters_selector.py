@@ -373,7 +373,8 @@ class ClustersSelector():
         rows = np.arange(len(p))
 
         idx = 1
-        while sparsity.__ge__(self.sparsity_min):
+        #while sparsity.__ge__(self.sparsity_min):
+        while sparsity >= self.sparsity_min:
             if not self.standardize:
                 estimator_cv = linear_model.Lasso(
                     alpha=sparsity,

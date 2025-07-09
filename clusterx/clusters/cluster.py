@@ -2,8 +2,6 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from collections import Counter
-from clusterx.symmetry import get_scaled_positions
 import numpy as np
 
 class Cluster():
@@ -47,7 +45,7 @@ class Cluster():
         if len(atom_indexes)!=0:
             try:
                 self.ais,self.ans = list(zip(*sorted(zip(np.array(atom_indexes),np.array(atom_numbers)))))
-            except:
+            except: # TODO: specify exception, when does this happen? Or delete try-except?
                 raise ValueError("Cluster initialization failed")
 
         else:
@@ -64,7 +62,6 @@ class Cluster():
             self.alphas = np.zeros(len(atom_indexes),dtype=int)
             self.site_type = np.zeros(len(atom_indexes),dtype=int)
             sites = super_cell.get_sites()
-            idx_subs = super_cell.get_idx_subs()
             tags = super_cell.get_tags()
 
             self.positions_cartesian = np.zeros((self.npoints,3))
@@ -74,7 +71,7 @@ class Cluster():
                 self.positions_cartesian[ip] = super_cell.get_positions()[idx]
                 #self.positions_scaled[ip] = super_cell.get_scaled_positions(wrap=True)[idx]
                 self.site_type[ip] = tags[idx]
-                self.alphas[ip] = np.argwhere(sites[idx] == self.ans[ip])
+                self.alphas[ip] = np.argwhere(sites[idx] == self.ans[ip])[0, 0]
 
             """
             # Set radius
@@ -148,6 +145,8 @@ class Cluster():
         return np.linalg.norm(self.ais)
 
     def __lt__(self,other):
+        # TODO: fix ordering? This seems not a good ordering, some inequivalent
+        # clusters may have the same norm.
         if self.npoints == other.npoints and abs(self.radius-other.radius)<1e-5:
             ns = self._get_idxs_norm()
             no = other._get_idxs_norm()
@@ -204,7 +203,7 @@ class Cluster():
             The parameter ``cell`` contains row-wise the corresponding cartesian
             coordinates of the cell vectors.
         """
-        from clusterx.symmetry import get_scaled_positions, get_internal_translations, wrap_scaled_positions
+        from clusterx.symmetry import get_scaled_positions
 
         orbit = []
         for r,t in zip(rr,tt):

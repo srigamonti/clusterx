@@ -2,11 +2,32 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+import pytest
 import numpy as np
 from ase.build import bulk
 from ase.spacegroup import crystal
+
 from clusterx.parent_lattice import ParentLattice
 from clusterx.utils import dict_compare
+from clusterx.super_cell import SuperCell
+
+
+@pytest.fixture
+def pristine():
+    return bulk('Cu', 'fcc', a=3.6)
+
+
+def test_with_symbols(pristine):
+    symbols = [['Cu', 'Au']]
+    plat = ParentLattice(atoms=pristine, symbols=symbols)
+    plat = ParentLattice(atoms=pristine, site_symbols=symbols)
+    np.testing.assert_array_equal(plat.get_sublattice_types()[0], [29, 79])
+
+
+def test_with_numbers(pristine):
+    plat = ParentLattice(atoms=pristine, numbers=[[29, 79]])
+    np.testing.assert_array_equal(plat.get_sublattice_types()[0], [29, 79])
+
 
 def test_parent_lattice_creation():
     """Test creation of a parent lattice for a fictitious quaternary zincblende crystal and for a Ternary clathrate.
@@ -25,7 +46,7 @@ def test_parent_lattice_creation():
     parent_lattice0.serialize(fname="test_parent_lattice_creation_0.json")
     # Clathrate
     a = 10.515
-    x = 0.185; y = 0.304; z = 0.116
+    x, y, z = 0.185, 0.304, 0.116
     wyckoff = [
         (0, y, z), #24k
         (x, x, x), #16i
@@ -40,10 +61,10 @@ def test_parent_lattice_creation():
     sub3 = crystal(['Si','Si','Si','Sr','Ba'], wyckoff, spacegroup=223, cellpar=[a, a, a, 90, 90, 90])
 
     parent_lattice1 = ParentLattice(atoms=pri,substitutions=[sub1,sub2,sub3])
-    print(parent_lattice1.get_sublattice_types(pretty_print=True))
+    parent_lattice1.print_sublattice_types()
     parent_lattice1.serialize(fname="test_parent_lattice_creation_1.json")
 
-    parent_lattice2 = ParentLattice(json_db_filepath="test_parent_lattice_creation_1.json")
+    parent_lattice2 = ParentLattice(filepath="test_parent_lattice_creation_1.json")
 
 
     print ("\n\n========Test writes========")
@@ -274,3 +295,37 @@ def check_result(parent_lattice, case):
                 return False
 
     return isok
+
+def test_is_nary():
+    """Test ParentLattice.is_nary() method
+    """
+    cu = bulk("Cu","fcc")
+    au = bulk("Au","fcc")
+    ag = bulk("Ag","fcc")
+
+    plat = ParentLattice(atoms=cu, substitutions=[au,ag])
+
+    scell = SuperCell(plat, [[2,2,-2],[2,-2,2],[-2,2,2]])
+
+    s = scell.gen_random_structure(nsubs={0:[10,3]})
+
+    isok1 = (s.is_nary(3) is True) and (s.is_nary(4) is False)
+
+    plat2 = ParentLattice(atoms=cu, site_symbols=[["Cu","Au","Ag","X"]])
+
+    isok2 = (plat2.is_nary(2) is False) and (plat2.is_nary(4) is True)
+
+    cuau = bulk("CuAu","zincblende",a=3.0)
+    cuag = bulk("CuAg","zincblende",a=3.0)
+
+    plat3 = ParentLattice(atoms=cuau, substitutions=[cuag])
+    isok3 = (plat3.is_nary(2) is True) and (plat3.is_nary(4) is False)
+
+    cuau = bulk("CuAu","zincblende",a=3.0)
+    cuag = bulk("CuAg","zincblende",a=3.0)
+    siau = bulk("SiAu","zincblende",a=3.0)
+
+    plat4 = ParentLattice(atoms=cuau, substitutions=[cuag,siau])
+    isok4 = (plat4.is_nary(2) is False) and (plat4.is_nary(3) is False) and (plat4.is_nary(4) is False)
+
+    assert (isok1 and isok2 and isok3 and isok4)

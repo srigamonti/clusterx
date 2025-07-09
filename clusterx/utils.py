@@ -849,7 +849,7 @@ def remove_vacancies(at):
         pbc=at.get_pbc(),
         numbers=numbers,
         positions=positions,
-        calculator=at.get_calculator(),
+        calculator=at.calc,
         tags=tags,
         momenta=momenta,
         masses=masses,
@@ -860,7 +860,7 @@ def remove_vacancies(at):
 
 
 def make_supercell(prim, P, wrap=True, tol=1e-5):
-    """Generate a supercell by applying a general transformation (*P*) to
+    r"""Generate a supercell by applying a general transformation (*P*) to
     the input configuration (*prim*).
 
     This function is a modified version of ASEs build/supercells.py.

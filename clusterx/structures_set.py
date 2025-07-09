@@ -36,9 +36,6 @@ class StructuresSet:
         by ``StructuresSet.serialize()`` or ``StructuresSet.write_files()``. In this case,
         the ``parent_lattice`` argument can be ommited (if present, it is overriden).
 
-    ``json_db_filepath``: String
-        Deprecated, use ``filepath`` instead. If set, overrides ``filepath``
-
     ``calculator``: ASE calculator object (default: None)
 
     ``quick_parse``: Boolean (default: ``False``)
@@ -48,10 +45,6 @@ class StructuresSet:
         every structure in the structures set being parsed. This leads to a slower parsing
         but safer if not sure how the file was built.
 
-    **Deprecated parameters:**
-
-    ``db_fname``: replaced by ``json_db_filepath``
-
     **Examples:**
 
     .. todo::
@@ -60,12 +53,7 @@ class StructuresSet:
     **Methods:**
     """
 
-    def __init__(
-        self, parent_lattice=None, filepath=None, json_db_filepath=None, calculator=None, quick_parse=False, **sset_opts
-    ):
-
-        if json_db_filepath is not None:
-            filepath = json_db_filepath
+    def __init__(self, parent_lattice=None, filepath=None, calculator=None, quick_parse=False, **sset_opts):
 
         self._iter = 0
         self._parent_lattice = parent_lattice
@@ -141,10 +129,19 @@ class StructuresSet:
         return self._nstructures
 
     def __add__(self, anothersset):
+        if not isinstance(anothersset, StructuresSet):
+            raise TypeError("Can only add another StructuresSet.")
+
         sset_union = StructuresSet(parent_lattice=self._parent_lattice)
         sset_union.add_structures(self)
         sset_union.add_structures(anothersset)
         return sset_union
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            return self.get_subset(structure_indices=range(*key.indices(len(self))), transfer_properties=True)
+        else:
+            return self._structures[key]
 
     def get_nstr(self):
         """Return number of structures in the structures set."""
@@ -293,9 +290,6 @@ class StructuresSet:
     def iterimages(self):
         # Allows trajectory to convert NEB into several images
         return iter(self._structures)
-
-    def __getitem__(self, i=-1):
-        return self._structures[i]
 
     def get_images(self, rm_vac=True, n=None):
         """
@@ -489,7 +483,7 @@ class StructuresSet:
         for folder in self._folders:
             os.chdir(folder)
             atoms = read(structure_fname)
-            atoms.set_calculator(calculator)
+            atoms.calc = calculator
             erg = atoms.get_potential_energy()
             f = open(os.path.join("energy.dat"), "w+")
             f.write(str(erg))
@@ -591,11 +585,11 @@ class StructuresSet:
                     write(path, atoms, format)
 
         db_path = os.path.join(root, prefix + "0" + "-" + str(self.get_nstr() - 1) + suffix + ".json")
-        self.serialize(path=db_path, overwrite=True)
+        self.serialize(filepath=db_path, overwrite=True)
 
     # Deprecated
-    def write_to_db(self, path="sset.json", overwrite=False, rm_vac=False):
-        self.serialize(path=path, overwrite=overwrite, rm_vac=rm_vac)
+    def write_to_db(self, filepath="sset.json", overwrite=False, rm_vac=False):
+        self.serialize(filepath=path, overwrite=overwrite, rm_vac=rm_vac)
 
     def serialize(self, filepath="sset.db", ase_db_type=None, overwrite=False, rm_vac=False):
         """Serialize StructuresSet object

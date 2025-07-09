@@ -2,17 +2,11 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-import clusterx as c
-from clusterx.parent_lattice import ParentLattice
-from clusterx.super_cell import SuperCell
-from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
-from ase import Atoms
 import numpy as np
-import sys
-from ase import Atoms
+
 
 class StructureSelector():
     """Structure selector class
@@ -39,17 +33,13 @@ class StructureSelector():
     def __init__(self, cluster_pool, training_set, candidate_set = None, correlations_calculator = None):
         'Barricade against bad input:'
         if not(isinstance(cluster_pool, ClustersPool)):
-            print('No cluster pool handed to StructureSelector.__init__()')
-            sys.exit()
+            raise TypeError('cluster_pool needs to be a ClustersPool object.')
         if not(isinstance(training_set, StructuresSet)):
-            print('No training set handed to StructureSelector.__init__()')
-            sys.exit()
+            raise TypeError('training_set needs to be a StructuresSet object.')
         if not(candidate_set is None or isinstance(candidate_set, StructuresSet)):
-            print('Wrong candidate set handed to StructureSelector.__init__()')
-            sys.exit()
+            raise TypeError('candidate_set needs to be a StructuresSet object or None.')
         if not(correlations_calculator is None or isinstance(correlations_calculator, CorrelationsCalculator)):
-            print('Wrong correlations calculator handed to StructureSelector.__init__()')
-            sys.exit()
+            raise TypeError('correlations_calculator needs to be a CorrelationsCalculator object or None.')
 
         self._cluster_pool = cluster_pool
         self._training_set = training_set
@@ -77,9 +67,7 @@ class StructureSelector():
         
         '''
         if not(isinstance(new_candidate_set, StructuresSet)):
-            print('No candidate set handed to set_candidate_set. StructureSelector()')
-            print('StructureSelectorError')
-            sys.exit()
+            raise TypeError('set_candidate_set() needs a StructuresSet object as input.')
         self._candidate_set = new_candidate_set
 
     def calculate_population_variance(self, domain_calculation_method = 'averagedConcentration', concentration = None):
@@ -129,13 +117,9 @@ class StructureSelector():
             Defines the concentration for which the domain matrix should be evaluated.
         '''
         if(self._candidate_set is None):
-            print('There are no candidate structures. select_structures()')
-            sys.exit()
+            raise ValueError('There are no candidate structures, use set_candidate_set')
         if not(isinstance(method, str) and (method[:6] == 'greedy' or method[:6] == 'global')):
-            text_file = open('somefile.txt', 'w')
-            text_file.write()
-            print('No method inserted to select_structures. select_structures()')
-            sys.exit()
+            raise ValueError('Method needs to be a string starting with "greedy" or "global_".')
 
         global_or_greedy = method[:6]
         covariance_matrix = self._covariance_matrix
@@ -143,8 +127,6 @@ class StructureSelector():
         if(global_or_greedy == 'global'):
             domain_calculation_method = method.replace("global_","")
             domain_matrix = self._calculate_domain_matrix(method = domain_calculation_method, concentration = concentration)
-
-            squared_covariance = np.dot(covariance_matrix, covariance_matrix)
 
             candidate_correlations = self._correlations_calculator.get_correlation_matrix(self._candidate_set)
 
@@ -177,17 +159,14 @@ class StructureSelector():
             return np.argmax(candidate_scores)
 
         else:
-            print('No valid selector chosen. select_structure() in StructureSelector.')
-            sys.exit()
+            raise ValueError('No valid selector chosen.')
     
     def _calculate_domain_matrix(self, method = None, concentration = None):
         if(method is None):
-            print('Error in StructureSelector(), _calculate_domain_matrix(). No method for calculation chosen!')
-            sys.exit()
+            raise ValueError('No method for calculation chosen.')
         method_list = ['averagedConcentration', 'infiniteCrystalFiniteClusters', 'byConcentration', 'vdWalleAndCeder']
         if not(method is s for s in method_list):
-            print('Error in StructureSelector(), _calculate_domain_matrix(). No valid option for calculation chosen!')
-            sys.exit()
+            raise ValueError('No valid method for calculation chosen. Choose one of: ' + str(method_list))
 
         '''
         Calculate domain matrix from Mueller2010 paper PRB 82, 184107
@@ -212,18 +191,16 @@ class StructureSelector():
         elif(method == 'byConcentration'):
             'Calculate domain matrix for infinite crystal at given concentration'
             if not(isinstance(concentration, float)):
-                print('Concentration missing to calculate domain_matrix. None returned')
-                sys.exit()
+                raise TypeError('Concentration needs to be a float.')
             'Number of occupations a cluster depends on'
             for rowIdx in range(number_clusters):
                 for colIdx in range(number_clusters):
                     domain_matrix[rowIdx, colIdx] = np.power((2*concentration - 1), npoints[rowIdx] + npoints[colIdx])
-                    
+
         elif(method == 'vdWalleAndCeder'):
             'Use A. vd Walles and G. Ceders method'
             domain_matrix = domain_matrix + np.identity(number_clusters)
         else:
-            print('No valid method passed to _calculate_domain_matrix() in StructureSelector()')
-            sys.exit()
-            
+            raise ValueError(f'Invalid method: {method}')
+
         return domain_matrix

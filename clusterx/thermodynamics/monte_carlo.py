@@ -17,7 +17,7 @@ from clusterx.structure import Structure
 
 
 class MonteCarlo:
-    """Monte Carlo class
+    r"""Monte Carlo class
 
     **Description**:
         Objects of this class are used to perform Monte Carlo samplings.
@@ -173,7 +173,7 @@ class MonteCarlo:
         filename=None,
         **kwargs
     ):
-        """Perform Monte-Carlo Metropolis simulation
+        r"""Perform Monte-Carlo Metropolis simulation
 
         **Description**:
             Perfom Monte-Carlo Metropolis sampling for
@@ -264,9 +264,9 @@ class MonteCarlo:
 
         else:
             if self._nsubs is not None:
-                struc = self._scell.gen_random(self._nsubs, mc=True)
+                struc = self._scell.gen_random_structure(self._nsubs, mc=True)
             else:
-                struc = self._scell.gen_random(mc=True)
+                struc = self._scell.gen_random_structure(mc=True)
 
         self._em.corrc.reset_mc(mc=True)
         e = self._em.predict(struc)
@@ -291,7 +291,7 @@ class MonteCarlo:
         if self._models:
             key_value_pairs = {}
             for m, mo in enumerate(self._models):
-                key_value_pairs.update({mo.property: mo.predict(struc)})
+                key_value_pairs.update({mo.property_name: mo.predict(struc)})
             traj.add_decoration(0, e, [], decoration=struc.decor, key_value_pairs=key_value_pairs)
         else:
             traj.add_decoration(0, e, [], decoration=struc.decor)
@@ -345,7 +345,7 @@ class MonteCarlo:
                 if self._models:
                     key_value_pairs = {}
                     for m, mo in enumerate(self._models):
-                        key_value_pairs.update({mo.property: mo.predict(struc)})
+                        key_value_pairs.update({mo.property_name: mo.predict(struc)})
                     traj.add_decoration(i, e, [[li[0], li[1]] for li in indices_list], key_value_pairs=key_value_pairs)
 
                 else:
@@ -476,7 +476,7 @@ class MonteCarloTrajectory:
                     movalue = np.zeros(len(models))
                     for m, mo in enumerate(models):
                         movalue[m] = mo.predict(sx)
-                        sdict.update({mo.property: movalue[m]})
+                        sdict.update({mo.property_name: movalue[m]})
                 else:
 
                     for m, mo in enumerate(models):
@@ -485,11 +485,11 @@ class MonteCarloTrajectory:
                             sx, ind1=indices_list[0][0], ind2=indices_list[0][1], site_types=self._sublattice_indices
                         )
                         movalue[m] = movalue[m] + dmo
-                        sdict.update({mo.property: movalue[m]})
+                        sdict.update({mo.property_name: movalue[m]})
 
             else:
                 for m, mo in enumerate(models):
-                    sdict.update({mo.property: mo.predict(sx)})
+                    sdict.update({mo.property_name: mo.predict(sx)})
 
             if prop_func is not None:
                 sdict.update({prop_name: prop_func(sx, tr, **kwargs)})
@@ -623,7 +623,7 @@ class MonteCarloTrajectory:
                 return np.asarray(props)
 
             except:
-                if prop not in [mo.property for mo in self._models]:
+                if prop not in [mo.property_name for mo in self._models]:
                     print("Model of property is not given, look at the documentation.")
                 else:
                     print("Property is not calculated, look at the documentation.")

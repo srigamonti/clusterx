@@ -42,9 +42,9 @@ class ClustersPool:
         (Note: Experimental feature.  The generated multiplicities may not be
         valid for clusters larger than half the size of the supercell. Use
         ``radii`` to get accurate multiplicities.)
-    ``method``: integer (1 or 2)
-        If 1, an elimination method is used to build the clusters pool. If 2, an
-        incremental method is used instead. Use method 2 only if ``super_cell`` is
+    ``method``: integer (0 or 1)
+        If 0, an elimination method is used to build the clusters pool. If 1, an
+        incremental method is used instead. Use method 1 only if ``super_cell`` is
         ``None``.
     ``filepath``: string (default: None)
         Overrides all the above. Used to initialize from file. Path of a json
@@ -160,7 +160,9 @@ class ClustersPool:
                 self._cpool_scell.get_substitutional_atoms().get_all_distances(mic=True)
             )
             self.set_radii(npoints=npoints, radii=radii)
-
+            if 0 in self._npoints:
+                raise ValueError("npoints cannot contain 0,\
+                zero-point clusters are deprecated. Use fit intercept instead.")
             if self._npoints.size != 0:
                 self.gen_clusters(method=method)
 
@@ -794,6 +796,7 @@ class ClustersPool:
 
         call(["rm", "-f", db_name])
         atoms_db = JSONDatabase(filename=db_name)
+        #atoms_db = connect(db_name, append=False) # for future reference
 
         cpool_atoms = self.get_cpool_atoms(
             orbit=orbit,
