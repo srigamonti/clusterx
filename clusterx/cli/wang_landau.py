@@ -36,13 +36,30 @@ def wang_landau(
     scell = SuperCell(plat, sc_shape)
 
     wl = WangLandau(
-        energy_model=model, scell=scell, ensemble="canonical", nsubs=nsubs
+        energy_model=model, scell=scell, ensemble="canonical", nsubs=nsubs, predict_swap=True,
     )
     cdos = wl.wang_landau_sampling(
         energy_range=energy_range,
-        energy_bin_width=0.002,
-        f_range=[math.exp(1), 2],
+        energy_bin_width=0.2,
+        f_range=[math.exp(1), math.exp(1e-4)],
         update_method="square_root",
-        flatness_conditions=[[0.1, math.exp(1e-1)]],
+        flatness_conditions=[
+            [0.5, math.exp(1e-1)],
+            [0.80, math.exp(1e-3)],
+            [0.90, math.exp(1e-5)],
+            [0.95, math.exp(1e-7)],
+            [0.98, math.exp(1e-8)],
+        ],
+        initial_decoration=None,
+        serialize=True,
+        filename="cdos.json",
+        serialize_during_sampling=True,
+        restart_from_file=False,
+        plot_hist_real_time=False,
+        acc_prob_init_structure=1e-3,
+        acc_prob_dist_init_structure="gaussian",
+        itmax_init_structure=int(1e8),
+        nproc=0,
+        #**kwargs,
     )
     energy_bins, gs = cdos.get_cdos(ln=True, normalization=False)

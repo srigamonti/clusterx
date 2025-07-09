@@ -930,17 +930,21 @@ class WangLandau:
             plt.ion()
             figure, ax = plt.subplots(figsize=(10, 8))
 
+        print("----------------------------------------")
+        print("Info (Wang-Landau): Running WL sampling.")
+        print(
+            f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
+        )
         while f > f_range[1]:
-            print("----------------------------------------")
-            print("Info (Wang-Landau): Running WL sampling.")
-            print(f"Info (Wang-Landau): Modification factor: {f}")
-            print(f"Info (Wang-Landau): Histogram flatness: {histogram_flatness}")
-
+            #print("----------------------------------------")
+            #print("Info (Wang-Landau): Running WL sampling.")
+            #print(f"Info (Wang-Landau): Modification factor: {f}")
+            #print(f"Info (Wang-Landau): Histogram flatness: {histogram_flatness}")
             struc, e, g, ibin, cdos, hist_cond, niter = self.flat_histogram(
                 struc, e, g, ibin, f, cdos, histogram_flatness, energy_bin_width
             )
 
-            print(f"Info (Wang-Landau): Number of MC steps: {niter}")
+            #print(f"Info (Wang-Landau): Number of MC steps: {niter}")
 
             self._n_mc_steps_total += niter
             cd.store_cdos(
@@ -1003,10 +1007,10 @@ class WangLandau:
         niter_per_sweep = 100000
         nonzero_bins_thresh = 5
 
-        print("Building flat histogram.")
-        print(
-            f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
-        )
+        #print("Building flat histogram.")
+        #print(
+        #    f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
+        #)
         while (hist_min < histogram_flatness * hist_avg) or (
             n_nonzero_bins < nonzero_bins_thresh
         ):
