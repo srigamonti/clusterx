@@ -14,14 +14,14 @@ from clusterx.thermodynamics.wang_landau import WangLandau
 commands = ["wang_landau"]
 
 @plac.annotations(
-    nsubs=("Number of substitutions", "option", 1, int),
+    nsubs=("Number of substitutions", "option", "nsubs", dict),
     model_filepath=("Output Model file path.", "option", "mof", str),
     plat_filepath=("Filepath of a serialized ParentLattice object.", "option", "plfp", str),
-    sc_shape=("3x3 integer matrix to specify supercell shape.", "positional", "scsh", list),
+    sc_shape=("3x3 integer matrix to specify supercell shape.", "option", "scsh", list),
     energy_range=("Energy range for sampling, list of maximum and minimum", "option", "er", list),
 )
 def wang_landau(
-    nsubs: int,
+    nsubs: dict = {0: [1]},
     model_filepath: str = "model.pickle",
     plat_filepath: str = "plat.json",
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = 1,
