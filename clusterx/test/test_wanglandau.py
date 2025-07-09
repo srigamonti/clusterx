@@ -4,16 +4,68 @@
 
 import math
 
+import pytest
 import numpy as np
+from ase import Atoms
 from ase.data import atomic_numbers as cn
 
 from clusterx.test.defaults import get_clathrate_plat
+from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.clusters.cluster import Cluster
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.model import Model
 from clusterx.thermodynamics.wang_landau import WangLandau
+from clusterx.cli.wang_landau import wang_landau
+
+
+@pytest.fixture
+def plat():
+    # parent lattice with single site and one substitution
+    cell = [1, 1, 1]
+    positions = [[0, 0, 0]]
+    pbc = [True, True, False]
+
+    pri = Atoms(["Cu"], positions=positions, cell=cell, pbc=pbc)
+    sub = Atoms(["Au"], positions=positions, cell=cell, pbc=pbc)
+    plat = ParentLattice(pri, substitutions=[sub], pbc=pbc)
+    return plat
+
+
+@pytest.fixture
+def cpool(plat):
+    # one-point clusters and nearest neighbor two-point clusters
+    return ClustersPool(plat, npoints=[1, 2], radii=[0, 1.1])
+
+
+@pytest.fixture
+def model(plat, cpool):
+    corc = CorrelationsCalculator("binary-linear", plat, cpool)
+    ecisE = [0., -1.]
+    multT = cpool.get_multiplicities()
+    cemodel = Model(corc, "energy", ecis=np.multiply(ecisE, multT))
+    return cemodel
+
+
+def test_cli(plat, model):
+    # serialize objects
+    model_filepath = "model_wl.pickle"
+    model.serialize(model_filepath)
+    plat_filepath = "plat_wl.json"
+    plat.serialize(plat_filepath)
+
+    nsubs = {0: [1]}
+    sc_shape = [8, 8]
+    energy_range = [-2.0, 2.0]
+
+    wang_landau(
+        nsubs=nsubs,
+        model_filepath=model_filepath,
+        plat_filepath=plat_filepath,
+        sc_shape=sc_shape,
+        energy_range=energy_range,
+    )
 
 
 def test_sampling_clathrate():
