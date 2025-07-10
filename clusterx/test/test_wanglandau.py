@@ -2,6 +2,7 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+import os
 import math
 
 import pytest
@@ -42,7 +43,7 @@ def cpool(plat):
 @pytest.fixture
 def model(plat, cpool):
     corc = CorrelationsCalculator("trigonometric", plat, cpool)
-    ecisE = [0., -1.]
+    ecisE = [0.0, -1.0]
     multT = cpool.get_multiplicities()
     cemodel = Model(corc, "energy", ecis=np.multiply(ecisE, multT))
     return cemodel
@@ -56,16 +57,39 @@ def test_cli(plat, model):
     plat.serialize(plat_filepath)
 
     sc_shape = [8, 8]
-    nsubs = {0: [int(np.prod(sc_shape) / 2)]}  # one substitution for the whole supercell
-    energy_range = [-2., 3.]
+    nsubs = {
+        0: [int(np.prod(sc_shape) / 2)]
+    }  # one substitution for the whole supercell
+    energy_range = [-2.0, 3.0]
 
     wang_landau(
-        nsubs=nsubs,
-        model_filepath=model_filepath,
         plat_filepath=plat_filepath,
+        model_filepath=model_filepath,
         sc_shape=sc_shape,
+        nsubs=nsubs,
+        ensemble="canonical",
+        sublattice_indices=[],
+        chemical_potentials=None,
+        predict_swap=True,
+        error_reset=None,
         energy_range=energy_range,
+        energy_bin_width=0.2,
+        f_range=[4, 1.9],
+        update_method="square_root",
+        flatness_conditions=[[0.5, 2], [0.5, 1]],
+        initial_decoration=None,
+        serialize=True,
+        filename="cdos.json",
+        serialize_during_sampling=True,
+        restart_from_file=False,
+        plot_hist_real_time=True,
+        acc_prob_init_structure=1e-3,
+        acc_prob_dist_init_structure="gaussian",
+        itmax_init_structure=int(1e8),
+        nproc=0,
+        seed=1,
     )
+    assert os.path.exists("cdos.json")
 
 
 def test_sampling_clathrate():
@@ -118,7 +142,11 @@ def test_sampling_clathrate():
     cemodelE = Model(corcE, "energy", ecis=np.multiply(ecisE, multT))
 
     wl = WangLandau(
-        energy_model=cemodelE, scell=scell, ensemble="canonical", nsubs=nsubs
+        energy_model=cemodelE,
+        scell=scell,
+        ensemble="canonical",
+        nsubs=nsubs,
+        predict_swap=False,
     )
     e0_unitcell = -77652.707924876348
     e0 = float(e0_unitcell)
@@ -129,6 +157,7 @@ def test_sampling_clathrate():
         f_range=[math.exp(1), 2],
         update_method="square_root",
         flatness_conditions=[[0.1, math.exp(1e-1)]],
+        plot_hist_real_time=True,
     )
     energy_bins, gs = cdos.get_cdos(ln=True, normalization=False)
 
