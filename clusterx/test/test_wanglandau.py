@@ -55,9 +55,9 @@ def test_cli(plat, model):
     plat_filepath = "plat_wl.json"
     plat.serialize(plat_filepath)
 
-    nsubs = {0: [32]}
     sc_shape = [8, 8]
-    energy_range = [-2., 2.0]
+    nsubs = {0: [int(np.prod(sc_shape) / 2)]}  # one substitution for the whole supercell
+    energy_range = [-2., 3.]
 
     wang_landau(
         nsubs=nsubs,

@@ -747,10 +747,11 @@ class WangLandau:
         ones_arr = np.ones(len(ener_arr))
 
         ax.clear()
-        ax.bar(ener_arr, ones_arr, width=energy_bin_width * 0.92, color="silver")
-        ax.bar(ener_arr, hist_arr, width=energy_bin_width * 0.82)
-        ax.bar(ener_arr, cdos_arr, width=energy_bin_width * 0.35)
+        ax.bar(ener_arr, ones_arr, width=energy_bin_width * 0.92, color="silver", label="Flatness target")
+        ax.bar(ener_arr, hist_arr, width=energy_bin_width * 0.82, label="Histogram")
+        ax.bar(ener_arr, cdos_arr, width=energy_bin_width * 0.35, label="CDOS")
         ax.relim()
+        ax.legend()
         figure.canvas.draw()
         figure.canvas.flush_events()
 
@@ -777,6 +778,7 @@ class WangLandau:
         acc_prob_dist_init_structure="gaussian",
         itmax_init_structure=int(1e8),
         nproc=0,
+        seed=None,
         **kwargs,
     ):
         r"""Perform Wang Landau simulation
@@ -866,6 +868,13 @@ class WangLandau:
         ``itmax_init_structure``: integer
             Maximum number of trials to search for initial structure inside given energy window.
 
+        ``nproc``: integer (default: 0)
+            Number of processes to use for the initial structure search.
+        
+        ``seed``: integer (default: None)
+            Seed for the numpy random number generator. If None, sequences are non-deterministic, if set with integer,
+            sequences are deterministic, i.e. pseudo-random. TODO: in future move to np.random.Generator
+
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the ConfigurationalDensityOfStates object that is initialized in this method.
 
@@ -875,6 +884,7 @@ class WangLandau:
 
         """
         self._em.corrc.reset_mc(mc=True)
+        np.random.seed(seed)
 
         struc = self._wls_create_initial_structure(
             initial_decoration,
