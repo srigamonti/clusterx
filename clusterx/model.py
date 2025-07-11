@@ -8,7 +8,7 @@ import os
 import time
 import warnings
 import numpy as np
-from clusterx.correlations import CorrelationsCalculator
+from clusterx.correlations import CorrelationsCalculator, site_basis_function
 from clusterx.estimators.estimator_factory import EstimatorFactory
 from clusterx.clusters_selector import ClustersSelector
 
@@ -412,11 +412,15 @@ class Model:
             cf = 1.0
             for i in range(nbodies):
                 if i == cluster_sites.index(ind):
-                    cf *= self.corrc.site_basis_function(
-                        cluster_funcs[i], new_sigma, cluster_ems[i]
-                    ) - self.corrc.site_basis_function(cluster_funcs[i], old_sigma, cluster_ems[i])
+                    cf *= site_basis_function(
+                        cluster_funcs[i], new_sigma, cluster_ems[i], self.corrc.basis_name, self.corrc.basis_set
+                    ) - site_basis_function(
+                        cluster_funcs[i], old_sigma, cluster_ems[i], self.corrc.basis_name, self.corrc.basis_set
+                    )
                 else:
-                    cf *= self.corrc.site_basis_function(cluster_funcs[i], sigmas[i], cluster_ems[i])
+                    cf *= site_basis_function(
+                        cluster_funcs[i], sigmas[i], cluster_ems[i], self.corrc.basis_name, self.corrc.basis_set
+                    )
 
             corrs[cluster_index] += cf
 

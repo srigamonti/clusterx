@@ -5,13 +5,24 @@
 import os
 import pickle
 from functools import lru_cache
+from subprocess import call
+from typing import Optional
+import warnings
 
 from numba import jit
 import numpy as np
+from ase.db.core import Database
+from ase.db import connect
+from ase.db.jsondb import JSONDatabase
 
 from clusterx.parent_lattice import ParentLattice
-from clusterx.symmetry import get_scaled_positions
-from clusterx.utils import PolynomialBasis
+from clusterx.super_cell import SuperCell
+from clusterx.clusters.cluster import Cluster
+from clusterx.clusters.clusters_pool import ClustersPool
+from clusterx.structure import Structure
+from clusterx.structures_set import StructuresSet
+from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions
+from clusterx.utils import PolynomialBasis, get_cl_idx_sc
 
 
 class CorrelationsCalculator:
@@ -44,7 +55,6 @@ class CorrelationsCalculator:
     """
 
     def __new__(cls, *args, **kwargs):
-
         if len(args) == 0 and len(kwargs) == 0:
             inst = super(CorrelationsCalculator, cls).__new__(cls, *args, **kwargs)
             return inst
@@ -83,13 +93,13 @@ class CorrelationsCalculator:
 
     def initialize(
         self,
-        basis_name=None,
-        parent_lattice=None,
-        clusters_pool=None,
-        db=None,
-        use_sym_table=False,
-        filepath=None,
-        json_db_filepath=None,
+        basis_name: str = None,
+        parent_lattice: ParentLattice = None,
+        clusters_pool: ClustersPool = None,
+        db: Database = None,
+        use_sym_table: bool = False,
+        filepath: str = None,
+        json_db_filepath: str = None,
     ):
         if filepath is not None:
             fext = os.path.splitext(filepath)[1][1:]
@@ -101,16 +111,11 @@ class CorrelationsCalculator:
                 json_db_filepath = filepath
 
         if json_db_filepath is not None:
-            from ase.db import connect
-
             db = connect(json_db_filepath)
 
         if db is not None:
             corr_dict = db.metadata.get("correlations_calculator", None)
             self.basis_name = corr_dict.get("basis", "trigonometric")
-
-            from clusterx.clusters.clusters_pool import ClustersPool
-
             self._cpool = ClustersPool(db=db)
             self._plat = self._cpool._plat
 
@@ -148,7 +153,7 @@ class CorrelationsCalculator:
         """Return ClustersPool object of the calculator"""
         return self._cpool
 
-    def serialize(self, filepath=None, fmt=None, db_name=None):
+    def serialize(self, filepath: str = None, fmt: str = None, db_name: str = None):
         """Write correlations calculator to Atoms Json database
 
         **Parameters**:
@@ -170,6 +175,12 @@ class CorrelationsCalculator:
 
         if db_name is not None:
             filepath = db_name
+            warnings.warn(
+                "The 'db_name' parameter is deprecated and will be removed in future versions. "
+                "Please use 'filepath' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         fext = os.path.splitext(filepath)[1][1:]
 
@@ -186,9 +197,7 @@ class CorrelationsCalculator:
                 pickle.dump(self, f)
 
         if fmt == "json_db":
-            from subprocess import call
-
-            from ase.db.jsondb import JSONDatabase
+            
 
             call(["rm", "-f", db_name])
             atoms_db = JSONDatabase(filename=db_name)
@@ -206,7 +215,7 @@ class CorrelationsCalculator:
             cpooldict.update({"correlations_calculator": corr_dict})
             atoms_db.metadata = cpooldict
 
-    def get_binary_random_structure_correlations(self, concentration):
+    def get_binary_random_structure_correlations(self, concentration: float):
         """Return cluster correlations for binary quasirandom structure
 
         .. todo::
@@ -221,8 +230,10 @@ class CorrelationsCalculator:
 
         return np.around(correlations, decimals=12)
 
-    def get_orbit_lengths(self, structure):
-        """Return integer array of orbit lenghts
+    def get_orbit_lengths(self, structure: Structure):
+        """Return integer array of orbit lengths
+
+        **Parameters**
 
         ``structure``: ParentLattice, SuperCell, or Structure object
             Object containing the lattice definition to determine the orbit
@@ -235,7 +246,7 @@ class CorrelationsCalculator:
             lengths[i] = len(orbit)
         return lengths
 
-    def get_cluster_orbits_for_scell(self, scell, verbose=False):
+    def get_cluster_orbits_for_scell(self, scell: SuperCell, verbose: bool = False):
         """Return array of cluster orbits for a given supercell
 
         **Parameters**
@@ -243,10 +254,9 @@ class CorrelationsCalculator:
         ``scell``: ParentLattice, SuperCell, or Structure object
             Object containing the lattice definition to determine the orbit
             of the clusters in the CorrelationsCalculator.
+        ``verbose``: boolean (default: False)
+            If ``True``, prints the progress of the calculation to the console.
         """
-        # if isinstance(scell,Structure):
-        from clusterx.clusters.clusters_pool import ClustersPool
-
         cluster_orbits = None
 
         # Check if cluster_orbit is already computed
@@ -261,13 +271,9 @@ class CorrelationsCalculator:
         if cluster_orbits is None:
             if verbose:
                 print("Calculating cluster orbits from scratch for scell")
-            from clusterx.structure import Structure
-
             # Add new super cell and calculate cluster orbits for it.
             cluster_orbits = []
             # scell = structure.get_supercell()
-            from clusterx.super_cell import SuperCell
-
             if isinstance(scell, Structure):
                 scell = scell.get_supercell()
             elif isinstance(scell, SuperCell):
@@ -286,13 +292,15 @@ class CorrelationsCalculator:
                 cluster_orbits.append(_cluster_orbit)
 
             self._scells.append(scell)  # Add supercell to calculator
-            self._cluster_orbits_set.append(cluster_orbits)  # Add corresponding cluster orbits
+            self._cluster_orbits_set.append(
+                cluster_orbits
+            )  # Add corresponding cluster orbits
             if self.pickle_file is not None:
                 self.serialize(self.pickle_file)
 
         return cluster_orbits
 
-    def get_cluster_orbit_pools_for_scell(self, scell):
+    def get_cluster_orbit_pools_for_scell(self, scell: SuperCell):
         """Return array of cluster_pool objects, containing cluster orbits for a given supercell
 
         **Parameters**
@@ -301,12 +309,6 @@ class CorrelationsCalculator:
             Object containing the lattice definition to determine the orbit
             of the clusters in the CorrelationsCalculator.
         """
-        from clusterx.clusters.clusters_pool import ClustersPool
-        from clusterx.structure import Structure
-        from clusterx.super_cell import SuperCell
-        from clusterx.symmetry import wrap_scaled_positions
-        from clusterx.utils import get_cl_idx_sc
-
         cluster_orbit_pools = []
 
         if isinstance(scell, Structure):
@@ -322,39 +324,46 @@ class CorrelationsCalculator:
             positions = cluster.get_positions()
 
             cl_spos = wrap_scaled_positions(
-                get_scaled_positions(positions, scell.get_cell(), pbc=scell.get_pbc(), wrap=True),
+                get_scaled_positions(
+                    positions, scell.get_cell(), pbc=scell.get_pbc(), wrap=True
+                ),
                 scell.get_pbc(),
             )
-            sc_spos = wrap_scaled_positions(scell.get_scaled_positions(wrap=True), scell.get_pbc())
+            sc_spos = wrap_scaled_positions(
+                scell.get_scaled_positions(wrap=True), scell.get_pbc()
+            )
             cl_idxs = get_cl_idx_sc(cl_spos, sc_spos, method=0)
 
-            _cluster_orbit_pool = cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs())
+            _cluster_orbit_pool = cpool.get_cluster_orbit(
+                scell, cl_idxs, cluster_species=cluster.get_nrs()
+            )
             cluster_orbit_pools.append(_cluster_orbit_pool)
 
         return cluster_orbit_pools
 
-    def reset_mc(self, mc=False):
-        # print("reset")
+    def reset_mc(self, mc: bool = False):
+        """Reset memoization of cluster orbits"""
         self._mc = mc
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
 
-    def get_cluster_correlations(self, structure, verbose=False):
+    def get_cluster_correlations(self, structure: Structure, verbose: bool = False):
         """Get cluster correlations for a structure
         **Parameters:**
 
         ``structure``: Structure object
             structure for which to calculate the correlations.
-        ``mc``: Boolean
-            Set to ``True`` when performing Monte-Carlo simulations, to use an
-            optimized version of the method.
+        ``verbose``: boolean (default: False)
+            If ``True``, prints the progress of the calculation to the console.
         """
         cluster_orbits = None
 
         if self._mc and self._cluster_orbits_set != [] and self._num_mc_calls != 0:
             cluster_orbits = self._cluster_orbits_mc
         else:
-            cluster_orbits = self.get_cluster_orbits_for_scell(structure.get_supercell(), verbose=verbose)
+            cluster_orbits = self.get_cluster_orbits_for_scell(
+                structure.get_supercell(), verbose=verbose
+            )
             if self._mc is True:
                 self._num_mc_calls = 1
                 self._cluster_orbits_mc = cluster_orbits
@@ -374,7 +383,7 @@ class CorrelationsCalculator:
                     structure.sigmas,
                     structure.ems,
                     self.basis_name,
-                    self.basis_set
+                    self.basis_set,
                 )
                 correlations[icl] += weight * cf
 
@@ -382,7 +391,9 @@ class CorrelationsCalculator:
 
         return np.around(correlations, decimals=12)
 
-    def get_correlation_matrix(self, structures_set, outfile=None, verbose=False):
+    def get_correlation_matrix(
+        self, structures_set: StructuresSet, outfile: str = None, verbose: bool = False
+    ):
         """Return correlation matrix for a structures set.
 
         **Parameters:**
@@ -390,13 +401,19 @@ class CorrelationsCalculator:
         ``structures_set``: StructuresSet object
             a 2D numpy matrix is returned. every row in the matrix corresponds to
             a structure in the ``StructuresSet`` object.
+        ``outfile``: string (default: None)
+            If given, the correlation matrix is written to a file with this name.
+        ``verbose``: boolean (default: False)
+            If ``True``, prints the progress of the calculation to the console.
         """
         corrs = np.empty((len(structures_set), len(self._cpool)))
         if verbose:
             nstr = len(structures_set)
         for i, st in enumerate(structures_set):
             if verbose:
-                print(f"CorrelationsCalculator: computing correlations for structure {i} from {nstr}")
+                print(
+                    f"CorrelationsCalculator: computing correlations for structure {i} from {nstr}"
+                )
             corrs[i] = self.get_cluster_correlations(st, verbose=verbose)
 
         if outfile is not None:
@@ -411,8 +428,8 @@ class CorrelationsCalculator:
 
 
 @jit
-#@lru_cache(maxsize=None)
-def _trigo_basis_function(alpha, sigma, m):
+# @lru_cache(maxsize=None)
+def _trigo_basis_function(alpha: int, sigma: int, m: int):
     # Axel van de Walle, CALPHAD 33, 266 (2009)
 
     if alpha == 0:
@@ -426,7 +443,13 @@ def _trigo_basis_function(alpha, sigma, m):
 
 
 @lru_cache(maxsize=None)
-def site_basis_function(alpha, sigma, m, basis_name, basis_set):
+def site_basis_function(
+    alpha: int,
+    sigma: int,
+    m: int,
+    basis_name: str,
+    basis_set: Optional[PolynomialBasis] = None,
+):
     """
     Calculates the site basis function.
 
@@ -446,7 +469,11 @@ def site_basis_function(alpha, sigma, m, basis_name, basis_set):
     if basis_name == "trigonometric":
         return _trigo_basis_function(alpha, sigma, m)
 
-    if basis_name == "binary-linear" or basis_name == "indicator-binary" or basis_name == "indicator_binary":
+    if (
+        basis_name == "binary-linear"
+        or basis_name == "indicator-binary"
+        or basis_name == "indicator_binary"
+    ):
         # Only for binary alloys. Allows for simple interpretation of cluster interactions.
         return sigma
 
@@ -469,16 +496,22 @@ def site_basis_function(alpha, sigma, m, basis_name, basis_set):
         return basis_set.evaluate(alpha, sigma, m)
 
 
-def cluster_function(cluster, structure_sigmas, ems, basis_name, basis_set):
+def cluster_function(
+    cluster: Cluster,
+    structure_sigmas: np.ndarray,
+    ems: np.ndarray,
+    basis_name: str,
+    basis_set: Optional[PolynomialBasis] = None,
+):
     cluster_atomic_idxs = np.array(cluster.get_idxs())
     cluster_alphas = cluster.alphas
     cf = 1.0
     for cl_alpha, cl_idx in zip(cluster_alphas, cluster_atomic_idxs):
         cf *= site_basis_function(
-            cl_alpha,
-            structure_sigmas[cl_idx],
-            ems[cl_idx],
-            basis_name,
-            basis_set
+            alpha=cl_alpha,
+            sigma=structure_sigmas[cl_idx],
+            m=ems[cl_idx],
+            basis_name=basis_name,
+            basis_set=basis_set,
         )
     return cf
