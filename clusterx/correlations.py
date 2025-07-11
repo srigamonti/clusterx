@@ -6,6 +6,7 @@ import os
 import pickle
 from functools import lru_cache
 
+from numba import jit
 import numpy as np
 
 from clusterx.parent_lattice import ParentLattice
@@ -82,7 +83,7 @@ class CorrelationsCalculator:
 
     def initialize(
         self,
-        basis=None,
+        basis_name=None,
         parent_lattice=None,
         clusters_pool=None,
         db=None,
@@ -106,7 +107,7 @@ class CorrelationsCalculator:
 
         if db is not None:
             corr_dict = db.metadata.get("correlations_calculator", None)
-            self.basis = corr_dict.get("basis", "trigonometric")
+            self.basis_name = corr_dict.get("basis", "trigonometric")
 
             from clusterx.clusters.clusters_pool import ClustersPool
 
@@ -114,7 +115,7 @@ class CorrelationsCalculator:
             self._plat = self._cpool._plat
 
         else:
-            self.basis = basis
+            self.basis_name = basis_name
             self._plat = parent_lattice
             self._cpool = clusters_pool
 
@@ -125,10 +126,15 @@ class CorrelationsCalculator:
         self._2pi = 2 * np.pi
         self.use_sym_table = use_sym_table
 
-        if self.basis == "polynomial":
-            self.basis_set = PolynomialBasis()
-        elif self.basis == "chebyshev":
-            self.basis_set = PolynomialBasis(symmetric=True)
+        match self.basis_name:
+            case "binary-linear" | "indicator-binary" | "indicator_binary":
+                self.basis_set = None
+            case "trigonometric":
+                self.basis_set = None
+            case "polynomial":
+                self.basis_set = PolynomialBasis()
+            case "chebyshev":
+                self.basis_set = PolynomialBasis(symmetric=True)
 
         self._mc = False
         self._num_mc_calls = 0
@@ -136,7 +142,7 @@ class CorrelationsCalculator:
 
     def get_basis(self):
         """Return basis set name"""
-        return self.basis
+        return self.basis_name
 
     def get_cpool(self):
         """Return ClustersPool object of the calculator"""
@@ -195,89 +201,10 @@ class CorrelationsCalculator:
             cpooldict = self._cpool.get_cpool_dict()
 
             corr_dict = {}
-            corr_dict.update({"basis": self.basis})
+            corr_dict.update({"basis": self.basis_name})
 
             cpooldict.update({"correlations_calculator": corr_dict})
             atoms_db.metadata = cpooldict
-
-    @lru_cache(maxsize=None)
-    def _trigo_basis_function(self, alpha, sigma, m):
-        # Axel van de Walle, CALPHAD 33, 266 (2009)
-
-        if alpha == 0:
-            return 1
-
-        elif alpha % 2 != 0:
-            return -np.cos(self._2pi * np.ceil(alpha / 2) * sigma / m)
-
-        else:
-            return -np.sin(self._2pi * np.ceil(alpha / 2) * sigma / m)
-
-    # @profile
-    @lru_cache(maxsize=None)
-    def site_basis_function(self, alpha, sigma, m):
-        """
-        Calculates the site basis function.
-
-        Evaluation of the single site basis functions using different basis sets.
-
-        **Parameters:**
-
-        ``alpha``: integer
-            integer number between 0 and ``m`` - 1; represents the index of the basis function
-        ``sigma``: integer
-            integer number between 0 and ``m`` - 1; represents the occupation variable
-        ``m``: integer
-            number of components of the sublattice
-
-        """
-
-        if self.basis == "trigonometric":
-
-            """
-            # Axel van de Walle, CALPHAD 33, 266 (2009)
-            if alpha == 0:
-                return 1
-
-            elif alpha%2 != 0:
-                return -np.cos(self._2pi*np.ceil(alpha/2.0)*sigma/m)
-
-            else:
-                return -np.sin(self._2pi*np.ceil(alpha/2.0)*sigma/m)
-            """
-            return self._trigo_basis_function(alpha, sigma, m)
-
-        if self.basis == "binary-linear" or self.basis == "indicator-binary" or self.basis == "indicator_binary":
-            # Only for binary alloys. Allows for simple interpretation of cluster interactions.
-            return sigma
-
-        if self.basis == "polynomial":
-
-            return self.basis_set.evaluate(alpha, sigma, m)
-
-        if self.basis == "chebyshev":
-            # Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984).
-            # Equivalent to polynomial basis.
-
-            def _map_sigma(sigma, m):
-                # Maps sigma = 0, 1, 2, ..., M-1 to -M/2 <= sigma <= M/2.
-                shifted_sigma = int(sigma - int(m / 2))
-                if (m % 2) == 0:
-                    if shifted_sigma >= 0:
-                        shifted_sigma += 1
-                return shifted_sigma
-
-            sigma = _map_sigma(sigma, m)
-
-            return self.basis_set.evaluate(alpha, sigma, m)
-
-    def cluster_function(self, cluster, structure_sigmas, ems):
-        cluster_atomic_idxs = np.array(cluster.get_idxs())
-        cluster_alphas = cluster.alphas
-        cf = 1.0
-        for cl_alpha, cl_idx in zip(cluster_alphas, cluster_atomic_idxs):
-            cf *= self.site_basis_function(cl_alpha, structure_sigmas[cl_idx], ems[cl_idx])
-        return cf
 
     def get_binary_random_structure_correlations(self, concentration):
         """Return cluster correlations for binary quasirandom structure
@@ -286,7 +213,7 @@ class CorrelationsCalculator:
             extend for other bases. Write method for n-aries.
         """
         correlations = np.zeros(len(self._cpool))
-        if self.basis == "binary-linear":
+        if self.basis_name == "binary-linear":
             for icl, cl in enumerate(self._cpool.get_cpool()):
                 correlations[icl] = np.power(concentration, cl.npoints)
         else:
@@ -402,9 +329,6 @@ class CorrelationsCalculator:
             cl_idxs = get_cl_idx_sc(cl_spos, sc_spos, method=0)
 
             _cluster_orbit_pool = cpool.get_cluster_orbit(scell, cl_idxs, cluster_species=cluster.get_nrs())
-            # cluster_orbit_pool = _cluster_orbit_pool.as_array()
-            mult = _cluster_orbit_pool.get_multiplicity_in_parent_lattice()
-
             cluster_orbit_pools.append(_cluster_orbit_pool)
 
         return cluster_orbit_pools
@@ -445,7 +369,13 @@ class CorrelationsCalculator:
             weights = cluster_orbit.get_weights()
 
             for weight, cluster in zip(weights, cluster_orbit_arr):
-                cf = self.cluster_function(cluster, structure.sigmas, structure.ems)
+                cf = cluster_function(
+                    cluster,
+                    structure.sigmas,
+                    structure.ems,
+                    self.basis_name,
+                    self.basis_set
+                )
                 correlations[icl] += weight * cf
 
             correlations[icl] /= np.sum(weights)
@@ -478,3 +408,77 @@ class CorrelationsCalculator:
             f.close()
 
         return corrs
+
+
+@jit
+#@lru_cache(maxsize=None)
+def _trigo_basis_function(alpha, sigma, m):
+    # Axel van de Walle, CALPHAD 33, 266 (2009)
+
+    if alpha == 0:
+        return 1
+
+    elif alpha % 2 != 0:
+        return -np.cos(2 * np.pi * np.ceil(alpha / 2) * sigma / m)
+
+    else:
+        return -np.sin(2 * np.pi * np.ceil(alpha / 2) * sigma / m)
+
+
+@lru_cache(maxsize=None)
+def site_basis_function(alpha, sigma, m, basis_name, basis_set):
+    """
+    Calculates the site basis function.
+
+    Evaluation of the single site basis functions using different basis sets.
+
+    **Parameters:**
+
+    ``alpha``: integer
+        integer number between 0 and ``m`` - 1; represents the index of the basis function
+    ``sigma``: integer
+        integer number between 0 and ``m`` - 1; represents the occupation variable
+    ``m``: integer
+        number of components of the sublattice
+
+    """
+
+    if basis_name == "trigonometric":
+        return _trigo_basis_function(alpha, sigma, m)
+
+    if basis_name == "binary-linear" or basis_name == "indicator-binary" or basis_name == "indicator_binary":
+        # Only for binary alloys. Allows for simple interpretation of cluster interactions.
+        return sigma
+
+    if basis_name == "polynomial":
+        return basis_set.evaluate(alpha, sigma, m)
+
+    if basis_name == "chebyshev":
+        # Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984).
+        # Equivalent to polynomial basis.
+        def _map_sigma(sigma, m):
+            # Maps sigma = 0, 1, 2, ..., M-1 to -M/2 <= sigma <= M/2.
+            shifted_sigma = int(sigma - int(m / 2))
+            if (m % 2) == 0:
+                if shifted_sigma >= 0:
+                    shifted_sigma += 1
+            return shifted_sigma
+
+        sigma = _map_sigma(sigma, m)
+
+        return basis_set.evaluate(alpha, sigma, m)
+
+
+def cluster_function(cluster, structure_sigmas, ems, basis_name, basis_set):
+    cluster_atomic_idxs = np.array(cluster.get_idxs())
+    cluster_alphas = cluster.alphas
+    cf = 1.0
+    for cl_alpha, cl_idx in zip(cluster_alphas, cluster_atomic_idxs):
+        cf *= site_basis_function(
+            cl_alpha,
+            structure_sigmas[cl_idx],
+            ems[cl_idx],
+            basis_name,
+            basis_set
+        )
+    return cf
