@@ -197,8 +197,6 @@ class CorrelationsCalculator:
                 pickle.dump(self, f)
 
         if fmt == "json_db":
-            
-
             call(["rm", "-f", db_name])
             atoms_db = JSONDatabase(filename=db_name)
 
@@ -442,7 +440,7 @@ def _trigo_basis_function(alpha: int, sigma: int, m: int):
         return -np.sin(2 * np.pi * np.ceil(alpha / 2) * sigma / m)
 
 
-@lru_cache(maxsize=None)
+#@lru_cache(maxsize=None)
 def site_basis_function(
     alpha: int,
     sigma: int,
@@ -465,35 +463,27 @@ def site_basis_function(
         number of components of the sublattice
 
     """
+    match basis_name:
+        case "binary-linear" | "indicator-binary" | "indicator_binary":
+            # Only for binary alloys. Allows for simple interpretation of cluster interactions.
+            return sigma
+        case "trigonometric":
+            return _trigo_basis_function(alpha, sigma, m)
+        case "polynomial":
+            return basis_set.evaluate(alpha, sigma, m)
+        case "chebyshev":
+            # Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984).
+            # Equivalent to polynomial basis.
+            def _map_sigma(sigma, m):
+                # Maps sigma = 0, 1, 2, ..., M-1 to -M/2 <= sigma <= M/2.
+                shifted_sigma = int(sigma - int(m / 2))
+                if (m % 2) == 0:
+                    if shifted_sigma >= 0:
+                        shifted_sigma += 1
+                return shifted_sigma
 
-    if basis_name == "trigonometric":
-        return _trigo_basis_function(alpha, sigma, m)
-
-    if (
-        basis_name == "binary-linear"
-        or basis_name == "indicator-binary"
-        or basis_name == "indicator_binary"
-    ):
-        # Only for binary alloys. Allows for simple interpretation of cluster interactions.
-        return sigma
-
-    if basis_name == "polynomial":
-        return basis_set.evaluate(alpha, sigma, m)
-
-    if basis_name == "chebyshev":
-        # Method proposed by J.M. Sanchez, Physica 128A, 334-350 (1984).
-        # Equivalent to polynomial basis.
-        def _map_sigma(sigma, m):
-            # Maps sigma = 0, 1, 2, ..., M-1 to -M/2 <= sigma <= M/2.
-            shifted_sigma = int(sigma - int(m / 2))
-            if (m % 2) == 0:
-                if shifted_sigma >= 0:
-                    shifted_sigma += 1
-            return shifted_sigma
-
-        sigma = _map_sigma(sigma, m)
-
-        return basis_set.evaluate(alpha, sigma, m)
+            sigma = _map_sigma(sigma, m)
+            return basis_set.evaluate(alpha, sigma, m)
 
 
 def cluster_function(
