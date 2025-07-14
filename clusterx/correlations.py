@@ -131,19 +131,34 @@ class CorrelationsCalculator:
         self._2pi = 2 * np.pi
         self.use_sym_table = use_sym_table
 
-        match self.basis_name:
-            case "binary-linear" | "indicator-binary" | "indicator_binary":
-                self.basis_set = None
-            case "trigonometric":
-                self.basis_set = None
-            case "polynomial":
-                self.basis_set = PolynomialBasis()
-            case "chebyshev":
-                self.basis_set = PolynomialBasis(symmetric=True)
+        self.basis_set_values = self.compute_basis_set_values(self._plat, self.basis_name)
 
         self._mc = False
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
+
+    @staticmethod
+    def compute_basis_set_values(parent_lattice: ParentLattice, basis_name: str):
+        match basis_name:
+            case "binary-linear" | "indicator-binary" | "indicator_binary":
+                basis_set = None
+            case "trigonometric":
+                basis_set = None
+            case "polynomial":
+                basis_set = PolynomialBasis()
+            case "chebyshev":
+                basis_set = PolynomialBasis(symmetric=True)
+            case _:
+                basis_set = None
+        m_max = max(parent_lattice.get_ems()) if parent_lattice is not None else 10
+        basis_set_values = np.zeros((m_max, m_max, m_max + 1))
+        for m in range(1, m_max + 1):
+            for alpha in range(m):
+                for sigma in range(m):
+                    basis_set_values[alpha, sigma, m] = site_basis_function(
+                        alpha, sigma, m, basis_name, basis_set
+                    )
+        return basis_set_values
 
     def get_basis(self):
         """Return basis set name"""
@@ -377,11 +392,11 @@ class CorrelationsCalculator:
 
             for weight, cluster in zip(weights, cluster_orbit_arr):
                 cf = cluster_function(
-                    cluster,
+                    np.array(cluster.get_idxs()),
+                    cluster.alphas,
                     structure.sigmas,
                     structure.ems,
-                    self.basis_name,
-                    self.basis_set,
+                    self.basis_set_values,
                 )
                 correlations[icl] += weight * cf
 
@@ -426,7 +441,6 @@ class CorrelationsCalculator:
 
 
 @jit
-# @lru_cache(maxsize=None)
 def _trigo_basis_function(alpha: int, sigma: int, m: int):
     # Axel van de Walle, CALPHAD 33, 266 (2009)
 
@@ -440,7 +454,6 @@ def _trigo_basis_function(alpha: int, sigma: int, m: int):
         return -np.sin(2 * np.pi * np.ceil(alpha / 2) * sigma / m)
 
 
-#@lru_cache(maxsize=None)
 def site_basis_function(
     alpha: int,
     sigma: int,
@@ -486,22 +499,15 @@ def site_basis_function(
             return basis_set.evaluate(alpha, sigma, m)
 
 
+@jit
 def cluster_function(
-    cluster: Cluster,
+    cluster_idxs: np.ndarray,
+    cluster_alphas: np.ndarray,
     structure_sigmas: np.ndarray,
     ems: np.ndarray,
-    basis_name: str,
-    basis_set: Optional[PolynomialBasis] = None,
+    basis_set_values: np.ndarray,
 ):
-    cluster_atomic_idxs = np.array(cluster.get_idxs())
-    cluster_alphas = cluster.alphas
     cf = 1.0
-    for cl_alpha, cl_idx in zip(cluster_alphas, cluster_atomic_idxs):
-        cf *= site_basis_function(
-            alpha=cl_alpha,
-            sigma=structure_sigmas[cl_idx],
-            m=ems[cl_idx],
-            basis_name=basis_name,
-            basis_set=basis_set,
-        )
+    for cl_alpha, cl_idx in zip(cluster_alphas, cluster_idxs):
+        cf *= basis_set_values[cl_alpha, structure_sigmas[cl_idx], ems[cl_idx]]
     return cf

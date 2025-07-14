@@ -720,7 +720,7 @@ class PolynomialBasis:
         self.symmetric = symmetric
         self.basis_function_set = {}
         for order in range(1, max_order + 1):
-            self.basis_function_set[str(order)] = self.construct(order)
+            self.basis_function_set[order] = self.construct(order)
 
     def construct(self, m):
         basis_functions = []
@@ -757,13 +757,13 @@ class PolynomialBasis:
         return scalar_product
 
     def print_basis_functions(self, m):
-        for function in self.basis_function_set[str(m)]:
+        for function in self.basis_function_set[m]:
             function.print_polynomial()
 
     def evaluate(self, alpha, sigma, m):
         if m > self.m:
-            self.basis_function_set[str(m)] = self.construct(m)
-        return self.basis_function_set[str(m)][int(alpha)].evaluate(sigma)
+            self.basis_function_set[m] = self.construct(m)
+        return self.basis_function_set[m][int(alpha)].evaluate(sigma)
 
 
 def poppush(x, val):

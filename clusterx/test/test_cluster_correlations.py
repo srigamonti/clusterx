@@ -14,6 +14,7 @@ from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator, site_basis_function
+from clusterx.utils import PolynomialBasis
 
 
 def scalar_product_basis_set(
@@ -137,7 +138,7 @@ def test_all_verbose():
     fun = partial(
         site_basis_function,
         basis_name=corrcal_tri.basis_name,
-        basis_set=corrcal_tri.basis_set,
+        basis_set=PolynomialBasis(symmetric=False),
     )
     print_orthonormality(fun, symmetric=False)
     print("Time for trigonometric basis", time.time() - t)
@@ -145,13 +146,13 @@ def test_all_verbose():
     fun = partial(
         site_basis_function,
         basis_name=corrcal_poly.basis_name,
-        basis_set=corrcal_poly.basis_set,
+        basis_set=PolynomialBasis(symmetric=True),
     )
-    print_orthonormality(fun, symmetric=False)
+    print_orthonormality(fun, symmetric=True)
     print("Time for polynomial basis", time.time() - t)
 
     print("\nPolynomial basis functions (m=3):")
-    corrcal_poly.basis_set.print_basis_functions(3)
+    PolynomialBasis(symmetric=True).print_basis_functions(3)
 
     print("\n\n========Test writes========")
     print(test_all_verbose.__doc__)

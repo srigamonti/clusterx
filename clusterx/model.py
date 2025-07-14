@@ -412,15 +412,10 @@ class Model:
             cf = 1.0
             for i in range(nbodies):
                 if i == cluster_sites.index(ind):
-                    cf *= site_basis_function(
-                        cluster_funcs[i], new_sigma, cluster_ems[i], self.corrc.basis_name, self.corrc.basis_set
-                    ) - site_basis_function(
-                        cluster_funcs[i], old_sigma, cluster_ems[i], self.corrc.basis_name, self.corrc.basis_set
-                    )
+                    cf *= self.corrc.basis_set_values[cluster_funcs[i], new_sigma, cluster_ems[i]] \
+                        - self.corrc.basis_set_values[cluster_funcs[i], old_sigma, cluster_ems[i]]
                 else:
-                    cf *= site_basis_function(
-                        cluster_funcs[i], sigmas[i], cluster_ems[i], self.corrc.basis_name, self.corrc.basis_set
-                    )
+                    cf *= self.corrc.basis_set_values[cluster_funcs[i], sigmas[i], cluster_ems[i]]
 
             corrs[cluster_index] += cf
 
