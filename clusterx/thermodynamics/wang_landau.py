@@ -666,7 +666,7 @@ class WangLandau:
             f = math.sqrt(cd._f)
             cd._update_method = update_method
         else:
-            sys.exit(
+            raise ValueError(
                 "Different update method for f requested. Please see documentation"
             )
 
@@ -731,7 +731,7 @@ class WangLandau:
         if update_method == "square_root":
             f = math.sqrt(f)
         else:
-            sys.exit(
+            raise ValueError(
                 "Different update method for f requested. Please see documentation"
             )
         return f
