@@ -511,3 +511,25 @@ def cluster_function(
     for cl_alpha, cl_idx in zip(cluster_alphas, cluster_idxs):
         cf *= basis_set_values[cl_alpha, structure_sigmas[cl_idx], ems[cl_idx]]
     return cf
+
+
+@jit
+def cluster_function_swap(
+    cluster_idxs: np.ndarray,
+    cluster_alphas: np.ndarray,
+    sigmas: np.ndarray,
+    ems: np.ndarray,
+    ind: int,
+    old_sigma: int,
+    new_sigma: int,
+    basis_set_values: np.ndarray,
+):
+    nbodies = len(cluster_idxs)
+    cf = 1.0
+    for i in range(nbodies):
+        if i == cluster_idxs.index(ind):
+            cf *= basis_set_values[cluster_alphas[i], new_sigma, ems[i]] \
+                - basis_set_values[cluster_alphas[i], old_sigma, ems[i]]
+        else:
+            cf *= basis_set_values[cluster_alphas[i], sigmas[i], ems[i]]
+    return cf
