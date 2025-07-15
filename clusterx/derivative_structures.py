@@ -501,26 +501,40 @@ class DSGenerator:
         )
 
     def generate(
-        self, supercell_sizes=None, num_subs_list=None, sc_shape=None, sc_shapes=None, n_random=None, random_state=None
+        self,
+        supercell_sizes=None,
+        shapes_nearest_orthogonal=False,
+        num_subs_list=None,
+        sc_shape=None,
+        sc_shapes=None,
+        n_random=None,
+        random_state=None,
     ):
         """Generate derivative structures
 
          **Parameters:**
 
          ``supercell_sizes``: list or array of int
-             List  of integers indicating the number of unit cells in each derivative supercell
+            List  of integers indicating the number of unit cells in each derivative supercell
+        ``shapes_nearest_orthogonal``: boolean or list of integers, default is False.
+            If True, for the class of supercells belonging to a hermite normal form (HNF), it will
+            select the supercells with angles between cell vectors pairwise closest to orthogonal.
+            This search is by default done by transforming the HNFs by 3x3 determinant-1 matrices
+            formed with the integers [1,0,-1]. If you pass a list of integers to this argument,
+            the passed list will be used insted of the default [1,0,-1]. If False, the original
+            HNFs determine the supercell shapes.
          ``num_subs_list``: ragged list of lists or arrays of integers, or list of dict for multilattice case
-             every list or array in the ragged list, indicate the number of substituents to be
-             considered in a given supercell. The first dimension must coincide with the
-             dimension of ``supercell_sizes``.
+            every list or array in the ragged list, indicate the number of substituents to be
+            considered in a given supercell. The first dimension must coincide with the
+            dimension of ``supercell_sizes``.
          ``sc_shape``: 3x3 matrix or None
-             if only decorations for a single supercell are wanted, specify it here.
+            if only decorations for a single supercell are wanted, specify it here.
          ``sc_shapes``: list of 3x3 matrix or None
-             list of sc_shapes to generate decorations.
+            list of sc_shapes to generate decorations.
         ``n_random``: int or None
-             If provided, generate only this number of random configurations per (shape, nsubs).
+            If provided, generate only this number of random configurations per (shape, nsubs).
          ``random_state``: int or None
-             If provided, used to seed the random number generators for reproducibility.
+            If provided, used to seed the random number generators for reproducibility.
         """
         # TODO: make supercell_sizes positional and required argument, as this
         # method does not work without it.
@@ -531,7 +545,18 @@ class DSGenerator:
         for i, num_subs in enumerate(num_subs_list):
             if sc_shape is None and sc_shapes is None:
                 sc_size = supercell_sizes[i]
-                _, unique_sc_shapes = get_unique_supercells(sc_size, self.plat)
+
+                if shapes_nearest_orthogonal is False:
+                    _, unique_sc_shapes = get_unique_supercells(sc_size, self.plat)
+                elif shapes_nearest_orthogonal is True:
+                    _, unique_sc_shapes_sa = get_unique_supercells_nearest_orthogonal(n, plat, elements=[1, 0, -1])
+                elif isinstance(shapes_nearest_orthogonal, list):
+                    _, unique_sc_shapes_sa = get_unique_supercells_nearest_orthogonal(
+                        n, plat, elements=shapes_nearest_orthogonal
+                    )
+                else:
+                    raise TypeError("Expected False, True, or a list of integers.")
+
             elif sc_shapes is None:
                 sc_size = int(round(np.linalg.det(sc_shape)))
                 unique_sc_shapes = [sc_shape]
@@ -1007,9 +1032,20 @@ def _get_normalized_scalar_products(s: np.ndarray):
 
 
 def get_unique_supercells_small_angles(n, parent_lattice: object, elements: list):
+    warnings.warn(
+        "'get_unique_supercells_small_angles' is deprecated and will be removed in a future release. "
+        "Please use 'get_unique_supercells_nearest_orthogonal' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return get_unique_supercells_nearest_orthogonal(n, parent_lattice, elements)
+
+
+def get_unique_supercells_nearest_orthogonal(n, parent_lattice: object, elements: list):
     """
-    Return all unique supercells with small angles.
-    Transformation of those supercells is done by unimodal matrices with matrix elements given by the paramter ``elements``
+    Return all unique supercells with pairwise lattice vectors angles closest to orthogonal.
+    Transformation of those supercells is done by unimodal matrices constructed
+    with integer matrix elements given by the paramter ``elements``
 
     **Parameters:**
 
@@ -1018,7 +1054,8 @@ def get_unique_supercells_small_angles(n, parent_lattice: object, elements: list
 
         example: [-3,-2,-1,0,1,2,3]
 
-        The algorithm will search all combinations of 3x3 matrices composed of those ``elements``.
+        The algorithm will search all combinations of 3x3 matrices composed of
+        those ``elements`` and filter those with determinant 1.
 
     """
 
@@ -1049,5 +1086,4 @@ def get_unique_supercells_small_angles(n, parent_lattice: object, elements: list
             harray,
         )
 
-    return [SuperCell(parent_lattice, p) for p in small_angle_sc_shapes], small_angle_sc_shapes
     return [SuperCell(parent_lattice, p) for p in small_angle_sc_shapes], small_angle_sc_shapes
