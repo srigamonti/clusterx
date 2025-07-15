@@ -549,9 +549,11 @@ class DSGenerator:
                 if shapes_nearest_orthogonal is False:
                     _, unique_sc_shapes = get_unique_supercells(sc_size, self.plat)
                 elif shapes_nearest_orthogonal is True:
-                    _, unique_sc_shapes_sa = get_unique_supercells_nearest_orthogonal(n, plat, elements=[1, 0, -1])
+                    _, unique_sc_shapes = get_unique_supercells_nearest_orthogonal(
+                        sc_size, self.plat, elements=[1, 0, -1]
+                    )
                 elif isinstance(shapes_nearest_orthogonal, list):
-                    _, unique_sc_shapes_sa = get_unique_supercells_nearest_orthogonal(
+                    _, unique_sc_shapes = get_unique_supercells_nearest_orthogonal(
                         n, plat, elements=shapes_nearest_orthogonal
                     )
                 else:
