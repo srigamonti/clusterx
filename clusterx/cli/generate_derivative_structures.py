@@ -30,6 +30,7 @@ commands = ["generate_derivative_structures"]
 
 @plac.annotations(
     sc_sizes=("List of supercell sizes.", "option", "scsi", list),
+    shapes_nearest_orthogonal=("Generate supercell shapes with angles closest to orthogonal", "flag", "sno", bool),
     nsubs_list=("List of lists indicating number of substitutions for each supercell.", "option", "nsl", list),
     sset_filepath=("Path to a serialized StructuresSet object.", "option", "ssfp", str),
     model_filepath=("Filepath of a serialized CE model object.", "option", "mfp", str),
@@ -49,6 +50,7 @@ commands = ["generate_derivative_structures"]
 )
 def generate_derivative_structures(
     sc_sizes: Optional[List[int]] = None,
+    shapes_nearest_orthogonal: Union[bool, List[int]] = False,
     nsubs_list: Optional[Union[int, List[int], List[List[int]]]] = None,
     sset_filepath: Optional[str] = None,
     model_filepath: Optional[str] = None,
@@ -122,6 +124,7 @@ def generate_derivative_structures(
             dsgen.generate(
                 num_subs_list=nsubs_list,
                 supercell_sizes=sc_sizes,
+                shapes_nearest_orthogonal=shapes_nearest_orthogonal,
                 sc_shape=sc_shape,
                 n_random=n_random,
                 random_state=random_state,
@@ -138,6 +141,7 @@ def generate_derivative_structures(
                 plat,
                 nsubs_list=nsubs_list,
                 sc_sizes=sc_sizes,
+                shapes_nearest_orthogonal=shapes_nearest_orthogonal,
                 sc_shape=sc_shape,
                 dss_filepath=dss_filepath,
             )
@@ -347,6 +351,7 @@ def _do_full_enumeration(
     plat: ParentLattice,
     nsubs_list: Optional[List[List[int]]],
     sc_sizes: Optional[List[int]] = None,
+    shapes_nearest_orthogonal: Union[bool, List[int]] = False,
     sc_shape: Optional[List[List[int]]] = None,
     dss_filepath: str = "dss.pickle",
 ) -> None:
@@ -356,6 +361,7 @@ def _do_full_enumeration(
     dsgen.generate(
         num_subs_list=nsubs_list,
         supercell_sizes=sc_sizes,
+        shapes_nearest_orthogonal=shapes_nearest_orthogonal,
         sc_shape=sc_shape,
     )
 
