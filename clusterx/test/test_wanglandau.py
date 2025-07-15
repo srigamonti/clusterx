@@ -82,7 +82,7 @@ def test_cli(plat, model):
         filename="cdos.json",
         serialize_during_sampling=True,
         restart_from_file=False,
-        plot_hist_real_time=True,
+        plot_hist_real_time=False,
         acc_prob_init_structure=1e-3,
         acc_prob_dist_init_structure="gaussian",
         itmax_init_structure=int(1e8),
@@ -157,7 +157,7 @@ def test_sampling_clathrate():
         f_range=[math.exp(1), 2],
         update_method="square_root",
         flatness_conditions=[[0.1, math.exp(1e-1)]],
-        plot_hist_real_time=True,
+        plot_hist_real_time=False,
     )
     energy_bins, gs = cdos.get_cdos(ln=True, normalization=False)
 
