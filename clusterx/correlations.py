@@ -421,9 +421,6 @@ class CorrelationsCalculator:
 
         ``structure``: Structure object
             structure for which to calculate the correlations.
-        ``mc``: Boolean
-            Set to ``True`` when performing Monte-Carlo simulations, to use an
-            optimized version of the method.
         """
         cluster_orbits = None
 

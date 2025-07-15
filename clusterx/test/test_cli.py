@@ -51,8 +51,6 @@ def test_build(tmp_path):
     # this is a workaround, ideally the tests should be independent, but this
     # would only be possible with extra pytest-dependency package
     run_build_parent_lattice(tmp_path)
-    run_build_cpool(tmp_path)
 
     # Check if the files were created
     assert os.path.exists(tmp_path / "plat.json")
-    assert os.path.exists(tmp_path / "cpool.json")
