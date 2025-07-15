@@ -78,8 +78,6 @@ class Model:
         self._mc_multiplicities: List[int] = []
         self._mc_start_time = 0
         self._mc_init_time = 0
-        self._mc_estimator_intercept = 0
-        self._mc_estimator_coef: List[float] = []
 
         if self.standardize:
             from sklearn.preprocessing import StandardScaler
@@ -119,14 +117,13 @@ class Model:
             raise ValueError(f"Error loading model from JSON file: {e}") from e
 
     def reset_mc(self, mc=False):
+        self.corrc.reset_mc(mc)
         self._mc = mc
         self._num_mc_calls = 0
         self._mc_nclusters = 0
         self._mc_multiplicities = []
         self._mc_start_time = 0
         self._mc_init_time = 0
-        self._mc_estimator_intercept = 0
-        self._mc_estimator_coef = []
 
     def serialize(self, filepath=None, fmt=None, db_name=None):
         """Write cluster expansion model to Json database
@@ -245,7 +242,6 @@ class Model:
 
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1, -1))[0]
-
         else:
             if self.standardize:
                 try:
@@ -290,9 +286,7 @@ class Model:
                 raise AttributeError("Cluster_orbits set has not been pre computed.")
 
             if self.standardize:
-                import sys
-
-                sys.exit("Predict swap does not support standardscaler")
+                raise RuntimeError("Predict swap does not support standardscaler")
 
             # Determine atom indexes for which to make the interactions list
             scell = structure.get_supercell()
@@ -332,10 +326,6 @@ class Model:
                         self._interactions_dict[ind]["cluster_sites_index_for_ind"].append(
                             self._clusters_list[icl]["cluster_sites"].index(ind)
                         )
-
-            if self.estimator is not None:
-                self._mc_estimator_intercept = self.estimator.intercept_
-                self._mc_estimator_coef = self.estimator.coef_
 
             if self._basis == "binary-linear" or self._basis == "indicator-binary":
                 self._delta_e_calc = self._compute_delta_e_binary_linear
@@ -390,7 +380,7 @@ class Model:
         pv = 0
 
         for i, corr in enumerate(corrs):
-            pv += self._mc_estimator_coef[i] * corr
+            pv += self.ecis[i] * corr
 
         return pv
 
