@@ -26,6 +26,7 @@ setup(
         "pytest-html",
         "tqdm",
         "pandas",
+        "numba",
     ],
     entry_points={"console_scripts": ["cell=clusterx.cli.main:main"]},
     flake8={"max-line-length": 120},
