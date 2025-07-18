@@ -21,8 +21,8 @@ from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
 from clusterx.utils import normalize_nsubs_list, normalize_shape_input
 from clusterx.visualization import (
+    plot_predictions_vs_target,
     plot_property_vs_concentration,
-    plot_predictions_vs_target
 )
 
 commands = ["generate_derivative_structures"]
@@ -210,9 +210,12 @@ def generate_derivative_structures(
             assert sset_filepath is not None, "sset_filepath needs to be provided"
             assert model_filepath is not None, "model_filepath needs to be provided"
             assert property_name is not None, "property_name needs to be provided"
-            print((
-                "Plotting predictions vs. target. This is only a rough plot, "
-                "for full plot, see clusterx.visualization module"))
+            print(
+                (
+                    "Plotting predictions vs. target. This is only a rough plot, "
+                    "for full plot, see clusterx.visualization module"
+                )
+            )
             sset = StructuresSet(filepath=sset_filepath)
             cemodel = Model(filepath=model_filepath)
             plot_predictions_vs_target(
@@ -270,11 +273,11 @@ def generate_derivative_structures(
 
                 scell = scell_cache[shape_id]
                 sset.add_structure(Structure(scell, sigmas=sigma), mask=mask_name)
-                
+
             for property_name in dss.get_property_names():
                 sset.set_property_values(property_name=property_name, property_vals=data[property_name].tolist())
 
-            print("serializing sset to json")
+            print("serializing sset")
             sset.serialize(filepath=sset_filepath, overwrite=True)
 
         case 100:
