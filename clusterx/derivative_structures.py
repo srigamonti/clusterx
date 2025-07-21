@@ -5,12 +5,12 @@
 import logging
 import pickle
 import random
+import tracemalloc
 import warnings
 from itertools import combinations, product
 from random import sample
 from typing import List, Optional, Set, Tuple, Union
 
-import tracemalloc
 import numpy as np
 import pandas as pd
 import scipy
@@ -619,7 +619,9 @@ class DSGenerator:
                 if recursive:
                     n_max = int(scipy.special.binom(len(ssites), nsubs))
                     with tqdm(total=n_max, desc="Finding unique sigmas") as pbar:
-                        num_conf = self._generate_all_configurations_recursive(ssites, nsubs, natoms, shape_id, symper_tuples, pbar=pbar)
+                        num_conf = self._generate_all_configurations_recursive(
+                            ssites, nsubs, natoms, shape_id, symper_tuples, pbar=pbar
+                        )
                 else:
                     num_conf = self._generate_all_configurations(ssites, nsubs, natoms, shape_id, symper)
 
@@ -643,7 +645,7 @@ class DSGenerator:
             nsubs,
             natoms,
         )
-    
+
     """
     def explore(element, max_depth, current_depth=0, seen=None):
         if seen is None:
@@ -658,62 +660,83 @@ class DSGenerator:
             seen.update(explore(child, max_depth, current_depth + 1))
         return seen
     """
-    
+
     def get_child_sigmas(self, sigma: Tuple[int], ssites: List[int], symper_tuples, seen):
-        
+
         non_zero_indices = {i for i, val in enumerate(sigma) if val != 0}
-        
+
         children = set()
         for site in ssites:
             if site not in non_zero_indices:
-                children.add(sigma[:site] + (1,) + sigma[site + 1:])            
-        
+                children.add(sigma[:site] + (1,) + sigma[site + 1 :])
+
         unique_children = set()
         # full_list = set()
         for child in children:
             if hash(child) not in seen:
-                all_hashes = {
-                    hash(tuple(child[i] for i in per))
-                    for per in symper_tuples
-                }
+                all_hashes = {hash(tuple(child[i] for i in per)) for per in symper_tuples}
                 seen |= all_hashes
                 unique_children.add(child)
-                
+
         return unique_children, seen
 
-            
-    def _generate_all_configurations_recursive(self, ssites, nsubs, natoms, shape_id, symper_tuples, sigma0=None, seen=None, current_nsubs=0, pbar=None, all_configs=None):
+    def _generate_all_configurations_recursive(
+        self,
+        ssites,
+        nsubs,
+        natoms,
+        shape_id,
+        symper_tuples,
+        sigma0=None,
+        seen=None,
+        current_nsubs=0,
+        pbar=None,
+        all_configs=None,
+    ):
 
         if sigma0 is None:
-            sigma0 = (0,)*natoms
-            
+            sigma0 = (0,) * natoms
+
         if seen is None:
             seen = set()
 
         if all_configs is None:
             all_configs = set()
-                    
+
         sigma0hash = hash(sigma0)
         if sigma0hash not in seen:
             self.add_configuration(sigma=sigma0, shape_id=shape_id)
             all_configs.add(sigma0hash)
-            
+
         if pbar:
             pbar.update(1)
-        
+
         if current_nsubs >= nsubs:
             return
 
         children, seen = self.get_child_sigmas(sigma0, ssites, symper_tuples, seen)
         if pbar:
-            pbar.set_postfix(nseen=len(seen), nchildren = len(children), nsub = sum(1 for x in list(children)[0] if x != 0))
+            pbar.set_postfix(nseen=len(seen), nchildren=len(children), nsub=sum(1 for x in list(children)[0] if x != 0))
         for child in children:
-            self._generate_all_configurations_recursive(ssites, nsubs, natoms, shape_id, symper_tuples, sigma0=child, seen=seen, current_nsubs=current_nsubs+1, pbar=pbar, all_configs=all_configs)
+            self._generate_all_configurations_recursive(
+                ssites,
+                nsubs,
+                natoms,
+                shape_id,
+                symper_tuples,
+                sigma0=child,
+                seen=seen,
+                current_nsubs=current_nsubs + 1,
+                pbar=pbar,
+                all_configs=all_configs,
+            )
 
         if current_nsubs == 0:
             return len(all_configs)
-        
-    def _generate_all_configurations(self, ssites, nsubs, natoms, shape_id, symper, cache_quota_bytes= 2 * 1024 * 1024 * 1024):
+
+    def _generate_all_configurations(
+        self, ssites, nsubs, natoms, shape_id, symper, cache_quota_bytes=2 * 1024 * 1024 * 1024
+    ):
         n_max = int(scipy.special.binom(len(ssites), nsubs))
         logging.info(
             "Max number of configurations for %s substitutions in %s-atom size scell (no sym accounted): %s",
@@ -746,17 +769,13 @@ class DSGenerator:
                 full_list = set()
                 for sigma in self.configurations["sigma"]:
                     sigma_hash_canonical = min(hash(tuple(sigma_trial[i] for i in per)) for per in self._symper_tuples)
-                    full_list.add(sigma_hash_canonical) 
-                
+                    full_list.add(sigma_hash_canonical)
 
             if mode is "fast":
                 sigma_hash = hash(tuple(sigma_trial))
 
                 if sigma_hash not in full_list:
-                    all_hashes = {
-                            hash(tuple(sigma_trial[i] for i in per))
-                            for per in self._symper_tuples
-                        }
+                    all_hashes = {hash(tuple(sigma_trial[i] for i in per)) for per in self._symper_tuples}
                     full_list |= all_hashes
                     self.add_configuration(sigma=sigma_trial, shape_id=shape_id)
 
@@ -764,11 +783,11 @@ class DSGenerator:
                 # Slow path: only store the canonical hash
                 sigma_hash_canonical = min(hash(tuple(sigma_trial[i] for i in per)) for per in self._symper_tuples)
                 if sigma_hash_canonical not in full_list:
-                    full_list.add(sigma_hash_canonical) 
+                    full_list.add(sigma_hash_canonical)
                     self.add_configuration(sigma=sigma_trial, shape_id=shape_id)
-    
+
             # Show memory usage in tqdm postfix
-            pbar.set_postfix(mem=self._format_bytes(current_mem),mode=mode, nconf=len(self.configurations["sigma"]))
+            pbar.set_postfix(mem=self._format_bytes(current_mem), mode=mode, nconf=len(self.configurations["sigma"]))
 
         tracemalloc.stop()
 
@@ -869,20 +888,20 @@ class DSGenerator:
         full_list: Set[Tuple[int, ...]] = set()
         attempts = 0
         attempts_total = 0
-        #max_attempts = n_random * 10  # Limit attempts to avoid infinite loops
+        # max_attempts = n_random * 10  # Limit attempts to avoid infinite loops
         max_attempts = 1000  # Limit attempts to avoid infinite loops
-        
+
         logging.info("Starting to generate %s random unique configurations...", n_random)
 
         num_conf_start = len(self.configurations)
 
         pbar = tqdm(total=n_random, desc="Generating configurations")
         tracemalloc.start()
-        
+
         while len(self.configurations) - num_conf_start < n_random and attempts < max_attempts:
             con = tuple(sorted(sample(ssites, nsubs)))
             sigma = self._create_sigma_array(natoms, con)
-            
+
             is_new = not any(tuple(sigma.take(per, axis=0)) in full_list for per in symper)
 
             if is_new:
@@ -908,7 +927,7 @@ class DSGenerator:
                 "%s unique configurations could be generated after %s attempts. Desired number: %s",
                 num_conf,
                 attempts_total,
-                n_random
+                n_random,
             )
         return num_conf
 
@@ -917,16 +936,16 @@ class DSGenerator:
         full_list: Set[Tuple[int, ...]] = set()
         attempts = 0
         attempts_total = 0
-        #max_attempts = n_random * 10  # Limit attempts to avoid infinite loops
+        # max_attempts = n_random * 10  # Limit attempts to avoid infinite loops
         max_attempts = 1000  # Limit attempts to avoid infinite loops
-        
+
         logging.info("Starting to generate %s random unique configurations...", n_random)
 
         num_conf_start = len(self.configurations)
 
         pbar = tqdm(total=n_random, desc="Generating configurations")
         tracemalloc.start()
-        
+
         while len(self.configurations) - num_conf_start < n_random and attempts < max_attempts:
             con = tuple(sorted(sample(ssites, nsubs)))
             sigma = self._create_sigma_array(natoms, con)
@@ -941,7 +960,6 @@ class DSGenerator:
                 current, peak = tracemalloc.get_traced_memory()
                 pbar.set_postfix(mem=self._format_bytes(current))
 
-
             attempts += 1
             attempts_total += 1
 
@@ -955,7 +973,7 @@ class DSGenerator:
                 "%s unique configurations could be generated after %s attempts. Desired number: %s",
                 num_conf,
                 attempts_total,
-                n_random
+                n_random,
             )
         return num_conf
 
