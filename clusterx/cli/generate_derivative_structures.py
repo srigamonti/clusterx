@@ -47,6 +47,7 @@ commands = ["generate_derivative_structures"]
     n_random=("Number of random structures to include.", "option", None, int),
     random_state=("Seed for random number generators.", "option", None, int),
     task=("Task to perform.", "option", "task", str),
+    recursive=("Use fast recursive method for finding derivative structures", "flag", "rec", bool),
 )
 def generate_derivative_structures(
     sc_sizes: Optional[List[int]] = None,
@@ -55,7 +56,7 @@ def generate_derivative_structures(
     sset_filepath: Optional[str] = None,
     model_filepath: Optional[str] = None,
     plat_filepath: Optional[str] = None,
-    dss_filepath: Optional[str] = None,
+    dss_filepath: Optional[str] = "dss.pickle",
     property_name: Optional[str] = None,
     property_names: Optional[List[str]] = None,
     property_solver: Optional[dict] = None,
@@ -71,6 +72,7 @@ def generate_derivative_structures(
     colors=None,
     markers=None,
     sizes=None,
+    recursive=True,
 ):
     """Generate derivative structures
 
@@ -144,6 +146,7 @@ def generate_derivative_structures(
                 shapes_nearest_orthogonal=shapes_nearest_orthogonal,
                 sc_shape=sc_shape,
                 dss_filepath=dss_filepath,
+                recursive=recursive,
             )
 
         # Compute property with CE model
@@ -357,6 +360,7 @@ def _do_full_enumeration(
     shapes_nearest_orthogonal: Union[bool, List[int]] = False,
     sc_shape: Optional[List[List[int]]] = None,
     dss_filepath: str = "dss.pickle",
+    recursive=False,
 ) -> None:
 
     dsgen = DSGenerator(plat)
@@ -366,6 +370,7 @@ def _do_full_enumeration(
         supercell_sizes=sc_sizes,
         shapes_nearest_orthogonal=shapes_nearest_orthogonal,
         sc_shape=sc_shape,
+        recursive=recursive,
     )
 
     with open(dss_filepath, "wb") as f:

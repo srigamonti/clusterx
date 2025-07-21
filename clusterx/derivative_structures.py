@@ -510,6 +510,7 @@ class DSGenerator:
         sc_shapes=None,
         n_random=None,
         random_state=None,
+        recursive=True,
     ):
         """Generate derivative structures
 
@@ -524,18 +525,23 @@ class DSGenerator:
             formed with the integers [1,0,-1]. If you pass a list of integers to this argument,
             the passed list will be used insted of the default [1,0,-1]. If False, the original
             HNFs determine the supercell shapes.
-         ``num_subs_list``: ragged list of lists or arrays of integers, or list of dict for multilattice case
+        ``num_subs_list``: ragged list of lists or arrays of integers, or list of dict for multilattice case
             every list or array in the ragged list, indicate the number of substituents to be
             considered in a given supercell. The first dimension must coincide with the
             dimension of ``supercell_sizes``.
-         ``sc_shape``: 3x3 matrix or None
+        ``sc_shape``: 3x3 matrix or None
             if only decorations for a single supercell are wanted, specify it here.
-         ``sc_shapes``: list of 3x3 matrix or None
+        ``sc_shapes``: list of 3x3 matrix or None
             list of sc_shapes to generate decorations.
         ``n_random``: int or None
             If provided, generate only this number of random configurations per (shape, nsubs).
          ``random_state``: int or None
             If provided, used to seed the random number generators for reproducibility.
+        ``recursive``: Bool, default True
+            Use fast recursive algorithm for finding derivative structures. If all configurations
+            for ``n`` substitutions are seek, the recursive algorithm finds before all of ``n-1``.
+            Thus, a calculation with  ``num_subs_list=[[0,1,2,3]]`` takes the same numerical
+            effort as ``num_subs_list=[[3]]`` when recursive is ``True``.
         """
         # TODO: make supercell_sizes positional and required argument, as this
         # method does not work without it.
@@ -573,13 +579,22 @@ class DSGenerator:
                     f"Start enum of scell shape {idx+1} of {len(unique_sc_shapes)}. Size: {sc_size}, nsubs:{num_subs}"
                 )
 
-                for nsubs in num_subs:
-                    self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs, n_random=n_random)
+                if recursive:
+                    self.generate_for_shape_nsubs(
+                        sc_shape=t, nsubs=max(num_subs), n_random=n_random, recursive=recursive
+                    )
+                else:
+                    for nsubs in num_subs:
+                        self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs, n_random=n_random, recursive=recursive)
 
         print(f"Enumeration complete. Found {len(self.configurations)} unique configurations.\n")
 
     def generate_for_shape_nsubs(
-        self, sc_shape: List[List[int]], nsubs: Optional[Union[int, dict]] = None, n_random: Optional[int] = None
+        self,
+        sc_shape: List[List[int]],
+        nsubs: Optional[Union[int, dict]] = None,
+        n_random: Optional[int] = None,
+        recursive: bool = True,
     ):
         """
         Generate derivative structures.
@@ -609,7 +624,6 @@ class DSGenerator:
         symper_tuples = [tuple(per) for per in symper]
         ssites = scell.get_substitutional_sites()
 
-        recursive = True
         if isinstance(nsubs, int):
             if nsubs > len(ssites):
                 logging.error("nsubs cannot exceed the number of substitutional sites.")
@@ -617,7 +631,10 @@ class DSGenerator:
 
             if n_random is None:
                 if recursive:
-                    n_max = int(scipy.special.binom(len(ssites), nsubs))
+                    partial_binom_sum = lambda N, n: (
+                        0 if n < 0 else partial_binom_sum(N, n - 1) + scipy.special.binom(N, n)
+                    )
+                    n_max = int(partial_binom_sum(len(ssites), nsubs) / np.abs(scell.get_index()))
                     with tqdm(total=n_max, desc="Finding unique sigmas") as pbar:
                         num_conf = self._generate_all_configurations_recursive(
                             ssites, nsubs, natoms, shape_id, symper_tuples, pbar=pbar
@@ -627,6 +644,7 @@ class DSGenerator:
 
             else:
                 num_conf = self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
+
         elif isinstance(nsubs, dict):
             tags = scell.get_tags()
             sltypes = scell.get_sublattice_types()
@@ -646,21 +664,6 @@ class DSGenerator:
             natoms,
         )
 
-    """
-    def explore(element, max_depth, current_depth=0, seen=None):
-        if seen is None:
-            seen = set()
-        seen.add(element)
-
-        if current_depth >= max_depth:
-            return seen
-
-        children = F(element)
-        for child in children:
-            seen.update(explore(child, max_depth, current_depth + 1))
-        return seen
-    """
-
     def get_child_sigmas(self, sigma: Tuple[int], ssites: List[int], symper_tuples, seen):
 
         non_zero_indices = {i for i, val in enumerate(sigma) if val != 0}
@@ -671,7 +674,6 @@ class DSGenerator:
                 children.add(sigma[:site] + (1,) + sigma[site + 1 :])
 
         unique_children = set()
-        # full_list = set()
         for child in children:
             if hash(child) not in seen:
                 all_hashes = {hash(tuple(child[i] for i in per)) for per in symper_tuples}
@@ -703,10 +705,8 @@ class DSGenerator:
         if all_configs is None:
             all_configs = set()
 
-        sigma0hash = hash(sigma0)
-        if sigma0hash not in seen:
-            self.add_configuration(sigma=sigma0, shape_id=shape_id)
-            all_configs.add(sigma0hash)
+        self.add_configuration(sigma=sigma0, shape_id=shape_id)
+        all_configs.add(hash(sigma0))
 
         if pbar:
             pbar.update(1)
@@ -715,7 +715,7 @@ class DSGenerator:
             return
 
         children, seen = self.get_child_sigmas(sigma0, ssites, symper_tuples, seen)
-        if pbar:
+        if pbar and len(children) != 0:
             pbar.set_postfix(nseen=len(seen), nchildren=len(children), nsub=sum(1 for x in list(children)[0] if x != 0))
         for child in children:
             self._generate_all_configurations_recursive(
@@ -813,7 +813,6 @@ class DSGenerator:
     def _generate_multilattice_configurations(n, tags, sublattice_types, nsubs):
         tags = np.array(tags)
 
-        # Map ems key -> list of positions in `tags` that match that ems key
         sublattice_positions = {
             sublattice_type: list(np.where(tags == sublattice_type)[0]) for sublattice_type in nsubs
         }
