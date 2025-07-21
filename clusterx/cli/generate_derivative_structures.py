@@ -47,7 +47,7 @@ commands = ["generate_derivative_structures"]
     n_random=("Number of random structures to include.", "option", None, int),
     random_state=("Seed for random number generators.", "option", None, int),
     task=("Task to perform.", "option", "task", str),
-    recursive=("Use fast recursive method for finding derivative structures", "flag", "rec", bool),
+    non_recursive=("Use slow non-recursive method for finding derivative structures", "flag", "rec", bool),
 )
 def generate_derivative_structures(
     sc_sizes: Optional[List[int]] = None,
@@ -72,7 +72,7 @@ def generate_derivative_structures(
     colors=None,
     markers=None,
     sizes=None,
-    recursive=True,
+    non_recursive=False,
 ):
     """Generate derivative structures
 
@@ -146,7 +146,7 @@ def generate_derivative_structures(
                 shapes_nearest_orthogonal=shapes_nearest_orthogonal,
                 sc_shape=sc_shape,
                 dss_filepath=dss_filepath,
-                recursive=recursive,
+                recursive=not non_recursive,
             )
 
         # Compute property with CE model
@@ -360,7 +360,7 @@ def _do_full_enumeration(
     shapes_nearest_orthogonal: Union[bool, List[int]] = False,
     sc_shape: Optional[List[List[int]]] = None,
     dss_filepath: str = "dss.pickle",
-    recursive=False,
+    recursive=True,
 ) -> None:
 
     dsgen = DSGenerator(plat)
