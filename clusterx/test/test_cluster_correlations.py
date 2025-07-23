@@ -3,6 +3,7 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import time
+from functools import partial
 
 import pytest
 from ase import Atoms
@@ -12,44 +13,45 @@ from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
 from clusterx.clusters.clusters_pool import ClustersPool
-from clusterx.correlations import CorrelationsCalculator
+from clusterx.correlations import CorrelationsCalculator, site_basis_function
+from clusterx.utils import PolynomialBasis
 
 
 def scalar_product_basis_set(
-        function1, function2, alpha1, alpha2, M=3, symmetric=False, scaled=True
-    ):
-        """
-        Function to test basis single site basis functions regarding their orthogonality.
-        Expects that sigma in {0,1,...,M-1}, where sigma is an ising type discrete spin varaible and M is the number of species in an alloy.
-        """
-        scaling = 1 / M if scaled else 1
-        if symmetric:
-            sigmas = [x for x in range(-int(M / 2), int(M / 2) + 1)]
-            if M % 2 == 0:
-                sigmas.remove(0)
-        else:
-            sigmas = [x for x in range(M)]
-        scalar_product = 0
-        for sigma in sigmas:
-            scalar_product += function1(alpha1, sigma, M) * function2(alpha2, sigma, M)
-        scalar_product = scalar_product * scaling
-        return scalar_product
+    function1, function2, alpha1, alpha2, M=3, symmetric=False, scaled=True
+):
+    """
+    Function to test basis single site basis functions regarding their orthogonality.
+    Expects that sigma in {0,1,...,M-1}, where sigma is an ising type discrete spin varaible and M is the number of species in an alloy.
+    """
+    scaling = 1 / M if scaled else 1
+    if symmetric:
+        sigmas = [x for x in range(-int(M / 2), int(M / 2) + 1)]
+        if M % 2 == 0:
+            sigmas.remove(0)
+    else:
+        sigmas = [x for x in range(M)]
+    scalar_product = 0
+    for sigma in sigmas:
+        scalar_product += function1(alpha1, sigma, M) * function2(alpha2, sigma, M)
+    scalar_product = scalar_product * scaling
+    return scalar_product
 
 
 def print_orthonormality(function, m=3, symmetric=True):
-        print("\northonormality:\nj k <theta_j | theta_k>")
-        for j in range(m):
-            for k in range(m):
-                print(
-                    j,
-                    k,
-                    round(
-                        scalar_product_basis_set(
-                            function, function, j, k, M=m, symmetric=symmetric
-                        ),
-                        10,
+    print("\northonormality:\nj k <theta_j | theta_k>")
+    for j in range(m):
+        for k in range(m):
+            print(
+                j,
+                k,
+                round(
+                    scalar_product_basis_set(
+                        function, function, j, k, M=m, symmetric=symmetric
                     ),
-                )
+                    10,
+                ),
+            )
 
 
 def test_all_verbose():
@@ -133,14 +135,24 @@ def test_all_verbose():
 
     t = time.time()
     # TODO: should this have 0.5 values?
-    print_orthonormality(corrcal_tri.site_basis_function, symmetric=False)
+    fun = partial(
+        site_basis_function,
+        basis_name=corrcal_tri.basis_name,
+        basis_set=PolynomialBasis(symmetric=False),
+    )
+    print_orthonormality(fun, symmetric=False)
     print("Time for trigonometric basis", time.time() - t)
     t = time.time()
-    print_orthonormality(corrcal_poly.site_basis_function, symmetric=False)
+    fun = partial(
+        site_basis_function,
+        basis_name=corrcal_poly.basis_name,
+        basis_set=PolynomialBasis(symmetric=True),
+    )
+    print_orthonormality(fun, symmetric=True)
     print("Time for polynomial basis", time.time() - t)
 
     print("\nPolynomial basis functions (m=3):")
-    corrcal_poly.basis_set.print_basis_functions(3)
+    PolynomialBasis(symmetric=True).print_basis_functions(3)
 
     print("\n\n========Test writes========")
     print(test_all_verbose.__doc__)
@@ -148,9 +160,13 @@ def test_all_verbose():
     cpool.write_clusters_db(
         cpool.get_cpool(), scell, "test_cluster_correlations_cpool.json"
     )
-    
-    structure1.serialize(fmt="json", filepath="test_cluster_correlations_structure_1.json")
-    structure2.serialize(fmt="json", filepath="test_cluster_correlations_structure_2.json")
+
+    structure1.serialize(
+        fmt="json", filepath="test_cluster_correlations_structure_1.json"
+    )
+    structure2.serialize(
+        fmt="json", filepath="test_cluster_correlations_structure_2.json"
+    )
 
 
 @pytest.fixture
@@ -160,7 +176,7 @@ def cell():
 
 @pytest.fixture
 def pbc():
-    return [True]*3
+    return [True] * 3
 
 
 @pytest.fixture
@@ -202,12 +218,12 @@ def ccalc(plat_quaternary, cpool):
 
 
 def test_serialize_load(ccalc):
-    ccalc.serialize(filepath='CCALC.pickle', fmt='pickle')
-    ccalc_loaded = CorrelationsCalculator('CCALC.pickle')
+    ccalc.serialize(filepath="CCALC.pickle", fmt="pickle")
+    ccalc_loaded = CorrelationsCalculator("CCALC.pickle")
 
 
 def test_binary_linear_basis(primitive_lattice, sub, scell131):
-    bin_plat = ParentLattice(primitive_lattice, substitutions=[sub], pbc=[True]*3)
+    bin_plat = ParentLattice(primitive_lattice, substitutions=[sub], pbc=[True] * 3)
     bin_cpool = ClustersPool(bin_plat, npoints=[1, 2], radii=[0, 1.2])
     coorrcal_bin_lin = CorrelationsCalculator("binary-linear", bin_plat, bin_cpool)
 
@@ -223,34 +239,38 @@ def test_binary_linear_basis(primitive_lattice, sub, scell131):
         fmt="json", filepath="test_cluster_correlations_structure_bin.json"
     )
 
-@pytest.mark.parametrize('basis', ['trigonometric', 'polynomial'])
-def test_cell_doubling(basis, plat_quaternary, cpool):
-    corrcal = CorrelationsCalculator(basis, plat_quaternary, cpool)
+
+@pytest.mark.parametrize(
+    "basis_name", ["binary-linear", "trigonometric", "polynomial", "chebyshev"]
+)
+def test_cell_doubling(basis_name, plat_quaternary, cpool):
+    corrcal = CorrelationsCalculator(basis_name, plat_quaternary, cpool)
 
     scell = SuperCell(plat_quaternary, np.array([(1, 0, 0), (0, 3, 0), (0, 0, 1)]))
-    structure = Structure(
-        scell,
-        [1, 1, 1, 6, 7, 1, 1, 2, 1])
+    structure = Structure(scell, [1, 1, 1, 6, 7, 1, 1, 2, 1])
     corrs1 = corrcal.get_cluster_correlations(structure)
 
     scell = SuperCell(plat_quaternary, np.array([(1, 0, 0), (0, 6, 0), (0, 0, 1)]))
-    structure = Structure(
-        scell,
-        [1, 1, 1, 6, 7, 1, 1, 2, 1, 1, 1, 1, 6, 7, 1, 1, 2, 1])
+    structure = Structure(scell, [1, 1, 1, 6, 7, 1, 1, 2, 1, 1, 1, 1, 6, 7, 1, 1, 2, 1])
     corrs2 = corrcal.get_cluster_correlations(structure)
     np.testing.assert_allclose(corrs1, corrs2, atol=1e-5)
 
 
 @pytest.mark.parametrize(
-    'basis,expected',
-    [('trigonometric', [-.33333333, 0, 0, .33333333, .57735027, -.33333333, -.25, 0, -.25]),
-     ('polynomial', [-.33333333, 0, 0, .81649658, .47140452, -.33333333, -.5, 0, -.5])
+    "basis_name,expected",
+    [
+        (
+            "trigonometric",
+            [-0.33333333, 0, 0, 0.33333333, 0.57735027, -0.33333333, -0.25, 0, -0.25],
+        ),
+        (
+            "polynomial",
+            [-0.33333333, 0, 0, 0.81649658, 0.47140452, -0.33333333, -0.5, 0, -0.5],
+        ),
     ],
 )
-def test_basis(plat_quaternary, cpool, scell131, basis, expected):
-    corrcal = CorrelationsCalculator(basis, plat_quaternary, cpool)
-    structure = Structure(
-        scell131,
-        [1, 1, 1, 6, 7, 1, 1, 2, 1])
+def test_basis(plat_quaternary, cpool, scell131, basis_name, expected):
+    corrcal = CorrelationsCalculator(basis_name, plat_quaternary, cpool)
+    structure = Structure(scell131, [1, 1, 1, 6, 7, 1, 1, 2, 1])
     corrs = corrcal.get_cluster_correlations(structure)
     np.testing.assert_allclose(corrs, expected, atol=1e-5)

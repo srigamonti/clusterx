@@ -106,7 +106,7 @@ class MonteCarlo:
         scell,
         nsubs=None,
         ensemble="canonical",
-        sublattice_indices=None,
+        sublattice_indices=[],
         chemical_potentials=None,
         models=[],
         no_of_swaps=1,
@@ -119,7 +119,7 @@ class MonteCarlo:
         self._nsubs = nsubs
         self._filename = filename
 
-        if sublattice_indices is None:
+        if not sublattice_indices:
             try:
                 self._sublattice_indices = [k for k in self._nsubs.keys()]
 
@@ -154,7 +154,7 @@ class MonteCarlo:
 
         if self._no_of_swaps > 1:
             self._control_flag = False
-        elif predict_swap == True:
+        elif predict_swap:
             self._control_flag = True
         else:
             self._control_flag = False
@@ -470,7 +470,7 @@ class MonteCarloTrajectory:
                 sx.swap(indices_list[j][0], indices_list[j][1])
 
             sdict = {}
-            if predict_swap == True:
+            if predict_swap:
 
                 if t == 0:
                     movalue = np.zeros(len(models))

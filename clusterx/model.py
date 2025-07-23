@@ -8,7 +8,7 @@ import os
 import time
 import warnings
 import numpy as np
-from clusterx.correlations import CorrelationsCalculator
+from clusterx.correlations import CorrelationsCalculator, cluster_function_swap
 from clusterx.estimators.estimator_factory import EstimatorFactory
 from clusterx.clusters_selector import ClustersSelector
 
@@ -250,12 +250,7 @@ class Model:
                     import sys
 
                     sys.exit("StandardScaler of Model has not been fitted.")
-
-            pv = 0
-            for i in range(len(corrs)):
-                pv = pv + self.ecis[i] * corrs[i]
-
-            return pv
+            return np.dot(self.ecis, corrs)
 
     def predict_swap(self, structure, ind1=None, ind2=None, correlation=False, site_types=[0]):
         """Predict property difference with the optimal cluster expansion model.
@@ -357,10 +352,6 @@ class Model:
     def _compute_delta_e_binary_linear(self, structure, ind, old_sigma, new_sigma):
         sgn = new_sigma - old_sigma
         corrs = np.zeros(self._mc_nclusters)
-        for icl in self._interactions_dict[ind]["interactions_list"]:
-            cluster_index = self._clusters_list[icl]["cluster_index"]
-            corrs[cluster_index] = 0
-
         for ifi, icl in zip(
             self._interactions_dict[ind]["cluster_sites_index_for_ind"],
             self._interactions_dict[ind]["interactions_list"],
@@ -374,55 +365,58 @@ class Model:
             if 0 not in ss:
                 corrs[cluster_index] += sgn
 
-        for i in range(self._mc_nclusters):
-            corrs[i] /= self._mc_multiplicities[i]
-
-        pv = 0
-
-        for i, corr in enumerate(corrs):
-            pv += self.ecis[i] * corr
-
-        return pv
+        corrs /= self._mc_multiplicities
+        return np.dot(self.ecis, corrs)
 
     def _compute_delta_e(self, structure, ind, old_sigma, new_sigma):
-
         corrs = np.zeros(self._mc_nclusters)
-        for icl in self._interactions_dict[ind]["interactions_list"]:
-            cluster_index = self._clusters_list[icl]["cluster_index"]
-            corrs[cluster_index] = 0
-
         for icl in self._interactions_dict[ind]["interactions_list"]:
             cluster_index = self._clusters_list[icl]["cluster_index"]
             cluster_sites = self._clusters_list[icl]["cluster_sites"]
             cluster_funcs = self._clusters_list[icl]["cluster_funcs"]
             cluster_ems = self._clusters_list[icl]["cluster_ems"]
-            nbodies = len(cluster_sites)
             sigmas = structure.sigmas.take(cluster_sites)
 
-            cf = 1.0
-            for i in range(nbodies):
-                if i == cluster_sites.index(ind):
-                    cf *= self.corrc.site_basis_function(
-                        cluster_funcs[i], new_sigma, cluster_ems[i]
-                    ) - self.corrc.site_basis_function(cluster_funcs[i], old_sigma, cluster_ems[i])
-                else:
-                    cf *= self.corrc.site_basis_function(cluster_funcs[i], sigmas[i], cluster_ems[i])
+            # loop implementation (baseline):
+            #nbodies = len(cluster_sites)
+            #cf = 1.0
+            #for i in range(nbodies):
+            #    if i == cluster_sites.index(ind):
+            #        cf *= self.corrc.basis_set_values[cluster_funcs[i], new_sigma, cluster_ems[i]] \
+            #            - self.corrc.basis_set_values[cluster_funcs[i], old_sigma, cluster_ems[i]]
+            #    else:
+            #       cf *= self.corrc.basis_set_values[cluster_funcs[i], sigmas[i], cluster_ems[i]]
+
+            # jit implementation (tiny bit faster):
+            cf = cluster_function_swap(
+                cluster_sites,
+                cluster_funcs,
+                sigmas,
+                cluster_ems,
+                ind,
+                old_sigma,
+                new_sigma,
+                self.corrc.basis_set_values,
+            )
+
+            # vectorized implementation (slow):
+            #cf_factors_const = self.corrc.basis_set_values[cluster_funcs, sigmas, cluster_ems]
+            #cf_factors_old_s = self.corrc.basis_set_values[cluster_funcs, np.repeat(old_sigma, nbodies), cluster_ems]
+            #cf_factors_new_s = self.corrc.basis_set_values[cluster_funcs, np.repeat(new_sigma, nbodies), cluster_ems]
+            #cf_factors_diff = cf_factors_new_s - cf_factors_old_s
+            #cf_factors = np.where(np.arange(nbodies)==cluster_sites.index(ind), cf_factors_diff, cf_factors_const)
+            #cf = np.prod(cf_factors)
 
             corrs[cluster_index] += cf
 
-        for i in range(self._mc_nclusters):
-            corrs[i] /= self._mc_multiplicities[i]
+        corrs /= self._mc_multiplicities
         corrs = np.around(corrs, decimals=12)
 
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
-            pv = self.estimator.predict(corrs.reshape(1, -1))[0] - self.estimator.intercept_
-            return pv
+            return self.estimator.predict(corrs.reshape(1, -1))[0] - self.estimator.intercept_
         else:
-            pv = 0
-            for icl, corr in enumerate(corrs):
-                pv = pv + self.ecis[icl] * corr
-            return pv
+            return np.dot(self.ecis, corrs)
 
     def report_errors(self, sset):
         """Report fit and CV scores

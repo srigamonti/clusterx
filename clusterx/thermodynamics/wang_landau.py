@@ -666,7 +666,7 @@ class WangLandau:
             f = math.sqrt(cd._f)
             cd._update_method = update_method
         else:
-            sys.exit(
+            raise ValueError(
                 "Different update method for f requested. Please see documentation"
             )
 
@@ -731,7 +731,7 @@ class WangLandau:
         if update_method == "square_root":
             f = math.sqrt(f)
         else:
-            sys.exit(
+            raise ValueError(
                 "Different update method for f requested. Please see documentation"
             )
         return f
@@ -747,10 +747,11 @@ class WangLandau:
         ones_arr = np.ones(len(ener_arr))
 
         ax.clear()
-        ax.bar(ener_arr, ones_arr, width=energy_bin_width * 0.92, color="silver")
-        ax.bar(ener_arr, hist_arr, width=energy_bin_width * 0.82)
-        ax.bar(ener_arr, cdos_arr, width=energy_bin_width * 0.35)
+        ax.bar(ener_arr, ones_arr, width=energy_bin_width * 0.92, color="silver", label="Flatness target")
+        ax.bar(ener_arr, hist_arr, width=energy_bin_width * 0.82, label="Histogram")
+        ax.bar(ener_arr, cdos_arr, width=energy_bin_width * 0.35, label="CDOS")
         ax.relim()
+        ax.legend()
         figure.canvas.draw()
         figure.canvas.flush_events()
 
@@ -777,6 +778,7 @@ class WangLandau:
         acc_prob_dist_init_structure="gaussian",
         itmax_init_structure=int(1e8),
         nproc=0,
+        seed=None,
         **kwargs,
     ):
         r"""Perform Wang Landau simulation
@@ -866,6 +868,13 @@ class WangLandau:
         ``itmax_init_structure``: integer
             Maximum number of trials to search for initial structure inside given energy window.
 
+        ``nproc``: integer (default: 0)
+            Number of processes to use for the initial structure search.
+        
+        ``seed``: integer (default: None)
+            Seed for the numpy random number generator. If None, sequences are non-deterministic, if set with integer,
+            sequences are deterministic, i.e. pseudo-random. TODO: in future move to np.random.Generator
+
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the ConfigurationalDensityOfStates object that is initialized in this method.
 
@@ -875,6 +884,7 @@ class WangLandau:
 
         """
         self._em.corrc.reset_mc(mc=True)
+        np.random.seed(seed)
 
         struc = self._wls_create_initial_structure(
             initial_decoration,
@@ -930,17 +940,21 @@ class WangLandau:
             plt.ion()
             figure, ax = plt.subplots(figsize=(10, 8))
 
+        print("----------------------------------------")
+        print("Info (Wang-Landau): Running WL sampling.")
+        print(
+            f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
+        )
         while f > f_range[1]:
-            print("----------------------------------------")
-            print("Info (Wang-Landau): Running WL sampling.")
-            print(f"Info (Wang-Landau): Modification factor: {f}")
-            print(f"Info (Wang-Landau): Histogram flatness: {histogram_flatness}")
-
+            #print("----------------------------------------")
+            #print("Info (Wang-Landau): Running WL sampling.")
+            #print(f"Info (Wang-Landau): Modification factor: {f}")
+            #print(f"Info (Wang-Landau): Histogram flatness: {histogram_flatness}")
             struc, e, g, ibin, cdos, hist_cond, niter = self.flat_histogram(
                 struc, e, g, ibin, f, cdos, histogram_flatness, energy_bin_width
             )
 
-            print(f"Info (Wang-Landau): Number of MC steps: {niter}")
+            #print(f"Info (Wang-Landau): Number of MC steps: {niter}")
 
             self._n_mc_steps_total += niter
             cd.store_cdos(
@@ -1003,10 +1017,10 @@ class WangLandau:
         niter_per_sweep = 100000
         nonzero_bins_thresh = 5
 
-        print("Building flat histogram.")
-        print(
-            f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
-        )
+        #print("Building flat histogram.")
+        #print(
+        #    f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
+        #)
         while (hist_min < histogram_flatness * hist_avg) or (
             n_nonzero_bins < nonzero_bins_thresh
         ):

@@ -15,13 +15,42 @@ from clusterx.thermodynamics.monte_carlo import MonteCarlo
 from clusterx.thermodynamics.monte_carlo import MonteCarloTrajectory
 from clusterx.utils import isclose
 from clusterx.utils import dict_compare
+from clusterx.cli.metropolis import metropolis
 
 import pytest
 from ase.data import atomic_numbers as cn
 from ase import Atoms
 import numpy as np
 import os
-import sys
+
+
+@pytest.fixture
+def plat():
+    # parent lattice with single site and one substitution
+    cell = [1, 1, 1]
+    positions = [[0, 0, 0]]
+    pbc = [True, True, False]
+
+    pri = Atoms(["Cu"], positions=positions, cell=cell, pbc=pbc)
+    sub = Atoms(["Au"], positions=positions, cell=cell, pbc=pbc)
+    plat = ParentLattice(pri, substitutions=[sub], pbc=pbc)
+    return plat
+
+
+@pytest.fixture
+def cpool(plat):
+    # one-point clusters and nearest neighbor two-point clusters
+    return ClustersPool(plat, npoints=[1, 2], radii=[0, 1.1])
+
+
+@pytest.fixture
+def model(plat, cpool):
+    # Ising-like model
+    corc = CorrelationsCalculator("trigonometric", plat, cpool)
+    ecisE = [0., -1.]
+    multT = cpool.get_multiplicities()
+    cemodel = Model(corc, "energy", ecis=np.multiply(ecisE, multT))
+    return cemodel
 
 
 @pytest.fixture
@@ -107,9 +136,38 @@ def plat_full_sub(
 
 
 @pytest.fixture
-def cemodel_binary():
+def cemodel_binary(pristine_crystal, sub_Al):
     plat = ParentLattice(
         atoms=pristine_crystal,substitutions=[sub_Al],pbc=(1,1,1))
+
+    cpool = ClustersPool(plat)
+    cpsc = cpool.get_cpool_scell()
+    s = cn["Al"]
+    cpool.add_cluster(Cluster([24],[s],cpsc))
+    cpool.add_cluster(Cluster([40],[s],cpsc))
+    cpool.add_cluster(Cluster([6,4],[s,s],cpsc))
+    cpool.add_cluster(Cluster([37,32],[s,s],cpsc))
+    cpool.add_cluster(Cluster([39,12],[s,s],cpsc))
+    cpool.add_cluster(Cluster([16,43],[s,s],cpsc))
+    cpool.add_cluster(Cluster([35,11],[s,s],cpsc))
+    cpool.add_cluster(Cluster([39,30],[s,s],cpsc))
+    cpool.add_cluster(Cluster([35,42],[s,s],cpsc))
+    cpool.add_cluster(Cluster([18,43],[s,s],cpsc))
+
+    ecis = [
+        -78407.3247588,
+        47.164484875,
+        47.1673476881,
+        47.1569012692,
+        0.00851281608144,
+        0.0139835351147,
+        0.0108175321899,
+        0.0101521144776,
+        0.00121744613474,
+        0.000413664306204
+    ]
+
+    multT = [1,24,16,6,12,8,48,24,24,24]
     corc = CorrelationsCalculator("binary-linear",plat,cpool)
     cemodel = Model(corc, "energy", ecis=np.multiply(ecis, multT))
     return cemodel
@@ -120,7 +178,6 @@ def cemodel_full_sub():
     plat = ParentLattice(
         atoms=pristine_crystal, substitutions=[sub_Al,sub_X,sub_Sr])
     scellS2= [(2,0,0),(0,2,0),(0,0,2)]
-    scellE2 = SuperCell(plat,scellS2)
 
     cpoolE2 = ClustersPool(plat, npoints=[1], radii=[0])
     corcE2 = CorrelationsCalculator("trigonometric", plat, cpoolE2)
@@ -142,96 +199,77 @@ def cemodel_full_sub():
         23.10
     ]
 
-    cemodelE2=Model(corcE2, "energy2",ecis=np.multiply(ecisE2, smultT2))
+    return Model(corcE2, "energy2",ecis=np.multiply(ecisE2, smultT2))
 
+
+def test_cli(plat, model):
+    model_filepath = "model_mc.pickle"
+    model.serialize(model_filepath)
+    plat_filepath = "plat_mc.json"
+    plat.serialize(plat_filepath)
+    sc_shape = [8, 8]
+    nsubs = {0: [int(np.prod(sc_shape) / 2)]}  # one substitution for the whole supercell
+    metropolis(
+        # class init arguments
+        plat_filepath=plat_filepath,
+        model_filepath=model_filepath,
+        sc_shape=sc_shape,
+        nsubs=nsubs,
+        ensemble="canonical",
+        sublattice_indices=[],
+        chemical_potentials=None,
+        models_aux_filepaths=[],
+        no_of_swaps=1,
+        predict_swap=True,
+        error_reset=None,
+        filename="trajectory.json",
+        # metropolis sampling arguments
+        no_of_sampling_steps=100,
+        scale_factor=[1.0],
+        temperature=1.0,
+        boltzmann_constant=1.0,
+        initial_decoration=None,
+        acceptance_ratio=None,
+    )
 
 
 @pytest.mark.xfail(raises=AssertionError, reason="Ref values not updated")
 def test_metropolis_clathrate_Si_Al(
-    wyckoff_sites,
-    pristine_crystal,
-    sub_Al
+    plat_binary, cemodel_binary
 ):
     np.random.seed(10) #setting a seed for the random package for comparible random structures
 
     # Build the parent lattice
     print("\nSampling in `Si_{46-x} Al_x Ba_{8}`")
-    plat = ParentLattice(
-        atoms=pristine_crystal,substitutions=[sub_Al],pbc=(1,1,1))
 
-    # Build clusters pool
-    #cpool = ClustersPool(plat,r=)
-    cpool = ClustersPool(plat)
-    cp = cpool._cpool
-    cpsc = cpool.get_cpool_scell()
-    s = cn["Al"]
-    cpool.add_cluster(Cluster([24],[s],cpsc))
-    cpool.add_cluster(Cluster([40],[s],cpsc))
-    cpool.add_cluster(Cluster([6,4],[s,s],cpsc))
-    cpool.add_cluster(Cluster([37,32],[s,s],cpsc))
-    cpool.add_cluster(Cluster([39,12],[s,s],cpsc))
-    cpool.add_cluster(Cluster([16,43],[s,s],cpsc))
-    cpool.add_cluster(Cluster([35,11],[s,s],cpsc))
-    cpool.add_cluster(Cluster([39,30],[s,s],cpsc))
-    cpool.add_cluster(Cluster([22,17],[s,s],cpsc))
-    cpool.add_cluster(Cluster([35,42],[s,s],cpsc))
-    cpool.add_cluster(Cluster([32,14],[s,s],cpsc))
-    cpool.add_cluster(Cluster([11,10],[s,s],cpsc))
-    cpool.add_cluster(Cluster([18,9],[s,s],cpsc))
-    cpool.add_cluster(Cluster([18,43],[s,s],cpsc))
-
-    # Energy
-    cpoolE = cpool.get_subpool([0,1,2,3,4,5,6,7,9,15])
-    ecisE = [
-        -78407.3247588,
-        47.164484875,
-        47.1673476881,
-        47.1569012692,
-        0.00851281608144,
-        0.0139835351147,
-        0.0108175321899,
-        0.0101521144776,
-        0.00121744613474,
-        0.000413664306204
-    ]
-
-    multT = [1,24,16,6,12,8,48,24,24,24]
-
-    corcE = CorrelationsCalculator("binary-linear",plat,cpoolE)
     scellS= [(1,0,0),(0,1,0),(0,0,1)]
-    scellE = SuperCell(plat,scellS)
-
-    sub_lattices = scellE.get_idx_subs()
-    print("Sublattices with corresponding atomic numbers: ", sub_lattices)
-    tags = scellE.get_tags()
-    print("Tags: ", tags)
+    scellE = SuperCell(plat_binary,scellS)
 
     nsubs={0:[16]}
-    cemodelE=Model(corcE, "energy", ecis=np.multiply(ecisE, multT))
-
     ecisBkk= [
         2.45499482287556,
         0.008755635590555,
         -0.00369049905517,
-        -0.00514045920119
     ]
 
     ecisBii= [
         2.3096951176787144,
         0.0020040504912059,
         0.0114729488335313,
-        0.004843235304331
     ]
 
-    cpoolBonds = ClustersPool(plat, npoints=[1], radii=[0])
-    corcBonds = CorrelationsCalculator("binary-linear", plat, cpoolBonds)
+    cpoolBonds = ClustersPool(plat_binary, npoints=[1], radii=[0])
+    print("Cpool bonds: ", cpoolBonds.get_cpool_arrays())
+    print("Plat sites: ", plat_binary.get_sites())
+    corcBonds = CorrelationsCalculator(
+        "binary-linear", plat_binary, cpoolBonds)
 
-    multB=[1,24,16,6]
+    multB=[1, 24, 16]
     cemodelBkk=Model(corcBonds, 'bond_kk', ecis=np.multiply(ecisBkk, multB))
     cemodelBii=Model(corcBonds, 'bond_ii', ecis=np.multiply(ecisBii, multB))
 
     mc = MonteCarlo(
-        cemodelE,
+        cemodel_binary,
         scellE,
         ensemble="canonical",
         nsubs=nsubs,
@@ -501,39 +539,3 @@ def test_metropolis_clathrate_full_subs(
     np.testing.assert_allclose(energies2, renergies2, rtol=1e-4)
     np.testing.assert_allclose(last_structure2.decor, rlast_decoration2, rtol=1e-4)
     assert dict_compare(last_entry2,rlast_entry2, tol=float(1e-7))
-
-
-@pytest.mark.xfail(reason="maybe this test is not needed anymore")
-def test_metropolis_extra():
-    # Sampling in the sublattices with indizes 0 and 1 - ternary sampling in sublattice 0 and binary sampling in sublattice 1
-    print("\nStart sampling in the two sublattices with indices 0 and 1:")
-
-    nmc=30
-    # temperature in K
-    temp = 600
-    print("Samplings steps",nmc)
-    print("Temperature",temp)
-
-    mc3 = MonteCarlo(cemodelE2, scellE2,ensemble = "canonical", nsubs = {0:[112,16],1:[8]})
-    traj3 = mc3.metropolis(
-        no_of_sampling_steps=nmc,
-        scale_factor=scale_factor,
-        temperature=temp,
-        boltzmann_constant=kb,
-        serialize=True,
-        filename = "trajectory-multi-lattice.json"
-    )
-    steps3 = traj3.get_sampling_step_nos()
-    energies3 = traj3.get_energies()
-    print(steps3)
-    print(energies3)
-
-    print("Configurations accepted at steps: ",steps3)
-
-    #rsteps3 = [0, 1, 2, 4, 5, 7, 9, 10, 11, 12, 13, 14, 16, 17, 18, 20, 21, 22, 23, 24, 26, 27, 28]
-    rsteps3 = [0, 1, 2, 4, 5, 7, 9, 10, 14, 15, 16, 17, 18, 19, 21, 23, 24, 25, 27, 28, 29]
-    #renergies3 = [-634365.0390243438, -634365.0390243438, -634365.0590243443, -634365.0590243443, -634365.0590243443, -634365.0590243443, -634365.0590243443, -634365.1063448524, -634365.1063448524, -634365.1409858714, -634365.1536653634, -634365.1536653634, -634365.1536653634, -634365.1536653634, -634365.2229473958, -634365.2229473958, -634365.2483063795, -634365.2483063795, -634365.2483063795, -634365.2683063787, -634365.2883063791, -634365.2883063791, -634365.2883063791]
-    renergies3 = [-634365.03902434, -634365.03902434, -634365.05902434, -634365.07902434, -634365.07902434, -634365.07902434, -634365.07902434, -634365.12634485, -634365.12634485, -634365.12634485, -634365.12634485, -634365.12634485, -634365.16098587, -634365.16098587, -634365.18634485, -634365.20634486, -634365.20634486, -634365.20634486, -634365.20634486, -634365.20634486, -634365.20634486]
-
-    np.testing.assert_allclose(steps3, rsteps3, rtol=1e-4)
-    np.testing.assert_allclose(energies3, renergies3, rtol=1e-4)
