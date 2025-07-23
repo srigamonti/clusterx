@@ -7,7 +7,38 @@ from clusterx.utils import (
     Exponential,
     PolynomialFunction,
     PolynomialBasis,
+    lattice_wrap_index,
 )
+
+
+def test_lattice_wrap_index():
+    """See https://stackoverflow.com/questions/38066785/np-ndarray-with-periodic-boundary-conditions"""
+    arr = np.array(
+        [
+            [11.0, 12.0, 13.0, 14.0],
+            [21.0, 22.0, 23.0, 24.0],
+            [31.0, 32.0, 33.0, 34.0],
+            [41.0, 42.0, 43.0, 44.0],
+        ]
+    )
+    test_vals = [
+        [(1, 1), 22.0],  # no wrapping
+        [(3, 3), 44.0],  # no wrapping, last element
+        [(4, 4), 11.0],  # single wrapping on diagonal
+        [(3, 4), 41.0],  # single wrapping off diagonal
+        [(4, 3), 14.0],
+        [[4, 3], 14.0],  # indexing with list instead of tuple
+        [(10, 10), 33.0],  # double wrapping
+        [[slice(0, 10), 1], False],  # no slice indexing
+        [1, False],  # no integer indexing
+        [(1,2,3), False],  # wrong shape of index
+    ]  # [index, expected value]
+    for idx, value in test_vals:
+        if isinstance(value, float):
+            assert arr[lattice_wrap_index(idx, (4, 4))] == value
+        else:
+            with pytest.raises(ValueError):
+                arr[lattice_wrap_index(idx, (4, 4))]
 
 
 def test_exponential():
