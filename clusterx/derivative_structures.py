@@ -579,13 +579,16 @@ class DSGenerator:
                     f"Start enum of scell shape {idx+1} of {len(unique_sc_shapes)}. Size: {sc_size}, nsubs:{num_subs}"
                 )
 
-                if recursive:
-                    self.generate_for_shape_nsubs(
-                        sc_shape=t, nsubs=max(num_subs), n_random=n_random, recursive=recursive
-                    )
-                else:
-                    for nsubs in num_subs:
-                        self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs, n_random=n_random, recursive=recursive)
+                for nsubs in num_subs:
+                    self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs, n_random=n_random, recursive=recursive)
+
+                # if recursive:
+                #     self.generate_for_shape_nsubs(
+                #         sc_shape=t, nsubs=max(num_subs), n_random=n_random, recursive=recursive
+                #     )
+                # else:
+                #     for nsubs in num_subs:
+                #         self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs, n_random=n_random, recursive=recursive)
 
         print(f"Enumeration complete. Found {len(self.configurations)} unique configurations.\n")
 
@@ -621,8 +624,13 @@ class DSGenerator:
         scell = SuperCell(self.plat, sc_shape)
         natoms = scell.get_natoms()
         symper = scell.get_sym_perm()
-        symper_tuples = [tuple(per) for per in symper]
+        nsites_per_type = scell.get_nsites_per_type()
+        ems = scell.get_ems()
         ssites = scell.get_substitutional_sites()
+        stypes = scell.get_tags()
+        scindex = np.abs(scell.get_index())
+
+        symper_tuples = [tuple(per) for per in symper]
 
         if isinstance(nsubs, int):
             if nsubs > len(ssites):
@@ -634,10 +642,10 @@ class DSGenerator:
                     partial_binom_sum = lambda N, n: (
                         0 if n < 0 else partial_binom_sum(N, n - 1) + scipy.special.binom(N, n)
                     )
-                    n_max = int(partial_binom_sum(len(ssites), nsubs) / np.abs(scell.get_index()))
+                    n_max = int(partial_binom_sum(len(ssites), nsubs) / scindex)
                     with tqdm(total=n_max, desc="Finding unique sigmas") as pbar:
                         num_conf = self._generate_all_configurations_recursive(
-                            ssites, nsubs, natoms, shape_id, symper_tuples, pbar=pbar
+                            ssites, nsubs, natoms, shape_id, symper_tuples, ems, pbar=pbar
                         )
                 else:
                     num_conf = self._generate_all_configurations(ssites, nsubs, natoms, shape_id, symper)
@@ -646,13 +654,30 @@ class DSGenerator:
                 num_conf = self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
 
         elif isinstance(nsubs, dict):
-            tags = scell.get_tags()
+            site_type_by_index = scell.get_tags()
             sltypes = scell.get_sublattice_types()
 
+            partial_binom_sum = lambda N, n: (0 if n < 0 else partial_binom_sum(N, n - 1) + scipy.special.binom(N, n))
+            estimated_nconf = 1
+            for site_type, nsites in nsites_per_type.items():
+                nsubs_in_type = np.sum(nsubs[site_type])
+                if recursive:
+                    estimated_nconf *= partial_binom_sum(nsites, nsubs_in_type)
+                else:
+                    estimated_nconf *= scipy.special.binom(nsites, nsubs_in_type)
+            estimated_nconf /= scindex
+
             if n_random is None:
-                num_conf = self._generate_all_configurations_multilattice(
-                    nsubs, natoms, shape_id, symper, tags, sltypes
-                )
+                if recursive:
+                    with tqdm(total=estinmated_nconf, desc="Finding unique sigmas") as pbar:
+                        num_conf = self._generate_all_configurations_recursive(
+                            ssites, nsubs, natoms, shape_id, symper_tuples, ems, stypes, pbar=pbar
+                        )
+                else:
+                    num_conf = self._generate_all_configurations_multilattice(
+                        nsubs, natoms, shape_id, symper, site_type_by_index
+                    )
+
             else:
                 raise NotImplementedError()
                 # num_conf = self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
@@ -664,14 +689,23 @@ class DSGenerator:
             natoms,
         )
 
-    def get_child_sigmas(self, sigma: Tuple[int], ssites: List[int], symper_tuples, seen):
-
-        non_zero_indices = {i for i, val in enumerate(sigma) if val != 0}
+    @staticmethod
+    def _validate_sigma(sigma: Tuple[int], ssites: List[int], ems, nsubs, stypes):
+        isok = True
+        for site_type, max_nsubs_list in nsubs.items():
+            for i, max_nsubs in enumerate(max_nsubs_list):
+                n = 0
+                for  j, sigma_j, stype_j in  enumerate(zip(sigma, stypes)):
+                    if stype_j == site_type:
+                        if 
+        
+    def get_child_sigmas(self, sigma: Tuple[int], ssites: List[int], symper_tuples:List[tuple], ems:List[int], seen, nsubs, stypes):
 
         children = set()
         for site in ssites:
-            if site not in non_zero_indices:
-                children.add(sigma[:site] + (1,) + sigma[site + 1 :])
+            for sigmai in range(1, ems[site]):
+                if sigmai != sigma[site]:
+                    children.add(sigma[:site] + (sigmai,) + sigma[site + 1 :])
 
         unique_children = set()
         for child in children:
@@ -689,6 +723,8 @@ class DSGenerator:
         natoms,
         shape_id,
         symper_tuples,
+        ems,
+        stypes,
         sigma0=None,
         seen=None,
         current_nsubs=0,
@@ -714,7 +750,7 @@ class DSGenerator:
         if current_nsubs >= nsubs:
             return
 
-        children, seen = self.get_child_sigmas(sigma0, ssites, symper_tuples, seen)
+        children, seen = self.get_child_sigmas(sigma0, ssites, symper_tuples, ems, seen, nsubs, stypes)
         if pbar and len(children) != 0:
             pbar.set_postfix(nseen=len(seen), nchildren=len(children), nsub=sum(1 for x in list(children)[0] if x != 0))
         for child in children:
@@ -724,6 +760,7 @@ class DSGenerator:
                 natoms,
                 shape_id,
                 symper_tuples,
+                ems,
                 sigma0=child,
                 seen=seen,
                 current_nsubs=current_nsubs + 1,
@@ -771,7 +808,7 @@ class DSGenerator:
                     sigma_hash_canonical = min(hash(tuple(sigma_trial[i] for i in per)) for per in self._symper_tuples)
                     full_list.add(sigma_hash_canonical)
 
-            if mode is "fast":
+            if mode == "fast":
                 sigma_hash = hash(tuple(sigma_trial))
 
                 if sigma_hash not in full_list:
@@ -793,14 +830,14 @@ class DSGenerator:
 
         return len(self.configurations) - num_conf_start
 
-    def _generate_all_configurations_multilattice(self, nsubs, natoms, shape_id, symper, tags, sublattice_types):
+    def _generate_all_configurations_multilattice(self, nsubs, natoms, shape_id, symper, site_type_by_index):
 
         full_list: Set[Tuple[int, ...]] = set()
         logging.info("Starting to find unique configurations...")
 
         num_conf_start = len(self.configurations)
 
-        configurations = DSGenerator._generate_multilattice_configurations(natoms, tags, sublattice_types, nsubs)
+        configurations = DSGenerator._generate_multilattice_configurations(natoms, site_type_by_index, nsubs)
 
         for sigma in configurations:
             if tuple(sigma) not in full_list:
@@ -810,31 +847,31 @@ class DSGenerator:
         return len(self.configurations) - num_conf_start
 
     @staticmethod
-    def _generate_multilattice_configurations(n, tags, sublattice_types, nsubs):
-        tags = np.array(tags)
+    def _generate_multilattice_configurations(natoms, site_type_by_index, nsubs):
+        site_type_by_index = np.array(site_type_by_index)
 
         sublattice_positions = {
-            sublattice_type: list(np.where(tags == sublattice_type)[0]) for sublattice_type in nsubs
+            sublattice_type: list(np.where(site_type_by_index == sublattice_type)[0]) for sublattice_type in nsubs
         }
 
         # Create generators for each domain
 
         sublattice_labelings = {
             sublattice_type: DSGenerator._generate_labelings_for_sublattice(
-                n, sublattice_positions[sublattice_type], nsubs[sublattice_type]
+                natoms, sublattice_positions[sublattice_type], nsubs[sublattice_type]
             )
             for sublattice_type in nsubs
         }
 
         # Use product of generators
         for combo in product(*sublattice_labelings.values()):
-            combined = np.zeros(n, dtype=int)
+            combined = np.zeros(natoms, dtype=int)
             for arr in combo:
                 combined += arr  # safe because positions are disjoint
             yield combined
 
     @staticmethod
-    def _generate_labelings_for_sublattice(n, sublattice_positions, nsubs):
+    def _generate_labelings_for_sublattice(natoms, sublattice_positions, nsubs):
         """
         Returns generator of labelings for a sublattice
 
@@ -864,7 +901,7 @@ class DSGenerator:
                     yield [(level + 1, indices)] + rest
 
         for assignment in recursive_build(0, set()):
-            full_arr = np.zeros(n, dtype=int)
+            full_arr = np.zeros(natoms, dtype=int)
             for value, idxs in assignment:
                 for idx in idxs:
                     full_arr[idx] = value
