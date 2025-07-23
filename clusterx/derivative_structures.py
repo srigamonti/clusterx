@@ -702,7 +702,7 @@ class DSGenerator:
                     with tqdm(total=n_max, desc="Finding unique sigmas") as pbar:
                         num_conf = self._generate_all_configurations_recursive(
                             ssites,
-                            nsubs,
+                            {0: [nsubs]},
                             natoms,
                             shape_id,
                             symper_tuples,
