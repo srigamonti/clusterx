@@ -15,6 +15,28 @@ from ase.build.supercells import (  # needed by make_supercell
 from ase.data import chemical_symbols as cs
 
 
+def lattice_wrap_index(index, lattice_shape):
+    """Returns periodic lattice index for a given iterable index.
+    Inspired by: https://stackoverflow.com/questions/38066785/np-ndarray-with-periodic-boundary-conditions
+
+    **parameters**
+    ``index``: iterable
+        one integer for each axis
+    ``lattice_shape``: tuple
+        the shape of the lattice to index to
+    """
+    if not hasattr(index, '__iter__'):
+        raise ValueError(f'wrap index does not support integer index: {index}')
+    if len(index) != len(lattice_shape):
+        raise ValueError(f'index {index} has incompatible shape with {lattice_shape}')
+    if any(isinstance(i, slice) for i in index):
+        raise ValueError('wrap index does not suppport slices')
+    if len(index) == len(lattice_shape):
+        mod_index = tuple(((i%s + s)%s for i,s in zip(index, lattice_shape)))
+        return mod_index
+    raise ValueError(f'Unexpected index: {index}, given shape {lattice_shape}')
+
+
 class SupercellError(Exception):
     pass
 
