@@ -58,6 +58,8 @@ def build_ising_model(suffix: str = "", prefix: str = "", true3d: bool = False):
     else:
         cpool.serialize(filepath=f"{prefix}cpool-ising-3d{suffix}.json")
 
+    ccalc = CorrelationsCalculator(basis="indicator-binary", parent_lattice=plat, clusters_pool=cpool)
+
     """
     scell = SuperCell(plat, p=2)
     cpool = ClustersPool(plat, npoints=[1, 2, 3], radii=[0, -1, -1], super_cell=scell)
