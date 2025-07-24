@@ -1279,9 +1279,9 @@ class ConfigurationalDensityOfStates:
             If ``normalization`` is true, type of normalization applied. Possible values are:
 
                 * ``0``: :math:`g(E_{min}) = 1`
-                * ``1``: :math:`\sum_E g(E) = \sum_{subl.} Binom(N_{sites}, n_{subs})`,
+                * ``1``: :math:`\\sum_E g(E) = \\sum_{subl.} Binom(N_{sites}, n_{subs})`,
                     i.e. the total weight of the histogram equals the total number of configurations.
-                * ``2``: :math:`\sum_E g(E) = e^{F}`,
+                * ``2``: :math:`\\sum_E g(E) = e^{F}`,
                     where :math:`F` is a custom normalization factor
                     given by the argument ``set_normalization_ln``, see below.
 
