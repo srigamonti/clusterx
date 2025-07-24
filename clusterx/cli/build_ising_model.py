@@ -4,17 +4,22 @@
 
 import plac
 from ase import Atoms
+from sklearn.linear_model import LinearRegression
 
 from clusterx.cli.config_utils import cmd_message
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
+from clusterx.model import Model
 
 commands = ["build_ising_model"]
 
 
 @plac.annotations(
+    e0=("Constant coefficient (intercept)", "option", "e0", float),
+    h0=("External field ", "option", "h0", float),
+    j1=("Spin-spin interaction (first neighbor)", "option", "j1", float),
     suffix=(
         "Suffix to be added to the file names created by this command",
         "option",
@@ -34,7 +39,14 @@ commands = ["build_ising_model"]
         bool,
     ),
 )
-def build_ising_model(suffix: str = "", prefix: str = "", true3d: bool = False):
+def build_ising_model(
+    e0: float = 0.0,
+    h0: float = 0.0,
+    j1: float = 1.0,
+    suffix: str = "",
+    prefix: str = "",
+    true3d: bool = False,
+):
     """Build Ising model. Used for demonstration purposes"""
     cmd_message("head")
 
@@ -60,7 +72,7 @@ def build_ising_model(suffix: str = "", prefix: str = "", true3d: bool = False):
     scell.serialize(filepath=f"{prefix}scell-ising-3d{suffix}.json")
 
     cpool = ClustersPool(
-        parent_lattice=plat, npoints=[2], radii=[1.1], super_cell=scell
+        parent_lattice=plat, npoints=[1, 2], radii=[0, 1.1], super_cell=scell
     )
     cpool.gen_clusters()
 
@@ -70,22 +82,18 @@ def build_ising_model(suffix: str = "", prefix: str = "", true3d: bool = False):
         cpool.serialize(filepath=f"{prefix}cpool-ising-3d{suffix}.json")
 
     ccalc = CorrelationsCalculator(
-        basis="chebyshev", parent_lattice=plat, clusters_pool=cpool
+        basis_name="chebyshev", parent_lattice=plat, clusters_pool=cpool
     )
 
-    """
-    scell = SuperCell(plat, p=2)
-    cpool = ClustersPool(plat, npoints=[1, 2, 3], radii=[0, -1, -1], super_cell=scell)
-    ccalc = CorrelationsCalculator(basis="indicator-binary", parent_lattice=plat, clusters_pool=cpool)
     estimator = LinearRegression()
     n_features = len(cpool)
 
-    random_coefficients = rng.random(size=n_features)
-    random_coefficients -= random_coefficients.mean()
-    estimator.coef_ = random_coefficients
-    estimator.intercept_ = 0
+    estimator.coef_ = [-h0, -j1]
+    estimator.intercept_ = e0
 
-    cemodel = Model(corrc=ccalc, property_name=property_name, estimator=estimator)
+    cemodel = Model(corrc=ccalc, property_name="Energy", estimator=estimator)
 
-    cemodel.serialize(filepath=model_filepath)
-    """
+    if not true3d:
+        cemodel.serialize(filepath=f"{prefix}ising_model_2d{suffix}.pickle")
+    else:
+        cemodel.serialize(filepath=f"{prefix}ising_model_3d{suffix}.pickle")
