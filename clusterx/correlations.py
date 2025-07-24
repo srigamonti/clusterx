@@ -4,7 +4,6 @@
 
 import os
 import pickle
-from functools import lru_cache
 from subprocess import call
 from typing import Optional
 import warnings
@@ -17,7 +16,6 @@ from ase.db.jsondb import JSONDatabase
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.clusters.cluster import Cluster
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
@@ -79,7 +77,7 @@ class CorrelationsCalculator:
 
     def __init__(
         self,
-        basis=None,
+        basis_name=None,
         parent_lattice=None,
         clusters_pool=None,
         db=None,
@@ -528,8 +526,10 @@ def cluster_function_swap(
     cf = 1.0
     for i in range(nbodies):
         if i == cluster_idxs.index(ind):
-            cf *= basis_set_values[cluster_alphas[i], new_sigma, ems[i]] \
+            cf *= (
+                basis_set_values[cluster_alphas[i], new_sigma, ems[i]]
                 - basis_set_values[cluster_alphas[i], old_sigma, ems[i]]
+            )
         else:
             cf *= basis_set_values[cluster_alphas[i], sigmas[i], ems[i]]
     return cf
