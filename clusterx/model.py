@@ -252,7 +252,9 @@ class Model:
                     sys.exit("StandardScaler of Model has not been fitted.")
             return np.dot(self.ecis, corrs)
 
-    def predict_swap(self, structure, ind1=None, ind2=None, correlation=False, site_types=[0]):
+    def predict_swap(
+        self, structure, ind1=None, ind2=None, correlation=False, site_types=[0]
+    ):
         """Predict property difference with the optimal cluster expansion model.
 
         **Parameters:**
@@ -304,7 +306,9 @@ class Model:
                     self._clusters_list[icl]["cluster_index"] = cluster_index
                     self._clusters_list[icl]["cluster_sites"] = cluster.get_idxs()
                     self._clusters_list[icl]["cluster_funcs"] = cluster.alphas
-                    self._clusters_list[icl]["cluster_ems"] = self._ems.take(cluster.get_idxs())
+                    self._clusters_list[icl]["cluster_ems"] = self._ems.take(
+                        cluster.get_idxs()
+                    )
 
                     icl += 1
 
@@ -318,9 +322,9 @@ class Model:
                 for icl in range(len(self._clusters_list)):
                     if ind in self._clusters_list[icl]["cluster_sites"]:
                         self._interactions_dict[ind]["interactions_list"].append(icl)
-                        self._interactions_dict[ind]["cluster_sites_index_for_ind"].append(
-                            self._clusters_list[icl]["cluster_sites"].index(ind)
-                        )
+                        self._interactions_dict[ind][
+                            "cluster_sites_index_for_ind"
+                        ].append(self._clusters_list[icl]["cluster_sites"].index(ind))
 
             if self._basis == "binary-linear" or self._basis == "indicator-binary":
                 self._delta_e_calc = self._compute_delta_e_binary_linear
@@ -378,9 +382,9 @@ class Model:
             sigmas = structure.sigmas.take(cluster_sites)
 
             # loop implementation (baseline):
-            #nbodies = len(cluster_sites)
-            #cf = 1.0
-            #for i in range(nbodies):
+            # nbodies = len(cluster_sites)
+            # cf = 1.0
+            # for i in range(nbodies):
             #    if i == cluster_sites.index(ind):
             #        cf *= self.corrc.basis_set_values[cluster_funcs[i], new_sigma, cluster_ems[i]] \
             #            - self.corrc.basis_set_values[cluster_funcs[i], old_sigma, cluster_ems[i]]
@@ -400,12 +404,12 @@ class Model:
             )
 
             # vectorized implementation (slow):
-            #cf_factors_const = self.corrc.basis_set_values[cluster_funcs, sigmas, cluster_ems]
-            #cf_factors_old_s = self.corrc.basis_set_values[cluster_funcs, np.repeat(old_sigma, nbodies), cluster_ems]
-            #cf_factors_new_s = self.corrc.basis_set_values[cluster_funcs, np.repeat(new_sigma, nbodies), cluster_ems]
-            #cf_factors_diff = cf_factors_new_s - cf_factors_old_s
-            #cf_factors = np.where(np.arange(nbodies)==cluster_sites.index(ind), cf_factors_diff, cf_factors_const)
-            #cf = np.prod(cf_factors)
+            # cf_factors_const = self.corrc.basis_set_values[cluster_funcs, sigmas, cluster_ems]
+            # cf_factors_old_s = self.corrc.basis_set_values[cluster_funcs, np.repeat(old_sigma, nbodies), cluster_ems]
+            # cf_factors_new_s = self.corrc.basis_set_values[cluster_funcs, np.repeat(new_sigma, nbodies), cluster_ems]
+            # cf_factors_diff = cf_factors_new_s - cf_factors_old_s
+            # cf_factors = np.where(np.arange(nbodies)==cluster_sites.index(ind), cf_factors_diff, cf_factors_const)
+            # cf = np.prod(cf_factors)
 
             corrs[cluster_index] += cf
 
@@ -414,7 +418,10 @@ class Model:
 
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
-            return self.estimator.predict(corrs.reshape(1, -1))[0] - self.estimator.intercept_
+            return (
+                self.estimator.predict(corrs.reshape(1, -1))[0]
+                - self.estimator.intercept_
+            )
         else:
             return np.dot(self.ecis, corrs)
 
@@ -516,7 +523,6 @@ class Model:
         x_mat = self.corrc.get_correlation_matrix(sset)
         y = sset.get_property_values(self.property_name)
 
-
         # cross_val_score internally clones the estimator, so the optimal one in Model is not changed.
         cvs = cross_val_score(
             self.estimator,
@@ -526,7 +532,9 @@ class Model:
             cv=LeaveOneOut(),
             scoring="neg_mean_squared_error",
         )
-        pred_cv = cross_val_predict(self.estimator, x_mat, y, params=params, cv=LeaveOneOut())
+        pred_cv = cross_val_predict(
+            self.estimator, x_mat, y, params=params, cv=LeaveOneOut()
+        )
 
         absolute_errors = np.sqrt(-cvs)
         cv = np.sqrt(-np.mean(cvs))
@@ -723,15 +731,21 @@ class ModelBuilder:
 
         # Select optimal clusters using the clusters_selector module
         if self.selector != "identity":
-            self.selector = ClustersSelector(basis=self.basis, method=self.selector_type, **self.selector_opts)
-            self.opt_cpool = self.selector.select_clusters(sset, cpool, prop, comat=self.ini_comat)
+            self.selector = ClustersSelector(
+                basis=self.basis, method=self.selector_type, **self.selector_opts
+            )
+            self.opt_cpool = self.selector.select_clusters(
+                sset, cpool, prop, comat=self.ini_comat
+            )
             self.opt_comat = self.selector.optimal_comat
 
         self.opt_corrc = CorrelationsCalculator(self.basis, self.plat, self.opt_cpool)
 
         # Find out the ECIs using an estimator
         if not self.standardize:
-            self.opt_estimator = EstimatorFactory.create(self.estimator_type, **self.estimator_opts)
+            self.opt_estimator = EstimatorFactory.create(
+                self.estimator_type, **self.estimator_opts
+            )
         else:
             from sklearn.preprocessing import StandardScaler
             from sklearn.pipeline import make_pipeline
