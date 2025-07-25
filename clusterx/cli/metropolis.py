@@ -1,7 +1,6 @@
 # Copyright (c) 2015-2024, CELL Developers.
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
-import math
 import warnings
 from typing import List, Optional, Union
 
@@ -108,7 +107,7 @@ commands = ["metropolis"]
 )
 def metropolis(
     # class init arguments
-    task:str= "usage", 
+    task: str = "usage",
     plat_filepath: str = "plat.json",
     model_filepath: str = "model.pickle",
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = 1,
@@ -137,7 +136,6 @@ def metropolis(
         scale_factor: Deprecated. Use energy_scale_factor instead."""
     cmd_message("head")
 
-    
     match task:
         case "runmc" | "runMC" | "run-monte-carlo":
             print(f"Info({get_command_name()}): Initialization")
