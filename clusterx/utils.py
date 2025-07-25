@@ -4,6 +4,7 @@
 
 import copy
 import os
+import warnings
 from typing import List, Optional, Union
 
 import numpy as np
@@ -13,6 +14,19 @@ from ase.build.supercells import (  # needed by make_supercell
     lattice_points_in_supercell,
 )
 from ase.data import chemical_symbols as cs
+
+
+def _process_deprecated(new_value, deprecated_value, new_name, deprecated_name):
+    if deprecated_value is not None:
+        warnings.warn(
+            f"'{deprecated_name}' is deprecated and will be removed in a future version. "
+            f"Please use '{new_name}' instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        if new_value is None:
+            return deprecated_value
+    return new_value
 
 
 def lattice_wrap_index(index, lattice_shape):
