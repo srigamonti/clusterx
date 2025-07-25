@@ -1,7 +1,6 @@
 # Copyright (c) 2015-2024, CELL Developers.
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
-import warnings
 from typing import List, Optional, Union
 
 import plac
@@ -11,6 +10,7 @@ from clusterx.model import Model
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.thermodynamics.monte_carlo import MonteCarlo
+from clusterx.utils import _process_deprecated
 
 commands = ["metropolis"]
 
@@ -23,7 +23,13 @@ commands = ["metropolis"]
         "plfp",
         str,
     ),
-    model_filepath=("Output Model file path.", "option", "mof", str),
+    model_filepath=("Output Model file path.", "option", "mofp", str),
+    traj_filepath=(
+        "Filename for the output trajectory",
+        "option",
+        "trfp",
+        str,
+    ),
     sc_shape=("3x3 integer matrix to specify supercell shape.", "option", "scsh", list),
     nsubs=("Number of substitutions", "option", "nsubs", dict),
     ensemble=("Thermodynamic ensemble", "option", "ens", str),
@@ -57,12 +63,6 @@ commands = ["metropolis"]
         "option",
         "err_reset",
         int,
-    ),
-    filename=(
-        "Filename for the output trajectory",
-        "option",
-        "fn",
-        str,
     ),
     no_of_sampling_steps=(
         "Number of metropolis steps to perform",
@@ -98,6 +98,12 @@ commands = ["metropolis"]
         "acc_ratio",
         float,
     ),
+    filename=(
+        "Filename for the output trajectory",
+        "option",
+        "fn",
+        str,
+    ),
     scale_factor=(
         "Deprecated: use ``energy_scale_factor instead``",
         "option",
@@ -110,6 +116,7 @@ def metropolis(
     task: str = "usage",
     plat_filepath: str = "plat.json",
     model_filepath: str = "model.pickle",
+    traj_filepath: str = "trajectory.json",
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = 1,
     nsubs: dict = {0: [1]},
     ensemble: str = "canonical",
@@ -119,7 +126,6 @@ def metropolis(
     no_of_swaps: int = 1,
     predict_swap: bool = True,
     error_reset: Optional[int] = None,
-    filename: str = "trajectory.json",
     # metropolis sampling arguments
     no_of_sampling_steps: int = 100,
     energy_scale_factor: float = 1.0,
@@ -129,6 +135,7 @@ def metropolis(
     acceptance_ratio: Optional[float] = None,
     # deprecated
     scale_factor: Optional[List[float]] = None,  # use energy_scale_factor instead
+    filename: Optional[str] = None,  # use traj_filepath instead
     **sampling_kwargs,
 ):
     """Perform Wang-Landau sampling
@@ -136,20 +143,16 @@ def metropolis(
         scale_factor: Deprecated. Use energy_scale_factor instead."""
     cmd_message("head")
 
+    energy_scale_factor = _process_deprecated(
+        energy_scale_factor, scale_factor, "energy_scale_factor", "scale_factor"
+    )
+    traj_filepath = _process_deprecated(
+        traj_filepath, filename, "traj_filepath", "filename"
+    )
+
     match task:
         case "runmc" | "runMC" | "run-monte-carlo":
             print(f"Info({get_command_name()}): Initialization")
-            if scale_factor is not None:
-                warnings.warn(
-                    "The 'scale_factor' argument is deprecated and will be removed in a future version. "
-                    "Please use 'energy_scale_factor' instead.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-                f = 1.0
-                for fi in scale_factor:
-                    f *= fi
-                energy_scale_factor = 1.0 / f
 
             plat = ParentLattice(filepath=plat_filepath)
             energy_model = Model(filepath=model_filepath)
@@ -167,7 +170,7 @@ def metropolis(
                 no_of_swaps=no_of_swaps,
                 predict_swap=predict_swap,
                 error_reset=error_reset,
-                filename=filename,
+                filename=traj_filepath,
             )
             mc.metropolis(
                 no_of_sampling_steps=no_of_sampling_steps,
@@ -177,6 +180,8 @@ def metropolis(
                 initial_decoration=initial_decoration,
                 acceptance_ratio=acceptance_ratio,
                 serialize=True,
-                filename=filename,
+                filename=traj_filepath,
                 **sampling_kwargs,
             )
+        case "plot-mc-trajectory":
+            pass
