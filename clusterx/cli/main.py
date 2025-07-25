@@ -55,6 +55,25 @@ def main():
             opt1 = "val1B"
             opt2 = "val2B"
 
+        You can avoid execution of a command by adding the key `ignore` with the
+        value `false`, e.g., below commmandA and the second call to commandB will
+        be ignored:
+
+            [commandA]
+            ignore = true
+            opt1 = val1
+            opt2 = val2
+
+            [[commandB]]
+            opt1 = val1
+            opt2 = val2
+
+            [[commandB]]
+            ignore = true
+            opt1 = val1
+            opt2 = val2
+
+
     Custom Commands:
         You can extend CELL by placing a file named `custom_cell_commands.toml` in your
         working directory. This file should contain the following attributes:
@@ -108,8 +127,9 @@ def main():
             for key, value in config_dict.items()
             if isinstance(value, dict) or (isinstance(value, list) and all(isinstance(item, dict) for item in value))
         ]
+
         commands = config_dict.get("do", commands_)
-        print("commands in cellinput.toml file are", commands)
+        print(f"commands in {toml_file_path} file are", commands)
         available_commands = cmds.commands  # List of available command names
         print("available commands are", available_commands)
 
@@ -123,12 +143,20 @@ def main():
                 if isinstance(arg_dict_from_toml, list) and all(isinstance(item, dict) for item in arg_dict_from_toml):
                     # Execute func for each dictionary in the list
                     for params in arg_dict_from_toml:
-                        print(f"Executing {command} with params: {params}")
-                        func(**params)
+                        ignore_flag = params.pop("ignore", None)
+                        if ignore_flag is True:
+                            print(f"Skipping {command} because 'ignore' is True")
+                        else:
+                            print(f"Executing {command} with params: {params}")
+                            func(**params)
                 elif isinstance(arg_dict_from_toml, dict):
-                    # Execute func with the single dictionary of parameters
-                    print(f"Executing {command} with params: {arg_dict_from_toml}")
-                    func(**arg_dict_from_toml)
+                    ignore_flag = arg_dict_from_toml.pop("ignore", None)
+                    if ignore_flag is True:
+                        print(f"Skipping {command} because 'ignore' is True")
+                    else:
+                        # Execute func with the single dictionary of parameters
+                        print(f"Executing {command} with params: {arg_dict_from_toml}")
+                        func(**arg_dict_from_toml)
                 else:
                     print(f"Invalid format for arguments in command '{command}': {arg_dict_from_toml}")
                     sys.exit(1)
