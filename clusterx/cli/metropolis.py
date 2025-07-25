@@ -2,6 +2,7 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 import math
+import warnings
 from typing import List, Optional, Union
 
 import plac
@@ -69,11 +70,11 @@ commands = ["metropolis"]
         "n_steps",
         int,
     ),
-    scale_factor=(
-        "List is used to adjust the factor :math:`k_B T` to the same units as the energy from ``energy_model``",
+    energy_scale_factor=(
+        "Float is used to adjust the energy from ``energy_model`` to give the total energy for the simulation supercell",
         "option",
         "scf",
-        list,
+        float,
     ),
     temperature=(
         "Temperature at which the sampling is performed.",
@@ -97,6 +98,12 @@ commands = ["metropolis"]
         "acc_ratio",
         float,
     ),
+    scale_factor=(
+        "Deprecated: use ``energy_scale_factor instead``",
+        "option",
+        "scf",
+        list,
+    ),
 )
 def metropolis(
     # class init arguments
@@ -114,15 +121,31 @@ def metropolis(
     filename: str = "trajectory.json",
     # metropolis sampling arguments
     no_of_sampling_steps: int = 100,
-    scale_factor: List[float] = [1.0],
+    energy_scale_factor: float = 1.0,
     temperature: float = 1.0,
     boltzmann_constant: float = 1.0,
     initial_decoration: Optional[List[int]] = None,
     acceptance_ratio: Optional[float] = None,
+    # deprecated
+    scale_factor: Optional[List[float]] = None,  # use energy_scale_factor instead
     **sampling_kwargs,
 ):
-    """Perform Wang-Landau sampling"""
+    """Perform Wang-Landau sampling
+    Deprecated:
+        scale_factor: Deprecated. Use energy_scale_factor instead."""
     cmd_message("head")
+
+    if scale_factor is not None:
+        warnings.warn(
+            "The 'scale_factor' argument is deprecated and will be removed in a future version. "
+            "Please use 'energy_scale_factor' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        f = 1.0
+        for fi in scale_factor:
+            f *= fi
+        energy_scale_factor = 1.0 / f
 
     print(f"Info({get_command_name()}): Initialization")
     plat = ParentLattice(filepath=plat_filepath)
@@ -134,7 +157,7 @@ def metropolis(
         energy_model=energy_model,
         scell=scell,
         nsubs=nsubs,
-        ensemble="canonical",
+        ensemble=ensemble,
         sublattice_indices=sublattice_indices,
         chemical_potentials=chemical_potentials,
         models=models_aux,
@@ -145,7 +168,7 @@ def metropolis(
     )
     mc.metropolis(
         no_of_sampling_steps=no_of_sampling_steps,
-        scale_factor=scale_factor,
+        scale_factor=[1 / energy_scale_factor],
         temperature=temperature,
         boltzmann_constant=boltzmann_constant,
         initial_decoration=initial_decoration,
