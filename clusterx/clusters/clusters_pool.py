@@ -430,7 +430,7 @@ class ClustersPool:
 
         return clsets
 
-    def gen_clusters(self, method=0):
+    def gen_clusters(self, method=0, append=False):
         """Generate pool of clusters
 
         **Parameters:**
@@ -439,6 +439,9 @@ class ClustersPool:
         0: Fast, default method. 1: Slow, use only for benchmarking purposes.
 
         """
+        if not append:
+            self._cpool = []
+            self._multiplicities = []
         if method == 0:
             self.gen_clusters0()
         if method == 1:
