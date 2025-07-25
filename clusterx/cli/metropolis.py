@@ -17,6 +17,7 @@ commands = ["metropolis"]
 
 
 @plac.annotations(
+    task=("Task to perform.", "option", "task", str),
     plat_filepath=(
         "Filepath of a serialized ParentLattice object.",
         "option",
@@ -107,6 +108,7 @@ commands = ["metropolis"]
 )
 def metropolis(
     # class init arguments
+    task:str= "usage", 
     plat_filepath: str = "plat.json",
     model_filepath: str = "model.pickle",
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = 1,
@@ -135,45 +137,48 @@ def metropolis(
         scale_factor: Deprecated. Use energy_scale_factor instead."""
     cmd_message("head")
 
-    if scale_factor is not None:
-        warnings.warn(
-            "The 'scale_factor' argument is deprecated and will be removed in a future version. "
-            "Please use 'energy_scale_factor' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        f = 1.0
-        for fi in scale_factor:
-            f *= fi
-        energy_scale_factor = 1.0 / f
+    
+    match task:
+        case "runmc" | "runMC" | "run-monte-carlo":
+            print(f"Info({get_command_name()}): Initialization")
+            if scale_factor is not None:
+                warnings.warn(
+                    "The 'scale_factor' argument is deprecated and will be removed in a future version. "
+                    "Please use 'energy_scale_factor' instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                f = 1.0
+                for fi in scale_factor:
+                    f *= fi
+                energy_scale_factor = 1.0 / f
 
-    print(f"Info({get_command_name()}): Initialization")
-    plat = ParentLattice(filepath=plat_filepath)
-    energy_model = Model(filepath=model_filepath)
-    scell = SuperCell(plat, sc_shape)
-    models_aux = [Model(filepath=fp) for fp in models_aux_filepaths]
+            plat = ParentLattice(filepath=plat_filepath)
+            energy_model = Model(filepath=model_filepath)
+            scell = SuperCell(plat, sc_shape)
+            models_aux = [Model(filepath=fp) for fp in models_aux_filepaths]
 
-    mc = MonteCarlo(
-        energy_model=energy_model,
-        scell=scell,
-        nsubs=nsubs,
-        ensemble=ensemble,
-        sublattice_indices=sublattice_indices,
-        chemical_potentials=chemical_potentials,
-        models=models_aux,
-        no_of_swaps=no_of_swaps,
-        predict_swap=predict_swap,
-        error_reset=error_reset,
-        filename=filename,
-    )
-    mc.metropolis(
-        no_of_sampling_steps=no_of_sampling_steps,
-        scale_factor=[1 / energy_scale_factor],
-        temperature=temperature,
-        boltzmann_constant=boltzmann_constant,
-        initial_decoration=initial_decoration,
-        acceptance_ratio=acceptance_ratio,
-        serialize=True,
-        filename=filename,
-        **sampling_kwargs,
-    )
+            mc = MonteCarlo(
+                energy_model=energy_model,
+                scell=scell,
+                nsubs=nsubs,
+                ensemble=ensemble,
+                sublattice_indices=sublattice_indices,
+                chemical_potentials=chemical_potentials,
+                models=models_aux,
+                no_of_swaps=no_of_swaps,
+                predict_swap=predict_swap,
+                error_reset=error_reset,
+                filename=filename,
+            )
+            mc.metropolis(
+                no_of_sampling_steps=no_of_sampling_steps,
+                scale_factor=[1 / energy_scale_factor],
+                temperature=temperature,
+                boltzmann_constant=boltzmann_constant,
+                initial_decoration=initial_decoration,
+                acceptance_ratio=acceptance_ratio,
+                serialize=True,
+                filename=filename,
+                **sampling_kwargs,
+            )
