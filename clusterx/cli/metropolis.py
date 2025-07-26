@@ -9,7 +9,7 @@ from clusterx.cli.config_utils import cmd_message, get_command_name
 from clusterx.model import Model
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.thermodynamics.monte_carlo import MonteCarlo
+from clusterx.thermodynamics.monte_carlo import MonteCarlo, MonteCarloTrajectory
 from clusterx.utils import _process_deprecated
 
 commands = ["metropolis"]
@@ -118,7 +118,7 @@ def metropolis(
     model_filepath: str = "model.pickle",
     traj_filepath: str = "trajectory.json",
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = 1,
-    nsubs: dict = {0: [1]},
+    nsubs: Optional[Union[int, dict]] = None,
     ensemble: str = "canonical",
     sublattice_indices: List[int] = [],
     chemical_potentials: Optional[dict] = None,
@@ -149,6 +149,10 @@ def metropolis(
     traj_filepath = _process_deprecated(
         traj_filepath, filename, "traj_filepath", "filename"
     )
+    if isinstance(nsubs, dict):
+        nsubs = {int(k): v for k, v in nsubs.items()}
+    elif isinstance(nsubs, int):
+        nsubs = {0: [nsubs]}
 
     match task:
         case "runmc" | "runMC" | "run-monte-carlo":
@@ -184,4 +188,17 @@ def metropolis(
                 **sampling_kwargs,
             )
         case "plot-mc-trajectory":
-            pass
+            from clusterx.visualization import plot_property
+
+            traj = MonteCarloTrajectory(filename=traj_filepath, read=True)
+            energies_accepted = traj.get_energies()
+            steps_accepted = traj.get_sampling_step_nos()
+            print(energies_accepted)
+            print(steps_accepted)
+            plot_property(
+                steps_accepted,
+                energies_accepted,
+                prop_name="Energy of visited structures",
+                xaxis_label="step no.",
+                yaxis_label="Energy [eV/#sites]",
+            )
