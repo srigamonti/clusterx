@@ -59,7 +59,9 @@ def build_ising_model(
 
     cpool.serialize(filepath=f"{prefix}cpool-ising{suffix}.json")
 
-    ccalc = CorrelationsCalculator(basis_name="chebyshev", parent_lattice=plat, clusters_pool=cpool)
+    ccalc = CorrelationsCalculator(
+        basis_name="chebyshev", parent_lattice=plat, clusters_pool=cpool
+    )
 
     estimator = LinearRegression()
     n_features = len(cpool)
