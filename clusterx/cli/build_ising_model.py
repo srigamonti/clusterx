@@ -12,7 +12,6 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.model import Model
 from clusterx.parent_lattice import ParentLattice
-from clusterx.super_cell import SuperCell
 
 commands = ["build_ising_model"]
 
