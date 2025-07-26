@@ -24,8 +24,7 @@ def _process_deprecated(new_value, deprecated_value, new_name, deprecated_name):
             DeprecationWarning,
             stacklevel=3,
         )
-        if new_value is None:
-            return deprecated_value
+        return deprecated_value
     return new_value
 
 
