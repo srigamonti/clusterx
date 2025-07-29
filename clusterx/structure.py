@@ -117,11 +117,11 @@ class Structure(SuperCell):
             self._comps = {}
 
             tags = self.get_tags()
-            sublats = self.get_idx_subs()
+            sublats = self.get_sublattice_types()
             for key in sublats.keys():
                 idxs = []
                 lens = []
-                for i, el in enumerate(sublats[key]):
+                for i, _ in enumerate(sublats[key]):
                     idx = [index for index in range(len(self.decor)) if self.sigmas[index] == i and tags[index] == key]
                     lidx = len(idx)
                     idxs.append(idx)
