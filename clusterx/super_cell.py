@@ -2,24 +2,23 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-import warnings
 import sys
+import warnings
+
 import numpy as np
+from ase.db import connect
 from ase.visualize import view
 
-# from ase.build import make_supercell
-from clusterx.utils import make_supercell
 from clusterx.parent_lattice import ParentLattice
 from clusterx.symmetry import (
     get_internal_translations,
     get_scaled_positions,
-    wrap_scaled_positions,
     get_spacegroup,
+    wrap_scaled_positions,
 )
 
-
-from clusterx.utils import get_cl_idx_sc
-from ase.db import connect
+# from ase.build import make_supercell
+from clusterx.utils import get_cl_idx_sc, make_supercell
 
 
 class SuperCell(ParentLattice):
@@ -418,12 +417,12 @@ class SuperCell(ParentLattice):
         if nsubs is None:
             import numpy as np
 
-            slts = self.get_sublattice_types()  #  e.g.  {0: [14,13], 1: [56,0,38], 2:[11]}
+            slts = self.get_sublattice_types()  # e.g.  {0: [14,13], 1: [56,0,38], 2:[11]}
             tags = self.get_tags()  # tags[atom_index] = site_type
             _nsubs = {}
             for k, v in slts.items():
                 if len(v) != 1:
-                    _nsubs[k] = [np.random.randint(0, len(np.where(self.get_tags() == k)[0]) + 1)]
+                    _nsubs[k] = [np.random.randint(0, len(np.where(tags == k)[0]) + 1)]
 
         elif isinstance(nsubs, int):
             if self.is_nary(2):
@@ -438,7 +437,7 @@ class SuperCell(ParentLattice):
         else:
             _nsubs = nsubs
 
-        decoration, sigmas = self.gen_random_decoration(_nsubs)
+        _, sigmas = self.gen_random_decoration(_nsubs)
 
         return clusterx.structure.Structure(
             SuperCell(self._plat, self._p, self._sort_key, sym_table=bool(self._sym_table)),
@@ -491,9 +490,10 @@ class SuperCell(ParentLattice):
         return decoration, sigmas
 
     def enumerate_decorations(self, npoints=None, radii=None):
+        from subprocess import call
+
         from ase.db.jsondb import JSONDatabase
         from ase.neighborlist import NeighborList
-        from subprocess import call
 
         atoms = self.get_pristine()
         natoms = len(atoms)
@@ -554,10 +554,11 @@ class SuperCell(ParentLattice):
         """
 
         import numpy as np
+
         from clusterx.symmetry import (
+            get_internal_translations,
             get_scaled_positions,
             wrap_scaled_positions,
-            get_internal_translations,
         )
         from clusterx.utils import get_cl_idx_sc
 
