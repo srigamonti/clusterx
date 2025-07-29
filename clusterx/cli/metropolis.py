@@ -9,7 +9,11 @@ from clusterx.cli.config_utils import cmd_message, get_command_name
 from clusterx.model import Model
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.thermodynamics.monte_carlo import MonteCarlo, MonteCarloTrajectory
+from clusterx.thermodynamics.monte_carlo import (
+    MonteCarlo,
+    MonteCarloLite,
+    MonteCarloTrajectory,
+)
 from clusterx.utils import _process_deprecated
 
 commands = ["metropolis"]
@@ -31,7 +35,7 @@ commands = ["metropolis"]
         str,
     ),
     sc_shape=("3x3 integer matrix to specify supercell shape.", "option", "scsh", list),
-    nsubs=("Number of substitutions", "option", "nsubs", dict),
+    n_substitutions=("Number of substitutions", "option", "nsubs", dict),
     ensemble=("Thermodynamic ensemble", "option", "ens", str),
     sublattice_indices=("Sublattice indices", "option", "sublat", list),
     chemical_potentials=(
@@ -58,13 +62,13 @@ commands = ["metropolis"]
         "pred_swap",
         bool,
     ),
-    error_reset=(
+    n_error_reset=(
         "Reset error after this many steps for numerical accuracy",
         "option",
         "err_reset",
         int,
     ),
-    no_of_sampling_steps=(
+    n_mc_steps=(
         "Number of metropolis steps to perform",
         "option",
         "n_steps",
@@ -118,16 +122,16 @@ def metropolis(
     model_filepath: str = "model.pickle",
     traj_filepath: str = "trajectory.json",
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = 1,
-    nsubs: Optional[Union[int, dict]] = None,
+    n_substitutions: Optional[Union[int, dict]] = None,
     ensemble: str = "canonical",
     sublattice_indices: List[int] = [],
     chemical_potentials: Optional[dict] = None,
     models_aux_filepaths: List[str] = [],
     no_of_swaps: int = 1,
     predict_swap: bool = True,
-    error_reset: Optional[int] = None,
+    n_error_reset: Optional[int] = None,
     # metropolis sampling arguments
-    no_of_sampling_steps: int = 100,
+    n_mc_steps: int = 100,
     energy_scale_factor: float = 1.0,
     temperature: float = 1.0,
     boltzmann_constant: float = 1.0,
@@ -143,12 +147,8 @@ def metropolis(
         scale_factor: Deprecated. Use energy_scale_factor instead."""
     cmd_message("head")
 
-    energy_scale_factor = _process_deprecated(
-        energy_scale_factor, scale_factor, "energy_scale_factor", "scale_factor"
-    )
-    traj_filepath = _process_deprecated(
-        traj_filepath, filename, "traj_filepath", "filename"
-    )
+    energy_scale_factor = _process_deprecated(energy_scale_factor, scale_factor, "energy_scale_factor", "scale_factor")
+    traj_filepath = _process_deprecated(traj_filepath, filename, "traj_filepath", "filename")
     if isinstance(nsubs, dict):
         nsubs = {int(k): v for k, v in nsubs.items()}
     elif isinstance(nsubs, int):
@@ -166,14 +166,14 @@ def metropolis(
             mc = MonteCarlo(
                 energy_model=energy_model,
                 scell=scell,
-                nsubs=nsubs,
+                nsubs=n_substitutions,
                 ensemble=ensemble,
                 sublattice_indices=sublattice_indices,
                 chemical_potentials=chemical_potentials,
                 models=models_aux,
                 no_of_swaps=no_of_swaps,
                 predict_swap=predict_swap,
-                error_reset=error_reset,
+                error_reset=n_error_reset,
                 filename=traj_filepath,
             )
             mc.metropolis(
@@ -187,6 +187,28 @@ def metropolis(
                 filename=traj_filepath,
                 **sampling_kwargs,
             )
+        case "runmclite" | "runMClite" | "run-monte-carlo-lite":
+            print(f"Info({get_command_name()}): Initialization")
+
+            plat = ParentLattice(filepath=plat_filepath)
+            energy_model = Model(filepath=model_filepath)
+            scell = SuperCell(plat, sc_shape)
+            models_aux = [Model(filepath=fp) for fp in models_aux_filepaths]
+
+            mclite = MonteCarloLite(
+                energy_model=energy_model,
+                scell=scell,
+            )
+            mclite.metropolis(
+                temperature=temperature,
+                n_mc_steps=n_mc_steps,
+                ensemble=ensemble,
+                n_substitutions=n_substitutions,
+                chemical_potential=chemical_potential,
+                n_error_reset=n_error_reset,
+                traj_filepath=traj_filepath,
+            )
+
         case "plot-mc-trajectory":
             from clusterx.visualization import plot_property
 
