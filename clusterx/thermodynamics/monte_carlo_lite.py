@@ -51,10 +51,21 @@ class MonteCarloLite:
 
     """
 
-    def __init__(self, energy_model, scell, energy_scale_factor=None, boltzmann_constant=1.0, mcsetup_filepath=None):
+    def __init__(
+        self,
+        energy_model,
+        scell,
+        energy_scale_factor=None,
+        boltzmann_constant=1.0,
+        mcsetup_filepath=None,
+    ):
         self._emodel = energy_model
         self._scell = scell
-        self._energy_scale_factor = energy_scale_factor if energy_scale_factor is not None else scell.get_index()
+        self._energy_scale_factor = (
+            energy_scale_factor
+            if energy_scale_factor is not None
+            else scell.get_index()
+        )
         self._kb = boltzmann_constant
 
         if not scell.is_nary(2):
@@ -191,7 +202,9 @@ class MonteCarloLite:
                         )
                         e1 = e + de
                 else:
-                    de = self._em.predict_swap(struc, ind1=ind1, ind2=ind2, site_types=self._sublattice_indices)
+                    de = self._em.predict_swap(
+                        struc, ind1=ind1, ind2=ind2, site_types=self._sublattice_indices
+                    )
                     e1 = e + de
 
             else:
@@ -242,7 +255,9 @@ class MonteCarloLite:
 
             if acceptance_ratio:
                 if i % 10 == 0 and i >= nar:
-                    scale_factor_product *= math.exp((acceptance_ratio / 100.0 - ar) / 10.0)
+                    scale_factor_product *= math.exp(
+                        (acceptance_ratio / 100.0 - ar) / 10.0
+                    )
 
         if serialize:
             traj.serialize()
