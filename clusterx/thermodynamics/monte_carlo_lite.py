@@ -183,6 +183,7 @@ class MonteCarloLite:
 
             mcrun.clics.append([])
 
+            # make MC move
             for j in range(n_clics):
                 if ensemble == "grandcanonical":
                     atom_index, sigma_initial, sigma_final = struc.flip_random(
@@ -216,28 +217,18 @@ class MonteCarloLite:
                         }
                     )
 
-            if i%:
-                if self._error_reset:
-                    if x > error_steps:
-                        x = 1
-                        e1 = self._em.predict(struc)
-                    else:
-                        x += 1
-                        de = self._em.predict_swap(
-                            struc,
-                            ind1=ind1,
-                            ind2=ind2,
-                            site_types=self._sublattice_indices,
-                        )
-                        e1 = e + de
-                else:
-                    de = self._em.predict_swap(
-                        struc, ind1=ind1, ind2=ind2, site_types=self._sublattice_indices
-                    )
-                    e1 = e + de
+            # compute new energy
+            if n_error_reset is not None and i % n_error_reset == 0:
+                e1 = self._em.predict(struc)
 
             else:
-                e1 = self._em.predict(struc)
+                de = self._em.predict_swap(
+                    struc,
+                    ind1=ind1,
+                    ind2=ind2,
+                    site_types=self._sublattice_indices,
+                )
+                e1 = e + de
 
             if e >= e1:
                 accept_swap = True
