@@ -81,7 +81,7 @@ class MonteCarloLite:
         self,
         temperature=None,
         n_mc_steps=None,
-        n_flips_per_mc_step=None,
+        n_clics=1,
         ensemble=None,
         n_substitutions=None,
         chemical_potential=None,
@@ -114,9 +114,9 @@ class MonteCarloLite:
         ``temperature``: float
             Temperature at which the sampling is performed.
 
-        ``n_flips``: integer
-            Number of species flips per sampling step. Must be an even number for canonical ensemble.
-            Defaults to ``1`` for ``grandcanonical`` and to ``2`` form ``canonical``.
+        ``n_clics``: integer
+            Number of species flips (grandcanonical) or species swaps (canonical) per sampling step.
+            Defaults to 1.
 
         ``n_substitutions``: integer (default = None)
             Defines the number of substituted atoms in the sublattice
@@ -147,9 +147,6 @@ class MonteCarloLite:
 
         from clusterx.utils import poppush
 
-        if n_flips is None:
-            n_flips = 1 if ensemble == "grandcanonical" else 2
-
         if initial_structure is None:
             if n_substitutions is not None:
                 struc = self._scell.gen_random_structure(n_substitutions)
@@ -164,7 +161,8 @@ class MonteCarloLite:
         mcrun_filepath
         if mcrun_filepath is None:
             warnings.warn(
-                "No file path provided for storing the MC run. Trajectory will not be saved to a file.", UserWarning
+                "No file path provided for storing the MC run. Trajectory will not be saved to a file.",
+                UserWarning,
             )
 
         mcrun = MCRun(self._scell, temperature, ensemble, mcrun_filepath)
@@ -183,11 +181,42 @@ class MonteCarloLite:
         ):
             indices_list = []
 
-            for j in range(n_flips):
-                ind1, ind2, site_type, rindices = struc.swap_random([self._substitutional_sublattice])
-                indices_list.append([ind1, ind2, [site_type, rindices]])
+            mcrun.clics.append([])
 
-            if self._control_flag:
+            for j in range(n_clics):
+                if ensemble == "grandcanonical":
+                    atom_index, sigma_initial, sigma_final = struc.flip_random(
+                        self._substitutional_sublattice
+                    )
+                    mcrun.clics[-1].append(
+                        {
+                            "atom_index": atom_index,
+                            "sigma_i": sigma_initial,
+                            "sigma_f": sigma_final,
+                        }
+                    )
+                elif ensemble == "canonical":
+                    atom_index1, sigma_initial1, sigma_final1 = struc.flip_random(
+                        self._substitutional_sublattice
+                    )
+                    atom_index2, sigma_initial2, sigma_final2 = struc.flip_random(
+                        self._substitutional_sublattice,
+                        sigma_initial=sigma_final1,
+                        sigma_final=sigma_initial1,
+                    )
+
+                    mcrun.clics[-1].append(
+                        {
+                            "atom_index1": atom_index1,
+                            "atom_index2": atom_index2,
+                            "sigma_1i": sigma_initial1,
+                            "sigma_1f": sigma_final1,
+                            "sigma_2i": sigma_initial2,
+                            "sigma_2f": sigma_final2,
+                        }
+                    )
+
+            if i%:
                 if self._error_reset:
                     if x > error_steps:
                         x = 1
@@ -274,3 +303,4 @@ class MCRun:
 
         self.sigmas = []
         self.energies = []
+        self.clics = []
