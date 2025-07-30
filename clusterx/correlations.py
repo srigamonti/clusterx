@@ -4,21 +4,21 @@
 
 import os
 import pickle
+import warnings
 from subprocess import call
 from typing import Optional
-import warnings
 
-from numba import jit
 import numpy as np
-from ase.db.core import Database
 from ase.db import connect
+from ase.db.core import Database
 from ase.db.jsondb import JSONDatabase
+from numba import jit
 
-from clusterx.parent_lattice import ParentLattice
-from clusterx.super_cell import SuperCell
 from clusterx.clusters.clusters_pool import ClustersPool
+from clusterx.parent_lattice import ParentLattice
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
+from clusterx.super_cell import SuperCell
 from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions
 from clusterx.utils import PolynomialBasis, get_cl_idx_sc
 
@@ -129,7 +129,9 @@ class CorrelationsCalculator:
         self._2pi = 2 * np.pi
         self.use_sym_table = use_sym_table
 
-        self.basis_set_values = self.compute_basis_set_values(self._plat, self.basis_name)
+        self.basis_set_values = self.compute_basis_set_values(
+            self._plat, self.basis_name
+        )
 
         self._mc = False
         self._num_mc_calls = 0
