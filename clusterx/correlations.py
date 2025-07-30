@@ -273,12 +273,14 @@ class CorrelationsCalculator:
         cluster_orbits = None
 
         # Check if cluster_orbit is already computed
-        for i, _scell in enumerate(self._scells):
-            if cluster_orbits is None:
-                if len(scell.get_positions()) == len(_scell.get_positions()):
-                    if np.allclose(scell._p, _scell._p):
-                        cluster_orbits = self._cluster_orbits_set[i]
-                        break
+        for scell_ref, cluster_orbits_ref in zip(
+            self._scells, self._cluster_orbits_set
+        ):
+            if len(scell.get_positions()) == len(
+                scell_ref.get_positions()
+            ) and np.allclose(scell._p, scell_ref._p):
+                cluster_orbits = cluster_orbits_ref
+                break
 
         # Compute cluster_orbit from scratch if not available
         if cluster_orbits is None:
