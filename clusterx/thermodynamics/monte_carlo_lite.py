@@ -1,7 +1,10 @@
 # Copyright (c) 2015-2025, CELL Developers.
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
+from __future__ import annotations
 
+import os
+import pickle
 import warnings
 
 import numpy as np
@@ -77,6 +80,40 @@ class MonteCarloLite:
                 self._substitutional_sublattice = int(k)
                 break
 
+    @classmethod
+    def from_file(cls, filepath: str) -> MonteCarloLite:
+        """
+        Load a MonteCarloLite object from a serialized file.
+
+        Supported formats:
+        - `.pickle`: Full Python object serialization using `pickle`.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the serialized file. The format is inferred from the file extension.
+
+        Returns
+        -------
+        Structure
+            A reconstructed Structure object based on the contents of the file.
+
+        Raises
+        ------
+        ValueError
+            If the file extension is not supported.
+        """
+        file_ext = os.path.splitext(filepath)[1].lower()
+        if file_ext == ".pickle":
+            return cls._load_from_pickle(filepath)
+        else:
+            raise ValueError(f"Unsupported file format: {file_ext}")
+
+    @staticmethod
+    def _load_from_pickle(filepath: str) -> MonteCarloLite:
+        with open(filepath, "rb") as f:
+            return pickle.load(f)
+
     def metropolis(
         self,
         temperature=None,
@@ -145,8 +182,6 @@ class MonteCarloLite:
 
         from tqdm import tqdm
 
-        from clusterx.utils import poppush
-
         if initial_structure is None:
             if n_substitutions is not None:
                 struc = self._scell.gen_random_structure(n_substitutions)
@@ -154,6 +189,8 @@ class MonteCarloLite:
                 struc = self._scell.gen_random_structure()
         else:
             struc = initial_structure
+
+        scaledbeta = self._energy_scale_factor / self._kb / temperature
 
         self._emodel.corrc.reset_mc(mc=True)
         e = self._emodel.predict(struc)
@@ -165,14 +202,11 @@ class MonteCarloLite:
                 UserWarning,
             )
 
-        mcrun = MCRun(self._scell, temperature, ensemble, mcrun_filepath)
+        mcrun = MCRun(self._scell, temperature, ensemble)
 
+        mcrun.accepted_steps.append(0)
         mcrun.sigmas.append(tuple(struc.get_sigmas()))
         mcrun.energies.append(e)
-
-        if n_error_reset is not None:
-            error_steps = int(n_error_reset)
-            x = 1
 
         for i in tqdm(
             range(1, n_mc_steps + 1),
@@ -184,6 +218,8 @@ class MonteCarloLite:
             mcrun.clics.append([])
 
             # make MC move
+            atom_indices = []
+            new_sigmas = []
             for j in range(n_clics):
                 if ensemble == "grandcanonical":
                     atom_index, sigma_initial, sigma_final = struc.flip_random(
@@ -196,6 +232,8 @@ class MonteCarloLite:
                             "sigma_f": sigma_final,
                         }
                     )
+                    atom_indices.append(atom_index)
+                    new_sigmas.append(sigma_final)
                 elif ensemble == "canonical":
                     atom_index1, sigma_initial1, sigma_final1 = struc.flip_random(
                         self._substitutional_sublattice
@@ -216,25 +254,38 @@ class MonteCarloLite:
                             "sigma_2f": sigma_final2,
                         }
                     )
+                    atom_indices.append(atom_index1)
+                    new_sigmas.append(sigma_final1)
+                    atom_indices.append(atom_index2)
+                    new_sigmas.append(sigma_final2)
 
+            comps = struc._comps[self._substitutional_sublattice]
+            print(comps)
+            comps[sigma_initial] -= 1
+            comps[sigma_final] += 1
+            print(comps)
             # compute new energy
             if n_error_reset is not None and i % n_error_reset == 0:
-                e1 = self._em.predict(struc)
+                e1 = self._emodel.predict(struc)
 
             else:
-                de = self._em.predict_swap(
-                    struc,
-                    ind1=ind1,
-                    ind2=ind2,
-                    site_types=self._sublattice_indices,
-                )
+                de = 0
+                for atom_index, sigma in zip(atom_indices, new_sigmas):
+                    de += self._emodel.predict_flip(
+                        struc,
+                        atom_index=atom_index,
+                        new_sigma=sigma,
+                        site_types=[self._substitutional_sublattice],
+                    )
+
                 e1 = e + de
+                print(e1, de)
 
             if e >= e1:
                 accept_swap = True
                 boltzmann_factor = 0
             else:
-                boltzmann_factor = math.exp((e - e1) / (scale_factor_product))
+                boltzmann_factor = math.exp((e - e1) * scaledbeta)
 
                 if np.random.uniform(0, 1) <= boltzmann_factor:
                     accept_swap = True
@@ -244,54 +295,67 @@ class MonteCarloLite:
             if accept_swap:
                 e = e1
 
-                if self._models:
-                    key_value_pairs = {}
-                    for m, mo in enumerate(self._models):
-                        key_value_pairs.update({mo.property_name: mo.predict(struc)})
-                    traj.add_decoration(
-                        i,
-                        e,
-                        [[li[0], li[1]] for li in indices_list],
-                        key_value_pairs=key_value_pairs,
-                    )
+                print("before", struc._comps[self._substitutional_sublattice])
+                print(atom_indices, new_sigmas)
+                struc.update_arrays(atom_indices=atom_indices, new_sigmas=new_sigmas)
+                print("after", struc._comps[self._substitutional_sublattice])
+                mcrun.accepted_steps.append(i)
+                mcrun.sigmas.append(tuple(struc.get_sigmas()))
+                mcrun.energies.append(e)
 
-                else:
-                    traj.add_decoration(i, e, [[li[0], li[1]] for li in indices_list])
+        if mcrun_filepath is not None:
+            mcrun.serialize(filepath=mcrun_filepath)
 
-                if acceptance_ratio:
-                    ar = poppush(hist, 1)
+        return mcrun
 
-            else:
-                for j in range(self._no_of_swaps - 1, -1, -1):
-                    struc.swap(
-                        indices_list[j][1],
-                        indices_list[j][0],
-                        site_type=indices_list[j][2][0],
-                        rindices=indices_list[j][2][1],
-                    )
+    def serialize(self, filepath="mcsetup.pickle", fmt="pickle"):
+        """Save the structure to a file in the specified format.
 
-                if acceptance_ratio:
-                    ar = poppush(hist, 0)
+        Parameters
+        ----------
+        fmt : str, optional
+            File format for output (default is "pickle").
+        filepath : str, optional
+            Path to the output file (default is "mcsetup.pickle").
 
-            if acceptance_ratio:
-                if i % 10 == 0 and i >= nar:
-                    scale_factor_product *= math.exp(
-                        (acceptance_ratio / 100.0 - ar) / 10.0
-                    )
+        """
+        file_ext = (
+            os.path.splitext(filepath)[1].lower().lstrip(".")
+        )  # remove leading dot
+        fmt = fmt or file_ext  # use file extension as format if fmt is not provided
 
-        if serialize:
-            traj.serialize()
-
-        return traj
+        if fmt == "pickle":
+            with open(filepath, "wb") as f:
+                pickle.dump(self, f)
+        else:
+            raise NotImplementedError(f"Serialization format '{fmt}' is not supported.")
 
 
 class MCRun:
-    def __init__(self, scell, temperature, ensemble, mcrun_filepath):
+    def __init__(self, scell, temperature, ensemble):
         self.scell = scell
         self.temperature = temperature
         self.ensemble = ensemble
-        self.mcrun_filepath = mcrun_filepath
 
+        self.accepted_steps = []
         self.sigmas = []
         self.energies = []
         self.clics = []
+
+    def serialize(self, filepath: str = None):
+        """Serialize the MCRun object using pickle."""
+        with open(filepath, "wb") as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def from_file(cls, filepath: str) -> "MCRun":
+        """Deserialize an MCRun object from a pickle file."""
+        with open(filepath, "rb") as f:
+            return pickle.load(f)
+
+    def __repr__(self):
+        return (
+            f"<MCRun(ensemble={self.ensemble}, T={self.temperature}, "
+            f"n_steps={len(self.clics)}, n_accepted_steps={len(self.accepted_steps)})>"
+            f"acceptance_ratios={len(self.clics) / len(self.accepted_steps) if len(self.accepted_steps) != 0 else 'Undefined'})>"
+        )
