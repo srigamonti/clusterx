@@ -1,19 +1,18 @@
 # Copyright (c) 2015-2024, CELL Developers.
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
+import random
 from typing import List, Optional, Union
 
+import numpy as np
 import plac
 
 from clusterx.cli.config_utils import cmd_message, get_command_name
 from clusterx.model import Model
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.thermodynamics.monte_carlo import (
-    MonteCarlo,
-    MonteCarloLite,
-    MonteCarloTrajectory,
-)
+from clusterx.thermodynamics.monte_carlo import MonteCarlo, MonteCarloTrajectory
+from clusterx.thermodynamics.monte_carlo_lite import MonteCarloLite
 from clusterx.utils import _process_deprecated
 
 commands = ["metropolis"]
@@ -120,11 +119,14 @@ def metropolis(
     task: str = "usage",
     plat_filepath: str = "plat.json",
     model_filepath: str = "model.pickle",
+    mcsetup_filepath: str = "mcsetup.pickle",
+    mcrun_filepath: str = "mcrun.pickle",
     traj_filepath: str = "trajectory.json",
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = 1,
     n_substitutions: Optional[Union[int, dict]] = None,
     ensemble: str = "canonical",
     sublattice_indices: List[int] = [],
+    chemical_potential: float = 0.0,
     chemical_potentials: Optional[dict] = None,
     models_aux_filepaths: List[str] = [],
     no_of_swaps: int = 1,
@@ -140,6 +142,7 @@ def metropolis(
     # deprecated
     scale_factor: Optional[List[float]] = None,  # use energy_scale_factor instead
     filename: Optional[str] = None,  # use traj_filepath instead
+    random_seed: Optional[int] = None,
     **sampling_kwargs,
 ):
     """Perform Wang-Landau sampling
@@ -147,12 +150,20 @@ def metropolis(
         scale_factor: Deprecated. Use energy_scale_factor instead."""
     cmd_message("head")
 
-    energy_scale_factor = _process_deprecated(energy_scale_factor, scale_factor, "energy_scale_factor", "scale_factor")
-    traj_filepath = _process_deprecated(traj_filepath, filename, "traj_filepath", "filename")
-    if isinstance(nsubs, dict):
-        nsubs = {int(k): v for k, v in nsubs.items()}
-    elif isinstance(nsubs, int):
-        nsubs = {0: [nsubs]}
+    energy_scale_factor = _process_deprecated(
+        energy_scale_factor, scale_factor, "energy_scale_factor", "scale_factor"
+    )
+    traj_filepath = _process_deprecated(
+        traj_filepath, filename, "traj_filepath", "filename"
+    )
+    if isinstance(n_substitutions, dict):
+        n_substitutions = {int(k): v for k, v in n_substitutions.items()}
+    elif isinstance(n_substitutions, int):
+        n_substitutions = {0: [n_substitutions]}
+
+    if random_seed is not None:
+        random.seed(random_seed)
+        np.random.seed(random_seed)
 
     match task:
         case "runmc" | "runMC" | "run-monte-carlo":
@@ -187,18 +198,27 @@ def metropolis(
                 filename=traj_filepath,
                 **sampling_kwargs,
             )
-        case "runmclite" | "runMClite" | "run-monte-carlo-lite":
-            print(f"Info({get_command_name()}): Initialization")
+
+        case "setup" | "setupmclite" | "setupMClite" | "setup-monte-carlo-lite":
+            print(f"Info({get_command_name()}): Setting up MC")
 
             plat = ParentLattice(filepath=plat_filepath)
             energy_model = Model(filepath=model_filepath)
             scell = SuperCell(plat, sc_shape)
-            models_aux = [Model(filepath=fp) for fp in models_aux_filepaths]
 
             mclite = MonteCarloLite(
                 energy_model=energy_model,
                 scell=scell,
             )
+            mclite.serialize(mcsetup_filepath)
+
+        case "run" | "runmclite" | "runMClite" | "run-monte-carlo-lite":
+            print(f"Info({get_command_name()}): Reading MC setup")
+
+            mclite = MonteCarloLite.from_file(mcsetup_filepath)
+
+            print(f"Info({get_command_name()}): Running Metropolis MC simulation")
+
             mclite.metropolis(
                 temperature=temperature,
                 n_mc_steps=n_mc_steps,
@@ -206,7 +226,7 @@ def metropolis(
                 n_substitutions=n_substitutions,
                 chemical_potential=chemical_potential,
                 n_error_reset=n_error_reset,
-                traj_filepath=traj_filepath,
+                mcrun_filepath=traj_filepath,
             )
 
         case "plot-mc-trajectory":
