@@ -213,8 +213,6 @@ class MonteCarloLite:
             total=n_mc_steps,
             desc="MMC simulation",
         ):
-            indices_list = []
-
             mcrun.clics.append([])
 
             # make MC move
@@ -259,11 +257,6 @@ class MonteCarloLite:
                     atom_indices.append(atom_index2)
                     new_sigmas.append(sigma_final2)
 
-            comps = struc._comps[self._substitutional_sublattice]
-            print(comps)
-            comps[sigma_initial] -= 1
-            comps[sigma_final] += 1
-            print(comps)
             # compute new energy
             if n_error_reset is not None and i % n_error_reset == 0:
                 e1 = self._emodel.predict(struc)
@@ -291,14 +284,10 @@ class MonteCarloLite:
                     accept_swap = True
                 else:
                     accept_swap = False
-
             if accept_swap:
                 e = e1
 
-                print("before", struc._comps[self._substitutional_sublattice])
-                print(atom_indices, new_sigmas)
                 struc.update_arrays(atom_indices=atom_indices, new_sigmas=new_sigmas)
-                print("after", struc._comps[self._substitutional_sublattice])
                 mcrun.accepted_steps.append(i)
                 mcrun.sigmas.append(tuple(struc.get_sigmas()))
                 mcrun.energies.append(e)
@@ -348,7 +337,7 @@ class MCRun:
             pickle.dump(self, f)
 
     @classmethod
-    def from_file(cls, filepath: str) -> "MCRun":
+    def from_file(cls, filepath: str) -> MCRun:
         """Deserialize an MCRun object from a pickle file."""
         with open(filepath, "rb") as f:
             return pickle.load(f)
