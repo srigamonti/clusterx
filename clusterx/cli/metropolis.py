@@ -12,7 +12,7 @@ from clusterx.model import Model
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.thermodynamics.monte_carlo import MonteCarlo, MonteCarloTrajectory
-from clusterx.thermodynamics.monte_carlo_lite import MonteCarloLite
+from clusterx.thermodynamics.monte_carlo_lite import MCRun, MonteCarloLite
 from clusterx.utils import _process_deprecated
 
 commands = ["metropolis"]
@@ -226,7 +226,21 @@ def metropolis(
                 n_substitutions=n_substitutions,
                 chemical_potential=chemical_potential,
                 n_error_reset=n_error_reset,
-                mcrun_filepath=traj_filepath,
+                mcrun_filepath=mcrun_filepath,
+            )
+
+        case "plot-mc-run":
+            from clusterx.visualization import plot_property
+
+            mcrun = MCRun.from_file(filepath=mcrun_filepath)
+            energies_accepted = mcrun.energies
+            steps_accepted = mcrun.accepted_steps
+            plot_property(
+                steps_accepted,
+                energies_accepted,
+                prop_name="Energy of visited structures",
+                xaxis_label="step no.",
+                yaxis_label="Energy [eV/#sites]",
             )
 
         case "plot-mc-trajectory":
@@ -235,8 +249,6 @@ def metropolis(
             traj = MonteCarloTrajectory(filename=traj_filepath, read=True)
             energies_accepted = traj.get_energies()
             steps_accepted = traj.get_sampling_step_nos()
-            print(energies_accepted)
-            print(steps_accepted)
             plot_property(
                 steps_accepted,
                 energies_accepted,
