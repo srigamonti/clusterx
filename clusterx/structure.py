@@ -127,9 +127,9 @@ class Structure(SuperCell):
 
         self._mc = mc
 
-        if self._mc:
-            # populate _idxs and _comps
-            self._build_index_maps()
+        # if self._mc:
+        # populate _idxs and _comps
+        self._build_index_maps()
 
         self.precision_positions = 5
 
@@ -450,7 +450,6 @@ class Structure(SuperCell):
             - Ternary system (n = 3, sigma ∈ {0, 1, 2}):
                 `sigma_intial = 1` flips to either 0 or 2, chosen randomly.
 
-        **Return:**
         """
 
         # number of species in the current sublattice
@@ -459,6 +458,8 @@ class Structure(SuperCell):
         # choose random initial species if not provided
         if sigma_initial is None:
             sigma_initial = np.random.choice(range(n_species))
+            if self._comps[site_type][sigma_initial] == 0:
+                sigma_initial -= 1
 
         # choose final species if not provided
         if sigma_final is None:
@@ -470,23 +471,62 @@ class Structure(SuperCell):
 
         # choose random position to flip
         aux_index = np.random.choice(range(self._comps[site_type][sigma_initial]))
+        print(
+            "here",
+            self._comps[site_type][sigma_initial],
+            aux_index,
+            len(self._idxs[site_type][sigma_initial]),
+        )
         atom_index = self._idxs[site_type][sigma_initial][aux_index]
 
-        # rindices = [sigma_initial, r]
-        # self.flip(atom_index, site_type=site_type, rindices=rindices)
-
         # update arrays
-        self.sigmas[atom_index] = sigma_final
-
-        self.decor[atom_index] = self.sites[atom_index][sigma_final]
-        self.atoms.set_atomic_numbers(self.decor)
-
-        self._idxs[site_type][sigma_initial][atom_index].remove(atom_index)
-        self._idxs[site_type][sigma_final][atom_index].append(atom_index)
-        self._comps[site_type][sigma_initial] -= 1
-        self._comps[site_type][sigma_final] += 1
+        # self.update_arrays(atom_indices=[atom_index], new_sigmas=[sigma_final])
 
         return atom_index, sigma_initial, sigma_final
+
+    def update_arrays(self, atom_indices=[], new_sigmas=[]):
+        r"""Update arrays.
+
+        **Parameters:**
+
+        ``site_type``: list of integer (required)
+            list of atom indices.
+
+        ``sigma_initial``: list of int
+            `sigma` values
+
+        """
+        old_sigmas = []
+        for aidx in atom_indices:
+            old_sigmas.append(self.sigmas[aidx])
+
+        site_types = self.get_tags()
+
+        for i, (aidx, s) in enumerate(zip(atom_indices, new_sigmas)):
+            self.sigmas[aidx] = s
+
+            self.decor[aidx] = self.sites[aidx][s]
+
+            if old_sigmas[i] == new_sigmas[i]:
+                print("alert!")
+                input()
+
+            print(
+                "lengths",
+                len(self._idxs[site_types[aidx]][old_sigmas[i]]),
+                len(self._idxs[site_types[aidx]][new_sigmas[i]]),
+            )
+            self._idxs[site_types[aidx]][old_sigmas[i]].remove(aidx)
+            self._idxs[site_types[aidx]][new_sigmas[i]].append(aidx)
+            print(
+                "lengths",
+                len(self._idxs[site_types[aidx]][old_sigmas[i]]),
+                len(self._idxs[site_types[aidx]][new_sigmas[i]]),
+            )
+            self._comps[site_types[aidx]][old_sigmas[i]] -= 1
+            self._comps[site_types[aidx]][new_sigmas[i]] += 1
+
+        self.atoms.set_atomic_numbers(self.decor)
 
     def swap_random_binary(self, site_type, sigma_swap=[0, 1]):
         r"""Swap two randomly selected atoms in given sub-lattice.
