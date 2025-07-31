@@ -459,7 +459,7 @@ class Structure(SuperCell):
         if sigma_initial is None:
             sigma_initial = np.random.choice(range(n_species))
             if self._comps[site_type][sigma_initial] == 0:
-                sigma_initial -= 1
+                sigma_initial = 1 - sigma_initial
 
         # choose final species if not provided
         if sigma_final is None:
@@ -471,12 +471,6 @@ class Structure(SuperCell):
 
         # choose random position to flip
         aux_index = np.random.choice(range(self._comps[site_type][sigma_initial]))
-        print(
-            "here",
-            self._comps[site_type][sigma_initial],
-            aux_index,
-            len(self._idxs[site_type][sigma_initial]),
-        )
         atom_index = self._idxs[site_type][sigma_initial][aux_index]
 
         # update arrays
@@ -507,22 +501,8 @@ class Structure(SuperCell):
 
             self.decor[aidx] = self.sites[aidx][s]
 
-            if old_sigmas[i] == new_sigmas[i]:
-                print("alert!")
-                input()
-
-            print(
-                "lengths",
-                len(self._idxs[site_types[aidx]][old_sigmas[i]]),
-                len(self._idxs[site_types[aidx]][new_sigmas[i]]),
-            )
             self._idxs[site_types[aidx]][old_sigmas[i]].remove(aidx)
             self._idxs[site_types[aidx]][new_sigmas[i]].append(aidx)
-            print(
-                "lengths",
-                len(self._idxs[site_types[aidx]][old_sigmas[i]]),
-                len(self._idxs[site_types[aidx]][new_sigmas[i]]),
-            )
             self._comps[site_types[aidx]][old_sigmas[i]] -= 1
             self._comps[site_types[aidx]][new_sigmas[i]] += 1
 
