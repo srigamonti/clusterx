@@ -292,10 +292,8 @@ class MonteCarloLite:
             if accept_swap:
                 e = e1
 
-                struc.update_arrays(atom_indices=atom_indices, new_sigmas=new_sigmas)
-                mcrun.accepted_steps.append(i)
-                mcrun.sigmas.append(tuple(struc.get_sigmas()))
-                mcrun.energies.append(e)
+                    # mcrun.sigmas.append(tuple(struc.get_sigmas()))
+                    mcrun.sigmas.append(np.array(struc.get_sigmas(), dtype=np.uint8))
 
         if mcrun_filepath is not None:
             mcrun.serialize(filepath=mcrun_filepath)
