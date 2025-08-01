@@ -5,9 +5,19 @@ from __future__ import annotations
 
 import os
 import pickle
+import time
 import warnings
+from contextlib import contextmanager
 
 import numpy as np
+
+
+@contextmanager
+def timed(label):
+    start = time.perf_counter()
+    yield
+    end = time.perf_counter()
+    print(f"[{label}] {end - start:.4f} seconds")
 
 
 class MonteCarloLite:
@@ -182,6 +192,7 @@ class MonteCarloLite:
 
         from tqdm import tqdm
 
+        print("Generating initial random structure")
         if initial_structure is None:
             if n_substitutions is not None:
                 struc = self._scell.gen_random_structure(n_substitutions)
@@ -193,6 +204,8 @@ class MonteCarloLite:
         scaledbeta = self._energy_scale_factor / self._kb / temperature
 
         self._emodel.corrc.reset_mc(mc=True)
+
+        print("Computing energy of initial random structure")
         e = self._emodel.predict(struc)
 
         mcrun_filepath
@@ -213,90 +226,99 @@ class MonteCarloLite:
         mcrun.sigmas.append(tuple(struc.get_sigmas()))
         mcrun.energies.append(e)
 
-        for i in tqdm(
-            range(1, n_mc_steps + 1),
-            total=n_mc_steps,
-            desc="MMC simulation",
-        ):
-            mcrun.clics.append([])
+        print("Starting MC steps")
 
-            # make MC move
-            atom_indices = []
-            new_sigmas = []
-            for j in range(n_clics):
-                if ensemble == "grandcanonical":
-                    atom_index, sigma_initial, sigma_final = struc.flip_random(
-                        self._substitutional_sublattice
-                    )
-                    mcrun.clics[-1].append(
-                        {
-                            "atom_index": atom_index,
-                            "sigma_i": sigma_initial,
-                            "sigma_f": sigma_final,
-                        }
-                    )
-                    atom_indices.append(atom_index)
-                    new_sigmas.append(sigma_final)
-                elif ensemble == "canonical":
-                    atom_index1, sigma_initial1, sigma_final1 = struc.flip_random(
-                        self._substitutional_sublattice
-                    )
-                    atom_index2, sigma_initial2, sigma_final2 = struc.flip_random(
-                        self._substitutional_sublattice,
-                        sigma_initial=sigma_final1,
-                        sigma_final=sigma_initial1,
-                    )
+        with timed("MC steps"):
+            for i in tqdm(
+                range(1, n_mc_steps + 1),
+                total=n_mc_steps,
+                desc="MMC simulation",
+            ):
+                # mcrun.clics.append([])
 
-                    mcrun.clics[-1].append(
-                        {
-                            "atom_index1": atom_index1,
-                            "atom_index2": atom_index2,
-                            "sigma_1i": sigma_initial1,
-                            "sigma_1f": sigma_final1,
-                            "sigma_2i": sigma_initial2,
-                            "sigma_2f": sigma_final2,
-                        }
-                    )
-                    atom_indices.append(atom_index1)
-                    new_sigmas.append(sigma_final1)
-                    atom_indices.append(atom_index2)
-                    new_sigmas.append(sigma_final2)
+                # make MC move
+                atom_indices = []
+                new_sigmas = []
+                for j in range(n_clics):
+                    if ensemble == "grandcanonical":
+                        atom_index, sigma_initial, sigma_final = struc.flip_random(
+                            self._substitutional_sublattice
+                        )
+                        # mcrun.clics[-1].append(
+                        #     {
+                        #         "atom_index": atom_index,
+                        #         "sigma_i": sigma_initial,
+                        #         "sigma_f": sigma_final,
+                        #     }
+                        # )
+                        atom_indices.append(atom_index)
+                        new_sigmas.append(sigma_final)
+                    elif ensemble == "canonical":
+                        atom_index1, sigma_initial1, sigma_final1 = struc.flip_random(
+                            self._substitutional_sublattice
+                        )
+                        atom_index2, sigma_initial2, sigma_final2 = struc.flip_random(
+                            self._substitutional_sublattice,
+                            sigma_initial=sigma_final1,
+                            sigma_final=sigma_initial1,
+                        )
 
-            # compute new energy
-            if n_error_reset is not None and i % n_error_reset == 0:
-                e1 = self._emodel.predict(struc)
+                        # mcrun.clics[-1].append(
+                        #     {
+                        #         "atom_index1": atom_index1,
+                        #         "atom_index2": atom_index2,
+                        #         "sigma_1i": sigma_initial1,
+                        #         "sigma_1f": sigma_final1,
+                        #         "sigma_2i": sigma_initial2,
+                        #         "sigma_2f": sigma_final2,
+                        #     }
+                        # )
+                        atom_indices.append(atom_index1)
+                        new_sigmas.append(sigma_final1)
+                        atom_indices.append(atom_index2)
+                        new_sigmas.append(sigma_final2)
 
-            else:
-                de = 0
-                for atom_index, sigma in zip(atom_indices, new_sigmas):
-                    de += self._emodel.predict_flip(
-                        struc,
-                        atom_index=atom_index,
-                        new_sigma=sigma,
-                        site_types=[self._substitutional_sublattice],
-                    )
+                # compute new energy
+                if n_error_reset is not None and i % n_error_reset == 0:
+                    e1 = self._emodel.predict(struc)
 
-                e1 = e + de
-                print(e1, de)
-
-            if e >= e1:
-                accept_swap = True
-                boltzmann_factor = 0
-            else:
-                boltzmann_factor = math.exp((e - e1) * scaledbeta)
-
-                if np.random.uniform(0, 1) <= boltzmann_factor:
-                    accept_swap = True
                 else:
-                    accept_swap = False
-            if accept_swap:
-                e = e1
+                    de = 0
+                    for atom_index, sigma in zip(atom_indices, new_sigmas):
+                        de += self._emodel.predict_flip(
+                            struc,
+                            atom_index=atom_index,
+                            new_sigma=sigma,
+                            site_types=[self._substitutional_sublattice],
+                        )
 
+                    e1 = e + de
+
+                if e >= e1:
+                    accept_swap = True
+                    boltzmann_factor = 0
+                else:
+                    boltzmann_factor = math.exp((e - e1) * scaledbeta)
+
+                    if np.random.uniform(0, 1) <= boltzmann_factor:
+                        accept_swap = True
+                    else:
+                        accept_swap = False
+                if accept_swap:
+                    e = e1
+
+                    struc.update_arrays(
+                        atom_indices=atom_indices, new_sigmas=new_sigmas
+                    )
+                    mcrun.accepted_steps.append(i)
                     # mcrun.sigmas.append(tuple(struc.get_sigmas()))
                     mcrun.sigmas.append(np.array(struc.get_sigmas(), dtype=np.uint8))
+                    mcrun.energies.append(e)
 
-        if mcrun_filepath is not None:
-            mcrun.serialize(filepath=mcrun_filepath)
+        print("Serializing")
+        with timed("serialization"):
+            if mcrun_filepath is not None:
+                mcrun.serialize(filepath=mcrun_filepath)
 
         return mcrun
 
