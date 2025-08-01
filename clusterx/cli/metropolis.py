@@ -2,6 +2,8 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 import random
+import time
+from contextlib import contextmanager
 from typing import List, Optional, Union
 
 import numpy as np
@@ -14,6 +16,15 @@ from clusterx.super_cell import SuperCell
 from clusterx.thermodynamics.monte_carlo import MonteCarlo, MonteCarloTrajectory
 from clusterx.thermodynamics.monte_carlo_lite import MCRun, MonteCarloLite
 from clusterx.utils import _process_deprecated
+
+
+@contextmanager
+def timed(label):
+    start = time.perf_counter()
+    yield
+    end = time.perf_counter()
+    print(f"[{label}] {end - start:.4f} seconds")
+
 
 commands = ["metropolis"]
 
@@ -215,33 +226,37 @@ def metropolis(
         case "run" | "runmclite" | "runMClite" | "run-monte-carlo-lite":
             print(f"Info({get_command_name()}): Reading MC setup")
 
-            mclite = MonteCarloLite.from_file(mcsetup_filepath)
+            with timed("from_file"):
+                mclite = MonteCarloLite.from_file(mcsetup_filepath)
 
             print(f"Info({get_command_name()}): Running Metropolis MC simulation")
 
-            mclite.metropolis(
-                temperature=temperature,
-                n_mc_steps=n_mc_steps,
-                ensemble=ensemble,
-                n_substitutions=n_substitutions,
-                chemical_potential=chemical_potential,
-                n_error_reset=n_error_reset,
-                mcrun_filepath=mcrun_filepath,
-            )
+            with timed("metropolis"):
+                mclite.metropolis(
+                    temperature=temperature,
+                    n_mc_steps=n_mc_steps,
+                    ensemble=ensemble,
+                    n_substitutions=n_substitutions,
+                    chemical_potential=chemical_potential,
+                    n_error_reset=n_error_reset,
+                    mcrun_filepath=mcrun_filepath,
+                )
 
         case "plot-mc-run":
             from clusterx.visualization import plot_property
 
-            mcrun = MCRun.from_file(filepath=mcrun_filepath)
+            with timed("MCRun.from_file"):
+                mcrun = MCRun.from_file(filepath=mcrun_filepath)
             energies_accepted = mcrun.energies
             steps_accepted = mcrun.accepted_steps
-            plot_property(
-                steps_accepted,
-                energies_accepted,
-                prop_name="Energy of visited structures",
-                xaxis_label="step no.",
-                yaxis_label="Energy [eV/#sites]",
-            )
+            with timed("plot_property"):
+                plot_property(
+                    steps_accepted,
+                    energies_accepted,
+                    prop_name="Energy of visited structures",
+                    xaxis_label="step no.",
+                    yaxis_label="Energy [eV/#sites]",
+                )
 
         case "plot-mc-trajectory":
             from clusterx.visualization import plot_property
