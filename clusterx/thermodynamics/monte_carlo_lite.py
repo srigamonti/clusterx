@@ -202,7 +202,12 @@ class MonteCarloLite:
                 UserWarning,
             )
 
-        mcrun = MCRun(self._scell, temperature, ensemble)
+        mcrun = MCRun(
+            self._scell.get_parent_lattice(),
+            self._scell.get_transformation(),
+            temperature,
+            ensemble,
+        )
 
         mcrun.accepted_steps.append(0)
         mcrun.sigmas.append(tuple(struc.get_sigmas()))
@@ -321,8 +326,10 @@ class MonteCarloLite:
 
 
 class MCRun:
-    def __init__(self, scell, temperature, ensemble):
-        self.scell = scell
+    def __init__(self, plat, scshape, temperature, ensemble):
+        # self.scell = scell
+        self.plat = plat
+        self.scshape = scshape
         self.temperature = temperature
         self.ensemble = ensemble
 
