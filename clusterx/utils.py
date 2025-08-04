@@ -4,7 +4,9 @@
 
 import copy
 import os
+import time
 import warnings
+from contextlib import contextmanager
 from typing import List, Optional, Union
 
 import numpy as np
@@ -14,6 +16,14 @@ from ase.build.supercells import (  # needed by make_supercell
     lattice_points_in_supercell,
 )
 from ase.data import chemical_symbols as cs
+
+
+@contextmanager
+def _timed(label):
+    start = time.perf_counter()
+    yield
+    end = time.perf_counter()
+    print(f"[{label}] {end - start:.4f} seconds")
 
 
 def _process_deprecated(new_value, deprecated_value, new_name, deprecated_name):

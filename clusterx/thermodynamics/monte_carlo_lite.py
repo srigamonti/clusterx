@@ -5,19 +5,11 @@ from __future__ import annotations
 
 import os
 import pickle
-import time
 import warnings
-from contextlib import contextmanager
 
 import numpy as np
 
-
-@contextmanager
-def timed(label):
-    start = time.perf_counter()
-    yield
-    end = time.perf_counter()
-    print(f"[{label}] {end - start:.4f} seconds")
+from clusterx.utils import _timed
 
 
 class MonteCarloLite:
@@ -205,8 +197,8 @@ class MonteCarloLite:
 
         self._emodel.corrc.reset_mc(mc=True)
 
-        print("Computing energy of initial random structure")
-        e = self._emodel.predict(struc)
+        with _timed("Computing energy of initial random structure"):
+            e = self._emodel.predict(struc)
 
         mcrun_filepath
         if mcrun_filepath is None:
@@ -228,7 +220,7 @@ class MonteCarloLite:
 
         print("Starting MC steps")
 
-        with timed("MC steps"):
+        with _timed("MC steps"):
             for i in tqdm(
                 range(1, n_mc_steps + 1),
                 total=n_mc_steps,
@@ -316,7 +308,7 @@ class MonteCarloLite:
                     mcrun.energies.append(e)
 
         print("Serializing")
-        with timed("serialization"):
+        with _timed("serialization"):
             if mcrun_filepath is not None:
                 mcrun.serialize(filepath=mcrun_filepath)
 

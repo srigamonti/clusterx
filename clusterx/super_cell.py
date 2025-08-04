@@ -89,7 +89,6 @@ class SuperCell(ParentLattice):
         json_db_filepath=None,
         sym_table=False,
     ):
-
         # Check for deprecated json_db_filepath argument
         if json_db_filepath is not None:
             warnings.warn(
@@ -122,7 +121,9 @@ class SuperCell(ParentLattice):
             elif p.shape == (3,):
                 self._p = np.diag(p)
             elif p.shape == (2, 2):
-                self._p = np.array([[p[0, 0], p[0, 1], 0], [p[1, 0], p[1, 1], 0], [0, 0, 1]])
+                self._p = np.array(
+                    [[p[0, 0], p[0, 1], 0], [p[1, 0], p[1, 1], 0], [0, 0, 1]]
+                )
             elif p.shape == (3, 3):
                 self._p = p
 
@@ -138,7 +139,9 @@ class SuperCell(ParentLattice):
 
         self.index = int(round(np.linalg.det(self._p)))
         prist = make_supercell(self._plat.get_pristine(), self._p)
-        subs = [make_supercell(atoms, self._p) for atoms in self._plat.get_substitutions()]
+        subs = [
+            make_supercell(atoms, self._p) for atoms in self._plat.get_substitutions()
+        ]
 
         prist.wrap()
         for i in range(len(subs)):
@@ -169,6 +172,9 @@ class SuperCell(ParentLattice):
         # self.scaled_positions = None
         self.sym_perm = None
         self.sym_perm_platt = None
+        self._distances = self.get_all_distances(mic=False)
+        self._distances_mic_true = self.get_all_distances(mic=True)
+        self._sdistances = self.get_substitutional_atoms().get_all_distances(mic=True)
 
     def compute_sym_perm(self, include_sc_trans=True):
         if include_sc_trans:
@@ -204,8 +210,12 @@ class SuperCell(ParentLattice):
         _sym_perm = []
         for r, t_ in zip(rot, tra):
             t = np.round(t_, decimals=8)
-            ts = np.tile(t, (len(spos), 1)).T  # Every column represents the same translation for every cluster site
-            spos_rt = np.add(np.dot(r, spos.T), ts).T  # Apply rotation, then translation
+            ts = np.tile(
+                t, (len(spos), 1)
+            ).T  # Every column represents the same translation for every cluster site
+            spos_rt = np.add(
+                np.dot(r, spos.T), ts
+            ).T  # Apply rotation, then translation
 
             _sp1_ = wrap_scaled_positions(spos_rt, self.get_pbc())
 
@@ -374,7 +384,9 @@ class SuperCell(ParentLattice):
         import clusterx.structure
 
         return clusterx.structure.Structure(
-            SuperCell(self._plat, self._p, self._sort_key, sym_table=bool(self._sym_table)),
+            SuperCell(
+                self._plat, self._p, self._sort_key, sym_table=bool(self._sym_table)
+            ),
             sigmas=sigmas,
             mc=mc,
         )
@@ -417,7 +429,9 @@ class SuperCell(ParentLattice):
         if nsubs is None:
             import numpy as np
 
-            slts = self.get_sublattice_types()  # e.g.  {0: [14,13], 1: [56,0,38], 2:[11]}
+            slts = (
+                self.get_sublattice_types()
+            )  # e.g.  {0: [14,13], 1: [56,0,38], 2:[11]}
             tags = self.get_tags()  # tags[atom_index] = site_type
             _nsubs = {}
             for k, v in slts.items():
@@ -440,7 +454,9 @@ class SuperCell(ParentLattice):
         _, sigmas = self.gen_random_decoration(_nsubs)
 
         return clusterx.structure.Structure(
-            SuperCell(self._plat, self._p, self._sort_key, sym_table=bool(self._sym_table)),
+            SuperCell(
+                self._plat, self._p, self._sort_key, sym_table=bool(self._sym_table)
+            ),
             sigmas=sigmas,
             mc=mc,
         )
@@ -516,7 +532,9 @@ class SuperCell(ParentLattice):
                 # chem_num.append(atoms.numbers[i])
                 spi = len(sites[i]) - 1
                 neigs[i].number = sites[i][spi]
-                neigs[i].position = atoms.positions[i] + np.dot(offset, atoms.get_cell())
+                neigs[i].position = atoms.positions[i] + np.dot(
+                    offset, atoms.get_cell()
+                )
 
             # neigs = Atoms(numbers=chem_num,positions=pos,cell=self.get_cell(),pbc=self.get_pbc())
 
@@ -578,24 +596,34 @@ class SuperCell(ParentLattice):
                 spos[:, i] %= 1.0
                 spos[:, i] %= 1.0
 
-        sp0 = get_scaled_positions(p0, self._plat.get_cell(), pbc=self.get_pbc(), wrap=False)
+        sp0 = get_scaled_positions(
+            p0, self._plat.get_cell(), pbc=self.get_pbc(), wrap=False
+        )
 
         atom_index = 0
         rot_index = 0
         intt_index = 0
         for r, t in zip(rotations, translations):
-            ts = np.tile(t, (len(sp0), 1)).T  # Every column represents the same translation for every cluster site
+            ts = np.tile(
+                t, (len(sp0), 1)
+            ).T  # Every column represents the same translation for every cluster site
             sp1 = np.add(np.dot(r, sp0.T), ts).T  # Apply rotation, then translation
             # Get cartesian, then scaled to supercell
             p1 = np.dot(sp1, self._plat.get_cell())
-            sp1 = get_scaled_positions(p1, self.get_cell(), pbc=self.get_pbc(), wrap=True)
+            sp1 = get_scaled_positions(
+                p1, self.get_cell(), pbc=self.get_pbc(), wrap=True
+            )
 
-            for itr, tr in enumerate(internal_trans):  # Now apply the internal translations
+            for itr, tr in enumerate(
+                internal_trans
+            ):  # Now apply the internal translations
                 sp2 = np.add(sp1, tr)
                 sp2 = wrap_scaled_positions(sp2, self.get_pbc())
                 new_pos = get_cl_idx_sc(sp2, spos, method=1, tol=1e-3)  # Get indices
                 for new_idx in new_pos:
-                    table[atom_index, rot_index, intt_index] = new_idx  # Create the table object
+                    table[atom_index, rot_index, intt_index] = (
+                        new_idx  # Create the table object
+                    )
                     atom_index += 1
                 atom_index = 0
                 intt_index += 1

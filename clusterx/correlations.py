@@ -20,7 +20,7 @@ from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
 from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions
-from clusterx.utils import PolynomialBasis, get_cl_idx_sc
+from clusterx.utils import PolynomialBasis, _timed, get_cl_idx_sc
 
 
 class CorrelationsCalculator:
@@ -295,16 +295,17 @@ class CorrelationsCalculator:
                 pass
             elif isinstance(scell, ParentLattice):
                 scell = SuperCell(scell, [1, 1, 1])
+            with _timed("INIT: Computing cluster orbits for all clusters"):
+                cpool = ClustersPool(scell.get_parent_lattice(), super_cell=scell)
 
-            cpool = ClustersPool(scell.get_parent_lattice(), super_cell=scell)
-
-            for icl, cluster in enumerate(self._cpool.get_cpool_list()):
-                _cluster_orbit = cpool.get_cluster_orbit(
-                    scell,
-                    cluster_positions=cluster.get_positions(),
-                    cluster_species=cluster.get_nrs(),
-                )
-                cluster_orbits.append(_cluster_orbit)
+            with _timed("Computing cluster orbits for all clusters"):
+                for icl, cluster in enumerate(self._cpool.get_cpool_list()):
+                    _cluster_orbit = cpool.get_cluster_orbit(
+                        scell,
+                        cluster_positions=cluster.get_positions(),
+                        cluster_species=cluster.get_nrs(),
+                    )
+                    cluster_orbits.append(_cluster_orbit)
 
             self._scells.append(scell)  # Add supercell to calculator
             self._cluster_orbits_set.append(
@@ -376,9 +377,10 @@ class CorrelationsCalculator:
         if self._mc and self._cluster_orbits_set != [] and self._num_mc_calls != 0:
             cluster_orbits = self._cluster_orbits_mc
         else:
-            cluster_orbits = self.get_cluster_orbits_for_scell(
-                structure.get_supercell(), verbose=verbose
-            )
+            with _timed("get cluster orbits in correlations"):
+                cluster_orbits = self.get_cluster_orbits_for_scell(
+                    structure.get_supercell(), verbose=verbose
+                )
             if self._mc is True:
                 self._num_mc_calls = 1
                 self._cluster_orbits_mc = cluster_orbits
@@ -387,22 +389,23 @@ class CorrelationsCalculator:
 
         correlations = np.zeros(len(cpool_list))
 
-        for icl, _ in enumerate(cpool_list):
-            cluster_orbit = cluster_orbits[icl]
-            cluster_orbit_arr = cluster_orbit.as_array()
-            weights = cluster_orbit.get_weights()
+        with _timed("Final loop in get cluster correlation"):
+            for icl, _ in enumerate(cpool_list):
+                cluster_orbit = cluster_orbits[icl]
+                cluster_orbit_arr = cluster_orbit.as_array()
+                weights = cluster_orbit.get_weights()
 
-            for weight, cluster in zip(weights, cluster_orbit_arr):
-                cf = cluster_function(
-                    np.array(cluster.get_idxs()),
-                    cluster.alphas,
-                    structure.sigmas,
-                    structure.ems,
-                    self.basis_set_values,
-                )
-                correlations[icl] += weight * cf
+                for weight, cluster in zip(weights, cluster_orbit_arr):
+                    cf = cluster_function(
+                        np.array(cluster.get_idxs()),
+                        cluster.alphas,
+                        structure.sigmas,
+                        structure.ems,
+                        self.basis_set_values,
+                    )
+                    correlations[icl] += weight * cf
 
-            correlations[icl] /= np.sum(weights)
+                correlations[icl] /= np.sum(weights)
 
         return np.around(correlations, decimals=12)
 
