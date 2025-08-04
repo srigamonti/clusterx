@@ -13,7 +13,6 @@ import numpy as np
 from clusterx.clusters_selector import ClustersSelector
 from clusterx.correlations import CorrelationsCalculator, cluster_function_swap
 from clusterx.estimators.estimator_factory import EstimatorFactory
-from clusterx.utils import _timed
 
 
 class Model:
@@ -242,8 +241,8 @@ class Model:
             structure object to calculate property to.
 
         """
-        with _timed("Get cluster correlations"):
-            corrs = self.corrc.get_cluster_correlations(structure)
+        # with _timed("Get cluster correlations"):
+        corrs = self.corrc.get_cluster_correlations(structure)
 
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1, -1))[0]

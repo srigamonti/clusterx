@@ -377,10 +377,10 @@ class CorrelationsCalculator:
         if self._mc and self._cluster_orbits_set != [] and self._num_mc_calls != 0:
             cluster_orbits = self._cluster_orbits_mc
         else:
-            with _timed("get cluster orbits in correlations"):
-                cluster_orbits = self.get_cluster_orbits_for_scell(
-                    structure.get_supercell(), verbose=verbose
-                )
+            # with _timed("get cluster orbits in correlations"):
+            cluster_orbits = self.get_cluster_orbits_for_scell(
+                structure.get_supercell(), verbose=verbose
+            )
             if self._mc is True:
                 self._num_mc_calls = 1
                 self._cluster_orbits_mc = cluster_orbits
@@ -389,23 +389,23 @@ class CorrelationsCalculator:
 
         correlations = np.zeros(len(cpool_list))
 
-        with _timed("Final loop in get cluster correlation"):
-            for icl, _ in enumerate(cpool_list):
-                cluster_orbit = cluster_orbits[icl]
-                cluster_orbit_arr = cluster_orbit.as_array()
-                weights = cluster_orbit.get_weights()
+        # with _timed("Final loop in get cluster correlation"):
+        for icl, _ in enumerate(cpool_list):
+            cluster_orbit = cluster_orbits[icl]
+            cluster_orbit_arr = cluster_orbit.as_array()
+            weights = cluster_orbit.get_weights()
 
-                for weight, cluster in zip(weights, cluster_orbit_arr):
-                    cf = cluster_function(
-                        np.array(cluster.get_idxs()),
-                        cluster.alphas,
-                        structure.sigmas,
-                        structure.ems,
-                        self.basis_set_values,
-                    )
-                    correlations[icl] += weight * cf
+            for weight, cluster in zip(weights, cluster_orbit_arr):
+                cf = cluster_function(
+                    np.array(cluster.get_idxs()),
+                    cluster.alphas,
+                    structure.sigmas,
+                    structure.ems,
+                    self.basis_set_values,
+                )
+                correlations[icl] += weight * cf
 
-                correlations[icl] /= np.sum(weights)
+            correlations[icl] /= np.sum(weights)
 
         return np.around(correlations, decimals=12)
 

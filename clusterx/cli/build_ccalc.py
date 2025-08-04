@@ -3,16 +3,17 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import plac
-from clusterx.parent_lattice import ParentLattice
+
+from clusterx.cli.config_utils import cmd_message
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
-from clusterx.cli.config_utils import cmd_message
+from clusterx.parent_lattice import ParentLattice
 
 commands = ["build_ccalc"]
 
 
 @plac.opt(
-    "basis",
+    "basis_name",
     abbrev="b",
     help="""cluster basis to be used. Possible values are: indicator-binary, trigonometric, 
         polynomial, and chebyshev. For a precise definition look into the parameter 
@@ -35,7 +36,7 @@ commands = ["build_ccalc"]
     help="The created CorrelationsCalculator object is saved to the indicated pickle file.",
 )
 def build_ccalc(
-    basis: str = "trigonometric",
+    basis_name: str = "trigonometric",
     plat_filepath: str = "plat.json",
     cpool_filepath: str = "cpool.json",
     ccalc_filepath: str = "ccalc.pickle",
@@ -47,6 +48,6 @@ def build_ccalc(
     cpool = ClustersPool(filepath=cpool_filepath)
 
     ccalc = CorrelationsCalculator(
-        basis=basis, parent_lattice=plat, clusters_pool=cpool
+        basis_name=basis_name, parent_lattice=plat, clusters_pool=cpool
     )
     ccalc.serialize(filepath=ccalc_filepath)

@@ -38,6 +38,9 @@ commands = ["metropolis"]
         str,
     ),
     model_filepath=("Output Model file path.", "option", "mofp", str),
+    mcsetup_filepath=("MC setup file path.", "option", "sufp", str),
+    mcrun_filepath=("MC run file path.", "option", "scfp", str),
+    mcscell_filepath=("MC scell file path.", "option", "scfp", str),
     traj_filepath=(
         "Filename for the output trajectory",
         "option",
@@ -112,17 +115,17 @@ commands = ["metropolis"]
         "acc_ratio",
         float,
     ),
-    filename=(
-        "Filename for the output trajectory",
-        "option",
-        "fn",
-        str,
-    ),
     scale_factor=(
         "Deprecated: use ``energy_scale_factor instead``",
         "option",
         "scf",
         list,
+    ),
+    filename=(
+        "Deprecated: use ``traf_filepath instead``",
+        "option",
+        "fn",
+        str,
     ),
 )
 def metropolis(
@@ -130,9 +133,10 @@ def metropolis(
     task: str = "usage",
     plat_filepath: str = "plat.json",
     model_filepath: str = "model.pickle",
-    mcsetup_filepath: str = "mcsetup.pickle",
-    mcrun_filepath: str = "mcrun.pickle",
-    traj_filepath: str = "trajectory.json",
+    mcsetup_filepath: str = "mc-setup.pickle",
+    mcrun_filepath: str = "mc-run.pickle",
+    mcscell_filepathh: str = "mc-scell.pickle",
+    traj_filepath: str = "mc-trajectory.json",
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = 1,
     n_substitutions: Optional[Union[int, dict]] = None,
     ensemble: str = "canonical",
