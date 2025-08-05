@@ -9,7 +9,8 @@ import numpy as np
 import plac
 from sklearn.feature_selection import SelectFromModel
 from sklearn.linear_model import LassoCV
-from sklearn.pipeline import make_pipeline
+from sklearn.metrics import mean_squared_error
+from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from clusterx.cli.config_utils import cmd_message, get_command_name
@@ -112,7 +113,7 @@ def build_nonlinear_model(
     default_nonlinear_transformation = {
         "module": "sklearn.preprocessing",
         "class": "PolynomialFeatures",
-        "args": {"degree": 1},
+        "args": {"degree": 1, "include_bias": True},
     }
     if nonlinear_transformation is None:
         nonlinear_transformation = {}
@@ -139,50 +140,78 @@ def build_nonlinear_model(
     else:
         reg.fit(comat, pvals)
 
-    if regression_model["class"] == "LassoCV":
-        lasso_cv = reg.named_steps["lassocv"]
-        cv_scores = lasso_cv.mse_path_
-        alphas = lasso_cv.alphas_
-        # Mean cross-validation scores for each alpha
-        print(cv_scores)
-        mean_cv_scores = np.mean(cv_scores, axis=1)
-        print(mean_cv_scores)
-        rmse_cv_scores = np.sqrt(mean_cv_scores)
-        # Print the mean cross-validation scores
-        print("Mean CV scores for each alpha:", rmse_cv_scores)
-        for a, cv in zip(alphas, rmse_cv_scores):
-            print(f"{a:>10.5f}\t{cv:>15.5f}")
+    preds = reg.predict(comat)
+    fit_error = np.sqrt(mean_squared_error(pvals, preds))
+    print(f"Fit RMSE: {fit_error:.5f}")
 
-        print("Dual gap", lasso_cv.dual_gap_)
-        print("Optimal alpha", lasso_cv.alpha_)
-        print("Model coefficients (1 to 10)", lasso_cv.coef_[:10])
-        print("Model coefficients", lasso_cv.coef_)
-        print("Number of non-zero coefficients", np.count_nonzero(lasso_cv.coef_))
-        print("Number of initial features", lasso_cv.n_features_in_)
+    if selection_model is not None:
+        summarize_cv_model(
+            reg.named_steps["selector"], selection_model["class"], label="SELECTOR"
+        )
 
-    if regression_model["class"] == "RidgeCV":
-        ridge_cv = reg.named_steps["ridgecv"]
-        cv_scores = ridge_cv.cv_results_
-        alphas = regression_model["args"]["alphas"]
-
-        mean_cv_scores = cv_scores.mean(axis=0)  # average over samples -> per alpha
-        rmse_cv_scores = np.sqrt(mean_cv_scores)
-
-        # Print the mean cross-validation scores
-        print("Mean CV scores for each alpha:", rmse_cv_scores)
-        for a, cv in zip(alphas, rmse_cv_scores):
-            print(f"{a:>10.5f}\t{cv:>15.5f}")
-
-        print("Optimal alpha", ridge_cv.alpha_)
-        print("Model coefficients (1 to 10)", ridge_cv.coef_[:10])
-        print("Model coefficients", ridge_cv.coef_)
-        print("Number of non-zero coefficients", np.count_nonzero(ridge_cv.coef_))
-        print("Number of initial features", ridge_cv.n_features_in_)
+    summarize_cv_model(
+        reg.named_steps["regressor"], regression_model["class"], label="REGRESSOR"
+    )
 
     print(f"Info({get_command_name()}): Building and serializing Model object")
 
     nlmodel = Model(corrc=ccalc, property_name=property_name, estimator=reg)
     nlmodel.serialize(model_filepath)
+
+
+def summarize_cv_model(regressor, model_type: str, label: str = "MODEL"):
+    """
+    Print CV performance summary for a fitted pipeline containing LassoCV or RidgeCV.
+
+    Parameters
+    ----------
+    pipeline : sklearn.pipeline.Pipeline
+        The fitted pipeline with a 'regressor' step.
+    X : array-like
+        Input features to predict on (e.g., training set).
+    y : array-like
+        Ground truth values.
+    model_type : str
+        One of 'LassoCV' or 'RidgeCV'.
+    """
+    # Predict and compute fit error
+    print("\n" + "=" * 72)
+    print(f"CV Model Summary Report — {model_type}/{label}")
+    print("=" * 72)
+
+    # Collect cross-validation scores
+    if model_type == "LassoCV":
+        if not hasattr(regressor, "mse_path_"):
+            print("mse_path_ not available. Did you forget to fit the model?")
+            return
+        cv_scores = regressor.mse_path_  # shape: (n_alphas, n_folds)
+        mean_cv_scores = np.mean(cv_scores, axis=1)  # mean over folds
+        alphas = regressor.alphas_
+
+    elif model_type == "RidgeCV":
+        if not hasattr(regressor, "cv_values_"):
+            print("cv_values_ not available. Did you set store_cv_values=True?")
+            return
+        cv_scores = regressor.cv_values_  # shape: (n_samples, n_alphas)
+        mean_cv_scores = np.mean(cv_scores, axis=0)  # mean over samples
+        alphas = regressor.alphas
+
+    else:
+        print(f"Unsupported model type: {model_type}")
+        return
+
+    # Compute RMSE for each alpha
+    rmse_cv_scores = np.sqrt(mean_cv_scores)
+    print("\nCross-Validation RMSE by Alpha:")
+    for a, rmse in zip(alphas, rmse_cv_scores):
+        print(f"  alpha = {a:10.5f} -> RMSE = {rmse:10.5f}")
+
+    # Summary of fitted model
+    print("\nOptimal alpha:", regressor.alpha_)
+    print("Number of features:", regressor.n_features_in_)
+    print("Number of non-zero coefficients:", np.count_nonzero(regressor.coef_))
+    print("First 10 coefficients:\n", regressor.coef_[:10])
+    print("=" * 72 + "\n")
 
 
 def _build_pipeline(
@@ -243,10 +272,10 @@ def _build_pipeline(
     rm_class = getattr(module, regression_model["class"])
     rm = rm_class(**regression_model["args"])
 
-    pipeline_steps = [ft]
+    pipeline_steps = [("transformer", ft)]
 
     if standardize:
-        pipeline_steps.append(StandardScaler())
+        pipeline_steps.append(("scaler", StandardScaler()))
 
     # Add feature selection if configured
     if selection_model is not None:
@@ -254,11 +283,12 @@ def _build_pipeline(
         sel_class = getattr(module, selection_model["class"])
         sel_model = sel_class(**selection_model["args"])
         selector = SelectFromModel(sel_model, threshold=selection_threshold)
-        pipeline_steps.append(selector)
+        pipeline_steps.append(("selector", selector))
 
-    pipeline_steps.append(rm)
+    pipeline_steps.append(("regressor", rm))
 
-    return make_pipeline(*pipeline_steps)
+    # return make_pipeline(*pipeline_steps)
+    return Pipeline(steps=pipeline_steps)
 
 
 def _build_pipeline_3(

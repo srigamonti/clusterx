@@ -14,7 +14,7 @@ from clusterx.clusters.cluster import Cluster
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions
-from clusterx.utils import _timed, get_cl_idx_sc
+from clusterx.utils import get_cl_idx_sc
 
 
 class ClustersPool:
@@ -1218,20 +1218,20 @@ class ClusterOrbit(ClustersPool):
             self.reduced_multiplicity = db.metadata.get("reduced_multiplicity", 0)
         else:
             platt = super_cell.get_parent_lattice()
-            with _timed("Calling super init clusters pool in orbits"):
-                super(ClusterOrbit, self).__init__(
-                    parent_lattice=platt, super_cell=super_cell
-                )
-            with _timed("actuallz computing the orbit"):
-                self._gen_orbit(
-                    super_cell,
-                    cluster_sites,
-                    cluster_species,
-                    tol,
-                    distances,
-                    no_trans,
-                    cluster_positions,
-                )
+            # with _timed("Calling super init clusters pool in orbits"):
+            super(ClusterOrbit, self).__init__(
+                parent_lattice=platt, super_cell=super_cell
+            )
+            # with _timed("actuallz computing the orbit"):
+            self._gen_orbit(
+                super_cell,
+                cluster_sites,
+                cluster_species,
+                tol,
+                distances,
+                no_trans,
+                cluster_positions,
+            )
         # The iteration variable "high" was not set, because the clusters are not calculated by super().__init__().
         # Therefore we set it here explicitly.
         self.high = self.nclusters - 1

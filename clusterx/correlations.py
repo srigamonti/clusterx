@@ -20,7 +20,7 @@ from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
 from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions
-from clusterx.utils import PolynomialBasis, _timed, get_cl_idx_sc
+from clusterx.utils import PolynomialBasis, get_cl_idx_sc
 
 
 class CorrelationsCalculator:
@@ -295,17 +295,17 @@ class CorrelationsCalculator:
                 pass
             elif isinstance(scell, ParentLattice):
                 scell = SuperCell(scell, [1, 1, 1])
-            with _timed("INIT: Computing cluster orbits for all clusters"):
-                cpool = ClustersPool(scell.get_parent_lattice(), super_cell=scell)
+            # with _timed("INIT: Computing cluster orbits for all clusters"):
+            cpool = ClustersPool(scell.get_parent_lattice(), super_cell=scell)
 
-            with _timed("Computing cluster orbits for all clusters"):
-                for icl, cluster in enumerate(self._cpool.get_cpool_list()):
-                    _cluster_orbit = cpool.get_cluster_orbit(
-                        scell,
-                        cluster_positions=cluster.get_positions(),
-                        cluster_species=cluster.get_nrs(),
-                    )
-                    cluster_orbits.append(_cluster_orbit)
+            # with _timed("Computing cluster orbits for all clusters"):
+            for icl, cluster in enumerate(self._cpool.get_cpool_list()):
+                _cluster_orbit = cpool.get_cluster_orbit(
+                    scell,
+                    cluster_positions=cluster.get_positions(),
+                    cluster_species=cluster.get_nrs(),
+                )
+                cluster_orbits.append(_cluster_orbit)
 
             self._scells.append(scell)  # Add supercell to calculator
             self._cluster_orbits_set.append(
