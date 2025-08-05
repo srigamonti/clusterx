@@ -173,7 +173,7 @@ class Structure(SuperCell):
         if not is_diagonal(p):
             raise ValueError("Structure cannot be initialized from sigma grid "
             "with non-diagonal super cell transformation.")
-        return cls(super_cell=super_cell, sigmas=sigma_grid.flatten())
+        return cls(super_cell=super_cell, sigmas=sigma_grid.ravel())
 
     @staticmethod
     def _load_from_pickle(filepath: str) -> Structure:

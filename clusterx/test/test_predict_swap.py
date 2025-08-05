@@ -11,9 +11,10 @@ import numpy as np
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.structures_set import StructuresSet
-from clusterx.model import ModelBuilder
+from clusterx.model import Model, ModelBuilder
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.calculators.emt import EMT2
+from clusterx.correlations import CorrelationsCalculator
 from clusterx.thermodynamics.monte_carlo import MonteCarlo
 from clusterx.test.defaults import (
     get_clathrate_supercell,
@@ -42,6 +43,32 @@ def test_clathrate_swap(basis):
     e1 = model.predict(structure)
     np.testing.assert_allclose(e0 - e1, e_diff_swap)
     np.testing.assert_allclose(e0, e_diff_swap + e1)
+
+
+@pytest.mark.parametrize('basis', ['trigonometric'])
+def test_swap_binary_cubic(basis):
+    seed_rnd_generator(42)
+    pri = bulk("H", crystalstructure="sc", a=1.)
+    sub = bulk("He", crystalstructure="sc", a=1.)
+    plat = ParentLattice(atoms=pri, substitutions=[sub], pbc=(1, 1, 1))
+    cpool = ClustersPool(plat, npoints=[1, 2], radii=[0, 2.1])
+    mult = cpool.get_multiplicities()
+
+    corcE2 = CorrelationsCalculator("trigonometric", plat, cpool)
+    model = Model(corcE2, "energy2",ecis=mult)
+    model.reset_mc(True)
+
+    p = [10, 10, 10]
+    scell = SuperCell(plat, p)
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p)/2))
+    i, j = structure.swap_random_binary(site_type=0)
+
+    pred_init = model.predict(structure)
+    pred_swap = model.predict_swap(structure, i, j)
+    structure.swap(i, j)
+    pred_final = model.predict(structure)
+    print(pred_init, pred_final)
+    print(pred_swap, pred_init - pred_final)
 
 
 def test_predict_swap_energy_model():
