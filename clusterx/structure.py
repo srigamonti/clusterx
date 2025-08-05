@@ -11,7 +11,7 @@ import warnings
 import numpy as np
 from ase import Atoms
 from ase.cell import Cell
-from ase.data import atomic_numbers as an
+from ase.data import atomic_numbers
 from ase.db import connect
 from ase.io import write
 
@@ -80,7 +80,7 @@ class Structure(SuperCell):
             else:
                 self.decor = []
                 for s in decoration_symbols:
-                    self.decor.append(an[s])
+                    self.decor.append(atomic_numbers[s])
                 decoration = self.decor
 
             self.sigmas = np.zeros(len(decoration), dtype=np.int8)
@@ -165,6 +165,15 @@ class Structure(SuperCell):
             return cls._load_from_json(filepath)
         else:
             raise ValueError(f"Unsupported file format: {file_ext}")
+
+    @classmethod
+    def from_sigma_grid(cls, super_cell: SuperCell, sigma_grid: np.ndarray):
+        p = super_cell.get_transformation()
+        is_diagonal = np.count_nonzero(p - np.diag(np.diagonal(p))) == 0
+        if not is_diagonal:
+            raise ValueError("Structure cannot be initialized from sigma grid "
+            "with non-diagonal super cell transformation.")
+        return cls(super_cell=super_cell, sigmas=sigma_grid.flatten())
 
     @staticmethod
     def _load_from_pickle(filepath: str) -> Structure:
