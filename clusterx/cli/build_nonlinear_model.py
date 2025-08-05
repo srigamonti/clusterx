@@ -7,6 +7,8 @@ from typing import Optional
 
 import numpy as np
 import plac
+from sklearn.feature_selection import SelectFromModel
+from sklearn.linear_model import LassoCV
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -18,13 +20,55 @@ commands = ["build_nonlinear_model"]
 
 
 @plac.annotations(
-    property_name=("Property to be modelled. Must be present in the StructuresSet object.", "positional", None, str),
-    ccalc_filepath=("Path to the pickle file of a serialized CorrelationsCalculator object.", "option", None, str),
-    xp_filepath=("Path to the npz file of a serialized correlation matrix (from compute_comat).", "option", None, str),
-    model_filepath=("Path to serialize the created Model object.", "option", "mof", str),
+    property_name=(
+        "Property to be modelled. Must be present in the StructuresSet object.",
+        "positional",
+        None,
+        str,
+    ),
+    ccalc_filepath=(
+        "Path to the pickle file of a serialized CorrelationsCalculator object.",
+        "option",
+        None,
+        str,
+    ),
+    xp_filepath=(
+        "Path to the npz file of a serialized correlation matrix (from compute_comat).",
+        "option",
+        None,
+        str,
+    ),
+    model_filepath=(
+        "Path to serialize the created Model object.",
+        "option",
+        "mof",
+        str,
+    ),
     regression_model=("Dictionary of estimator options.", "option", "rm", dict),
-    nonlinear_transformation=("Dictionary of nonlinear transformation settings.", "option", "nt", dict),
-    weights_filepath=("Sample weights for fitting and evaluating the weighted MSE.", "option", None, str),
+    selection_model=(
+        "Dictionary of estimator options for feature selection model (e.g. LASSO).",
+        "option",
+        "sm",
+        dict,
+    ),
+    selection_threshold=(
+        "Threshold to interactions.",
+        "option",
+        "thr",
+        float,
+    ),
+    nonlinear_transformation=(
+        "Dictionary of nonlinear transformation settings.",
+        "option",
+        "nt",
+        dict,
+    ),
+    weights_filepath=(
+        "Sample weights for fitting and evaluating the weighted MSE.",
+        "option",
+        None,
+        str,
+    ),
     standardize=("Standardize the input data.", "flag", "std", bool),
 )
 def build_nonlinear_model(
@@ -33,6 +77,8 @@ def build_nonlinear_model(
     xp_filepath: str = "xp.npz",
     model_filepath: str = "model.pickle",
     regression_model: Optional[dict] = None,
+    selection_model: Optional[dict] = None,
+    selection_threshold: Optional[float] = None,
     nonlinear_transformation: Optional[dict] = None,
     weights_filepath: Optional[str] = None,
     standardize: bool = False,
@@ -55,6 +101,14 @@ def build_nonlinear_model(
         regression_model = {}
     regression_model = {**default_regression_model, **regression_model}
 
+    default_selection_model = {
+        "module": "sklearn.linear_model",
+        "class": "LassoCV",
+        "args": {"alphas": 10, "cv": 10},
+    }
+    if selection_model is not None:
+        selection_model = {**default_selection_model, **selection_model}
+
     default_nonlinear_transformation = {
         "module": "sklearn.preprocessing",
         "class": "PolynomialFeatures",
@@ -62,13 +116,18 @@ def build_nonlinear_model(
     }
     if nonlinear_transformation is None:
         nonlinear_transformation = {}
-    nonlinear_transformation = {**default_nonlinear_transformation, **nonlinear_transformation}
+    nonlinear_transformation = {
+        **default_nonlinear_transformation,
+        **nonlinear_transformation,
+    }
 
     print(f"Info({get_command_name()}): Computing model")
 
     reg = _build_pipeline(
         regression_model,
         nonlinear_transformation,
+        selection_model=selection_model,
+        selection_threshold=selection_threshold,
         standardize=standardize,
     )
 
@@ -85,7 +144,9 @@ def build_nonlinear_model(
         cv_scores = lasso_cv.mse_path_
         alphas = lasso_cv.alphas_
         # Mean cross-validation scores for each alpha
+        print(cv_scores)
         mean_cv_scores = np.mean(cv_scores, axis=1)
+        print(mean_cv_scores)
         rmse_cv_scores = np.sqrt(mean_cv_scores)
         # Print the mean cross-validation scores
         print("Mean CV scores for each alpha:", rmse_cv_scores)
@@ -94,9 +155,29 @@ def build_nonlinear_model(
 
         print("Dual gap", lasso_cv.dual_gap_)
         print("Optimal alpha", lasso_cv.alpha_)
+        print("Model coefficients (1 to 10)", lasso_cv.coef_[:10])
         print("Model coefficients", lasso_cv.coef_)
         print("Number of non-zero coefficients", np.count_nonzero(lasso_cv.coef_))
         print("Number of initial features", lasso_cv.n_features_in_)
+
+    if regression_model["class"] == "RidgeCV":
+        ridge_cv = reg.named_steps["ridgecv"]
+        cv_scores = ridge_cv.cv_results_
+        alphas = regression_model["args"]["alphas"]
+
+        mean_cv_scores = cv_scores.mean(axis=0)  # average over samples -> per alpha
+        rmse_cv_scores = np.sqrt(mean_cv_scores)
+
+        # Print the mean cross-validation scores
+        print("Mean CV scores for each alpha:", rmse_cv_scores)
+        for a, cv in zip(alphas, rmse_cv_scores):
+            print(f"{a:>10.5f}\t{cv:>15.5f}")
+
+        print("Optimal alpha", ridge_cv.alpha_)
+        print("Model coefficients (1 to 10)", ridge_cv.coef_[:10])
+        print("Model coefficients", ridge_cv.coef_)
+        print("Number of non-zero coefficients", np.count_nonzero(ridge_cv.coef_))
+        print("Number of initial features", ridge_cv.n_features_in_)
 
     print(f"Info({get_command_name()}): Building and serializing Model object")
 
@@ -105,6 +186,149 @@ def build_nonlinear_model(
 
 
 def _build_pipeline(
+    regression_model: dict,
+    nonlinear_transformation: dict,
+    selection_model: dict | None = None,
+    selection_threshold: str | float = "mean",
+    standardize: bool = False,
+):
+    """
+    Build a regression pipeline with optional feature selection.
+
+    Parameters
+    ----------
+    regression_model : dict
+        Final regression model config:
+        {
+            "module": "sklearn.linear_model",
+            "class": "RidgeCV",
+            "args": {"alphas": [0.1, 1.0, 10.0]}
+        }
+
+    nonlinear_transformation : dict
+        Feature transformation config (e.g., PolynomialFeatures):
+        {
+            "module": "sklearn.preprocessing",
+            "class": "PolynomialFeatures",
+            "args": {"degree": 2, "include_bias": False}
+        }
+
+    selection_model : dict or None, default None
+        Optional selection model config for SelectFromModel:
+        {
+            "module": "sklearn.linear_model",
+            "class": "LassoCV",
+            "args": {"cv": 5, "max_iter": 1000}
+        }
+
+    selection_threshold : str or float, default "mean"
+        Threshold for SelectFromModel.
+
+    standardize : bool, default False
+        If True, inserts StandardScaler after the nonlinear transformation.
+
+    Returns
+    -------
+    sklearn.pipeline.Pipeline
+        A fully configured pipeline.
+    """
+
+    # Import and instantiate the nonlinear transformer
+    module = importlib.import_module(nonlinear_transformation["module"])
+    ft_class = getattr(module, nonlinear_transformation["class"])
+    ft = ft_class(**nonlinear_transformation["args"])
+
+    # Import and instantiate the final regression model
+    module = importlib.import_module(regression_model["module"])
+    rm_class = getattr(module, regression_model["class"])
+    rm = rm_class(**regression_model["args"])
+
+    pipeline_steps = [ft]
+
+    if standardize:
+        pipeline_steps.append(StandardScaler())
+
+    # Add feature selection if configured
+    if selection_model is not None:
+        module = importlib.import_module(selection_model["module"])
+        sel_class = getattr(module, selection_model["class"])
+        sel_model = sel_class(**selection_model["args"])
+        selector = SelectFromModel(sel_model, threshold=selection_threshold)
+        pipeline_steps.append(selector)
+
+    pipeline_steps.append(rm)
+
+    return make_pipeline(*pipeline_steps)
+
+
+def _build_pipeline_3(
+    regression_model: dict,
+    nonlinear_transformation: dict,
+    standardize: bool = False,
+    use_lassocv_selection: bool = True,
+    selection_threshold: str | float = 1.0e-2,
+    selection_model_args: dict | None = None,
+):
+    """Create pipeline with optional LassoCV-based feature selection followed by LassoCV refit.
+
+    Parameters
+    ----------
+    regression_model : dict
+        Final regression model configuration:
+        {"module": "...", "class": "LassoCV", "args": {...}}
+        (Should be LassoCV for this setup.)
+    nonlinear_transformation : dict
+        Nonlinear feature configuration (e.g., PolynomialFeatures):
+        {"module": "...", "class": "PolynomialFeatures", "args": {...}}
+    standardize : bool, default False
+        If True, insert StandardScaler **after** the nonlinear transformation.
+    use_lassocv_selection : bool, default True
+        If True, insert SelectFromModel(LassoCV) before the final estimator.
+    selection_threshold : {"mean","median"} or float, default "mean"
+        Threshold for SelectFromModel.
+    selection_model_args : dict or None, default None
+        Args for the LassoCV used inside SelectFromModel. If None, reuse
+        regression_model["args"].
+
+    Returns
+    -------
+    sklearn.pipeline.Pipeline
+    """
+
+    # Final estimator (should be LassoCV for this specific workflow)
+    module = importlib.import_module(regression_model["module"])
+    rm_class = getattr(module, regression_model["class"])
+    rm = rm_class(**regression_model["args"])
+
+    # Nonlinear transformer (e.g., PolynomialFeatures)
+    module = importlib.import_module(nonlinear_transformation["module"])
+    ft_class = getattr(module, nonlinear_transformation["class"])
+    ft = ft_class(**nonlinear_transformation["args"])
+
+    pipeline_steps = [ft]
+
+    # Standardize AFTER expansion so penalties act on comparable scales
+    if standardize:
+        pipeline_steps.append(StandardScaler())
+
+    # Optional LassoCV-based feature selection, then refit with final LassoCV
+    if use_lassocv_selection:
+        sel_args = (
+            selection_model_args
+            if selection_model_args is not None
+            else regression_model["args"]
+        )
+        lasso_for_selection = LassoCV(**sel_args)
+        sfm = SelectFromModel(lasso_for_selection, threshold=selection_threshold)
+        pipeline_steps.extend([sfm, rm])
+    else:
+        pipeline_steps.append(rm)
+
+    _pipeline = make_pipeline(*pipeline_steps)
+    return _pipeline
+
+
+def _build_pipeline_2(
     regression_model: dict,
     nonlinear_transformation: dict,
     standardize: bool = False,
