@@ -17,6 +17,7 @@ from ase.io import write
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
+from clusterx.utils import is_diagonal
 
 
 class Structure(SuperCell):
@@ -169,8 +170,7 @@ class Structure(SuperCell):
     @classmethod
     def from_sigma_grid(cls, super_cell: SuperCell, sigma_grid: np.ndarray):
         p = super_cell.get_transformation()
-        is_diagonal = np.count_nonzero(p - np.diag(np.diagonal(p))) == 0
-        if not is_diagonal:
+        if not is_diagonal(p):
             raise ValueError("Structure cannot be initialized from sigma grid "
             "with non-diagonal super cell transformation.")
         return cls(super_cell=super_cell, sigmas=sigma_grid.flatten())
@@ -323,6 +323,16 @@ class Structure(SuperCell):
     def get_sigmas(self):
         """Return decoration array in terms of sigma variables."""
         return self.sigmas
+
+    def get_sigma_grid(self) -> np.ndarray:
+        """Return the sigmas in the form of a 4-dim numpy array."""
+        p = self.scell.get_transformation()
+        if not is_diagonal(p):
+            raise ValueError("Sigma grid cannot be generated, super cell "
+            "transformation is not diagonal.")
+        grid_shape = np.diag(p).tolist() + [len(self.get_parent_lattice())]
+        sigmas = self.get_sigmas()
+        return np.reshape(sigmas, grid_shape)
 
     def get_supercell(self):
         """Return SuperCell member of the Structure"""

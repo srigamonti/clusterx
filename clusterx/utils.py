@@ -15,6 +15,10 @@ from ase.build.supercells import (  # needed by make_supercell
 from ase.data import chemical_symbols as cs
 
 
+def is_diagonal(x: np.ndarray):
+    return np.count_nonzero(x - np.diag(np.diagonal(x))) == 0
+
+
 def lattice_wrap_index(index, lattice_shape):
     """Returns periodic lattice index for a given iterable index.
     Inspired by: https://stackoverflow.com/questions/38066785/np-ndarray-with-periodic-boundary-conditions

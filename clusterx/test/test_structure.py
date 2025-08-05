@@ -1,7 +1,5 @@
 """Test the Structure class from clusterx.structure"""
 
-import os
-
 import pytest
 from ase import Atoms
 from ase.data import chemical_symbols
@@ -79,6 +77,8 @@ def test_sigma_grid_orthorhombic(parent_lattice):
     struct_grid = Structure.from_sigma_grid(super_cell, sigma_grid)
     np.testing.assert_array_equal(
         struct_flat.get_sigmas(), struct_grid.get_sigmas())
+    np.testing.assert_array_equal(
+        struct_flat.get_sigma_grid(), struct_grid.get_sigma_grid())
 
 
 def test_initializations(parent_lattice):
@@ -100,6 +100,18 @@ def test_initializations(parent_lattice):
 
     for other in others:
         assert reference == other
+        np.testing.assert_array_equal(
+            reference.get_sigma_grid(), other.get_sigma_grid())
+
+
+def test_swap(super_cell):
+    sigmas_init = [0, 1, 0, 0, 2, 0, 0, 0, 0]
+    sigmas_final = [0, 2, 0, 0, 1, 0, 0, 0, 0]
+    i, j = 1, 4
+    structure_init = Structure(super_cell, sigmas=sigmas_init)
+    structure_init.swap(i, j)
+    structure_final = Structure(super_cell, sigmas=sigmas_final)
+    assert structure_init == structure_final
 
 
 def test_sigma_grid_non_diag(parent_lattice):
