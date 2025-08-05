@@ -381,28 +381,8 @@ class CorrelationsCalculator:
                 self._num_mc_calls = 1
                 self._cluster_orbits_mc = cluster_orbits
 
-        cpool_list = self._cpool.get_cpool_list()
-
-        correlations = np.zeros(len(cpool_list))
-
-        for icl, _ in enumerate(cpool_list):
-            cluster_orbit = cluster_orbits[icl]
-            cluster_orbit_arr = cluster_orbit.as_array()
-            weights = cluster_orbit.get_weights()
-
-            for weight, cluster in zip(weights, cluster_orbit_arr):
-                cf = cluster_function(
-                    np.array(cluster.get_idxs()),
-                    cluster.alphas,
-                    structure.sigmas,
-                    structure.ems,
-                    self.basis_set_values,
-                )
-                correlations[icl] += weight * cf
-
-            correlations[icl] /= np.sum(weights)
-
-        return np.around(correlations, decimals=12)
+        return cluster_correlations(
+            structure, cluster_orbits, self.basis_set_values)
 
     def get_correlation_matrix(
         self, structures_set: StructuresSet, outfile: str = None, verbose: bool = False
@@ -438,6 +418,28 @@ class CorrelationsCalculator:
             f.close()
 
         return corrs
+
+
+def cluster_correlations(structure, cluster_orbits, basis_set_values):
+    correlations = np.zeros(len(cluster_orbits))
+
+    for icl, cluster_orbit in enumerate(cluster_orbits):
+        cluster_orbit_arr = cluster_orbit.as_array()
+        weights = cluster_orbit.get_weights()
+
+        for weight, cluster in zip(weights, cluster_orbit_arr):
+            cf = cluster_function(
+                np.array(cluster.get_idxs()),
+                cluster.alphas,
+                structure.sigmas,
+                structure.ems,
+                basis_set_values,
+            )
+            correlations[icl] += weight * cf
+
+        correlations[icl] /= np.sum(weights)
+
+    return np.around(correlations, decimals=12)
 
 
 @jit
