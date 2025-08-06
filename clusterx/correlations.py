@@ -4,7 +4,6 @@
 
 import os
 import pickle
-from functools import lru_cache
 from subprocess import call
 from typing import Optional
 import warnings
@@ -17,7 +16,6 @@ from ase.db.jsondb import JSONDatabase
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.clusters.cluster import Cluster
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
@@ -442,8 +440,40 @@ def cluster_correlations(structure, cluster_orbits, basis_set_values):
     return np.around(correlations, decimals=12)
 
 
+def cluster_correlations_flip(
+    structure,
+    cluster_orbits,
+    basis_set_values,
+    i_flip,
+    sigma_old,
+    sigma_new
+) -> np.ndarray:
+    correlations = np.zeros(len(cluster_orbits))
+
+    for icl, cluster_orbit in enumerate(cluster_orbits):
+        cluster_orbit_arr = cluster_orbit.as_array()
+        weights = cluster_orbit.get_weights()
+
+        for weight, cluster in zip(weights, cluster_orbit_arr):
+            cf = cluster_function_flip(
+                np.array(cluster.get_idxs()),
+                cluster.alphas,
+                structure.sigmas,
+                structure.ems,
+                i_flip,
+                sigma_old,
+                sigma_new,
+                basis_set_values,
+            )
+            correlations[icl] += weight * cf
+
+        correlations[icl] /= np.sum(weights)
+
+    return np.around(correlations, decimals=12)
+
+
 @jit
-def _trigo_basis_function(alpha: int, sigma: int, m: int):
+def _trigo_basis_function(alpha: int, sigma: int, m: int) -> float:
     # Axel van de Walle, CALPHAD 33, 266 (2009)
 
     if alpha == 0:
@@ -505,33 +535,33 @@ def site_basis_function(
 def cluster_function(
     cluster_idxs: np.ndarray,
     cluster_alphas: np.ndarray,
-    structure_sigmas: np.ndarray,
+    sigmas: np.ndarray,
     ems: np.ndarray,
     basis_set_values: np.ndarray,
 ):
     cf = 1.0
     for cl_alpha, cl_idx in zip(cluster_alphas, cluster_idxs):
-        cf *= basis_set_values[cl_alpha, structure_sigmas[cl_idx], ems[cl_idx]]
+        cf *= basis_set_values[cl_alpha, sigmas[cl_idx], ems[cl_idx]]
     return cf
 
 
 @jit
-def cluster_function_swap(
+def cluster_function_flip(
     cluster_idxs: np.ndarray,
     cluster_alphas: np.ndarray,
     sigmas: np.ndarray,
     ems: np.ndarray,
-    ind: int,
-    old_sigma: int,
-    new_sigma: int,
+    i_flip: int,
+    sigma_old: int,
+    sigma_new: int,
     basis_set_values: np.ndarray,
 ):
     nbodies = len(cluster_idxs)
     cf = 1.0
     for i in range(nbodies):
-        if i == cluster_idxs.index(ind):
-            cf *= basis_set_values[cluster_alphas[i], new_sigma, ems[i]] \
-                - basis_set_values[cluster_alphas[i], old_sigma, ems[i]]
+        if i == cluster_idxs.index(i_flip):
+            cf *= basis_set_values[cluster_alphas[i], sigma_old, ems[i]] \
+                - basis_set_values[cluster_alphas[i], sigma_new, ems[i]]
         else:
             cf *= basis_set_values[cluster_alphas[i], sigmas[i], ems[i]]
     return cf

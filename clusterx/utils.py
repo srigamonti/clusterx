@@ -15,6 +15,25 @@ from ase.build.supercells import (  # needed by make_supercell
 from ase.data import chemical_symbols as cs
 
 
+def grid_mapping(
+    grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple
+):
+    """Map values from grid to reduced grid around grid index i_grid.
+
+    **parameters**
+    ``grid``: ndarray, shape (pX, pY, pZ, n)
+    ``i_grid``: ndarray, shape (4,)
+    ``p_reduced``: tuple of int, shape (3,)
+    """
+    d = len(grid.shape) - 1
+    indices = np.indices(p_reduced)
+    offset = i_grid[:-1] - np.array(p_reduced)//2
+    offset = offset.reshape([-1] + [1]*d)
+    indices += offset
+    indices %= np.array(grid.shape[:-1]).reshape([-1] + [1]*d)
+    return grid[*indices, :]
+
+
 def is_diagonal(x: np.ndarray):
     return np.count_nonzero(x - np.diag(np.diagonal(x))) == 0
 

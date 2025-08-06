@@ -8,7 +8,23 @@ from clusterx.utils import (
     PolynomialFunction,
     PolynomialBasis,
     lattice_wrap_index,
+    grid_mapping
 )
+
+@pytest.mark.parametrize(
+    "grid_shape,i_grid,p_reduced",
+    [
+        ((10, 10, 10, 2), np.array([0, 0, 0, 0]), (3, 3, 3)),
+        ((10, 10, 10, 2), np.array([3, 3, 3, 0]), (3, 3, 3)),
+        ((10, 10, 10, 2), np.array([9, 9, 9, 2]), (3, 3, 3)),
+        ((10, 10, 1), np.array([9, 9, 0]), (3, 3)),
+    ]
+)
+def test_grid_mapping(grid_shape, i_grid, p_reduced):
+    grid = np.arange(np.prod(grid_shape)).reshape(grid_shape)
+    grid_reduced = grid_mapping(grid, i_grid, p_reduced)
+    np.testing.assert_array_equal(
+        grid_reduced.shape, list(p_reduced) + [grid_shape[-1]])
 
 
 def test_lattice_wrap_index():

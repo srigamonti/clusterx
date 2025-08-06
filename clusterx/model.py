@@ -7,10 +7,18 @@ import pickle
 import os
 import time
 import warnings
+
 import numpy as np
-from clusterx.correlations import CorrelationsCalculator, cluster_function_swap
+
+from clusterx.correlations import (
+    CorrelationsCalculator,
+    cluster_function_flip,
+    cluster_correlations_flip
+)
+from clusterx.structure import Structure
 from clusterx.estimators.estimator_factory import EstimatorFactory
 from clusterx.clusters_selector import ClustersSelector
+from clusterx.utils import grid_mapping, is_diagonal
 
 
 class Model:
@@ -78,6 +86,8 @@ class Model:
         self._mc_multiplicities: List[int] = []
         self._mc_start_time = 0
         self._mc_init_time = 0
+        self.corrc_reduced = None
+        self.scell_reduced = None
 
         if self.standardize:
             from sklearn.preprocessing import StandardScaler
@@ -124,6 +134,19 @@ class Model:
         self._mc_multiplicities = []
         self._mc_start_time = 0
         self._mc_init_time = 0
+        self.scell_reduced = None
+        self.corrc_reduced = None
+        self.correlation_last = None
+
+    def init_reduced_model(self):
+        cpool = self.corrc.get_cpool()
+        self.scell_reduced = cpool.get_containing_supercell()
+        plat = cpool.get_plat()
+        self.corrc_reduced = CorrelationsCalculator(
+            basis=self.corrc.get_basis(),
+            parent_lattice=plat,
+            clusters_pool=cpool,
+        )
 
     def serialize(self, filepath=None, fmt=None, db_name=None):
         """Write cluster expansion model to Json database
@@ -244,13 +267,55 @@ class Model:
             return self.estimator.predict(corrs.reshape(1, -1))[0]
         else:
             if self.standardize:
-                try:
-                    corrs = self.stdscaler.transform(corrs)
-                except:
-                    import sys
-
-                    sys.exit("StandardScaler of Model has not been fitted.")
+                corrs = self.stdscaler.transform(corrs)
             return np.dot(self.ecis, corrs)
+
+    def predict_swap_reduced(self, structure: Structure, i: int, j: int):
+        """Predict property difference with the cluster expansion model by
+        reducing the structure to only the supercell around the flip indices,
+        and calculating the correlations in the reduced structure.
+
+        **Parameters:**
+
+        ``structure``: Structure object
+            structure object to calculate property difference to.
+
+        ``i``: int
+            index of first atom position has been swapped
+
+        ``j``: int
+            index of second atom position has been swapped
+        """
+        p = np.diag(structure.get_supercell().get_transformation()).tolist()
+        if not is_diagonal(p):
+            raise ValueError("Reduced structure cannot be initialized "
+            "with non-diagonal super cell transformation.")
+
+        if self.scell_reduced is None:
+            self.init_reduced_model()
+        # NOTE: handle periodic reset outside to reduce error drift externally
+        if self.correlation_last is None:
+            self.correlation_last = self.corrc.get_cluster_correlations(
+                structure)
+
+        p_reduced = np.diag(self.scell_reduced.get_transformation())
+        grid_shape = p + [len(self.get_plat())]
+        grid_shape_reduced = np.diag(p_reduced).tolist() + [len(self.get_plat())]
+        sigma_grid = structure.get_sigma_grid()
+
+        # get the flip indices on the grid of sigmas
+        i_grid = list(np.unravel_index(i, grid_shape))
+        j_grid = list(np.unravel_index(i, grid_shape))
+        # alternatively, maybe faster:
+        #indices = np.unravel_index([i, j], grid_shape)
+        #i_grid = [index[0] for index in indices]
+        #j_grid = [index[1] for index in indices]
+
+        sigma_grid_reduced = grid_mapping(sigma_grid, i_grid, p_reduced)
+
+        structure_reduced = Structure.from_sigma_grid(
+            self.scell_reduced, sigma_grid_reduced)
+
 
     def predict_swap(self, structure, ind1=None, ind2=None, correlation=False, site_types=[0]):
         """Predict property difference with the optimal cluster expansion model.
@@ -377,18 +442,7 @@ class Model:
             cluster_ems = self._clusters_list[icl]["cluster_ems"]
             sigmas = structure.sigmas.take(cluster_sites)
 
-            # loop implementation (baseline):
-            #nbodies = len(cluster_sites)
-            #cf = 1.0
-            #for i in range(nbodies):
-            #    if i == cluster_sites.index(ind):
-            #        cf *= self.corrc.basis_set_values[cluster_funcs[i], new_sigma, cluster_ems[i]] \
-            #            - self.corrc.basis_set_values[cluster_funcs[i], old_sigma, cluster_ems[i]]
-            #    else:
-            #       cf *= self.corrc.basis_set_values[cluster_funcs[i], sigmas[i], cluster_ems[i]]
-
-            # jit implementation (tiny bit faster):
-            cf = cluster_function_swap(
+            cf = cluster_function_flip(
                 cluster_sites,
                 cluster_funcs,
                 sigmas,
@@ -398,15 +452,6 @@ class Model:
                 new_sigma,
                 self.corrc.basis_set_values,
             )
-
-            # vectorized implementation (slow):
-            #cf_factors_const = self.corrc.basis_set_values[cluster_funcs, sigmas, cluster_ems]
-            #cf_factors_old_s = self.corrc.basis_set_values[cluster_funcs, np.repeat(old_sigma, nbodies), cluster_ems]
-            #cf_factors_new_s = self.corrc.basis_set_values[cluster_funcs, np.repeat(new_sigma, nbodies), cluster_ems]
-            #cf_factors_diff = cf_factors_new_s - cf_factors_old_s
-            #cf_factors = np.where(np.arange(nbodies)==cluster_sites.index(ind), cf_factors_diff, cf_factors_const)
-            #cf = np.prod(cf_factors)
-
             corrs[cluster_index] += cf
 
         corrs /= self._mc_multiplicities
