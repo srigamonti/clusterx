@@ -560,8 +560,8 @@ def cluster_function_flip(
     cf = 1.0
     for i in range(nbodies):
         if i == cluster_idxs.index(i_flip):
-            cf *= basis_set_values[cluster_alphas[i], sigma_old, ems[i]] \
-                - basis_set_values[cluster_alphas[i], sigma_new, ems[i]]
+            cf *= basis_set_values[cluster_alphas[i], sigma_new, ems[i]] \
+                - basis_set_values[cluster_alphas[i], sigma_old, ems[i]]
         else:
             cf *= basis_set_values[cluster_alphas[i], sigmas[i], ems[i]]
     return cf
