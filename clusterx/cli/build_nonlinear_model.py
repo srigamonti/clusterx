@@ -10,6 +10,11 @@ import plac
 from sklearn.feature_selection import SelectFromModel
 from sklearn.linear_model import LassoCV
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import (
+    LeaveOneOut,
+    cross_val_predict,
+    cross_val_score,
+)
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -113,14 +118,13 @@ def build_nonlinear_model(
     default_nonlinear_transformation = {
         "module": "sklearn.preprocessing",
         "class": "PolynomialFeatures",
-        "args": {"degree": 1, "include_bias": True},
+        "args": {"degree": 1, "include_bias": False},
     }
-    if nonlinear_transformation is None:
-        nonlinear_transformation = {}
-    nonlinear_transformation = {
-        **default_nonlinear_transformation,
-        **nonlinear_transformation,
-    }
+    if nonlinear_transformation is not None:
+        nonlinear_transformation = {
+            **default_nonlinear_transformation,
+            **nonlinear_transformation,
+        }
 
     print(f"Info({get_command_name()}): Computing model")
 
@@ -145,12 +149,21 @@ def build_nonlinear_model(
     print(f"Fit RMSE: {fit_error:.5f}")
 
     if selection_model is not None:
-        summarize_cv_model(
-            reg.named_steps["selector"], selection_model["class"], label="SELECTOR"
+        print(reg.named_steps["selector"].estimator_)
+        summarize_model(
+            reg.named_steps["selector"].estimator_,
+            comat,
+            pvals,
+            selection_model["class"],
+            label="SELECTOR",
         )
-
-    summarize_cv_model(
-        reg.named_steps["regressor"], regression_model["class"], label="REGRESSOR"
+    print(reg.named_steps["regressor"])
+    summarize_model(
+        reg.named_steps["regressor"],
+        comat,
+        pvals,
+        regression_model["class"],
+        label="REGRESSOR",
     )
 
     print(f"Info({get_command_name()}): Building and serializing Model object")
@@ -159,7 +172,7 @@ def build_nonlinear_model(
     nlmodel.serialize(model_filepath)
 
 
-def summarize_cv_model(regressor, model_type: str, label: str = "MODEL"):
+def summarize_model(regressor, x, y, model_type: str, label: str = "MODEL"):
     """
     Print CV performance summary for a fitted pipeline containing LassoCV or RidgeCV.
 
@@ -176,9 +189,9 @@ def summarize_cv_model(regressor, model_type: str, label: str = "MODEL"):
     """
     # Predict and compute fit error
     print("\n" + "=" * 72)
-    print(f"CV Model Summary Report — {model_type}/{label}")
+    print(f"Model Summary Report — {model_type}/{label}")
     print("=" * 72)
-
+    print_cv_info = False
     # Collect cross-validation scores
     if model_type == "LassoCV":
         if not hasattr(regressor, "mse_path_"):
@@ -187,36 +200,62 @@ def summarize_cv_model(regressor, model_type: str, label: str = "MODEL"):
         cv_scores = regressor.mse_path_  # shape: (n_alphas, n_folds)
         mean_cv_scores = np.mean(cv_scores, axis=1)  # mean over folds
         alphas = regressor.alphas_
+        print_cv_info = True
 
     elif model_type == "RidgeCV":
-        if not hasattr(regressor, "cv_values_"):
-            print("cv_values_ not available. Did you set store_cv_values=True?")
+        if not hasattr(regressor, "cv_results_"):
+            print(
+                "cv_results_ not available. Did you set store_cv_results to True (and cv to None)?"
+            )
             return
-        cv_scores = regressor.cv_values_  # shape: (n_samples, n_alphas)
+        cv_scores = regressor.cv_results_  # shape: (n_samples, n_alphas)
         mean_cv_scores = np.mean(cv_scores, axis=0)  # mean over samples
         alphas = regressor.alphas
+        print_cv_info = True
+
+    elif model_type == "Lasso":
+        cvs = cross_val_score(
+            regressor,
+            x,
+            y,
+            cv=LeaveOneOut(),
+            scoring="neg_mean_squared_error",
+        )
+        pred_cv = cross_val_predict(regressor, x, y, cv=LeaveOneOut())
+
+        absolute_errors = np.sqrt(-cvs)
+        cv = np.sqrt(-np.mean(cvs))
+        maxae = np.amax(absolute_errors)
+        mae = np.mean(absolute_errors)
+
+        print(
+            "RMSE-CV", cv, "MAE-CV", mae, "MaxAE-CV", maxae, "Predictions-CV", pred_cv
+        )
 
     else:
         print(f"Unsupported model type: {model_type}")
         return
 
-    # Compute RMSE for each alpha
-    rmse_cv_scores = np.sqrt(mean_cv_scores)
-    print("\nCross-Validation RMSE by Alpha:")
-    for a, rmse in zip(alphas, rmse_cv_scores):
-        print(f"  alpha = {a:10.5f} -> RMSE = {rmse:10.5f}")
+    if print_cv_info:
+        # Compute RMSE for each alpha
+        rmse_cv_scores = np.sqrt(mean_cv_scores)
+        print("\nCross-Validation RMSE by Alpha:")
+        for a, rmse in zip(alphas, rmse_cv_scores):
+            print(f"  alpha = {a:10.5f} -> RMSE = {rmse:10.5f}")
 
-    # Summary of fitted model
-    print("\nOptimal alpha:", regressor.alpha_)
-    print("Number of features:", regressor.n_features_in_)
+        # Summary of fitted model
+        print("\nOptimal alpha:", regressor.alpha_)
+        print("Number of features:", regressor.n_features_in_)
+
     print("Number of non-zero coefficients:", np.count_nonzero(regressor.coef_))
     print("First 10 coefficients:\n", regressor.coef_[:10])
+
     print("=" * 72 + "\n")
 
 
 def _build_pipeline(
     regression_model: dict,
-    nonlinear_transformation: dict,
+    nonlinear_transformation: dict | None = None,
     selection_model: dict | None = None,
     selection_threshold: str | float = "mean",
     standardize: bool = False,
@@ -262,17 +301,19 @@ def _build_pipeline(
         A fully configured pipeline.
     """
 
-    # Import and instantiate the nonlinear transformer
-    module = importlib.import_module(nonlinear_transformation["module"])
-    ft_class = getattr(module, nonlinear_transformation["class"])
-    ft = ft_class(**nonlinear_transformation["args"])
+    pipeline_steps = []
+
+    if nonlinear_transformation is not None:
+        # Import and instantiate the nonlinear transformer
+        module = importlib.import_module(nonlinear_transformation["module"])
+        ft_class = getattr(module, nonlinear_transformation["class"])
+        ft = ft_class(**nonlinear_transformation["args"])
+        pipeline_steps.append(("transformer", ft))
 
     # Import and instantiate the final regression model
     module = importlib.import_module(regression_model["module"])
     rm_class = getattr(module, regression_model["class"])
     rm = rm_class(**regression_model["args"])
-
-    pipeline_steps = [("transformer", ft)]
 
     if standardize:
         pipeline_steps.append(("scaler", StandardScaler()))
