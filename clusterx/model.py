@@ -9,10 +9,12 @@ import warnings
 from typing import List, Optional
 
 import numpy as np
+from sklearn.pipeline import Pipeline
 
 from clusterx.clusters_selector import ClustersSelector
 from clusterx.correlations import CorrelationsCalculator, cluster_function_swap
 from clusterx.estimators.estimator_factory import EstimatorFactory
+from clusterx.utils import _timed
 
 
 class Model:
@@ -70,8 +72,29 @@ class Model:
 
         self.corrc = corrc
         self.property_name = property_name
+
+        if ecis is not None and estimator is not None:
+            raise ValueError(
+                "Only one of 'ecis' or 'estimator' should be provided, not both."
+            )
+
         self.estimator = estimator
         self.ecis = ecis
+
+        # Extract coefficients from estimator if given
+        if isinstance(estimator, Pipeline):
+            final_estimator = estimator[-1]
+            self.ecis = final_estimator.coef_
+            self.intercept = final_estimator.intercept_
+        elif estimator is not None:
+            self.ecis = estimator.coef_
+            self.intercept = estimator.intercept_
+        elif ecis is not None:
+            self.ecis = ecis
+            self.intercept = 0
+        else:
+            raise ValueError("Either 'ecis' or 'estimator' must be provided.")
+
         self.standardize = standardize
         self._basis = None
         self._mc = False
@@ -220,13 +243,14 @@ class Model:
 
     def get_ecis(self):
         """Return array of effective cluster interactions (ECIs) of the model"""
-        if self.ecis is not None:
-            return self.ecis
-        else:
-            if self.standardize:
-                return self.estimator[-1].coef_
-            else:
-                return self.estimator.coef_
+        return self.ecis
+        # if self.ecis is not None:
+        #     return self.ecis
+        # else:
+        #     if self.standardize:
+        #         return self.estimator[-1].coef_
+        #     else:
+        #         return self.estimator.coef_
 
     def get_correlations_calculator(self):
         """Return correlations calculator of the Model object"""
@@ -257,7 +281,6 @@ class Model:
             return np.dot(self.ecis, corrs)
 
     def _initialize_interaction_dictionaries(self, scell, site_types):
-        self._mc_init_time = time.time()
         print("Info(Model): setting up dictionary of interactions.")
 
         try:
@@ -284,7 +307,9 @@ class Model:
             for cluster in cluster_orbit:
                 self._clusters_list.append({})
                 self._clusters_list[icl]["cluster_index"] = cluster_index
-                self._clusters_list[icl]["cluster_sites"] = cluster.get_idxs()
+                self._clusters_list[icl]["cluster_sites"] = (
+                    cluster.get_idxs()
+                )  # Atom indexes of cluster
                 self._clusters_list[icl]["cluster_funcs"] = cluster.alphas
                 self._clusters_list[icl]["cluster_ems"] = self._ems.take(
                     cluster.get_idxs()
@@ -319,6 +344,7 @@ class Model:
         atom_index=None,
         new_sigma=None,
         site_types=[0],
+        is_binary=False,
     ):
         """Predict property change by flipping a species.
 
@@ -335,21 +361,88 @@ class Model:
         ``new_sigma``: int, default None
         """
         if self._num_mc_calls == 0:
-            self._initialize_interaction_dictionaries(
-                structure.get_supercell(), site_types
-            )
+            self._mc_init_time = time.time()
+
+            with _timed("Model: initialize_interaction_dictionaries"):
+                self._initialize_interaction_dictionaries(
+                    structure.get_supercell(), site_types
+                )
 
         old_sigma = structure.sigmas[atom_index]
 
-        if new_sigma is not None:
-            new_sigma = new_sigma
-        elif structure.is_nary(2):
+        if new_sigma == old_sigma:
+            return 0.0
+        elif new_sigma is None and is_binary:
             new_sigma = 1 - old_sigma
-        else:
-            raise ValueError("new_sigma not given and structure is not binary")
 
-        de = self._delta_e_calc(structure, atom_index, old_sigma, new_sigma)
+        de = self._delta_e_flip(structure, atom_index, old_sigma, new_sigma)
         return de
+
+    def _delta_e_flip(self, structure, ind, old_sigma, new_sigma):
+        """
+        Compute the energy change when flipping a site 'ind' from old_sigma to new_sigma.
+        Only clusters affected by the flip are evaluated.
+        """
+        check = False
+        basis_set_values = self.corrc.basis_set_values
+        if check:
+            corrs0 = self.corrc.get_cluster_correlations(structure)
+            structure.update_arrays(
+                atom_indices=[ind], new_sigmas=[new_sigma], update_idx_comps=False
+            )
+            corrs1 = self.corrc.get_cluster_correlations(structure)
+            structure.update_arrays(
+                atom_indices=[ind], new_sigmas=[old_sigma], update_idx_comps=False
+            )
+            dcorr = corrs1 - corrs0
+
+        corrs = np.zeros(self._mc_nclusters)
+        for icl in self._interactions_dict[ind]["interactions_list"]:
+            cluster = self._clusters_list[icl]
+            cluster_index = cluster["cluster_index"]
+            cluster_sites = cluster["cluster_sites"]
+            cluster_funcs = cluster["cluster_funcs"]
+            cluster_ems = cluster["cluster_ems"]
+
+            sigmas = structure.sigmas.take(cluster_sites)
+
+            cf = 1.0
+
+            for i, site in enumerate(cluster_sites):
+                func = cluster_funcs[i]
+                m = cluster_ems[i]
+
+                if site == ind:
+                    # Compute the change due to flipping the site
+                    new_val = basis_set_values[func, new_sigma, m]
+                    old_val = basis_set_values[func, old_sigma, m]
+                    cf *= new_val - old_val
+                else:
+                    # Other sites contribute normally
+                    sigma = sigmas[i]
+                    cf *= basis_set_values[func, sigma, m]
+
+            corrs[cluster_index] += cf
+
+        corrs /= self._mc_multiplicities
+        corrs = np.around(corrs, decimals=12)
+
+        if check:
+            col_width = 6
+            precision = 3
+            fmt = f"{{:>{col_width}.{precision}f}}"
+
+            for label, arr in [("dcorr", dcorr), ("corrs", corrs)]:
+                values = [fmt.format(x) for x in arr]
+                line = f"{label:<8}: " + " ".join(values)
+                print(line)
+                input()
+
+        if self.estimator is not None:
+            # Intercept must be subctracted from computation of energy change.
+            return self.estimator.predict(corrs.reshape(1, -1))[0] - self.intercept
+        else:
+            return np.dot(self.ecis, corrs)
 
     def predict_swap(
         self, structure, ind1=None, ind2=None, correlation=False, site_types=[0]
@@ -455,10 +548,7 @@ class Model:
 
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
-            return (
-                self.estimator.predict(corrs.reshape(1, -1))[0]
-                - self.estimator.intercept_
-            )
+            return self.estimator.predict(corrs.reshape(1, -1))[0] - self.intercept
         else:
             return np.dot(self.ecis, corrs)
 
