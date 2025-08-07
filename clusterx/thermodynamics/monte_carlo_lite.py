@@ -57,12 +57,7 @@ class MonteCarloLite:
     """
 
     def __init__(
-        self,
-        energy_model,
-        scell,
-        energy_scale_factor=None,
-        boltzmann_constant=1.0,
-        mcsetup_filepath=None,
+        self, energy_model, scell, energy_scale_factor=None, boltzmann_constant=1.0
     ):
         self._emodel = energy_model
         self._scell = scell
