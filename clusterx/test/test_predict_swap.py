@@ -64,8 +64,8 @@ def test_swap_binary_cubic(basis):
     i, j = structure.swap_random_binary(site_type=0)
 
     pred_init = model.predict(structure)
-    #pred_swap = model.predict_swap(structure, i, j)
-    pred_swap = model.predict_swap_reduced(structure, i, j)
+    pred_swap = model.predict_swap(structure, i, j)
+    #pred_swap = model.predict_swap_reduced(structure, i, j)
     structure.swap(i, j)
     pred_final = model.predict(structure)
     assert np.isclose(pred_init - pred_final, pred_swap)

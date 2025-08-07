@@ -335,7 +335,104 @@ class Model:
         self.correlations_last -= correlations_diff
         return prediction
 
-    def predict_swap(self, structure, ind1=None, ind2=None, correlation=False, site_types=[0]):
+    def _initialize_interaction_dictionaries(self, scell, site_types):
+        self._mc_init_time = time.time()
+        print("Info(Model): setting up dictionary of interactions.")
+
+        try:
+            cluster_orbits = self.corrc._cluster_orbits_mc
+            self._mc_nclusters = len(cluster_orbits)
+            for i in range(self._mc_nclusters):
+                self._mc_multiplicities.append(len(cluster_orbits[i]))
+        except AttributeError:
+            raise AttributeError("Cluster_orbits set has not been pre computed.")
+
+        if self.standardize:
+            raise RuntimeError("Standardscaler not supported")
+
+        self._atom_indexes = []
+        for st in site_types:
+            for aidx in scell.get_atom_indices_for_site_type(st)[0]:
+                self._atom_indexes.append(aidx)
+
+        self._ems = scell.get_ems()
+        self._clusters_list = []
+
+        icl = 0
+        for cluster_index, cluster_orbit in enumerate(cluster_orbits):
+            for cluster in cluster_orbit:
+                self._clusters_list.append({})
+                self._clusters_list[icl]["cluster_index"] = cluster_index
+                self._clusters_list[icl]["cluster_sites"] = cluster.get_idxs()
+                self._clusters_list[icl]["cluster_funcs"] = cluster.alphas
+                self._clusters_list[icl]["cluster_ems"] = self._ems.take(
+                    cluster.get_idxs()
+                )
+                icl += 1
+
+        self._interactions_dict = {}
+        for ind in self._atom_indexes:
+            self._interactions_dict[ind] = {}
+            self._interactions_dict[ind]["interactions_list"] = []
+            self._interactions_dict[ind]["cluster_sites_index_for_ind"] = []
+            for icl in range(len(self._clusters_list)):
+                if ind in self._clusters_list[icl]["cluster_sites"]:
+                    self._interactions_dict[ind]["interactions_list"].append(icl)
+                    self._interactions_dict[ind]["cluster_sites_index_for_ind"].append(
+                        self._clusters_list[icl]["cluster_sites"].index(ind)
+                    )
+
+        if self._basis == "binary-linear" or self._basis == "indicator-binary":
+            self._delta_e_calc = self._compute_delta_e_binary_linear
+        else:
+            self._delta_e_calc = self._compute_delta_e
+
+        self._num_mc_calls = 1
+        self._mc_init_time -= time.time()
+        self._mc_init_time = -self._mc_init_time
+        self._mc_start_time = time.time()
+
+    def predict_flip(
+        self,
+        structure,
+        atom_index=None,
+        new_sigma=None,
+        site_types=[0],
+    ):
+        """Predict property change by flipping a species.
+
+        Structure object remains unchanged
+
+        **Parameters:**
+
+        ``structure``: Structure object
+            structure object to calculate property difference to.
+
+        ``atom_index``: int
+            index of the atom to be substituted
+
+        ``new_sigma``: int, default None
+        """
+        if self._num_mc_calls == 0:
+            self._initialize_interaction_dictionaries(
+                structure.get_supercell(), site_types
+            )
+
+        old_sigma = structure.sigmas[atom_index]
+
+        if new_sigma is not None:
+            new_sigma = new_sigma
+        elif structure.is_nary(2):
+            new_sigma = 1 - old_sigma
+        else:
+            raise ValueError("new_sigma not given and structure is not binary")
+
+        de = self._delta_e_calc(structure, atom_index, old_sigma, new_sigma)
+        return de
+
+    def predict_swap(
+        self, structure, ind1=None, ind2=None, correlation=False, site_types=[0]
+    ):
         """Predict property difference with the optimal cluster expansion model.
 
         **Parameters:**
@@ -351,69 +448,9 @@ class Model:
 
         """
         if self._num_mc_calls == 0:
-            self._mc_init_time = time.time()
-            print("Info(Model): setting up dictionary of interactions.")
-
-            try:
-                cluster_orbits = self.corrc._cluster_orbits_mc
-                self._mc_nclusters = len(cluster_orbits)
-                for i in range(self._mc_nclusters):
-                    self._mc_multiplicities.append(len(cluster_orbits[i]))
-
-            except AttributeError:
-                raise AttributeError("Cluster_orbits set has not been pre computed.")
-
-            if self.standardize:
-                raise RuntimeError("Predict swap does not support standardscaler")
-
-            # Determine atom indexes for which to make the interactions list
-            scell = structure.get_supercell()
-            self._atom_indexes = []
-            for st in site_types:
-                for aidx in scell.get_atom_indices_for_site_type(st)[0]:
-                    self._atom_indexes.append(aidx)
-
-            # Determine ems
-            self._ems = scell.get_ems()
-
-            # Make a list of clusters
-            self._clusters_list = []
-
-            icl = 0
-            for cluster_index, cluster_orbit in enumerate(cluster_orbits):
-                for cluster in cluster_orbit:
-                    self._clusters_list.append({})
-
-                    self._clusters_list[icl]["cluster_index"] = cluster_index
-                    self._clusters_list[icl]["cluster_sites"] = cluster.get_idxs()
-                    self._clusters_list[icl]["cluster_funcs"] = cluster.alphas
-                    self._clusters_list[icl]["cluster_ems"] = self._ems.take(cluster.get_idxs())
-
-                    icl += 1
-
-            # Determine which interactions (clusters) contain every site
-            self._interactions_dict = {}
-
-            for ind in self._atom_indexes:
-                self._interactions_dict[ind] = {}
-                self._interactions_dict[ind]["interactions_list"] = []
-                self._interactions_dict[ind]["cluster_sites_index_for_ind"] = []
-                for icl in range(len(self._clusters_list)):
-                    if ind in self._clusters_list[icl]["cluster_sites"]:
-                        self._interactions_dict[ind]["interactions_list"].append(icl)
-                        self._interactions_dict[ind]["cluster_sites_index_for_ind"].append(
-                            self._clusters_list[icl]["cluster_sites"].index(ind)
-                        )
-
-            if self._basis == "binary-linear" or self._basis == "indicator-binary":
-                self._delta_e_calc = self._compute_delta_e_binary_linear
-            else:
-                self._delta_e_calc = self._compute_delta_e
-
-            self._num_mc_calls = 1
-            self._mc_init_time -= time.time()
-            self._mc_init_time = -self._mc_init_time
-            self._mc_start_time = time.time()
+            self._initialize_interaction_dictionaries(
+                structure.get_supercell(), site_types
+            )
 
         new_sigma = structure.sigmas[ind1]
         old_sigma = structure.sigmas[ind2]
