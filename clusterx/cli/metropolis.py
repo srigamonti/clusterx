@@ -39,7 +39,7 @@ commands = ["metropolis"]
     ),
     model_filepath=("Output Model file path.", "option", "mofp", str),
     mcsetup_filepath=("MC setup file path.", "option", "sufp", str),
-    mcrun_filepath=("MC run file path.", "option", "scfp", str),
+    mcrun_filepath=("MC run file path.", "option", "mcrfp", str),
     mcscell_filepath=("MC scell file path.", "option", "scfp", str),
     traj_filepath=(
         "Filename for the output trajectory",
@@ -135,7 +135,7 @@ def metropolis(
     model_filepath: str = "model.pickle",
     mcsetup_filepath: str = "mc-setup.pickle",
     mcrun_filepath: str = "mc-run.pickle",
-    mcscell_filepathh: str = "mc-scell.pickle",
+    mcscell_filepath: str = "mc-scell.pickle",
     traj_filepath: str = "mc-trajectory.json",
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = 1,
     n_substitutions: Optional[Union[int, dict]] = None,
@@ -149,7 +149,7 @@ def metropolis(
     n_error_reset: Optional[int] = None,
     # metropolis sampling arguments
     n_mc_steps: int = 100,
-    energy_scale_factor: float = 1.0,
+    energy_scale_factor: float | None = None,
     temperature: float = 1.0,
     boltzmann_constant: float = 1.0,
     initial_decoration: Optional[List[int]] = None,
@@ -224,6 +224,8 @@ def metropolis(
             mclite = MonteCarloLite(
                 energy_model=energy_model,
                 scell=scell,
+                energy_scale_factor=energy_scale_factor,
+                boltzmann_constant=boltzmann_constant,
             )
             mclite.serialize(mcsetup_filepath)
 
