@@ -21,17 +21,19 @@ def grid_mapping(
     """Map values from grid to reduced grid around grid index i_grid.
 
     **parameters**
-    ``grid``: ndarray, shape (pX, pY, pZ, n)
-    ``i_grid``: ndarray, shape (4,)
-    ``p_reduced``: tuple of int, shape (3,)
+    ``grid``: ndarray, shape (pX, pY, pZ, ..., pd n)
+    ``i_grid``: ndarray, shape (d + 1,)
+    ``p_reduced``: tuple of int, shape (d,)
     """
     d = len(grid.shape) - 1
+    plat_index = i_grid[-1]
     indices = np.indices(p_reduced)
     offset = i_grid[:-1] - np.array(p_reduced)//2
     offset = offset.reshape([-1] + [1]*d)
     indices += offset
     indices %= np.array(grid.shape[:-1]).reshape([-1] + [1]*d)
-    return grid[*indices, :]
+    i_grid_new = np.array((np.array(p_reduced)//2).tolist() + [plat_index])
+    return grid[*indices, :], i_grid_new
 
 
 def is_diagonal(x: np.ndarray):
