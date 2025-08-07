@@ -190,20 +190,20 @@ class MonteCarloLite:
 
         from tqdm import tqdm
 
-        print("Generating initial random structure")
-        if initial_structure is None:
-            if n_substitutions is not None:
-                struc = self._scell.gen_random_structure(n_substitutions)
+        with _timed("Metropolis: Generating initial random structure"):
+            if initial_structure is None:
+                if n_substitutions is not None:
+                    struc = self._scell.gen_random_structure(n_substitutions)
+                else:
+                    struc = self._scell.gen_random_structure()
             else:
-                struc = self._scell.gen_random_structure()
-        else:
-            struc = initial_structure
+                struc = initial_structure
 
         scaledbeta = self._energy_scale_factor / self._kb / temperature
 
         self._emodel.corrc.reset_mc(mc=True)
 
-        with _timed("Computing energy of initial random structure"):
+        with _timed("Metropolis: Computing energy of initial random structure"):
             e = self._emodel.predict(struc)
 
         mcrun_filepath
@@ -313,8 +313,7 @@ class MonteCarloLite:
                     mcrun.sigmas.append(np.array(struc.get_sigmas(), dtype=np.uint8))
                     mcrun.energies.append(e)
 
-        print("Serializing")
-        with _timed("serialization"):
+        with _timed("Metropolis: serialization"):
             if mcrun_filepath is not None:
                 mcrun.serialize(filepath=mcrun_filepath)
 
