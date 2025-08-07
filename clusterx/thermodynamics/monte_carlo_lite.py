@@ -226,6 +226,8 @@ class MonteCarloLite:
 
         progress = tqdm(range(1, n_mc_steps + 1), total=n_mc_steps, desc="MMC sim.")
 
+        i_reset = 0
+        e_error = 0
         with _timed("Metropolis: MC steps"):
             for i in progress:
                 atom_indices = []
@@ -235,13 +237,6 @@ class MonteCarloLite:
                         atom_index, sigma_initial, sigma_final = struc.flip_random(
                             self._substitutional_sublattice
                         )
-                        # mcrun.clics[-1].append(
-                        #     {
-                        #         "atom_index": atom_index,
-                        #         "sigma_i": sigma_initial,
-                        #         "sigma_f": sigma_final,
-                        #     }
-                        # )
                         atom_indices.append(atom_index)
                         new_sigmas.append(sigma_final)
                     elif ensemble == "canonical":
@@ -254,16 +249,6 @@ class MonteCarloLite:
                             sigma_final=sigma_initial1,
                         )
 
-                        # mcrun.clics[-1].append(
-                        #     {
-                        #         "atom_index1": atom_index1,
-                        #         "atom_index2": atom_index2,
-                        #         "sigma_1i": sigma_initial1,
-                        #         "sigma_1f": sigma_final1,
-                        #         "sigma_2i": sigma_initial2,
-                        #         "sigma_2f": sigma_final2,
-                        #     }
-                        # )
                         atom_indices.append(atom_index1)
                         new_sigmas.append(sigma_final1)
                         atom_indices.append(atom_index2)
@@ -283,16 +268,16 @@ class MonteCarloLite:
                 e1 = e + de
 
                 if e >= e1:
-                    accept_swap = True
+                    accept_clic = True
                     boltzmann_factor = 0
                 else:
                     boltzmann_factor = math.exp((e - e1) * scaledbeta)
 
                     if np.random.uniform(0, 1) <= boltzmann_factor:
-                        accept_swap = True
+                        accept_clic = True
                     else:
-                        accept_swap = False
-                if accept_swap:
+                        accept_clic = False
+                if accept_clic:
                     e = e1
 
                     struc.update_arrays(
