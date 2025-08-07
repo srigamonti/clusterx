@@ -473,12 +473,9 @@ class Structure(SuperCell):
         aux_index = np.random.choice(range(self._comps[site_type][sigma_initial]))
         atom_index = self._idxs[site_type][sigma_initial][aux_index]
 
-        # update arrays
-        # self.update_arrays(atom_indices=[atom_index], new_sigmas=[sigma_final])
-
         return atom_index, sigma_initial, sigma_final
 
-    def update_arrays(self, atom_indices=[], new_sigmas=[]):
+    def update_arrays(self, atom_indices=[], new_sigmas=[], update_idx_comps=True):
         r"""Update arrays.
 
         **Parameters:**
@@ -496,15 +493,22 @@ class Structure(SuperCell):
 
         site_types = self.get_tags()
 
-        for i, (aidx, s) in enumerate(zip(atom_indices, new_sigmas)):
-            self.sigmas[aidx] = s
+        for i, (aidx, new_sigma) in enumerate(zip(atom_indices, new_sigmas)):
+            old_sigma = old_sigmas[i]
+            site_type = site_types[aidx]
 
-            self.decor[aidx] = self.sites[aidx][s]
+            # Update sigmas and decorations
+            self.sigmas[aidx] = new_sigma
+            self.decor[aidx] = self.sites[aidx][new_sigma]
 
-            self._idxs[site_types[aidx]][old_sigmas[i]].remove(aidx)
-            self._idxs[site_types[aidx]][new_sigmas[i]].append(aidx)
-            self._comps[site_types[aidx]][old_sigmas[i]] -= 1
-            self._comps[site_types[aidx]][new_sigmas[i]] += 1
+            if update_idx_comps:
+                # Update index tracking
+                self._idxs[site_type][old_sigma].remove(aidx)
+                self._idxs[site_type][new_sigma].append(aidx)
+
+                # Update composition counts
+                self._comps[site_type][old_sigma] -= 1
+                self._comps[site_type][new_sigma] += 1
 
         self.atoms.set_atomic_numbers(self.decor)
 
