@@ -37,6 +37,8 @@ def grid_mapping(
 
 
 def is_diagonal(x: np.ndarray):
+    if len(np.shape(x)) == 1:
+        return True
     return np.count_nonzero(x - np.diag(np.diagonal(x))) == 0
 
 

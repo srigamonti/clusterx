@@ -77,7 +77,7 @@ class CorrelationsCalculator:
 
     def __init__(
         self,
-        basis=None,
+        basis_name=None,
         parent_lattice=None,
         clusters_pool=None,
         db=None,
@@ -456,7 +456,7 @@ def cluster_correlations_flip(
 
         for weight, cluster in zip(weights, cluster_orbit_arr):
             cf = cluster_function_flip(
-                np.array(cluster.get_idxs()),
+                cluster.get_idxs(),
                 cluster.alphas,
                 structure.sigmas,
                 structure.ems,
@@ -547,7 +547,7 @@ def cluster_function(
 
 @jit
 def cluster_function_flip(
-    cluster_idxs: np.ndarray,
+    cluster_idxs: list,
     cluster_alphas: np.ndarray,
     sigmas: np.ndarray,
     ems: np.ndarray,
@@ -555,7 +555,9 @@ def cluster_function_flip(
     sigma_old: int,
     sigma_new: int,
     basis_set_values: np.ndarray,
-):
+) -> float:
+    if i_flip not in cluster_idxs:
+        return 0.0
     nbodies = len(cluster_idxs)
     cf = 1.0
     for i in range(nbodies):

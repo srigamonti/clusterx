@@ -88,6 +88,7 @@ class Model:
         self._mc_init_time = 0
         self.corrc_reduced = None
         self.scell_reduced = None
+        self.cluster_orbits_reduced = None
 
         if self.standardize:
             from sklearn.preprocessing import StandardScaler
@@ -136,16 +137,20 @@ class Model:
         self._mc_init_time = 0
         self.scell_reduced = None
         self.corrc_reduced = None
-        self.correlation_last = None
+        self.correlations_last = None
+        self.cluster_orbits_reduced = None
 
     def init_reduced_model(self):
         cpool = self.corrc.get_cpool()
         self.scell_reduced = cpool.get_containing_supercell()
         plat = cpool.get_plat()
         self.corrc_reduced = CorrelationsCalculator(
-            basis=self.corrc.get_basis(),
+            basis_name=self.corrc.get_basis(),
             parent_lattice=plat,
             clusters_pool=cpool,
+        )
+        self.cluster_orbits_reduced = self.corrc_reduced.get_cluster_orbits_for_scell(
+            self.scell_reduced
         )
 
     def serialize(self, filepath=None, fmt=None, db_name=None):
@@ -294,28 +299,41 @@ class Model:
         if self.scell_reduced is None:
             self.init_reduced_model()
         # NOTE: handle periodic reset outside to reduce error drift externally
-        if self.correlation_last is None:
-            self.correlation_last = self.corrc.get_cluster_correlations(
+        if self.correlations_last is None:
+            self.correlations_last = self.corrc.get_cluster_correlations(
                 structure)
 
+        sigma_i = structure.sigmas[i]
+        sigma_j = structure.sigmas[j]
+
         p_reduced = np.diag(self.scell_reduced.get_transformation())
-        grid_shape = p + [len(self.get_plat())]
-        grid_shape_reduced = np.diag(p_reduced).tolist() + [len(self.get_plat())]
+        grid_shape = p + [len(self.get_parent_lattice())]
         sigma_grid = structure.get_sigma_grid()
 
-        # get the flip indices on the grid of sigmas
-        i_grid = list(np.unravel_index(i, grid_shape))
-        j_grid = list(np.unravel_index(i, grid_shape))
-        # alternatively, maybe faster:
-        #indices = np.unravel_index([i, j], grid_shape)
-        #i_grid = [index[0] for index in indices]
-        #j_grid = [index[1] for index in indices]
+        correlations_diff = np.zeros_like(self.correlations_last)
+        for index in [i, j]:
+            index_grid = list(np.unravel_index(index, grid_shape))
+            sigma_grid_reduced, index_grid_reduced = grid_mapping(
+                sigma_grid, index_grid, p_reduced)
+            structure_reduced = Structure.from_sigma_grid(
+                self.scell_reduced, sigma_grid_reduced)
+            index_reduced = np.ravel_multi_index(
+                index_grid_reduced, sigma_grid_reduced.shape)
+            correlations_flip = cluster_correlations_flip(
+                structure_reduced,
+                self.cluster_orbits_reduced,
+                self.corrc_reduced.basis_set_values,
+                int(index_reduced),
+                sigma_i,
+                sigma_j,
+            )
+            correlations_diff += correlations_flip
+            structure_reduced.sigmas[i], structure_reduced.sigmas[j] = structure_reduced.sigmas[j], structure_reduced.sigmas[i]
 
-        sigma_grid_reduced = grid_mapping(sigma_grid, i_grid, p_reduced)
-
-        structure_reduced = Structure.from_sigma_grid(
-            self.scell_reduced, sigma_grid_reduced)
-
+        self.correlations_last += correlations_diff
+        prediction = np.dot(self.ecis, self.correlations_last)
+        self.correlations_last -= correlations_diff
+        return prediction
 
     def predict_swap(self, structure, ind1=None, ind2=None, correlation=False, site_types=[0]):
         """Predict property difference with the optimal cluster expansion model.
