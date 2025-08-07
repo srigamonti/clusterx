@@ -224,17 +224,10 @@ class MonteCarloLite:
         mcrun.sigmas.append(tuple(struc.get_sigmas()))
         mcrun.energies.append(e)
 
-        print("Starting MC steps")
+        progress = tqdm(range(1, n_mc_steps + 1), total=n_mc_steps, desc="MMC sim.")
 
-        with _timed("MC steps"):
-            for i in tqdm(
-                range(1, n_mc_steps + 1),
-                total=n_mc_steps,
-                desc="MMC simulation",
-            ):
-                # mcrun.clics.append([])
-
-                # make MC move
+        with _timed("Metropolis: MC steps"):
+            for i in progress:
                 atom_indices = []
                 new_sigmas = []
                 for j in range(n_clics):
@@ -277,20 +270,17 @@ class MonteCarloLite:
                         new_sigmas.append(sigma_final2)
 
                 # compute new energy
-                if n_error_reset is not None and i % n_error_reset == 0:
-                    e1 = self._emodel.predict(struc)
 
-                else:
-                    de = 0
-                    for atom_index, sigma in zip(atom_indices, new_sigmas):
-                        de += self._emodel.predict_flip(
-                            struc,
-                            atom_index=atom_index,
-                            new_sigma=sigma,
-                            site_types=[self._substitutional_sublattice],
-                        )
+                de = 0.0
+                for atom_index, sigma in zip(atom_indices, new_sigmas):
+                    de += self._emodel.predict_flip(
+                        struc,
+                        atom_index=atom_index,
+                        new_sigma=sigma,
+                        site_types=[self._substitutional_sublattice],
+                    )
 
-                    e1 = e + de
+                e1 = e + de
 
                 if e >= e1:
                     accept_swap = True
@@ -312,6 +302,18 @@ class MonteCarloLite:
                     # mcrun.sigmas.append(tuple(struc.get_sigmas()))
                     mcrun.sigmas.append(np.array(struc.get_sigmas(), dtype=np.uint8))
                     mcrun.energies.append(e)
+
+                if n_error_reset is not None and i % n_error_reset == 0:
+                    e0 = e
+                    e = self._emodel.predict(struc)
+                    mcrun.energies[-1] = e
+                    e_error = e - e0
+                    i_reset = i
+
+                ratio = len(mcrun.accepted_steps) / i
+                progress.set_description(
+                    f"MMC sim. | Acc. ratio: {ratio:.4f} | E-reset@{i_reset}: {e_error:.3e}"
+                )
 
         with _timed("Metropolis: serialization"):
             if mcrun_filepath is not None:
