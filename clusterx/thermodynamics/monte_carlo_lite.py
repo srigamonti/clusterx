@@ -82,6 +82,17 @@ class MonteCarloLite:
                 self._substitutional_sublattice = int(k)
                 break
 
+        print("\n" + "=" * 70)
+        print("MonteCarloLite Initialized")
+        print("=" * 70)
+        print(f"Sublattice index:          {self._substitutional_sublattice}")
+        print(f"Energy scale factor:       {self._energy_scale_factor}")
+        print(f"Boltzmann constant (kB):   {self._kb}")
+        print(f"Supercell size:            {self._scell.get_index()} parent lattices")
+        print(f"Energy model:              {type(self._emodel).__name__}")
+        print(f"Energy model - num params: {len(self._emodel.ecis)}")
+        print("=" * 70 + "\n")
+
     @classmethod
     def from_file(cls, filepath: str) -> MonteCarloLite:
         """
