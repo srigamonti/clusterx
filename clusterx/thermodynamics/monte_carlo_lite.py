@@ -201,7 +201,7 @@ class MonteCarloLite:
 
         scaledbeta = self._energy_scale_factor / self._kb / temperature
 
-        self._emodel.corrc.reset_mc(mc=True)
+        self._emodel.reset_mc(True)
 
         with _timed("Metropolis: Computing energy of initial random structure"):
             e = self._emodel.predict(struc)
