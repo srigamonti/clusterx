@@ -6,6 +6,7 @@ import os
 import pickle
 import time
 import warnings
+from pathlib import Path
 from typing import List, Optional
 
 import numpy as np
@@ -116,8 +117,19 @@ class Model:
     def _load_from_pickle(filepath: str) -> "Model":
         """Load Model object from a pickle file."""
         try:
+            stem = Path(filepath).stem
+            dirname = os.path.dirname(filepath)
+            filepath_corrc = os.path.join(dirname, stem + "_CCALC.pickle")
+
+            with open(filepath_corrc, "rb") as fcorrc:
+                corrc = pickle.load(fcorrc)
+
             with open(filepath, "rb") as f:
-                return pickle.load(f)
+                model = pickle.load(f)
+
+            model.corrc = corrc
+            return model
+
         except (FileNotFoundError, pickle.UnpicklingError) as e:
             raise ValueError(f"Error loading model from pickle file: {e}") from e
 
@@ -165,8 +177,6 @@ class Model:
         ``db_name``: (DEPRECATED) string
             Name of the json file containing the database
         """
-        import os
-        from pathlib import Path
 
         if filepath is None and db_name is None:
             filepath = "cemodel.pickle"
@@ -265,8 +275,8 @@ class Model:
             structure object to calculate property to.
 
         """
-        # with _timed("Get cluster correlations"):
-        corrs = self.corrc.get_cluster_correlations(structure)
+        with _timed("Model.predict: Get cluster correlations"):
+            corrs = self.corrc.get_cluster_correlations(structure)
 
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1, -1))[0]
