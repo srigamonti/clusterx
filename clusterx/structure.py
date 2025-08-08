@@ -17,7 +17,7 @@ from ase.io import write
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.utils import is_diagonal
+from clusterx.utils import is_diagonal, grid_mapping
 
 
 class Structure(SuperCell):
@@ -333,6 +333,20 @@ class Structure(SuperCell):
         grid_shape = np.diag(p).tolist() + [len(self.get_parent_lattice())]
         sigmas = self.get_sigmas()
         return np.reshape(sigmas, grid_shape)
+
+    def get_reduced_structure(self, p: list[int], index: int) -> Structure:
+        """Return a reduced structure and reduced index.
+        Given transformation p, around site index."""
+        sigma_grid = self.get_sigma_grid()
+        index_grid = list(np.unravel_index(index, sigma_grid.shape))
+        sigma_grid_reduced, index_grid_reduced = grid_mapping(
+            sigma_grid, index_grid, p)
+        scell_reduced = SuperCell(self.scell.get_parent_lattice(), p)
+        structure_reduced = Structure.from_sigma_grid(
+            scell_reduced, sigma_grid_reduced)
+        index_reduced = int(np.ravel_multi_index(
+            index_grid_reduced, sigma_grid_reduced.shape))
+        return structure_reduced, index_reduced
 
     def get_supercell(self):
         """Return SuperCell member of the Structure"""

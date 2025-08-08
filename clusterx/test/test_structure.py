@@ -39,6 +39,18 @@ def structure(super_cell):
     return Structure(super_cell, decoration=[1]*len(super_cell))
 
 
+def test_reduced_structure(parent_lattice):
+    p = [10, 10, 10]
+    p_reduced = [3, 3, 3]
+    super_cell = SuperCell(parent_lattice, p)
+    sites = super_cell.get_sites()
+    sigmas = [len(site) - 1 for site in sites.values()]
+    structure = Structure(super_cell, sigmas=sigmas)
+    structure_reduced, index_reduced = structure.get_reduced_structure(p_reduced, 0)
+    assert isinstance(structure_reduced, Structure)
+    assert isinstance(index_reduced, int)
+
+
 def test_init_scell(structure):
     assert structure.scell is not None
 

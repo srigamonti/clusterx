@@ -307,18 +307,11 @@ class Model:
         sigma_j = structure.sigmas[j]
 
         p_reduced = np.diag(self.scell_reduced.get_transformation())
-        grid_shape = p + [len(self.get_parent_lattice())]
-        sigma_grid = structure.get_sigma_grid()
 
         correlations_diff = np.zeros_like(self.correlations_last)
         for index in [i, j]:
-            index_grid = list(np.unravel_index(index, grid_shape))
-            sigma_grid_reduced, index_grid_reduced = grid_mapping(
-                sigma_grid, index_grid, p_reduced)
-            structure_reduced = Structure.from_sigma_grid(
-                self.scell_reduced, sigma_grid_reduced)
-            index_reduced = np.ravel_multi_index(
-                index_grid_reduced, sigma_grid_reduced.shape)
+            structure_reduced, index_reduced = structure.get_reduced_structure(
+                p_reduced, index)
             correlations_flip = cluster_correlations_flip(
                 structure_reduced,
                 self.cluster_orbits_reduced,
