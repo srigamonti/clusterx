@@ -86,9 +86,7 @@ class Model:
         self._mc_multiplicities: List[int] = []
         self._mc_start_time = 0
         self._mc_init_time = 0
-        self.corrc_reduced = None
         self.scell_reduced = None
-        self.cluster_orbits_reduced = None
 
         if self.standardize:
             from sklearn.preprocessing import StandardScaler
@@ -135,23 +133,10 @@ class Model:
         self._mc_multiplicities = []
         self._mc_start_time = 0
         self._mc_init_time = 0
-        self.scell_reduced = None
-        self.corrc_reduced = None
-        self.correlations_last = None
-        self.cluster_orbits_reduced = None
 
     def init_reduced_model(self):
         cpool = self.corrc.get_cpool()
         self.scell_reduced = cpool.get_containing_supercell()
-        plat = cpool.get_plat()
-        self.corrc_reduced = CorrelationsCalculator(
-            basis_name=self.corrc.get_basis(),
-            parent_lattice=plat,
-            clusters_pool=cpool,
-        )
-        self.cluster_orbits_reduced = self.corrc_reduced.get_cluster_orbits_for_scell(
-            self.scell_reduced
-        )
 
     def serialize(self, filepath=None, fmt=None, db_name=None):
         """Write cluster expansion model to Json database
@@ -275,7 +260,7 @@ class Model:
                 corrs = self.stdscaler.transform(corrs)
             return np.dot(self.ecis, corrs)
 
-    def predict_swap_reduced(self, structure: Structure, i: int, j: int):
+    def predict_swap_reduced(self, structure: Structure, i: int, j: int, site_types=[0]):
         """Predict property difference with the cluster expansion model by
         reducing the structure to only the supercell around the flip indices,
         and calculating the correlations in the reduced structure.
@@ -298,47 +283,33 @@ class Model:
 
         if self.scell_reduced is None:
             self.init_reduced_model()
-        # NOTE: handle periodic reset outside to reduce error drift externally
-        if self.correlations_last is None:
-            self.correlations_last = self.corrc.get_cluster_correlations(
-                structure)
-
         sigma_i = structure.sigmas[i]
         sigma_j = structure.sigmas[j]
 
         p_reduced = np.diag(self.scell_reduced.get_transformation())
 
-        correlations_diff = np.zeros_like(self.correlations_last)
-        for index in [i, j]:
-            structure_reduced, index_reduced = structure.get_reduced_structure(
-                p_reduced, index)
-            correlations_flip = cluster_correlations_flip(
+        prediction = 0.0
+        for i_flip, new_sigma in [(i, sigma_j), (j, sigma_i)]:
+            structure_reduced, i_flip_reduced = structure.get_reduced_structure(
+                p_reduced, i_flip)
+            prediction += self.predict_flip(
                 structure_reduced,
-                self.cluster_orbits_reduced,
-                self.corrc_reduced.basis_set_values,
-                int(index_reduced),
-                sigma_i,
-                sigma_j,
+                atom_index=i_flip_reduced,
+                new_sigma=new_sigma,
+                site_types=site_types,
             )
-            correlations_diff += correlations_flip
-            structure_reduced.sigmas[i], structure_reduced.sigmas[j] = structure_reduced.sigmas[j], structure_reduced.sigmas[i]
+            structure.swap(i, j)
 
-        self.correlations_last += correlations_diff
-        prediction = np.dot(self.ecis, self.correlations_last)
-        self.correlations_last -= correlations_diff
         return prediction
 
     def _initialize_interaction_dictionaries(self, scell, site_types):
         self._mc_init_time = time.time()
         print("Info(Model): setting up dictionary of interactions.")
 
-        try:
-            cluster_orbits = self.corrc._cluster_orbits_mc
-            self._mc_nclusters = len(cluster_orbits)
-            for i in range(self._mc_nclusters):
-                self._mc_multiplicities.append(len(cluster_orbits[i]))
-        except AttributeError:
-            raise AttributeError("Cluster_orbits set has not been pre computed.")
+        cluster_orbits = self.corrc.get_cluster_orbits_for_scell(scell)
+        self._mc_nclusters = len(cluster_orbits)
+        for i in range(self._mc_nclusters):
+            self._mc_multiplicities.append(len(cluster_orbits[i]))
 
         if self.standardize:
             raise RuntimeError("Standardscaler not supported")
@@ -501,15 +472,19 @@ class Model:
                 self.corrc.basis_set_values,
             )
             corrs[cluster_index] += cf
+        print(corrs)
 
         corrs /= self._mc_multiplicities
         corrs = np.around(corrs, decimals=12)
 
+
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
-            return self.estimator.predict(corrs.reshape(1, -1))[0] - self.estimator.intercept_
+            res = self.estimator.predict(corrs.reshape(1, -1))[0] - self.estimator.intercept_
         else:
-            return np.dot(self.ecis, corrs)
+            res = np.dot(self.ecis, corrs)
+        print(res)
+        return res
 
     def report_errors(self, sset):
         """Report fit and CV scores
