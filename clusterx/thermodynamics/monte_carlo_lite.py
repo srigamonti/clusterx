@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import pickle
+import random
 import warnings
 
 import numpy as np
@@ -45,11 +46,9 @@ class MonteCarloLite:
         energy in the simulation supercell. If None, it is assumed that the energy_model
         gives the energy per parent lattice and energy_scale_factor is set to scell.get_index().
 
-    ``ensemble``: string (default: ``canonical``)
-        ``canonical`` allows for swaps of atoms that conserve the concentration defined with ``nsubs``.
-
-        ``grandcanonical`` allows for replacing atoms in the sub-lattices defined with ``sublattice_indices``.
-        (So far, ``grandcanonical`` is not yet implemented.)
+    ``boltzmann_constant``: float (optional, default 1.0)
+        Boltzmann constant kb. kb times the temperature must have the same units
+        as the units of energy that energy model yields.
 
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
@@ -57,10 +56,17 @@ class MonteCarloLite:
     """
 
     def __init__(
-        self, energy_model, scell, energy_scale_factor=None, boltzmann_constant=1.0
+        self,
+        energy_model,
+        scell,
+        energy_scale_factor=None,
+        boltzmann_constant=1.0,
     ):
         self._emodel = energy_model
+        self._emodel.reset_mc(True)
+
         self._scell = scell
+
         self._energy_scale_factor = (
             energy_scale_factor
             if energy_scale_factor is not None
@@ -69,13 +75,26 @@ class MonteCarloLite:
         self._kb = boltzmann_constant
 
         if not scell.is_nary(2):
-            raise ValueError("MonteCarloLite works only for binary materials.")
+            raise ValueError(
+                "MonteCarloLite.init(): MonteCarloLite works only for binary materials."
+            )
 
         self._substitutional_sublattice = None
         for k, v in scell.get_sublattice_types().items():
             if len(v) == 2:
                 self._substitutional_sublattice = int(k)
                 break
+
+        with _timed("MonteCarloLite.init(): Generating pristine structure"):
+            self.structure = self._scell.get_pristine_structure()
+
+        with _timed("MonteCarloLite.init(): Computing energy of pristine structure"):
+            self.e_pristine = self._emodel.predict(self.structure)
+
+        with _timed("MonteCarloLite.init(): Initialize interaction dictionaries"):
+            self._emodel._initialize_interaction_dictionaries(
+                self._scell, [self._substitutional_sublattice]
+            )
 
         print("\n" + "=" * 70)
         print("MonteCarloLite Initialized")
@@ -133,6 +152,7 @@ class MonteCarloLite:
         mcrun_filepath=None,
         n_error_reset=None,
         initial_structure=None,
+        random_seed: Optional[int] = None,
         **kwargs,
     ):
         r"""Perform Monte-Carlo Metropolis simulation
@@ -163,6 +183,13 @@ class MonteCarloLite:
             Number of species flips (grandcanonical) or species swaps (canonical) per sampling step.
             Defaults to 1.
 
+        ``ensemble``: string (default: ``canonical``)
+            ``canonical`` allows for swaps of atoms that conserve the concentration defined with ``nsubs``.
+
+            ``grandcanonical`` allows for replacing atoms in the sub-lattices defined with ``sublattice_indices``.
+            (So far, ``grandcanonical`` is not yet implemented.)
+
+
         ``n_substitutions``: integer (default = None)
             Defines the number of substituted atoms in the sublattice
 
@@ -177,7 +204,10 @@ class MonteCarloLite:
 
         ``initial_structure``: Structure object
             Initial structure, from which the sampling starts.
-            If ``None``, sampling starts from a random structure.
+            If ``None``, sampling starts from a random structure with ``n_substitutions`` substitutions.
+
+        ``random_seed``: Integer or None (default: None)
+            Random seed to produce reproducible results
 
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the MonteCarloTrajectory object that is initialized in this method.
@@ -190,21 +220,31 @@ class MonteCarloLite:
 
         from tqdm import tqdm
 
-        with _timed("Metropolis: Generating initial random structure"):
+        if random_seed is not None:
+            random.seed(random_seed)
+            np.random.seed(random_seed)
+
+        with _timed("MonteCarloLite.metropolis: Generating initial random structure"):
             if initial_structure is None:
                 if n_substitutions is not None:
-                    struc = self._scell.gen_random_structure(n_substitutions)
+                    _, sigmas = self._scell.gen_random_decoration(
+                        nsubs={self._substitutional_sublattice: [n_substitutions]}
+                    )
                 else:
-                    struc = self._scell.gen_random_structure()
+                    raise ValueError(
+                        "MonteCarloLite.metropolis: please provide n_substitutions or initial_structure."
+                    )
             else:
-                struc = initial_structure
+                sigmas = initial_structure.get_sigmas()
+
+            self.structure.set_arrays(sigmas=sigmas)
 
         scaledbeta = self._energy_scale_factor / self._kb / temperature
 
-        self._emodel.reset_mc(True)
-
-        with _timed("Metropolis: Computing energy of initial random structure"):
-            e = self._emodel.predict(struc)
+        with _timed(
+            "MonteCarloLite.metropolis: Compute energy of initial random structure"
+        ):
+            e = self._emodel.predict(self.structure)
 
         mcrun_filepath
         if mcrun_filepath is None:
@@ -221,7 +261,7 @@ class MonteCarloLite:
         )
 
         mcrun.accepted_steps.append(0)
-        mcrun.sigmas.append(tuple(struc.get_sigmas()))
+        mcrun.sigmas.append(tuple(self.structure.get_sigmas()))
         mcrun.energies.append(e)
 
         progress = tqdm(range(1, n_mc_steps + 1), total=n_mc_steps, desc="MMC sim.")
@@ -234,19 +274,21 @@ class MonteCarloLite:
                 new_sigmas = []
                 for j in range(n_clics):
                     if ensemble == "grandcanonical":
-                        atom_index, sigma_initial, sigma_final = struc.flip_random(
-                            self._substitutional_sublattice
+                        atom_index, sigma_initial, sigma_final = (
+                            self.structure.flip_random(self._substitutional_sublattice)
                         )
                         atom_indices.append(atom_index)
                         new_sigmas.append(sigma_final)
                     elif ensemble == "canonical":
-                        atom_index1, sigma_initial1, sigma_final1 = struc.flip_random(
-                            self._substitutional_sublattice
+                        atom_index1, sigma_initial1, sigma_final1 = (
+                            self.structure.flip_random(self._substitutional_sublattice)
                         )
-                        atom_index2, sigma_initial2, sigma_final2 = struc.flip_random(
-                            self._substitutional_sublattice,
-                            sigma_initial=sigma_final1,
-                            sigma_final=sigma_initial1,
+                        atom_index2, sigma_initial2, sigma_final2 = (
+                            self.structure.flip_random(
+                                self._substitutional_sublattice,
+                                sigma_initial=sigma_final1,
+                                sigma_final=sigma_initial1,
+                            )
                         )
 
                         atom_indices.append(atom_index1)
@@ -256,16 +298,18 @@ class MonteCarloLite:
 
                 # compute new energy
 
-                struc.backup_arrays()
+                self.structure.backup_arrays()
                 de = 0.0
                 for atom_index, sigma in zip(atom_indices, new_sigmas):
                     de += self._emodel.predict_flip(
-                        struc,
+                        self.structure,
                         atom_index=atom_index,
                         new_sigma=sigma,
                         site_types=[self._substitutional_sublattice],
                     )
-                    struc.update_arrays(atom_indices=[atom_index], new_sigmas=[sigma])
+                    self.structure.update_arrays(
+                        atom_indices=[atom_index], new_sigmas=[sigma]
+                    )
 
                 e1 = e + de
 
@@ -283,15 +327,17 @@ class MonteCarloLite:
                     e = e1
 
                     mcrun.accepted_steps.append(i)
-                    # mcrun.sigmas.append(tuple(struc.get_sigmas()))
-                    mcrun.sigmas.append(np.array(struc.get_sigmas(), dtype=np.uint8))
+                    # mcrun.sigmas.append(tuple(self.structure.get_sigmas()))
+                    mcrun.sigmas.append(
+                        np.array(self.structure.get_sigmas(), dtype=np.uint8)
+                    )
                     mcrun.energies.append(e)
                 else:
-                    struc.restore_arrays()
+                    self.structure.restore_arrays()
 
                 if n_error_reset is not None and i % n_error_reset == 0:
                     e0 = e
-                    e = self._emodel.predict(struc)
+                    e = self._emodel.predict(self.structure)
                     mcrun.energies[-1] = e
                     e_error = e - e0
                     i_reset = i

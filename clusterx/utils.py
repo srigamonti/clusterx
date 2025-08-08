@@ -20,10 +20,21 @@ from ase.data import chemical_symbols as cs
 
 @contextmanager
 def _timed(label):
+    print(f"[{label}] ...starting")  # print immediately
     start = time.perf_counter()
-    yield
-    end = time.perf_counter()
-    print(f"[{label}] {end - start:.4f} seconds")
+    try:
+        yield
+    finally:
+        end = time.perf_counter()
+        print(f"[{label}] completed in {end - start:.4f} seconds")
+
+
+# @contextmanager
+# def _timed(label):
+#     start = time.perf_counter()
+#     yield
+#     end = time.perf_counter()
+#     print(f"[{label}] {end - start:.4f} seconds")
 
 
 def _process_deprecated(new_value, deprecated_value, new_name, deprecated_name):

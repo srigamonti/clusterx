@@ -122,9 +122,11 @@ class Structure(SuperCell):
             cell=super_cell.get_cell(),
             pbc=super_cell.get_pbc(),
         )
-        super(Structure, self).__init__(
-            super_cell.get_parent_lattice(), super_cell.get_transformation()
-        )
+
+        # with _timed("Structure.init(): recreating supercell Super"):
+        #     super(Structure, self).__init__(
+        #         super_cell.get_parent_lattice(), super_cell.get_transformation()
+        #     )
 
         self._mc = mc
 
@@ -133,6 +135,10 @@ class Structure(SuperCell):
         self._build_index_maps()
 
         self.precision_positions = 5
+
+    # Delegate missing attrs/methods to the wrapped instance
+    def __getattr__(self, name):
+        return getattr(self.scell, name)
 
     def _build_index_maps(self):
         """
@@ -475,6 +481,32 @@ class Structure(SuperCell):
         atom_index = self._idxs[site_type][sigma_initial][aux_index]
 
         return atom_index, sigma_initial, sigma_final
+
+    def set_arrays(self, sigmas=None, decoration=None):
+        if sigmas is None and decoration is None:
+            print("Structure: provide one of sigmas or decoration")
+
+        if sigmas is not None:
+            self.sigmas = sigmas
+            for idx, sigma in enumerate(sigmas):
+                self.decor[idx] = self.sites[idx][sigma]
+
+        if decoration is not None:
+            self.decor = decoration
+
+            for idx, species in enumerate(decoration):
+                if species not in self.sites[idx]:
+                    raise AttributeError(
+                        "Error (Structure): decoration not compatible with parent lattice definition."
+                    )
+
+            for idx, species in enumerate(decoration):
+                self.sigmas[idx] = np.argwhere(
+                    np.array(self.sites[idx], dtype=int) == species
+                )[0, 0]
+
+        self.atoms.set_atomic_numbers(self.decor)
+        self._build_index_maps()
 
     def backup_arrays(self):
         """Backup current state of arrays for potential restoration later."""

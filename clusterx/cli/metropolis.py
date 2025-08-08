@@ -2,8 +2,6 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 import random
-import time
-from contextlib import contextmanager
 from typing import List, Optional, Union
 
 import numpy as np
@@ -15,16 +13,7 @@ from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.thermodynamics.monte_carlo import MonteCarlo, MonteCarloTrajectory
 from clusterx.thermodynamics.monte_carlo_lite import MCRun, MonteCarloLite
-from clusterx.utils import _process_deprecated
-
-
-@contextmanager
-def timed(label):
-    start = time.perf_counter()
-    yield
-    end = time.perf_counter()
-    print(f"[{label}] {end - start:.4f} seconds")
-
+from clusterx.utils import _process_deprecated, _timed
 
 commands = ["metropolis"]
 
@@ -100,6 +89,12 @@ commands = ["metropolis"]
         float,
     ),
     boltzmann_constant=("Boltzmann constant", "option", "k_B", float),
+    random_seed=(
+        "Random seed to produce reproducible results",
+        "option",
+        "rs",
+        str,
+    ),
     initial_decoration=(
         "Initial decoration of the supercell, list of integers",
         "option",
@@ -171,10 +166,6 @@ def metropolis(
     traj_filepath = _process_deprecated(
         traj_filepath, filename, "traj_filepath", "filename"
     )
-    if isinstance(n_substitutions, dict):
-        n_substitutions = {int(k): v for k, v in n_substitutions.items()}
-    elif isinstance(n_substitutions, int):
-        n_substitutions = {0: [n_substitutions]}
 
     if random_seed is not None:
         random.seed(random_seed)
@@ -183,6 +174,11 @@ def metropolis(
     match task:
         case "runmc" | "runMC" | "run-monte-carlo":
             print(f"Info({get_command_name()}): Initialization")
+
+            if isinstance(n_substitutions, dict):
+                n_substitutions = {int(k): v for k, v in n_substitutions.items()}
+            elif isinstance(n_substitutions, int):
+                n_substitutions = {0: [n_substitutions]}
 
             plat = ParentLattice(filepath=plat_filepath)
             energy_model = Model(filepath=model_filepath)
@@ -217,27 +213,31 @@ def metropolis(
         case "setup" | "setupmclite" | "setupMClite" | "setup-monte-carlo-lite":
             print(f"Info({get_command_name()}): Setting up MC")
 
-            plat = ParentLattice(filepath=plat_filepath)
-            energy_model = Model(filepath=model_filepath)
-            scell = SuperCell(plat, sc_shape)
+            with _timed("CLI.metropolis (task=setupmclite): unpickling plat and model"):
+                plat = ParentLattice(filepath=plat_filepath)
+                energy_model = Model(filepath=model_filepath)
+                scell = SuperCell(plat, sc_shape)
 
-            mclite = MonteCarloLite(
-                energy_model=energy_model,
-                scell=scell,
-                energy_scale_factor=energy_scale_factor,
-                boltzmann_constant=boltzmann_constant,
-            )
-            mclite.serialize(mcsetup_filepath)
+            with _timed("CLI.metropolis (task=setupmclite): Create MC instance"):
+                mclite = MonteCarloLite(
+                    energy_model=energy_model,
+                    scell=scell,
+                    energy_scale_factor=energy_scale_factor,
+                    boltzmann_constant=boltzmann_constant,
+                )
+
+            with _timed("CLI.metropolis(setupMClite): MonteCarloLite serialization"):
+                mclite.serialize(mcsetup_filepath)
 
         case "run" | "runmclite" | "runMClite" | "run-monte-carlo-lite":
             print(f"Info({get_command_name()}): Reading MC setup")
 
-            with timed("from_file"):
+            with _timed("from_file"):
                 mclite = MonteCarloLite.from_file(mcsetup_filepath)
 
             print(f"Info({get_command_name()}): Running Metropolis MC simulation")
 
-            with timed("metropolis"):
+            with _timed("metropolis"):
                 mclite.metropolis(
                     temperature=temperature,
                     n_mc_steps=n_mc_steps,
@@ -246,16 +246,17 @@ def metropolis(
                     chemical_potential=chemical_potential,
                     n_error_reset=n_error_reset,
                     mcrun_filepath=mcrun_filepath,
+                    random_seed=random_seed,
                 )
 
         case "plot-mc-run":
             from clusterx.visualization import plot_property
 
-            with timed("MCRun.from_file"):
+            with _timed("MCRun.from_file"):
                 mcrun = MCRun.from_file(filepath=mcrun_filepath)
             energies_accepted = mcrun.energies
             steps_accepted = mcrun.accepted_steps
-            with timed("plot_property"):
+            with _timed("plot_property"):
                 plot_property(
                     steps_accepted,
                     energies_accepted,

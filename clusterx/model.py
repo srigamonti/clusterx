@@ -373,10 +373,11 @@ class Model:
         if self._num_mc_calls == 0:
             self._mc_init_time = time.time()
 
-            with _timed("Model: initialize_interaction_dictionaries"):
-                self._initialize_interaction_dictionaries(
-                    structure.get_supercell(), site_types
-                )
+            if not hasattr(self, "_interactions_dict"):
+                with _timed("Model.predict_flip: initialize_interaction_dictionaries"):
+                    self._initialize_interaction_dictionaries(
+                        structure.get_supercell(), site_types
+                    )
 
         old_sigma = structure.sigmas[atom_index]
 
