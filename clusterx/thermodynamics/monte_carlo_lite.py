@@ -256,6 +256,7 @@ class MonteCarloLite:
 
                 # compute new energy
 
+                struc.backup_arrays()
                 de = 0.0
                 for atom_index, sigma in zip(atom_indices, new_sigmas):
                     de += self._emodel.predict_flip(
@@ -264,6 +265,7 @@ class MonteCarloLite:
                         new_sigma=sigma,
                         site_types=[self._substitutional_sublattice],
                     )
+                    struc.update_arrays(atom_indices=[atom_index], new_sigmas=[sigma])
 
                 e1 = e + de
 
@@ -280,13 +282,12 @@ class MonteCarloLite:
                 if accept_clic:
                     e = e1
 
-                    struc.update_arrays(
-                        atom_indices=atom_indices, new_sigmas=new_sigmas
-                    )
                     mcrun.accepted_steps.append(i)
                     # mcrun.sigmas.append(tuple(struc.get_sigmas()))
                     mcrun.sigmas.append(np.array(struc.get_sigmas(), dtype=np.uint8))
                     mcrun.energies.append(e)
+                else:
+                    struc.restore_arrays()
 
                 if n_error_reset is not None and i % n_error_reset == 0:
                     e0 = e

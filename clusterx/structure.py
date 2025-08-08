@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import copy
 import os
 import pickle
 import warnings
@@ -475,6 +476,15 @@ class Structure(SuperCell):
 
         return atom_index, sigma_initial, sigma_final
 
+    def backup_arrays(self):
+        """Backup current state of arrays for potential restoration later."""
+        self._arrays_backup = {
+            "sigmas": copy.deepcopy(self.sigmas),
+            "decor": copy.deepcopy(self.decor),
+            "_idxs": copy.deepcopy(self._idxs),
+            "_comps": copy.deepcopy(self._comps),
+        }
+
     def update_arrays(self, atom_indices=[], new_sigmas=[], update_idx_comps=True):
         r"""Update arrays.
 
@@ -509,6 +519,18 @@ class Structure(SuperCell):
                 # Update composition counts
                 self._comps[site_type][old_sigma] -= 1
                 self._comps[site_type][new_sigma] += 1
+
+        self.atoms.set_atomic_numbers(self.decor)
+
+    def restore_arrays(self):
+        """Restore arrays from backup."""
+        if not hasattr(self, "_arrays_backup"):
+            raise RuntimeError("No backup found. Call backup_arrays() first.")
+
+        self.sigmas = copy.deepcopy(self._arrays_backup["sigmas"])
+        self.decor = copy.deepcopy(self._arrays_backup["decor"])
+        self._idxs = copy.deepcopy(self._arrays_backup["_idxs"])
+        self._comps = copy.deepcopy(self._arrays_backup["_comps"])
 
         self.atoms.set_atomic_numbers(self.decor)
 
