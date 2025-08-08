@@ -22,6 +22,33 @@ from clusterx.test.defaults import (
 )
 
 
+@pytest.fixture
+def plat_cubic():
+    pri = bulk("H", crystalstructure="sc", a=1.)
+    sub = bulk("He", crystalstructure="sc", a=1.)
+    return ParentLattice(atoms=pri, substitutions=[sub], pbc=(1, 1, 1))
+
+
+@pytest.fixture
+def cpool_cubic(plat_cubic):
+    return ClustersPool(plat_cubic, npoints=[1, 2], radii=[0, 2.1])
+
+
+@pytest.fixture
+def corrc_cubic(plat_cubic, cpool_cubic):
+    return CorrelationsCalculator("trigonometric", plat_cubic, cpool_cubic)
+
+
+@pytest.fixture
+def model_cubic(plat_cubic, cpool_cubic, corrc_cubic):
+    mult = cpool_cubic.get_multiplicities()
+
+    corrc = CorrelationsCalculator("trigonometric", plat_cubic, cpool_cubic)
+    model = Model(corrc, "energy2", ecis=mult)
+    model.reset_mc(True)
+    return model
+
+
 def seed_rnd_generator(seed=0):
     random.seed(seed)
     np.random.seed(seed)
@@ -29,7 +56,7 @@ def seed_rnd_generator(seed=0):
 # test cases (TODO):
 # estimator: None (just ECI), linear, non-linear
 @pytest.mark.parametrize('basis', ['binary-linear', 'trigonometric', 'polynomial'])
-def test_clathrate_swap(basis):
+def test_swap_clathrate(basis):
     seed_rnd_generator(42) # is specific, so that swap changes energy
     scell = get_clathrate_supercell()
     model = get_clathrate_model(basis)
@@ -45,29 +72,33 @@ def test_clathrate_swap(basis):
     np.testing.assert_allclose(e0, e_diff_swap + e1)
 
 
-@pytest.mark.parametrize('basis', ['trigonometric'])
-def test_swap_binary_cubic(basis):
+def test_swap(plat_cubic, model_cubic):
     seed_rnd_generator(42)
-    pri = bulk("H", crystalstructure="sc", a=1.)
-    sub = bulk("He", crystalstructure="sc", a=1.)
-    plat = ParentLattice(atoms=pri, substitutions=[sub], pbc=(1, 1, 1))
-    cpool = ClustersPool(plat, npoints=[1, 2], radii=[0, 2.1])
-    mult = cpool.get_multiplicities()
-
-    corcE2 = CorrelationsCalculator("trigonometric", plat, cpool)
-    model = Model(corcE2, "energy2",ecis=mult)
-    model.reset_mc(True)
 
     p = [10, 10, 10]
-    scell = SuperCell(plat, p)
+    scell = SuperCell(plat_cubic, p)
     structure = scell.gen_random_structure(nsubs=int(np.prod(p)/2))
     i, j = structure.swap_random_binary(site_type=0)
 
-    pred_init = model.predict(structure)
-    pred_swap = model.predict_swap(structure, i, j)
-    #pred_swap = model.predict_swap_reduced(structure, i, j)
+    pred_init = model_cubic.predict(structure)
+    pred_swap = model_cubic.predict_swap(structure, i, j)
     structure.swap(i, j)
-    pred_final = model.predict(structure)
+    pred_final = model_cubic.predict(structure)
+    assert np.isclose(pred_init - pred_final, pred_swap)
+
+
+def test_swap_reduced(plat_cubic, model_cubic):
+    seed_rnd_generator(42)
+
+    p = [10, 10, 10]
+    scell = SuperCell(plat_cubic, p)
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p)/2))
+    i, j = structure.swap_random_binary(site_type=0)
+
+    pred_init = model_cubic.predict(structure)
+    pred_swap = model_cubic.predict_swap_reduced(structure, i, j)
+    structure.swap(i, j)
+    pred_final = model_cubic.predict(structure)
     assert np.isclose(pred_init - pred_final, pred_swap)
 
 
