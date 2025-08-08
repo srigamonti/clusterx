@@ -620,7 +620,7 @@ class WangLandau:
                 )
                 de = (
                     self._em.predict_swap(
-                        struc, ind1=ind1, ind2=ind2, site_types=self._sublattice_indices
+                        struc, i=ind1, j=ind2, site_types=self._sublattice_indices
                     )
                     * self._ef
                 )
@@ -1067,8 +1067,8 @@ class WangLandau:
                         de = (
                             self._em.predict_swap(
                                 struc,
-                                ind1=ind1,
-                                ind2=ind2,
+                                i=ind1,
+                                j=ind2,
                                 site_types=self._sublattice_indices,
                             )
                             * self._ef
@@ -1078,8 +1078,8 @@ class WangLandau:
                     de = (
                         self._em.predict_swap(
                             struc,
-                            ind1=ind1,
-                            ind2=ind2,
+                            i=ind1,
+                            j=ind2,
                             site_types=self._sublattice_indices,
                         )
                         * self._ef

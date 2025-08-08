@@ -319,16 +319,16 @@ class MonteCarlo:
                         e1 = self._em.predict(struc)
                     else:
                         x += 1
-                        de = self._em.predict_swap(struc, ind1=ind1, ind2=ind2, site_types=self._sublattice_indices)
+                        de = self._em.predict_swap(struc, i=ind1, j=ind2, site_types=self._sublattice_indices)
                         e1 = e + de
                 else:
-                    de = self._em.predict_swap(struc, ind1=ind1, ind2=ind2, site_types=self._sublattice_indices)
+                    de = self._em.predict_swap(struc, i=ind1, j=ind2, site_types=self._sublattice_indices)
                     e1 = e + de
 
             else:
                 e1 = self._em.predict(struc)
 
-            if e >= e1:
+            if e1 <= e:
                 accept_swap = True
                 boltzmann_factor = 0
             else:
@@ -482,7 +482,7 @@ class MonteCarloTrajectory:
                     for m, mo in enumerate(models):
                         # only works for single swaps
                         dmo = mo.predict_swap(
-                            sx, ind1=indices_list[0][0], ind2=indices_list[0][1], site_types=self._sublattice_indices
+                            sx, i=indices_list[0][0], j=indices_list[0][1], site_types=self._sublattice_indices
                         )
                         movalue[m] = movalue[m] + dmo
                         sdict.update({mo.property_name: movalue[m]})

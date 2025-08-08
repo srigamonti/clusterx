@@ -68,8 +68,7 @@ def test_swap_clathrate(basis):
     e_diff_swap = model.predict_swap(structure, i0, i1)
     structure.swap(i0, i1)
     e1 = model.predict(structure)
-    np.testing.assert_allclose(e0 - e1, e_diff_swap)
-    np.testing.assert_allclose(e0, e_diff_swap + e1)
+    np.testing.assert_allclose(e1 - e0, e_diff_swap)
 
 
 def test_swap(plat_cubic, model_cubic):
@@ -120,21 +119,16 @@ def test_predict_swap_energy_model():
     mb = ModelBuilder(basis="trigonometric")
     model = mb.build(sset=sset, cpool=cpool, prop="energy")
 
-    # This is a horrible workaround. The behavior of the CorrelationsCalculator is different
-    # when performing MC simulations, so we run a short one here to allow for predicting a swap.
-    predict_full = MonteCarlo(energy_model=model, scell=scell, nsubs={0: [4]})
-    _ = predict_full.metropolis(temperature=100, no_of_sampling_steps=1)
-
     # To make sure the same indices are swapped in prediction and for the swap
     swap_idx1 = 0
     swap_idx2 = 6
 
     seed_rnd_generator()
     structure = scell.gen_random_structure(nsubs={0: [5]})
-    energy_predict_swap = model.predict_swap(structure, ind1=swap_idx1, ind2=swap_idx2)
+    energy_predict_swap = model.predict_swap(structure, i=swap_idx1, j=swap_idx2)
     print(
         "Predict swap correlations:",
-        model.predict_swap(structure, ind1=swap_idx1, ind2=swap_idx2, correlation=True),
+        model.predict_swap(structure, i=swap_idx1, j=swap_idx2, correlation=True),
     )
     model.corrc.reset_mc()
     energy_original_predicted = model.predict(structure)
@@ -148,7 +142,7 @@ def test_predict_swap_energy_model():
     assert not np.isclose(energy_swapped_predicted, energy_original_predicted), (
         "Energies of swapped structure is too similar to energy of original structure"
     )
-    swapped_energy = energy_original_predicted - energy_swapped_predicted
+    swapped_energy =  energy_swapped_predicted - energy_original_predicted
     assert np.isclose(swapped_energy, energy_predict_swap), (
         f"Prediction of swap differs from energy difference after swap: real:{swapped_energy}, predicted:{energy_predict_swap}"
     )
@@ -178,23 +172,24 @@ def test_predict_swap_monte_carlo_binary():
     mb.initialize()
     model = mb.build(sset=sset, cpool=cpool, prop="energy")
 
-    predict_full = MonteCarlo(energy_model=model, scell=scell, nsubs={0: [4]})
+    mc_full = MonteCarlo(energy_model=model, scell=scell, nsubs={0: [4]})
     seed_rnd_generator()
     t1 = perf_counter()
-    traj_full = predict_full.metropolis(temperature=100, no_of_sampling_steps=100)
+    traj_full = mc_full.metropolis(temperature=100, no_of_sampling_steps=100)
     t2 = perf_counter()
     print(f"time full: {t2 - t1}")
     seed_rnd_generator()
-    traj_full2 = predict_full.metropolis(temperature=100, no_of_sampling_steps=100)
 
-    predict_swap = MonteCarlo(
+    mc_swap = MonteCarlo(
         energy_model=model, scell=scell, nsubs={0: [4]}, predict_swap=True
     )
     seed_rnd_generator()
     t1 = perf_counter()
-    traj_swap = predict_swap.metropolis(temperature=100, no_of_sampling_steps=100)
+    traj_swap = mc_swap.metropolis(temperature=100, no_of_sampling_steps=100)
     t2 = perf_counter()
     print(f"time swap: {t2 - t1}")
+    print(traj_full.get_energies())
+    print(traj_swap.get_energies())
 
     assert len(traj_full._trajectory) == len(traj_swap._trajectory), (
         "Different length for trajectories."
