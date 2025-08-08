@@ -84,7 +84,7 @@ def test_swap(plat_cubic, model_cubic):
     pred_swap = model_cubic.predict_swap(structure, i, j)
     structure.swap(i, j)
     pred_final = model_cubic.predict(structure)
-    np.testing.assert_allclose(pred_swap, pred_init - pred_final)
+    np.testing.assert_allclose(pred_swap, pred_final - pred_init)
 
 
 def test_swap_reduced(plat_cubic, model_cubic):
@@ -99,7 +99,7 @@ def test_swap_reduced(plat_cubic, model_cubic):
     pred_swap = model_cubic.predict_swap_reduced(structure, i, j)
     structure.swap(i, j)
     pred_final = model_cubic.predict(structure)
-    np.testing.assert_allclose(pred_swap, pred_init - pred_final)
+    np.testing.assert_allclose(pred_swap, pred_final - pred_init)
 
 
 def test_predict_swap_energy_model():

@@ -556,8 +556,6 @@ def cluster_function_flip(
     sigma_new: int,
     basis_set_values: np.ndarray,
 ) -> float:
-    if i_flip not in cluster_idxs:
-        return 0.0
     nbodies = len(cluster_idxs)
     cf = 1.0
     for i in range(nbodies):

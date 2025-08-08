@@ -287,16 +287,19 @@ class Model:
         sigma_j = structure.sigmas[j]
 
         p_reduced = np.diag(self.scell_reduced.get_transformation())
+        multiplicity_factor = np.prod(p) / np.prod(p_reduced)
 
         prediction = 0.0
-        for i_flip, new_sigma in [(i, sigma_j), (j, sigma_i)]:
+        for i_flip, (sigma_old, sigma_new) in [(i, (sigma_i, sigma_j)), (j, (sigma_j, sigma_i))]:
             structure_reduced, i_flip_reduced = structure.get_reduced_structure(
                 p_reduced, i_flip)
             prediction += self.predict_flip(
                 structure_reduced,
-                atom_index=i_flip_reduced,
-                new_sigma=new_sigma,
-                site_types=site_types,
+                i_flip_reduced,
+                sigma_old,
+                sigma_new,
+                site_types,
+                multiplicity_factor
             )
             structure.swap(i, j)
 
@@ -358,10 +361,12 @@ class Model:
 
     def predict_flip(
         self,
-        structure,
-        atom_index=None,
-        new_sigma=None,
+        structure: Structure,
+        index: int,
+        old_sigma: int,
+        new_sigma: int,
         site_types=[0],
+        multiplicity_factor: float = 1.0
     ):
         """Predict property change by flipping a species.
 
@@ -381,21 +386,16 @@ class Model:
             self._initialize_interaction_dictionaries(
                 structure.get_supercell(), site_types
             )
-
-        old_sigma = structure.sigmas[atom_index]
-
-        if new_sigma is not None:
-            new_sigma = new_sigma
-        elif structure.is_nary(2):
-            new_sigma = 1 - old_sigma
-        else:
-            raise ValueError("new_sigma not given and structure is not binary")
-
-        de = self._delta_e_calc(structure, atom_index, old_sigma, new_sigma)
-        return de
+        return self._delta_e_calc(
+            structure,
+            index,
+            old_sigma,
+            new_sigma,
+            multiplicity_factor
+        )
 
     def predict_swap(
-        self, structure, ind1=None, ind2=None, correlation=False, site_types=[0]
+        self, structure, i=None, j=None, correlation=False, site_types=[0]
     ):
         """Predict property difference with the optimal cluster expansion model.
 
@@ -404,36 +404,24 @@ class Model:
         ``structure``: Structure object
             structure object to calculate property difference to.
 
-        ``ind1``: int
+        ``i``: int
             index of first atom position has been swapped
 
-        ``ind2``: int
+        ``j``: int
             index of second atom position has been swapped
 
         """
-        if self._num_mc_calls == 0:
-            self._initialize_interaction_dictionaries(
-                structure.get_supercell(), site_types
-            )
+        sigma_i = structure.sigmas[i]
+        sigma_j = structure.sigmas[j]
 
-        new_sigma = structure.sigmas[ind1]
-        old_sigma = structure.sigmas[ind2]
-
-        de1 = self._delta_e_calc(structure, ind1, old_sigma, new_sigma)
-
-        sigma1 = structure.sigmas[ind1]
-        sigma2 = structure.sigmas[ind2]
-        structure.sigmas[ind1] = sigma2
-        structure.sigmas[ind2] = sigma1
-
-        de2 = self._delta_e_calc(structure, ind2, new_sigma, old_sigma)
-
-        structure.sigmas[ind1] = sigma1
-        structure.sigmas[ind2] = sigma2
+        de1 = self.predict_flip(structure, i, sigma_i, sigma_j, site_types, 1.0)
+        structure.swap(i, j)
+        de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, 1.0)
+        structure.swap(i, j)
 
         return de1 + de2
 
-    def _compute_delta_e_binary_linear(self, structure, ind, old_sigma, new_sigma):
+    def _compute_delta_e_binary_linear(self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0):
         sgn = new_sigma - old_sigma
         corrs = np.zeros(self._mc_nclusters)
         for ifi, icl in zip(
@@ -450,9 +438,10 @@ class Model:
                 corrs[cluster_index] += sgn
 
         corrs /= self._mc_multiplicities
+        corrs /= multiplicity_factor
         return np.dot(self.ecis, corrs)
 
-    def _compute_delta_e(self, structure, ind, old_sigma, new_sigma):
+    def _compute_delta_e(self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0):
         corrs = np.zeros(self._mc_nclusters)
         for icl in self._interactions_dict[ind]["interactions_list"]:
             cluster_index = self._clusters_list[icl]["cluster_index"]
@@ -472,18 +461,16 @@ class Model:
                 self.corrc.basis_set_values,
             )
             corrs[cluster_index] += cf
-        print(corrs)
 
         corrs /= self._mc_multiplicities
+        corrs /= multiplicity_factor
         corrs = np.around(corrs, decimals=12)
-
 
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
             res = self.estimator.predict(corrs.reshape(1, -1))[0] - self.estimator.intercept_
         else:
             res = np.dot(self.ecis, corrs)
-        print(res)
         return res
 
     def report_errors(self, sset):
