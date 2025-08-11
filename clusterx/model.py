@@ -395,7 +395,7 @@ class Model:
         )
 
     def predict_swap(
-        self, structure, i=None, j=None, correlation=False, site_types=[0]
+        self, structure, i, j, correlation=False, site_types=[0]
     ):
         """Predict property difference with the optimal cluster expansion model.
 
@@ -413,12 +413,17 @@ class Model:
         """
         sigma_i = structure.sigmas[i]
         sigma_j = structure.sigmas[j]
-
+        structure.sigmas[j] = sigma_i
         de1 = self.predict_flip(structure, i, sigma_i, sigma_j, site_types, 1.0)
-        structure.swap(i, j)
+        structure.sigmas[i] = sigma_j
+        structure.sigmas[j] = sigma_j
         de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, 1.0)
-        structure.swap(i, j)
+        structure.sigmas[i] = sigma_i
 
+        #de1 = self.predict_flip(structure, i, sigma_i, sigma_j, site_types, 1.0)
+        #structure.swap(i, j)
+        #de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, 1.0)
+        #structure.swap(i, j)
         return de1 + de2
 
     def _compute_delta_e_binary_linear(self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0):

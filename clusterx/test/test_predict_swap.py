@@ -74,16 +74,42 @@ def test_swap_clathrate(basis):
 def test_swap(plat_cubic, model_cubic):
     seed_rngs(42)
 
-    p = [10, 10, 10]
+    p = [4, 4, 4]
     scell = SuperCell(plat_cubic, p)
     structure = scell.gen_random_structure(nsubs=int(np.prod(p)/2))
-    i, j = structure.swap_random_binary(site_type=0)
+    preds_full = []
+    preds_swap = []
+    for i in range(len(scell)):
+        for j in range(len(scell)):
+            if j > i:
+                continue
+            pred_init = model_cubic.predict(structure)
+            pred_swap = model_cubic.predict_swap(structure, i, j)
+            structure.swap(i, j)
+            pred_final = model_cubic.predict(structure)
+            preds_full.append(pred_final - pred_init)
+            preds_swap.append(pred_swap)
+    np.testing.assert_allclose(preds_swap, preds_full)
 
-    pred_init = model_cubic.predict(structure)
-    pred_swap = model_cubic.predict_swap(structure, i, j)
-    structure.swap(i, j)
-    pred_final = model_cubic.predict(structure)
-    np.testing.assert_allclose(pred_swap, pred_final - pred_init)
+
+def test_flip(plat_cubic, model_cubic):
+    seed_rngs(42)
+
+    p = [4, 4, 4]
+    scell = SuperCell(plat_cubic, p)
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p)/2))
+    preds_full = []
+    preds_flip = []
+    for i in range(len(structure)):
+        pred_init = model_cubic.predict(structure)
+        old_sigma = structure.sigmas[i]
+        new_sigma = 1 - old_sigma
+        pred_flip = model_cubic.predict_flip(structure, i, old_sigma, new_sigma)
+        structure.sigmas[i] = new_sigma
+        pred_final = model_cubic.predict(structure)
+        preds_full.append(pred_final - pred_init)
+        preds_flip.append(pred_flip)
+    np.testing.assert_allclose(preds_flip, preds_full)
 
 
 def test_swap_reduced(plat_cubic, model_cubic):
@@ -101,99 +127,19 @@ def test_swap_reduced(plat_cubic, model_cubic):
     np.testing.assert_allclose(pred_swap, pred_final - pred_init)
 
 
-def test_predict_swap_energy_model():
-    # binary case
-    structure = bulk("Si")
-    substitutions = structure.copy()
-    substitutions.set_chemical_symbols(["Ge", "Ge"])
-    pl = ParentLattice(atoms=structure, substitutions=[substitutions], pbc=(1, 1, 1))
-    scell = SuperCell(pl, 2)
-    seed_rngs()
-    sset = StructuresSet(parent_lattice=pl, calculator=EMT2())
-    for nsub in range(2, 15):
-        for _ in range(3):
-            structure = scell.gen_random_structure(nsubs={0: [nsub]})
-            sset.add_structure(structure)
-    sset.calculate_property()
-    cpool = ClustersPool(pl, npoints=[1, 2], radii=[0, 3])
-    mb = ModelBuilder(basis="trigonometric")
-    model = mb.build(sset=sset, cpool=cpool, prop="energy")
+def test_metropolis_cubic(plat_cubic, model_cubic):
+    seed_rngs(42)
 
-    # To make sure the same indices are swapped in prediction and for the swap
-    swap_idx1 = 0
-    swap_idx2 = 6
-
-    seed_rngs()
-    structure = scell.gen_random_structure(nsubs={0: [5]})
-    energy_predict_swap = model.predict_swap(structure, i=swap_idx1, j=swap_idx2)
-    print(
-        "Predict swap correlations:",
-        model.predict_swap(structure, i=swap_idx1, j=swap_idx2, correlation=True),
-    )
-    model.corrc.reset_mc()
-    energy_original_predicted = model.predict(structure)
-    print(f"Original structure sigmas: {structure.get_sigmas()}")
-    print("correlations of original", model.corrc.get_cluster_correlations(structure))
-    structure.swap(swap_idx1, swap_idx2)
-    print(f"Swapped structure sigmas: {structure.get_sigmas()}")
-    energy_swapped_predicted = model.predict(structure)
-    print("correlations of swapped", model.corrc.get_cluster_correlations(structure))
-
-    assert not np.isclose(energy_swapped_predicted, energy_original_predicted), (
-        "Energies of swapped structure is too similar to energy of original structure"
-    )
-    swapped_energy =  energy_swapped_predicted - energy_original_predicted
-    assert np.isclose(swapped_energy, energy_predict_swap), (
-        f"Prediction of swap differs from energy difference after swap: real:{swapped_energy}, predicted:{energy_predict_swap}"
-    )
-
-
-def test_predict_swap_monte_carlo_binary():
-    structure = bulk("Si")
-    substitutions = structure.copy()
-    substitutions.set_chemical_symbols(["Ge", "Ge"])
-    pl = ParentLattice(atoms=structure, substitutions=[substitutions], pbc=(1, 1, 1))
-    scell = SuperCell(pl, 2)
+    p = [4, 4, 4]
+    scell = SuperCell(plat_cubic, p)
     nsubs = {0: [4]}
-    seed_rngs(42)
-    sset = StructuresSet(parent_lattice=pl, calculator=EMT2())
-
-    for nsub in range(1, 16):
-        for _ in range(5):
-            structure = scell.gen_random_structure(nsubs={0: [nsub]})
-            sset.add_structure(structure)
-
-    sset.calculate_property()
-
-    cpool = ClustersPool(pl, npoints=[1, 2, 3], radii=[0, 3, 4])
-
-    from time import perf_counter
-
-    mb = ModelBuilder()
-    mb.initialize()
-    model = mb.build(sset=sset, cpool=cpool, prop="energy")
 
     seed_rngs(42)
-    mc_full = MonteCarlo(energy_model=model, scell=scell, nsubs=nsubs, predict_swap=False)
-    t1 = perf_counter()
+    mc_full = MonteCarlo(energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=False)
     traj_full = mc_full.metropolis(temperature=100, no_of_sampling_steps=10)
-    t2 = perf_counter()
-    print(f"time full: {t2 - t1}")
 
     seed_rngs(42)
-    mc_swap = MonteCarlo(energy_model=model, scell=scell, nsubs=nsubs, predict_swap=True)
-    t1 = perf_counter()
+    mc_swap = MonteCarlo(energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=True)
     traj_swap = mc_swap.metropolis(temperature=100, no_of_sampling_steps=10)
-    t2 = perf_counter()
-    print(f"time swap: {t2 - t1}")
-    e_full = traj_full.get_energies()
-    e_swap = traj_swap.get_energies()
-    print(e_full)
-    print(e_swap)
 
-    assert len(traj_full._trajectory) == len(traj_swap._trajectory), (
-        "Different length for trajectories."
-    )
-    assert np.allclose(traj_full.get_energies(), traj_swap.get_energies()), (
-        "Energies of structures visited with 'predict_swap' differ from full CE prediction."
-    )
+    np.testing.assert_allclose(traj_swap.get_energies(), traj_full.get_energies())
