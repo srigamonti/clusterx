@@ -141,9 +141,7 @@ class MonteCarlo:
                         )
 
         if not self._sublattice_indices:
-            import sys
-
-            sys.exit("Sublattice for the sampling is not correctly assigned, look at the documatation.")
+            raise AttributeError("Sublattice for the sampling is not correctly assigned, look at the documatation.")
 
         self._models = []
         if models:
@@ -268,8 +266,8 @@ class MonteCarlo:
             else:
                 struc = self._scell.gen_random_structure(mc=True)
 
-        self._em.corrc.reset_mc(mc=True)
-        e = self._em.predict(struc)
+        self._em.reset_mc(mc=True)
+        e_last = self._em.predict(struc)
 
         if filename is not None:
             self._filename = filename
@@ -287,23 +285,21 @@ class MonteCarlo:
             acceptance_ratio=acceptance_ratio,
             **kwargs
         )
+        if self._no_of_swaps > 1:
+            raise NotImplementedError("No. of swaps > 1 functionality not implemented")
 
         if self._models:
             key_value_pairs = {}
             for m, mo in enumerate(self._models):
                 key_value_pairs.update({mo.property_name: mo.predict(struc)})
-            traj.add_decoration(0, e, [], decoration=struc.decor, key_value_pairs=key_value_pairs)
+            traj.add_decoration(0, e_last, [], decoration=struc.decor, key_value_pairs=key_value_pairs)
         else:
-            traj.add_decoration(0, e, [], decoration=struc.decor)
+            traj.add_decoration(0, e_last, [], decoration=struc.decor)
 
         if acceptance_ratio:
             nar = 100
             ar = acceptance_ratio
             hist = np.zeros(nar, dtype=int)
-
-        if self._error_reset is not None:
-            error_steps = int(self._error_reset)
-            x = 1
 
         for i in tqdm(range(1, no_of_sampling_steps + 1), total=no_of_sampling_steps, desc="MMC simulation"):
             indices_list = []
@@ -311,45 +307,38 @@ class MonteCarlo:
             for j in range(self._no_of_swaps):
                 ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
                 indices_list.append([ind1, ind2, [site_type, rindices]])
+            print("Proposed swap: {} <-> {}".format(ind1, ind2))
 
             if self._control_flag:
-                if self._error_reset:
-                    if x > error_steps:
-                        x = 1
-                        e1 = self._em.predict(struc)
-                    else:
-                        x += 1
-                        de = self._em.predict_swap(struc, i=ind1, j=ind2, site_types=self._sublattice_indices)
-                        e1 = e + de
-                else:
-                    de = self._em.predict_swap(struc, i=ind1, j=ind2, site_types=self._sublattice_indices)
-                    e1 = e + de
-
+                de = self._em.predict_swap(struc, i=ind1, j=ind2, site_types=self._sublattice_indices)
             else:
-                e1 = self._em.predict(struc)
+                struc.swap(ind1, ind2)
+                de = self._em.predict(struc) - e_last
+                struc.swap(ind1, ind2)
 
-            if e1 <= e:
+            if de <= 0:
                 accept_swap = True
                 boltzmann_factor = 0
             else:
-                boltzmann_factor = math.exp((e - e1) / (scale_factor_product))
+                boltzmann_factor = math.exp(-de / (scale_factor_product))
 
                 if np.random.uniform(0, 1) <= boltzmann_factor:
                     accept_swap = True
                 else:
                     accept_swap = False
+            print(f"E_diff = {de}, accepted: {accept_swap}")
 
             if accept_swap:
-                e = e1
+                e_last += de
 
                 if self._models:
                     key_value_pairs = {}
                     for m, mo in enumerate(self._models):
                         key_value_pairs.update({mo.property_name: mo.predict(struc)})
-                    traj.add_decoration(i, e, [[li[0], li[1]] for li in indices_list], key_value_pairs=key_value_pairs)
+                    traj.add_decoration(i, e_last, [[li[0], li[1]] for li in indices_list], key_value_pairs=key_value_pairs)
 
                 else:
-                    traj.add_decoration(i, e, [[li[0], li[1]] for li in indices_list])
+                    traj.add_decoration(i, e_last, [[li[0], li[1]] for li in indices_list])
 
                 if acceptance_ratio:
                     ar = poppush(hist, 1)

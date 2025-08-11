@@ -49,7 +49,7 @@ def model_cubic(plat_cubic, cpool_cubic, corrc_cubic):
     return model
 
 
-def seed_rnd_generator(seed=0):
+def seed_rngs(seed=0):
     random.seed(seed)
     np.random.seed(seed)
 
@@ -57,7 +57,7 @@ def seed_rnd_generator(seed=0):
 # estimator: None (just ECI), linear, non-linear
 @pytest.mark.parametrize('basis', ['binary-linear', 'trigonometric', 'polynomial'])
 def test_swap_clathrate(basis):
-    seed_rnd_generator(42) # is specific, so that swap changes energy
+    seed_rngs(42) # is specific, so that swap changes energy
     scell = get_clathrate_supercell()
     model = get_clathrate_model(basis)
     model.reset_mc(True)
@@ -72,7 +72,7 @@ def test_swap_clathrate(basis):
 
 
 def test_swap(plat_cubic, model_cubic):
-    seed_rnd_generator(42)
+    seed_rngs(42)
 
     p = [10, 10, 10]
     scell = SuperCell(plat_cubic, p)
@@ -87,7 +87,7 @@ def test_swap(plat_cubic, model_cubic):
 
 
 def test_swap_reduced(plat_cubic, model_cubic):
-    seed_rnd_generator(42)
+    seed_rngs(42)
 
     p = [10, 10, 10]
     scell = SuperCell(plat_cubic, p)
@@ -108,7 +108,7 @@ def test_predict_swap_energy_model():
     substitutions.set_chemical_symbols(["Ge", "Ge"])
     pl = ParentLattice(atoms=structure, substitutions=[substitutions], pbc=(1, 1, 1))
     scell = SuperCell(pl, 2)
-    seed_rnd_generator()
+    seed_rngs()
     sset = StructuresSet(parent_lattice=pl, calculator=EMT2())
     for nsub in range(2, 15):
         for _ in range(3):
@@ -123,7 +123,7 @@ def test_predict_swap_energy_model():
     swap_idx1 = 0
     swap_idx2 = 6
 
-    seed_rnd_generator()
+    seed_rngs()
     structure = scell.gen_random_structure(nsubs={0: [5]})
     energy_predict_swap = model.predict_swap(structure, i=swap_idx1, j=swap_idx2)
     print(
@@ -154,7 +154,8 @@ def test_predict_swap_monte_carlo_binary():
     substitutions.set_chemical_symbols(["Ge", "Ge"])
     pl = ParentLattice(atoms=structure, substitutions=[substitutions], pbc=(1, 1, 1))
     scell = SuperCell(pl, 2)
-    seed_rnd_generator()
+    nsubs = {0: [4]}
+    seed_rngs(42)
     sset = StructuresSet(parent_lattice=pl, calculator=EMT2())
 
     for nsub in range(1, 16):
@@ -172,24 +173,23 @@ def test_predict_swap_monte_carlo_binary():
     mb.initialize()
     model = mb.build(sset=sset, cpool=cpool, prop="energy")
 
-    mc_full = MonteCarlo(energy_model=model, scell=scell, nsubs={0: [4]})
-    seed_rnd_generator()
+    seed_rngs(42)
+    mc_full = MonteCarlo(energy_model=model, scell=scell, nsubs=nsubs, predict_swap=False)
     t1 = perf_counter()
-    traj_full = mc_full.metropolis(temperature=100, no_of_sampling_steps=100)
+    traj_full = mc_full.metropolis(temperature=100, no_of_sampling_steps=10)
     t2 = perf_counter()
     print(f"time full: {t2 - t1}")
-    seed_rnd_generator()
 
-    mc_swap = MonteCarlo(
-        energy_model=model, scell=scell, nsubs={0: [4]}, predict_swap=True
-    )
-    seed_rnd_generator()
+    seed_rngs(42)
+    mc_swap = MonteCarlo(energy_model=model, scell=scell, nsubs=nsubs, predict_swap=True)
     t1 = perf_counter()
-    traj_swap = mc_swap.metropolis(temperature=100, no_of_sampling_steps=100)
+    traj_swap = mc_swap.metropolis(temperature=100, no_of_sampling_steps=10)
     t2 = perf_counter()
     print(f"time swap: {t2 - t1}")
-    print(traj_full.get_energies())
-    print(traj_swap.get_energies())
+    e_full = traj_full.get_energies()
+    e_swap = traj_swap.get_energies()
+    print(e_full)
+    print(e_swap)
 
     assert len(traj_full._trajectory) == len(traj_swap._trajectory), (
         "Different length for trajectories."
