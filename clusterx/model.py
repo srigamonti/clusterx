@@ -10,15 +10,15 @@ import warnings
 
 import numpy as np
 
+from clusterx.super_cell import SuperCell
 from clusterx.correlations import (
     CorrelationsCalculator,
     cluster_function_flip,
-    cluster_correlations_flip
 )
 from clusterx.structure import Structure
 from clusterx.estimators.estimator_factory import EstimatorFactory
 from clusterx.clusters_selector import ClustersSelector
-from clusterx.utils import grid_mapping, is_diagonal
+from clusterx.utils import is_diagonal
 
 
 class Model:
@@ -87,6 +87,7 @@ class Model:
         self._mc_start_time = 0
         self._mc_init_time = 0
         self.scell_reduced = None
+        self.initialized_interactions = False
 
         if self.standardize:
             from sklearn.preprocessing import StandardScaler
@@ -133,6 +134,7 @@ class Model:
         self._mc_multiplicities = []
         self._mc_start_time = 0
         self._mc_init_time = 0
+        self.initialized_interactions = False
 
     def init_reduced_model(self):
         print("Info(Model): setting up reduced SuperCell.")
@@ -261,59 +263,38 @@ class Model:
                 corrs = self.stdscaler.transform(corrs)
             return np.dot(self.ecis, corrs)
 
-    def _initialize_interaction_dictionaries(self, scell, site_types):
-        self._mc_init_time = time.time()
-        print("Info(Model): setting up dictionary of interactions.")
-
-        cluster_orbits = self.corrc.get_cluster_orbits_for_scell(scell)
-        self._mc_nclusters = len(cluster_orbits)
-        for i in range(self._mc_nclusters):
-            self._mc_multiplicities.append(len(cluster_orbits[i]))
-
-        if self.standardize:
-            raise RuntimeError("Standardscaler not supported")
-
-        self._atom_indexes = []
-        for st in site_types:
-            for aidx in scell.get_atom_indices_for_site_type(st)[0]:
-                self._atom_indexes.append(aidx)
-
-        self._ems = scell.get_ems()
-        self._clusters_list = []
-
-        icl = 0
+    def _init_interaction_dict(self, super_cell: SuperCell):
+        """Alternative for interaction_dictionary, based on ase NeighborList."""
+        print("Info(Model): setting up dictionary of interactions **new**.")
+        cluster_orbits = self.corrc.get_cluster_orbits_for_scell(super_cell)
+        cluster_indices = []  # to which primitive cluster each cluster belongs
+        cluster_orbits_array = []  # all clusters from all orbits
+        multiplicities = []  # relative to cluster_orbits_array
         for cluster_index, cluster_orbit in enumerate(cluster_orbits):
+            multiplicities.append(len(cluster_orbit))
             for cluster in cluster_orbit:
-                self._clusters_list.append({})
-                self._clusters_list[icl]["cluster_index"] = cluster_index
-                self._clusters_list[icl]["cluster_sites"] = cluster.get_idxs()
-                self._clusters_list[icl]["cluster_funcs"] = cluster.alphas
-                self._clusters_list[icl]["cluster_ems"] = self._ems.take(
-                    cluster.get_idxs()
-                )
-                icl += 1
+                cluster_indices.append(cluster_index)
+                cluster_orbits_array.append(cluster)
 
-        self._interactions_dict = {}
-        for ind in self._atom_indexes:
-            self._interactions_dict[ind] = {}
-            self._interactions_dict[ind]["interactions_list"] = []
-            self._interactions_dict[ind]["cluster_sites_index_for_ind"] = []
-            for icl in range(len(self._clusters_list)):
-                if ind in self._clusters_list[icl]["cluster_sites"]:
-                    self._interactions_dict[ind]["interactions_list"].append(icl)
-                    self._interactions_dict[ind]["cluster_sites_index_for_ind"].append(
-                        self._clusters_list[icl]["cluster_sites"].index(ind)
-                    )
+        # List of lists, where each sublist contains indices
+        # from cluster_orbits_array
+        site_clusters = []
+        for site in range(len(super_cell)):
+            involved_clusters = []
+            for index, cluster in enumerate(cluster_orbits_array):
+                if site in cluster.get_idxs():
+                    involved_clusters.append(index)
+            site_clusters.append(involved_clusters)
+        n_interactions = sum([len(sc) for sc in site_clusters])
+        print(f"Info(Model): # saved interactions: {n_interactions}")
 
-        if self._basis == "binary-linear" or self._basis == "indicator-binary":
-            self._delta_e_calc = self._compute_delta_e_binary_linear
-        else:
-            self._delta_e_calc = self._compute_delta_e
+        self._cluster_orbits_array = np.array(cluster_orbits_array, dtype=object)
+        self._cluster_indices = np.array(cluster_indices, dtype=int)
+        self._multiplicities = np.array(multiplicities, dtype=int)
+        self._site_clusters = site_clusters
+        self._delta_e_calc = self._compute_delta_e
+        self.initialized_interactions = True
 
-        self._num_mc_calls = 1
-        self._mc_init_time -= time.time()
-        self._mc_init_time = -self._mc_init_time
-        self._mc_start_time = time.time()
 
     def predict_flip(
         self,
@@ -357,10 +338,8 @@ class Model:
         else:
             multiplicity_factor = 1.0
 
-        if self._num_mc_calls == 0:
-            self._initialize_interaction_dictionaries(
-                structure.get_supercell(), site_types
-            )
+        if not self.initialized_interactions:
+            self._init_interaction_dict(structure.get_supercell())
         return self._delta_e_calc(
             structure,
             index,
@@ -400,6 +379,7 @@ class Model:
         return de1 + de2
 
     def _compute_delta_e_binary_linear(self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0):
+        # TODO: implement new interactions dict, currently not working
         sgn = new_sigma - old_sigma
         corrs = np.zeros(self._mc_nclusters)
         for ifi, icl in zip(
@@ -415,24 +395,24 @@ class Model:
             if 0 not in ss:
                 corrs[cluster_index] += sgn
 
-        corrs /= self._mc_multiplicities
+        corrs /= self._multiplicities
         corrs /= multiplicity_factor
         return np.dot(self.ecis, corrs)
 
     def _compute_delta_e(self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0):
-        corrs = np.zeros(self._mc_nclusters)
-        for icl in self._interactions_dict[ind]["interactions_list"]:
-            cluster_index = self._clusters_list[icl]["cluster_index"]
-            cluster_sites = self._clusters_list[icl]["cluster_sites"]
-            cluster_funcs = self._clusters_list[icl]["cluster_funcs"]
-            cluster_ems = self._clusters_list[icl]["cluster_ems"]
-            sigmas = structure.sigmas.take(cluster_sites)
+        indices = self._site_clusters[ind]
+        clusters = self._cluster_orbits_array[indices]
+        cluster_indices = self._cluster_indices[indices]
+        corrs = np.zeros(max(cluster_indices) + 1, dtype=float)
 
+        for cluster, cluster_index in zip(clusters, cluster_indices):
+            cluster_sites = cluster.get_idxs()
+            cluster_funcs = cluster.alphas
             cf = cluster_function_flip(
                 cluster_sites,
                 cluster_funcs,
-                sigmas,
-                cluster_ems,
+                structure.sigmas.take(cluster_sites),
+                structure.ems,
                 ind,
                 old_sigma,
                 new_sigma,
@@ -440,7 +420,7 @@ class Model:
             )
             corrs[cluster_index] += cf
 
-        corrs /= self._mc_multiplicities
+        corrs /= self._multiplicities
         corrs /= multiplicity_factor
         corrs = np.around(corrs, decimals=12)
 
