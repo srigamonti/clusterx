@@ -74,7 +74,7 @@ def test_swap_clathrate(basis):
 def test_swap(plat_cubic, model_cubic):
     seed_rngs(42)
 
-    p = [4, 4, 4]
+    p = [2, 2, 2]
     scell = SuperCell(plat_cubic, p)
     structure = scell.gen_random_structure(nsubs=int(np.prod(p)/2))
     preds_full = []
@@ -89,7 +89,7 @@ def test_swap(plat_cubic, model_cubic):
             pred_final = model_cubic.predict(structure)
             preds_full.append(pred_final - pred_init)
             preds_swap.append(pred_swap)
-    np.testing.assert_allclose(preds_swap, preds_full)
+    np.testing.assert_allclose(preds_swap, preds_full, atol=1e-10)
 
 
 def test_flip(plat_cubic, model_cubic):

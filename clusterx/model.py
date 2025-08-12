@@ -411,19 +411,14 @@ class Model:
             index of second atom position has been swapped
 
         """
+
         sigma_i = structure.sigmas[i]
         sigma_j = structure.sigmas[j]
-        structure.sigmas[j] = sigma_i
-        de1 = self.predict_flip(structure, i, sigma_i, sigma_j, site_types, 1.0)
-        structure.sigmas[i] = sigma_j
-        structure.sigmas[j] = sigma_j
-        de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, 1.0)
-        structure.sigmas[i] = sigma_i
 
-        #de1 = self.predict_flip(structure, i, sigma_i, sigma_j, site_types, 1.0)
-        #structure.swap(i, j)
-        #de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, 1.0)
-        #structure.swap(i, j)
+        de1 = self.predict_flip(structure, i, sigma_i, sigma_j, site_types, 1.0)
+        structure.swap(i, j)
+        de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, 1.0)
+        structure.swap(i, j)
         return de1 + de2
 
     def _compute_delta_e_binary_linear(self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0):
