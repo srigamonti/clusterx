@@ -169,6 +169,7 @@ class MonteCarlo:
         acceptance_ratio=None,
         serialize=False,
         filename=None,
+        reduce_super_cell=False,
         **kwargs
     ):
         r"""Perform Monte-Carlo Metropolis simulation
@@ -219,6 +220,10 @@ class MonteCarlo:
 
         ``filename``: string (default: ``trajectory.json``)
             Name of a Json file in which the trajectory is serialized after the sampling if ``serialize`` is **True**.
+        
+        ``reduce_super_cell``: boolean (default: False)
+            If **True**, the super cell is reduced to the smallest possible size
+            that contains all clusters.
 
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the MonteCarloTrajectory object that is initialized in this method.
@@ -305,12 +310,12 @@ class MonteCarlo:
             indices_list = []
 
             for j in range(self._no_of_swaps):
-                ind1, ind2, site_type, rindices = struc.swap_random(self._sublattice_indices)
+                ind1, ind2, site_type, rindices = struc.get_random_swap(
+                    self._sublattice_indices)
                 indices_list.append([ind1, ind2, [site_type, rindices]])
-            print("Proposed swap: {} <-> {}".format(ind1, ind2))
 
             if self._control_flag:
-                de = self._em.predict_swap(struc, i=ind1, j=ind2, site_types=self._sublattice_indices)
+                de = self._em.predict_swap(struc, i=ind1, j=ind2, site_types=self._sublattice_indices, reduce=reduce_super_cell)
             else:
                 struc.swap(ind1, ind2)
                 de = self._em.predict(struc) - e_last
@@ -326,9 +331,9 @@ class MonteCarlo:
                     accept_swap = True
                 else:
                     accept_swap = False
-            print(f"E_diff = {de}, accepted: {accept_swap}")
 
             if accept_swap:
+                struc.swap(ind1, ind2)
                 e_last += de
 
                 if self._models:
@@ -344,14 +349,6 @@ class MonteCarlo:
                     ar = poppush(hist, 1)
 
             else:
-                for j in range(self._no_of_swaps - 1, -1, -1):
-                    struc.swap(
-                        indices_list[j][1],
-                        indices_list[j][0],
-                        site_type=indices_list[j][2][0],
-                        rindices=indices_list[j][2][1],
-                    )
-
                 if acceptance_ratio:
                     ar = poppush(hist, 0)
 
@@ -423,6 +420,7 @@ class MonteCarloTrajectory:
             self._scale_factor = kwargs.pop("scale_factor", None)
             self._acceptance_ratio = kwargs.pop("acceptance_ratio", None)
             self._keyword_arguments = kwargs
+            self._reduce_supercell = kwargs.pop("reduce_super_cell", False)
 
     def calculate_properties(self, models=[], prop_func=None, prop_name=None, **kwargs):
         """Calculate the property for all decorations in the trajectory. The property can be
@@ -471,7 +469,11 @@ class MonteCarloTrajectory:
                     for m, mo in enumerate(models):
                         # only works for single swaps
                         dmo = mo.predict_swap(
-                            sx, i=indices_list[0][0], j=indices_list[0][1], site_types=self._sublattice_indices
+                            sx,
+                            i=indices_list[0][0],
+                            j=indices_list[0][1],
+                            site_types=self._sublattice_indices,
+                            reduce=self._reduce_supercell
                         )
                         movalue[m] = movalue[m] + dmo
                         sdict.update({mo.property_name: movalue[m]})

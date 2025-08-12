@@ -413,8 +413,8 @@ class Structure(SuperCell):
 
         self._fname = filepath
 
-    def swap_random_binary(self, site_type, sigma_swap=[0, 1]):
-        r"""Swap two randomly selected atoms in given sub-lattice.
+    def get_random_swap_binary(self, site_type, sigma_swap=[0, 1]):
+        r"""Return indices to swap tow sites in a binary lattice.
 
         **Parameters:**
 
@@ -435,7 +435,6 @@ class Structure(SuperCell):
             ridx1 = self._idxs[site_type][sigma_swap[0]][rind1]
             ridx2 = self._idxs[site_type][sigma_swap[1]][rind2]
             rindices = [sigma_swap, [rind1, rind2]]
-            self.swap(ridx1, ridx2, site_type=site_type, rindices=rindices)
 
             return ridx1, ridx2, site_type, rindices
         else:
@@ -452,19 +451,39 @@ class Structure(SuperCell):
             ]
             ridx1 = np.random.choice(idx1)
             ridx2 = np.random.choice(idx2)
-            self.swap(ridx1, ridx2)
 
             return ridx1, ridx2
 
-    def swap_random(self, site_types):
-        """Swap two randomly selected atoms in randomly selected sub-lattice.
+    def swap_random_binary(self, site_type, sigma_swap=[0, 1]):
+        """Swap two randomly selected atoms in a binary sub-lattice.
+
+        First, a pair of species from the sublattice are swapped.
+        The swapped Structure object is also returned.
+
+        **Parameters:**
+
+        ``site_type``: integer (required)
+            Indicate index of sub-lattice where atoms are to be swapped.
+
+        ``sigma_swap``: two-component integer array (default: ``[0,1]``)
+            Indicate which atomic species (represented by sigma variables) in the sublattice
+            are swapped. E.g., in the case of a binary, this can only be ``[0,1]``, while
+            for a ternary, this can be ``[0,1]``, ``[0,2]``, ``[1,2]`` (and, obviously,
+            the exchanged ones, e.g. ``[1,0]``).
+
+        **Return:**
+        """
+        i, j = self.get_random_swap_binary(site_type, sigma_swap)
+        self.swap(i, j, site_type)
+        return i, j
+
+    def get_random_swap(self, site_types):
+        """Get indices of two randomly selected atoms in randomly selected sub-lattice.
 
         First, a sublattice from the site_types array is picked at random. Second,
         a pair of species from the selected sublattice are swapped.
 
-        Structure object is modified by the swap. The swapped Structure object is also returned.
-
-        See also :py:meth:`Structure.swap_random_binary() <clusterx.structure.Structure.swap_random_binary>`
+        See also :py:meth:`Structure.get_random_swap_binary() <clusterx.structure.Structure.swap_random_binary>`
 
         **Parameters:**
 
@@ -482,7 +501,24 @@ class Structure(SuperCell):
         else:
             sigma_swap = np.arange(len_subs)
 
-        return self.swap_random_binary(site_type, sigma_swap=sigma_swap)
+        return self.get_random_swap_binary(site_type, sigma_swap=sigma_swap)
+
+    def swap_random(self, site_types):
+        """Swap two randomly selected atoms in a randomly selected sub-lattice.
+
+        First, a sublattice from the site_types array is picked at random. Second,
+        a pair of species from the selected sublattice are swapped.
+
+        See also :py:meth:`Structure.swap_random_binary() <clusterx.structure.Structure.swap_random_binary>`
+
+        **Parameters:**
+
+        ``site_types``: integer array (required)
+            Indicate indices of sub-lattices to be considered in the random sub-lattice selection.
+        """
+        i, j, site_type, rindices = self.get_random_swap(site_types)
+        self.swap(i, j, site_type, rindices)
+        return i, j, site_type, rindices
 
     def swap(self, ridx1, ridx2, site_type=None, rindices=None):
         sigma1 = self.sigmas[ridx1]
@@ -498,9 +534,6 @@ class Structure(SuperCell):
         if site_type is not None:
             self._idxs[site_type][rindices[0][0]][rindices[1][0]] = ridx2
             self._idxs[site_type][rindices[0][1]][rindices[1][1]] = ridx1
-
-            # a = sorted(self._idxs[site_type][rindices[0][0]])
-            # b = sorted(self._idxs[site_type][rindices[0][1]])
 
     def update_decoration(self, decoration):
         """Update decoration of the structure object

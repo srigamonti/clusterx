@@ -14,16 +14,13 @@ from clusterx.model import Model
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.thermodynamics.monte_carlo import MonteCarlo
-from clusterx.test.defaults import (
-    get_clathrate_supercell,
-    get_clathrate_model
-)
+from clusterx.test.defaults import get_clathrate_supercell, get_clathrate_model
 
 
 @pytest.fixture
 def plat_cubic():
-    pri = bulk("H", crystalstructure="sc", a=1.)
-    sub = bulk("He", crystalstructure="sc", a=1.)
+    pri = bulk("H", crystalstructure="sc", a=1.0)
+    sub = bulk("He", crystalstructure="sc", a=1.0)
     return ParentLattice(atoms=pri, substitutions=[sub], pbc=(1, 1, 1))
 
 
@@ -51,11 +48,12 @@ def seed_rngs(seed=0):
     random.seed(seed)
     np.random.seed(seed)
 
+
 # test cases (TODO):
 # estimator: None (just ECI), linear, non-linear
-@pytest.mark.parametrize('basis', ['binary-linear', 'trigonometric', 'polynomial'])
+@pytest.mark.parametrize("basis", ["binary-linear", "trigonometric", "polynomial"])
 def test_swap_clathrate(basis):
-    seed_rngs(42) # is specific, so that swap changes energy
+    seed_rngs(42)  # is specific, so that swap changes energy
     scell = get_clathrate_supercell()
     model = get_clathrate_model(basis)
     model.reset_mc(True)
@@ -69,13 +67,13 @@ def test_swap_clathrate(basis):
     np.testing.assert_allclose(e1 - e0, e_diff_swap)
 
 
-@pytest.mark.parametrize('reduce', [False, True])
+@pytest.mark.parametrize("reduce", [False, True])
 def test_swap(plat_cubic, model_cubic, reduce):
     seed_rngs(42)
 
     p = [2, 2, 2]
     scell = SuperCell(plat_cubic, p)
-    structure = scell.gen_random_structure(nsubs=int(np.prod(p)/2))
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
     preds_full = []
     preds_swap = []
     for i in range(len(scell)):
@@ -91,13 +89,13 @@ def test_swap(plat_cubic, model_cubic, reduce):
     np.testing.assert_allclose(preds_swap, preds_full, atol=1e-10)
 
 
-@pytest.mark.parametrize('reduce', [False, True])
+@pytest.mark.parametrize("reduce", [False, True])
 def test_flip(plat_cubic, model_cubic, reduce):
     seed_rngs(42)
 
     p = [4, 4, 4]
     scell = SuperCell(plat_cubic, p)
-    structure = scell.gen_random_structure(nsubs=int(np.prod(p)/2))
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
     preds_full = []
     preds_flip = []
     for i in range(len(structure)):
@@ -122,11 +120,26 @@ def test_metropolis_cubic(plat_cubic, model_cubic):
     nsubs = {0: [4]}
 
     seed_rngs(42)
-    mc_full = MonteCarlo(energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=False)
-    traj_full = mc_full.metropolis(temperature=100, no_of_sampling_steps=10)
+    mc_full = MonteCarlo(
+        energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=False
+    )
+    traj_full = mc_full.metropolis(temperature=100, no_of_sampling_steps=100)
 
     seed_rngs(42)
-    mc_swap = MonteCarlo(energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=True)
-    traj_swap = mc_swap.metropolis(temperature=100, no_of_sampling_steps=10)
+    mc_swap = MonteCarlo(
+        energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=True
+    )
+    traj_swap = mc_swap.metropolis(temperature=100, no_of_sampling_steps=100)
+
+    seed_rngs(42)
+    mc_swap_reduced = MonteCarlo(
+        energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=True
+    )
+    traj_swap_reduced = mc_swap.metropolis(
+        temperature=100, no_of_sampling_steps=100, reduce_super_cell=True
+    )
 
     np.testing.assert_allclose(traj_swap.get_energies(), traj_full.get_energies())
+    np.testing.assert_allclose(
+        traj_swap_reduced.get_energies(), traj_full.get_energies()
+    )
