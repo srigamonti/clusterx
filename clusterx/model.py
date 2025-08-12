@@ -135,6 +135,7 @@ class Model:
         self._mc_init_time = 0
 
     def init_reduced_model(self):
+        print("Info(Model): setting up reduced SuperCell.")
         cpool = self.corrc.get_cpool()
         self.scell_reduced = cpool.get_containing_supercell()
 
@@ -366,7 +367,7 @@ class Model:
         old_sigma: int,
         new_sigma: int,
         site_types=[0],
-        multiplicity_factor: float = 1.0
+        reduce: bool = False
     ):
         """Predict property change by flipping a species.
 
@@ -381,7 +382,26 @@ class Model:
             index of the atom to be substituted
 
         ``new_sigma``: int, default None
+
+        ``reduce``: bool, default False
+            if True, use the reduced structure around the flipped sigma
         """
+        if reduce:
+            p = np.diag(structure.get_supercell().get_transformation()).tolist()
+            if not is_diagonal(p):
+                raise ValueError("Reduced structure cannot be initialized "
+                "with non-diagonal super cell transformation.")
+
+            if self.scell_reduced is None:
+                self.init_reduced_model()
+            p_reduced = np.diag(self.scell_reduced.get_transformation())
+            multiplicity_factor = np.prod(p) / np.prod(p_reduced)
+
+            structure, index = structure.get_reduced_structure(
+                p_reduced, index)
+        else:
+            multiplicity_factor = 1.0
+
         if self._num_mc_calls == 0:
             self._initialize_interaction_dictionaries(
                 structure.get_supercell(), site_types
@@ -395,7 +415,7 @@ class Model:
         )
 
     def predict_swap(
-        self, structure, i, j, correlation=False, site_types=[0]
+        self, structure, i, j, correlation=False, site_types=[0], reduce=False
     ):
         """Predict property difference with the optimal cluster expansion model.
 
@@ -410,14 +430,17 @@ class Model:
         ``j``: int
             index of second atom position has been swapped
 
+        ``reduce``: bool, default False
+            if True, use the reduced structure around the swapped sigmas
+
         """
 
         sigma_i = structure.sigmas[i]
         sigma_j = structure.sigmas[j]
 
-        de1 = self.predict_flip(structure, i, sigma_i, sigma_j, site_types, 1.0)
+        de1 = self.predict_flip(structure, i, sigma_i, sigma_j, site_types, reduce)
         structure.swap(i, j)
-        de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, 1.0)
+        de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, reduce)
         structure.swap(i, j)
         return de1 + de2
 

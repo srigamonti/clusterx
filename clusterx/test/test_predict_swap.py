@@ -10,10 +10,8 @@ import numpy as np
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.structures_set import StructuresSet
-from clusterx.model import Model, ModelBuilder
+from clusterx.model import Model
 from clusterx.clusters.clusters_pool import ClustersPool
-from clusterx.calculators.emt import EMT2
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.thermodynamics.monte_carlo import MonteCarlo
 from clusterx.test.defaults import (
@@ -71,7 +69,8 @@ def test_swap_clathrate(basis):
     np.testing.assert_allclose(e1 - e0, e_diff_swap)
 
 
-def test_swap(plat_cubic, model_cubic):
+@pytest.mark.parametrize('reduce', [False, True])
+def test_swap(plat_cubic, model_cubic, reduce):
     seed_rngs(42)
 
     p = [2, 2, 2]
@@ -84,7 +83,7 @@ def test_swap(plat_cubic, model_cubic):
             if j > i:
                 continue
             pred_init = model_cubic.predict(structure)
-            pred_swap = model_cubic.predict_swap(structure, i, j)
+            pred_swap = model_cubic.predict_swap(structure, i, j, reduce=reduce)
             structure.swap(i, j)
             pred_final = model_cubic.predict(structure)
             preds_full.append(pred_final - pred_init)
@@ -92,7 +91,8 @@ def test_swap(plat_cubic, model_cubic):
     np.testing.assert_allclose(preds_swap, preds_full, atol=1e-10)
 
 
-def test_flip(plat_cubic, model_cubic):
+@pytest.mark.parametrize('reduce', [False, True])
+def test_flip(plat_cubic, model_cubic, reduce):
     seed_rngs(42)
 
     p = [4, 4, 4]
@@ -104,27 +104,14 @@ def test_flip(plat_cubic, model_cubic):
         pred_init = model_cubic.predict(structure)
         old_sigma = structure.sigmas[i]
         new_sigma = 1 - old_sigma
-        pred_flip = model_cubic.predict_flip(structure, i, old_sigma, new_sigma)
+        pred_flip = model_cubic.predict_flip(
+            structure, i, old_sigma, new_sigma, reduce=reduce
+        )
         structure.sigmas[i] = new_sigma
         pred_final = model_cubic.predict(structure)
         preds_full.append(pred_final - pred_init)
         preds_flip.append(pred_flip)
     np.testing.assert_allclose(preds_flip, preds_full)
-
-
-def test_swap_reduced(plat_cubic, model_cubic):
-    seed_rngs(42)
-
-    p = [10, 10, 10]
-    scell = SuperCell(plat_cubic, p)
-    structure = scell.gen_random_structure(nsubs=int(np.prod(p)/2))
-    i, j = structure.swap_random_binary(site_type=0)
-
-    pred_init = model_cubic.predict(structure)
-    pred_swap = model_cubic.predict_swap_reduced(structure, i, j)
-    structure.swap(i, j)
-    pred_final = model_cubic.predict(structure)
-    np.testing.assert_allclose(pred_swap, pred_final - pred_init)
 
 
 def test_metropolis_cubic(plat_cubic, model_cubic):
