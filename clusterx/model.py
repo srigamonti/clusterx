@@ -261,51 +261,6 @@ class Model:
                 corrs = self.stdscaler.transform(corrs)
             return np.dot(self.ecis, corrs)
 
-    def predict_swap_reduced(self, structure: Structure, i: int, j: int, site_types=[0]):
-        """Predict property difference with the cluster expansion model by
-        reducing the structure to only the supercell around the flip indices,
-        and calculating the correlations in the reduced structure.
-
-        **Parameters:**
-
-        ``structure``: Structure object
-            structure object to calculate property difference to.
-
-        ``i``: int
-            index of first atom position has been swapped
-
-        ``j``: int
-            index of second atom position has been swapped
-        """
-        p = np.diag(structure.get_supercell().get_transformation()).tolist()
-        if not is_diagonal(p):
-            raise ValueError("Reduced structure cannot be initialized "
-            "with non-diagonal super cell transformation.")
-
-        if self.scell_reduced is None:
-            self.init_reduced_model()
-        sigma_i = structure.sigmas[i]
-        sigma_j = structure.sigmas[j]
-
-        p_reduced = np.diag(self.scell_reduced.get_transformation())
-        multiplicity_factor = np.prod(p) / np.prod(p_reduced)
-
-        prediction = 0.0
-        for i_flip, (sigma_old, sigma_new) in [(i, (sigma_i, sigma_j)), (j, (sigma_j, sigma_i))]:
-            structure_reduced, i_flip_reduced = structure.get_reduced_structure(
-                p_reduced, i_flip)
-            prediction += self.predict_flip(
-                structure_reduced,
-                i_flip_reduced,
-                sigma_old,
-                sigma_new,
-                site_types,
-                multiplicity_factor
-            )
-            structure.swap(i, j)
-
-        return prediction
-
     def _initialize_interaction_dictionaries(self, scell, site_types):
         self._mc_init_time = time.time()
         print("Info(Model): setting up dictionary of interactions.")
