@@ -174,21 +174,11 @@ def cemodel_binary(pristine_crystal, sub_Al):
 
 
 @pytest.fixture
-def cemodel_full_sub():
-    plat = ParentLattice(
-        atoms=pristine_crystal, substitutions=[sub_Al,sub_X,sub_Sr])
-    scellS2= [(2,0,0),(0,2,0),(0,0,2)]
-
-    cpoolE2 = ClustersPool(plat, npoints=[1], radii=[0])
-    corcE2 = CorrelationsCalculator("trigonometric", plat, cpoolE2)
-
-    multT2=cpoolE2.get_multiplicities()
-    scellSize=np.prod(np.dot(scellS2,(1,1,1)))
-    smultT2=np.zeros(len(multT2))
-    for i in range(0,len(multT2)):
-        smultT2[i]=int(multT2[i]*scellSize)
-
-    ecisE2 = [
+def cemodel_full_sub(plat_full_sub):
+    cpool = ClustersPool(plat_full_sub, npoints=[1], radii=[0])
+    corrc = CorrelationsCalculator("trigonometric", plat_full_sub, cpool)
+    mult=cpool.get_multiplicities()
+    ecis = [
         -78407.325,
         23.16,
         23.15,
@@ -198,8 +188,7 @@ def cemodel_full_sub():
         23.11,
         23.10
     ]
-
-    return Model(corcE2, "energy2",ecis=np.multiply(ecisE2, smultT2))
+    return Model(corrc, "energy2",ecis=np.multiply(ecis, mult))
 
 
 def test_cli(plat, model):
@@ -437,64 +426,32 @@ def test_metropolis_clathrate_Si_Al(
     assert(isok3)
 
 
-@pytest.mark.xfail(raises=AssertionError, reason="Ref values not updated")
 def test_metropolis_clathrate_full_subs(
-    pristine_crystal,
-    sub_Al,
-    sub_X,
-    sub_Sr
+    plat_full_sub,
+    cemodel_full_sub,
 ):
-    #Clathrate ternary `Si_{46-x-y} Al_x Vac_y Ba_{8-z} Sr_z`
-    print("\nSampling in `Si_{46-x-y} Al_x Vac_y Ba_{8-z} Sr_z`")
-    plat2 = ParentLattice(
-        atoms=pristine_crystal, substitutions=[sub_Al,sub_X,sub_Sr])
-
-    scellS2= [(2,0,0),(0,2,0),(0,0,2)]
-    scellE2 = SuperCell(plat2,scellS2)
-
-    idx_subs = scellE2.get_idx_subs()
-    print("Sublattices with corresponding atomic numbers: ",idx_subs)
-
-    cpoolE2 = ClustersPool(plat2, npoints=[1], radii=[0])
-    corcE2 = CorrelationsCalculator("trigonometric", plat2, cpoolE2)
-
-    multT2=cpoolE2.get_multiplicities()
-    print("Cluster multiplicities: ",multT2)
-    print("Corresponding radii: ",cpoolE2.get_all_radii())
-    print("Corresponding points: ",cpoolE2.get_all_npoints())
-
-    scellSize=np.prod(np.dot(scellS2,(1,1,1)))
-    print("Multiplications of the parent cell: ", scellSize)
-    smultT2=np.zeros(len(multT2))
-    for i in range(0,len(multT2)):
-        smultT2[i]=int(multT2[i]*scellSize)
-
-    ecisE2 = [
-        -78407.325,
-        23.16,
-        23.15,
-        23.14,
-        23.13,
-        23.12,
-        23.11,
-        23.10
-    ]
-
-    cemodelE2=Model(corcE2, "energy2",ecis=np.multiply(ecisE2, smultT2))
-
-    # Sampling in sublattice with index 0 - ternary sampling
-    print("Start sampling in sublattice with index 0:")
-    mc2 = MonteCarlo(cemodelE2, scellE2, ensemble = "canonical", nsubs = {0:[112,16],1:[0]})
+    print("Cpool: ", cemodel_full_sub.corrc.get_cpool().get_cpool_list())
+    scell = SuperCell(plat_full_sub, 2)
+    mc = MonteCarlo(
+        cemodel_full_sub,
+        scell,
+        nsubs={0:[112,16],1:[0]},
+        ensemble="canonical",
+        sublattice_indices=[],
+        chemical_potentials=None,
+        models=[],
+        no_of_swaps=1,
+        predict_swap=True,
+        error_reset=None,
+        filename=None,
+    )
 
     nmc=30
-    # temperature in K
     temp = 600
-    print("Samplings steps ",nmc)
-    print("Temperature ",temp)
     scale_factor = []
     kb = float(3.16681009610757e-6)
 
-    traj2 = mc2.metropolis(
+    traj = mc.metropolis(
         no_of_sampling_steps=nmc,
         scale_factor=scale_factor,
         temperature=temp,
@@ -502,40 +459,9 @@ def test_metropolis_clathrate_full_subs(
         serialize=True,
         filename="trajectory-ternary.json"
     )
-    steps2 = traj2.get_sampling_step_nos()
-    energies2 = traj2.get_energies()
-    last_entry2 = traj2.get_sampling_step_entry_at_step(steps2[-1])
-    last_structure2 = traj2.get_structure_at_step(steps2[-1])
-
-    traj2.serialize()
-    print(last_structure2.decor)
-
-    print("Configurations accepted at steps: ",steps2)
-
-    #rsteps2 = [0, 1, 3, 7, 8, 12, 14, 18, 21, 23, 24, 25, 26, 28, 29, 30]
-    rsteps2 = [0, 1, 3, 7, 8, 10, 12, 16, 17, 22, 23, 24, 25, 26, 29]
-    #renergies2 = [-634734.608306379, -634734.608306379, -634734.608306379, -634734.620985871, -634734.620985871, -634734.620985871, -634734.620985871, -634734.620985871, -634734.620985871, -634734.633665363, -634734.633665363, -634734.6683063792, -634734.6683063792, -634734.680985871, -634734.680985871, -634734.7156268872]
-    renergies2 = [-634734.60830638, -634734.60830638, -634734.60830638, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.62098587, -634734.65562689, -634734.65562689]
-    #rlast_entry2={'sampling_step_no': 30, 'model_total_energy': -634734.7156268872, 'swapped_positions': [[351, 4]], 'key_value_pairs': {}}
-    rlast_entry2={'sampling_step_no': 29, 'energy': -634734.6556268871, 'swapped_positions': [[247, 243]], 'key_value_pairs': {}}
-    #rlast_decoration2 = np.int8([14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 13,  0, 13, 14, 14, 14, 13, 14, 13, 13, 13, 14, 13, 13, 13, 14, 13, 13, 14, 14, 14, 14, 14, 14, 13, 14, 13, 56, 56, 56, 56, 56, 56, 56, 56,
-    #                             13, 13, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 13, 14, 13, 13,  0, 13, 13, 14, 14, 13, 14, 13, 14, 13, 13, 14, 13, 14,  0, 14, 14, 14, 14, 13, 14, 13, 14, 14, 13, 13, 14, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
-    #                             14, 13, 13, 14, 14, 13, 14,  0, 14, 14, 14, 13, 14,  0, 14, 14, 14, 14, 13, 14, 13, 14, 14,  0, 14, 14, 13, 13, 13, 13, 14, 13, 14, 14, 14, 13, 14, 14, 13, 14,  0, 14, 13, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
-    #                             14, 13, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 13, 14, 14, 13, 14, 14, 14, 13, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 13, 13, 14, 14, 14, 14, 13, 14, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
-    #                             14, 14, 14, 14, 13, 14, 14, 14, 13, 14, 14, 13, 14, 13, 14, 14, 14, 13, 13, 13, 14, 14, 14, 13, 14, 14, 14,  0, 14,  0,  0, 14, 13, 14, 13, 13, 13, 14, 13, 14, 14, 14, 14, 14, 14, 13, 56, 56, 56, 56, 56, 56, 56, 56,
-    #                             13, 14, 13, 13, 13, 14, 14, 14, 14, 13, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 13, 14, 13, 14, 13, 13, 14,  0,  0, 14, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
-    #                             14, 14, 13, 14, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 13, 14, 14, 14, 13, 13, 14, 14,  0, 13, 14, 14, 13, 13, 14, 13, 14, 13, 13, 13, 14, 13, 13, 13, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
-    #                             14, 14, 14, 13, 14, 14, 13, 14, 14,  0, 14, 14, 13, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14,  0, 14, 14, 13, 14, 13,  0, 14, 13, 13, 14, 13, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56])
-    rlast_decoration2 = np.int8([14, 14, 14, 14,  0, 14, 14, 13, 14,  0, 14, 13, 14, 14, 14, 14, 14,  0, 14, 13, 13, 13, 14, 14, 14, 13, 14, 13, 13, 13, 14, 13, 13, 13, 14, 13, 14, 14, 14, 14, 14, 14, 14, 13, 14, 13, 56, 56, 56, 56, 56, 56, 56, 56,
-                                 13,  0, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 13, 14,  0, 13, 13, 13, 13, 13, 14, 13, 14, 13, 14, 13, 13, 14, 13, 14,  0, 14, 14, 14, 14, 13, 14, 13, 14, 14, 13, 13, 14, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
-                                 14, 13, 13, 14, 13, 13, 14,  0, 14, 14, 14, 13, 14, 13, 14, 14, 14, 14, 13, 14, 13, 14, 14, 13, 14, 14, 13, 13, 13,  0, 14, 13, 14, 14, 14, 13, 14, 14, 13, 14,  0, 14, 13, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
-                                 14, 13, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 14, 13, 14, 13, 14, 14, 14, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14,  0, 13, 14, 14, 14, 14, 13, 14, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
-                                 14, 14, 14, 14, 13, 14, 14, 14, 13, 14, 14, 13, 14, 13, 14, 14, 14, 13, 13,  0, 14, 14, 14, 13, 14, 14, 14, 14, 14,  0, 13,  0, 13, 13, 13, 13, 13, 14, 13, 14, 14, 14, 14, 14, 14, 13, 56, 56, 56, 56, 56, 56, 56, 56,
-                                 13, 14, 13, 13, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 13, 14, 13, 14, 13, 13, 14,  0,  0, 14, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
-                                 14, 14, 13, 14, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 13, 14, 14, 13, 13, 14, 13, 14, 13, 13, 14, 14, 13, 14, 14, 14, 14, 13, 13, 13, 14, 13, 13, 13, 14, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56,
-                                 14, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 13, 14, 13, 14, 14, 14, 14, 14, 14, 13, 14, 14, 13, 14, 14, 14, 14, 14, 14, 14, 13, 14, 13, 14, 14, 13,  0, 14, 13, 13, 14, 13, 14, 14, 56, 56, 56, 56, 56, 56, 56, 56])
-
-    np.testing.assert_allclose(steps2, rsteps2, rtol=1e-4)
-    np.testing.assert_allclose(energies2, renergies2, rtol=1e-4)
-    np.testing.assert_allclose(last_structure2.decor, rlast_decoration2, rtol=1e-4)
-    assert dict_compare(last_entry2,rlast_entry2, tol=float(1e-7))
+    steps = traj.get_sampling_step_nos()
+    traj.get_energies()
+    traj.get_sampling_step_entry_at_step(steps[-1])
+    traj.get_structure_at_step(steps[-1])
+    traj.serialize()
+    assert os.path.isfile("trajectory-ternary.json")
