@@ -179,7 +179,7 @@ class SuperCell(ParentLattice):
         self.sym_perm = None
         self.sym_perm_platt = None
 
-        compute_distances = True
+        compute_distances = False
         if compute_distances:
             with _timed("SuperCell.init: Computing distance matrices"):
                 self._distances = self.get_all_distances(mic=False)
