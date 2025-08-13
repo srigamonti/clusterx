@@ -275,7 +275,7 @@ class Model:
             structure object to calculate property to.
 
         """
-        #with _timed("Model.predict: Get cluster correlations"):
+        # with _timed("Model.predict: Get cluster correlations"):
         corrs = self.corrc.get_cluster_correlations(structure)
 
         if self.estimator is not None:

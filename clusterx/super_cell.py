@@ -158,48 +158,25 @@ class SuperCell(ParentLattice):
             for i in range(len(subs)):
                 subs[i] = sort_atoms(subs[i], key=self._sort_key)
 
-        with _timed("SuperCell.init: Calling super... a huge plat"):
+        with _timed(
+            "SuperCell.init: Initialize parent ParentLattice object of SuperCell"
+        ):
             super(SuperCell, self).__init__(atoms=prist, substitutions=subs)
 
         self._natoms = len(self)
         self.set_pbc(self._plat.get_pbc())
 
         if sym_table == True:
-            self._sym_table = self.get_symmetry_table()
+            with _timed("SuperCell.init: Compute symmetry table"):
+                self._sym_table = self.get_symmetry_table()
         else:
             self._sym_table = []
 
         self.sc_sg, self.sc_sym = self.get_sym()
         self.sc_sg_pl, self.sc_sym_pl = self.get_sym_platt()
-        # self.internal_trans = get_internal_translations(self._plat, self) # Scaled to super_cell
         self.internal_trans = None  # Scaled to super_cell
-        # self.all_distances_mic = None
-        # self.all_distances_nomic = None
-        # self.scaled_positions = None
         self.sym_perm = None
         self.sym_perm_platt = None
-
-        compute_distances = False
-        if compute_distances:
-            with _timed("SuperCell.init: Computing distance matrices"):
-                self._distances = self.get_all_distances(mic=False)
-                print(
-                    f"_distances size: {self._distances.shape} -> {self._distances.nbytes / 1024:.2f} KB"
-                )
-                self._distances_mic_true = self.get_all_distances(mic=True)
-                print(
-                    f"_distances_mic_true size: {self._distances_mic_true.shape} -> {self._distances_mic_true.nbytes / 1024:.2f} KB"
-                )
-                self._sdistances = self.get_substitutional_atoms().get_all_distances(
-                    mic=True
-                )
-                print(
-                    f"_sdistances size: {self._sdistances.shape} -> {self._sdistances.nbytes / 1024:.2f} KB"
-                )
-        else:
-            self._distances = []
-            self._distances_mic_true = []
-            self._sdistances = []
 
     def compute_sym_perm(self, include_sc_trans=True):
         if include_sc_trans:
@@ -293,31 +270,6 @@ class SuperCell(ParentLattice):
 
     def _compute_sym(self):
         return get_spacegroup(self)
-
-    """
-    def get_scaled_positions():
-        if self.scaled_positions == None:
-            self.scaled_positions = get_scaled_positions(wrap = True)
-            return self.scaled_positions
-        else:
-            return self.scaled_positions
-    
-    def get_all_distances(self, mic=False):
-        vector = False
-        if mic:
-            if self.all_distances_mic == None:
-                self.all_distances_mic = super(ParentLattice, self).get_all_distances(mic, vector)
-                return self.all_distances_mic
-            else:
-                return self.all_distances_mic
-
-        if not mic:
-            if self.all_distances_nomic == None:
-                self.all_distances_nomic = super(ParentLattice, self).get_all_distances(mic, vector)
-                return self.all_distances_nomic
-            else:
-                return self.all_distances_nomic
-    """
 
     def get_internal_translations(self):
         """Get internal translations of parent lattice in supercell, scaled to supercell"""
@@ -548,7 +500,6 @@ class SuperCell(ParentLattice):
         rmax = np.full(len(atoms), np.amax(radii) / 2.0)
         nl = NeighborList(rmax, self_interaction=True, bothways=True, skin=0.0)
         nl.build(atoms)
-        distances = atoms.get_all_distances(mic=True)
 
         for id1 in range(natoms):
             neigs = atoms.copy()

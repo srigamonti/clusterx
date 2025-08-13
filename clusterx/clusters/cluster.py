@@ -4,7 +4,8 @@
 
 import numpy as np
 
-class Cluster():
+
+class Cluster:
     """Cluster class
 
     Objects of this class represent clusters. The intialization of these objects
@@ -28,24 +29,23 @@ class Cluster():
         and numbers) are set. Otherwise, a complete definition is set up, containing
         atom coordinates, basis function indices, site types (which indicate which
         sublattices a cluster point belongs to), etc.
-    ``distances``: matrix of float (default: ``None``)
-        to speed up the calculation of the cluster radius on initialization, the
-        distances between all pairs of atoms in the supercell may be passed in
-        this argument.
 
 
     **Methods:**
     """
 
-    def __init__(self, atom_indexes, atom_numbers, super_cell=None, distances=None):
-
+    def __init__(self, atom_indexes, atom_numbers, super_cell=None):
         if len(atom_indexes) != len(atom_numbers):
-            raise ValueError("Initialization error, number of sites in cluster different from number of species.")
+            raise ValueError(
+                "Initialization error, number of sites in cluster different from number of species."
+            )
 
-        if len(atom_indexes)!=0:
+        if len(atom_indexes) != 0:
             try:
-                self.ais,self.ans = list(zip(*sorted(zip(np.array(atom_indexes),np.array(atom_numbers)))))
-            except: # TODO: specify exception, when does this happen? Or delete try-except?
+                self.ais, self.ans = list(
+                    zip(*sorted(zip(np.array(atom_indexes), np.array(atom_numbers))))
+                )
+            except:  # TODO: specify exception, when does this happen? Or delete try-except?
                 raise ValueError("Cluster initialization failed")
 
         else:
@@ -55,56 +55,34 @@ class Cluster():
         self.npoints = len(atom_numbers)
         self.positions_cartesian = None
         self.alphas = None
-        #self.positions_scaled = None
+        # self.positions_scaled = None
         self.radius = None
         if super_cell is not None:
             # Set alphas, site_type, and positions
-            self.alphas = np.zeros(len(atom_indexes),dtype=int)
-            self.site_type = np.zeros(len(atom_indexes),dtype=int)
+            self.alphas = np.zeros(len(atom_indexes), dtype=int)
+            self.site_type = np.zeros(len(atom_indexes), dtype=int)
             sites = super_cell.get_sites()
             tags = super_cell.get_tags()
 
-            self.positions_cartesian = np.zeros((self.npoints,3))
-            #self.positions_scaled = np.zeros((self.npoints,3))
+            self.positions_cartesian = np.zeros((self.npoints, 3))
+            # self.positions_scaled = np.zeros((self.npoints,3))
+            positions_car = super_cell.get_positions()
             for ip, idx in enumerate(atom_indexes):
-                #self.positions_cartesian[ip] = super_cell.get_positions(wrap=True)[idx]
-                self.positions_cartesian[ip] = super_cell.get_positions()[idx]
-                #self.positions_scaled[ip] = super_cell.get_scaled_positions(wrap=True)[idx]
+                self.positions_cartesian[ip] = positions_car[idx]
                 self.site_type[ip] = tags[idx]
                 self.alphas[ip] = np.argwhere(sites[idx] == self.ans[ip])[0, 0]
 
-            """
-            # Set radius
-            r = 0.0
-            if self.npoints > 1:
-                for i1, idx1 in enumerate(self.ais):
-                    for idx2 in self.ais[i1+1:]:
-                        if distances is not None:
-                            d = distances[idx1,idx2]
-                        else:
-                            d = super_cell.get_distance(idx1,idx2,mic=False,vector=False)
-                        if r < d:
-                            r = d
-            self.radius = r
-            """
-            
             # Set radius
             # FIX this! Radius cannot be based on distance in supercell, as it will fail for small supercells and large clusters wrapped into it.
             r = 0.0
             if self.npoints > 1:
-                if distances is not None:
-                    for i1, idx1 in enumerate(self.ais):
-                        for idx2 in self.ais[i1+1:]:
-                            #d = distances[idx1,idx2]
-                            d = np.abs(idx1-idx2)
-                            if r < d:
-                                r = d
-                else:
-                    for i1 in range(self.npoints-1):
-                        for i2 in range(i1+1, self.npoints):
-                            d = np.linalg.norm(self.positions_cartesian[i1]-self.positions_cartesian[i2])
-                            if r < d:
-                                r = d
+                for i1 in range(self.npoints - 1):
+                    for i2 in range(i1 + 1, self.npoints):
+                        d = np.linalg.norm(
+                            self.positions_cartesian[i1] - self.positions_cartesian[i2]
+                        )
+                        if r < d:
+                            r = d
             self.radius = r
 
         self.myhash = self.__hash__()
@@ -118,23 +96,20 @@ class Cluster():
     """
 
     def get_alphas(self):
-        """Return labels of point basis-functions of cluster
-        """
+        """Return labels of point basis-functions of cluster"""
         return self.alphas
 
-    def _compute_radius(self,distances):
+    def _compute_radius(self, distances):
         r = 0.0
         if self.npoints > 1:
             for i1, idx1 in enumerate(self.ais):
-                for idx2 in self.ais[i1+1:]:
-                    d = np.abs(idx1-idx2)
-                    
-                    #d = distances[idx1,idx2]
+                for idx2 in self.ais[i1 + 1 :]:
+                    d = distances[idx1, idx2]
                     if r < d:
                         r = d
         self.radius = r
 
-    def get_radius(self,distances=None):
+    def get_radius(self, distances=None):
         """Return cluster radius
         The radius of a cluster is the maximum distance between any pair of its points.
         """
@@ -147,10 +122,10 @@ class Cluster():
     def _get_idxs_norm(self):
         return np.linalg.norm(self.ais)
 
-    def __lt__(self,other):
+    def __lt__(self, other):
         # TODO: fix ordering? This seems not a good ordering, some inequivalent
         # clusters may have the same norm.
-        if self.npoints == other.npoints and abs(self.radius-other.radius)<1e-5:
+        if self.npoints == other.npoints and abs(self.radius - other.radius) < 1e-5:
             ns = self._get_idxs_norm()
             no = other._get_idxs_norm()
             return ns < no
@@ -160,11 +135,11 @@ class Cluster():
             return self.npoints < other.npoints
 
     def __repr__(self):
-        return "Cluster["+str(list(zip(self.ais,self.ans)))+"]"
-        
+        return "Cluster[" + str(list(zip(self.ais, self.ans))) + "]"
+
     def __hash__(self):
-        return hash(str(list(zip(self.ais,self.ans))))
-        
+        return hash(str(list(zip(self.ais, self.ans))))
+
     def __eq__(self, other):
         return self.myhash == other.myhash
 
@@ -172,8 +147,7 @@ class Cluster():
         return len(self.ais)
 
     def get_idxs(self):
-        """Return array of atom indices referred to the defining supercell.
-        """
+        """Return array of atom indices referred to the defining supercell."""
         return self.ais
 
     def get_nrs(self):
@@ -209,45 +183,46 @@ class Cluster():
         from clusterx.symmetry import get_scaled_positions
 
         orbit = []
-        for r,t in zip(rr,tt):
-            ts = np.tile(t,(self.npoints,1)).T
-            #sp0 = np.dot(self.positions_cartesian,np.linalg.inv(cell))
-            sp0 = get_scaled_positions(self.positions_cartesian, cell, pbc=pbc, wrap=True)
-            sp1 = np.add(np.dot(r,sp0.T),ts).T
+        for r, t in zip(rr, tt):
+            ts = np.tile(t, (self.npoints, 1)).T
+            # sp0 = np.dot(self.positions_cartesian,np.linalg.inv(cell))
+            sp0 = get_scaled_positions(
+                self.positions_cartesian, cell, pbc=pbc, wrap=True
+            )
+            sp1 = np.add(np.dot(r, sp0.T), ts).T
             orbit.append(sp1)
 
-        rorbit = np.around(orbit,5)
-        #print("rorbit",rorbit)
+        rorbit = np.around(orbit, 5)
+        # print("rorbit",rorbit)
         all_pos = []
         for cl in rorbit:
             for sp in cl:
                 all_pos.append(sp)
 
-        #print("all_pos",all_pos)
+        # print("all_pos",all_pos)
         unique_pos = np.unique(all_pos, axis=0)
 
-        #print("unique_pos",unique_pos)
+        # print("unique_pos",unique_pos)
         key_orbit = []
-        for icl,cl in enumerate(rorbit):
+        for icl, cl in enumerate(rorbit):
             key_vec = []
             for ipos, pos in enumerate(cl):
-                for iupos ,upos in enumerate(unique_pos):
+                for iupos, upos in enumerate(unique_pos):
                     if (pos == upos).all():
                         key_vec.append(iupos)
 
             key_orbit.append(sorted(key_vec))
 
-        #print("key_orbit",key_orbit)
-        #print("unique clusters",np.unique(key_orbit,axis=0))
-        #print(key_orbit)
-        #print("ALL POS",all_pos)
-        #print("UNIQUE", unique_pos)
-        #print(np.around(orbit,5))
-        #print(np.unique(np.around(orbit,5),axis=0))
-        #return len(np.unique(np.around(orbit,5),axis=0))
-        return len(np.unique(key_orbit,axis=0))
+        # print("key_orbit",key_orbit)
+        # print("unique clusters",np.unique(key_orbit,axis=0))
+        # print(key_orbit)
+        # print("ALL POS",all_pos)
+        # print("UNIQUE", unique_pos)
+        # print(np.around(orbit,5))
+        # print(np.unique(np.around(orbit,5),axis=0))
+        # return len(np.unique(np.around(orbit,5),axis=0))
+        return len(np.unique(key_orbit, axis=0))
 
     def get_positions(self):
-        """Return cartesian coordinates of the cluster points.
-        """
+        """Return cartesian coordinates of the cluster points."""
         return self.positions_cartesian

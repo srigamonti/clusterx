@@ -7,7 +7,6 @@ import pickle
 import warnings
 from subprocess import call
 from typing import Optional
-from tqdm import tqdm
 
 import numpy as np
 from ase.db import connect
@@ -284,6 +283,7 @@ class CorrelationsCalculator:
                 break
 
         # Compute cluster_orbit from scratch if not available
+
         if cluster_orbits is None:
             if verbose:
                 print("Calculating cluster orbits from scratch for scell")
@@ -298,21 +298,16 @@ class CorrelationsCalculator:
                 scell = SuperCell(scell, [1, 1, 1])
             # with _timed("INIT: Computing cluster orbits for all clusters"):
             cpool = ClustersPool(scell.get_parent_lattice(), super_cell=scell)
-
             # with _timed("Computing cluster orbits for all clusters"):
             from tqdm import tqdm
 
             for icl, cluster in enumerate(
-                    tqdm(self._cpool.get_cpool_list(), desc="Computing cluster orbits in super cell", unit="cluster")
-            ):
-                _cluster_orbit = cpool.get_cluster_orbit(
-                    scell,
-                    cluster_positions=cluster.get_positions(),
-                    cluster_species=cluster.get_nrs(),
+                tqdm(
+                    self._cpool.get_cpool_list(),
+                    desc="Computing cluster orbits in super cell",
+                    unit="cluster",
                 )
-                cluster_orbits.append(_cluster_orbit)
-    
-            for icl, cluster in enumerate(self._cpool.get_cpool_list()):
+            ):
                 _cluster_orbit = cpool.get_cluster_orbit(
                     scell,
                     cluster_positions=cluster.get_positions(),

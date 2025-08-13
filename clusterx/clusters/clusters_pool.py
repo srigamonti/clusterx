@@ -14,7 +14,7 @@ from clusterx.clusters.cluster import Cluster
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions
-from clusterx.utils import get_cl_idx_sc
+from clusterx.utils import _timed, get_cl_idx_sc
 
 
 class ClustersPool:
@@ -112,10 +112,6 @@ class ClustersPool:
             self._radii = db.metadata.get("_radii", [])
             scell_dict = db.metadata.get("super_cell", {})
             self._cpool_scell = SuperCell.scell_from_dict(scell_dict)
-            self._distances = self._cpool_scell.get_all_distances(mic=False)
-            self._sdistances = (
-                self._cpool_scell.get_substitutional_atoms().get_all_distances(mic=True)
-            )
 
             cl_nrs = db.metadata.get("atom_numbers", [])
             cl_positions = db.metadata.get("atom_positions", [])
@@ -128,9 +124,7 @@ class ClustersPool:
                         cl_positions[i], sc_positions, method=1, tol=1e-3
                     )
 
-                self._cpool.append(
-                    Cluster(idxs, cl_nrs[i], self._cpool_scell, self._distances)
-                )
+                self._cpool.append(Cluster(idxs, cl_nrs[i], self._cpool_scell))
 
             self._multiplicities = db.metadata.get("multiplicities", [])
 
@@ -154,28 +148,7 @@ class ClustersPool:
                 self._cpool_scell = self.get_containing_supercell()
             else:
                 self._cpool_scell = SuperCell(parent_lattice, np.diag([1, 1, 1]))
-                
 
-            compute_distances = False
-            if compute_distances:
-                with _timed("Get all distances 1"):
-                    self._distances = self._cpool_scell.get_all_distances(mic=False)
-                with _timed("Get all distances 2"):
-                    self._distances_mic_true = self._cpool_scell.get_all_distances(mic=True)
-                with _timed("Get all distances 3"):
-                    self._sdistances = (
-                        self._cpool_scell.get_substitutional_atoms().get_all_distances(mic=True)
-                    )
-            else:
-                #natoms = len( self._cpool_scell)
-                #nsatoms = len(self._cpool_scell.get_substitutional_atoms())
-                natoms = 1
-                nsatoms = 1
-                self._distances = np.zeros((natoms,natoms))
-                self._distances_mic_true = np.zeros((natoms,natoms))
-                self._sdistances = np.zeros((nsatoms,nsatoms))
-                
-            self.set_radii(npoints=npoints, radii=radii)
             if 0 in self._npoints:
                 raise ValueError(
                     "npoints cannot contain 0,\
@@ -191,25 +164,23 @@ class ClustersPool:
         self.high = self.nclusters - 1
         self._cpool_atoms = []
 
-    def set_radii(self, npoints=[], radii=[]):
+    def set_radii(self, sdistances, distances, npoints=[], radii=[]):
         eps = 1.0e-8
         self._radii = np.array(radii, dtype=float)
 
-        dmax = np.around(np.amax(self._sdistances), decimals=3)
+        dmax = np.around(np.amax(sdistances), decimals=3)
 
         try:
-            sd = np.unique(np.around(np.sort(self._distances.flatten()), decimals=3))
+            sd = np.unique(np.around(np.sort(distances.flatten()), decimals=3))
             idmax2 = np.argwhere(np.abs(sd - dmax) < eps)
             dmax2 = sd[idmax2 + 1][0, 0]
         except:
             dmax2 = dmax
 
-        # Check if supercell is large enough
         if len(radii) > 0:
             for i in range(len(radii)):
                 if radii[i] < 0:
                     self._radii[i] = (dmax + dmax2) / 2.0
-                    # self._radii[i] = dmax + eps
 
         radii = self._radii
 
@@ -225,7 +196,6 @@ class ClustersPool:
                     radii[i] = 0.0
                 else:
                     radii[i] = (dmax + dmax2) / 2.0
-                    # radii[i] = dmax + eps
             self._radii = radii
 
     def __iter__(self):
@@ -493,8 +463,16 @@ class ClustersPool:
         sites = scell.get_sites()
         satoms = scell.get_substitutional_sites()
         nsatoms = len(satoms)
-        distances = self._distances
-        radii = self._radii
+        with _timed(
+            "ClustersPool.gen_clusters0: computing matrix of interatomic distances"
+        ):
+            distances = scell.get_all_distances(mic=False)
+            sdistances = self._cpool_scell.get_substitutional_atoms().get_all_distances(
+                mic=True
+            )
+            distances_mic_true = self._cpool_scell.get_all_distances(mic=True)
+
+        radii = self.set_radii(sdistances, distances, npoints, self._radii)
 
         symper = scell.get_sym_perm()
 
@@ -525,7 +503,7 @@ class ClustersPool:
             for widx in wyck_idxs:
                 idxs.append(widx)
                 for satidx in satoms:
-                    if self._distances_mic_true[widx, satidx] <= radius:
+                    if distances_mic_true[widx, satidx] <= radius:
                         idxs.append(satidx)
             idxs_sets[irad] = np.unique(np.array(idxs))
 
@@ -560,7 +538,7 @@ class ClustersPool:
 
                     _radius = 0
                     for idxs2 in combinations(idxs, 2):
-                        d = self._distances_mic_true[idxs2]
+                        d = distances_mic_true[idxs2]
                         if _radius < d:
                             _radius = d
 
@@ -593,9 +571,7 @@ class ClustersPool:
 
             _cl = Cluster(idx_ss[0], sps)
 
-            _orbit = self.get_cluster_orbit(
-                scell, _cl.get_idxs(), _cl.get_nrs(), distances=distances
-            )
+            _orbit = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs())
 
             r = []
             for __cl in _orbit:
@@ -611,9 +587,7 @@ class ClustersPool:
             mult = _orbit.get_multiplicity_in_parent_lattice()
 
             self._cpool.append(
-                Cluster(
-                    _cl.get_idxs(), _cl.get_nrs(), self._cpool_scell, self._distances
-                )
+                Cluster(_cl.get_idxs(), _cl.get_nrs(), self._cpool_scell)
             )
 
             self._multiplicities.append(int(mult))
@@ -632,7 +606,10 @@ class ClustersPool:
         scell = self._cpool_scell
         sites = scell.get_sites()
         satoms = scell.get_substitutional_sites()
-        distances = self._distances
+        with _timed(
+            "ClustersPool.gen_clusters1: computing matrix of interatomic distances"
+        ):
+            distances = scell.get_all_distances(mic=False)
         radii = self._radii
 
         for npts, radius in zip(npoints, radii):
@@ -650,9 +627,7 @@ class ClustersPool:
 
             while len(clrs_full) != 0:
                 _cl = clrs_full[0]
-                _orbit = self.get_cluster_orbit(
-                    scell, _cl.get_idxs(), _cl.get_nrs(), distances=distances
-                )
+                _orbit = self.get_cluster_orbit(scell, _cl.get_idxs(), _cl.get_nrs())
                 mult = _orbit.get_multiplicity_in_parent_lattice()
                 orbit = _orbit.as_array()
                 orbit.sort()
@@ -665,12 +640,7 @@ class ClustersPool:
                 clrs_full = [c for i, c in enumerate(clrs_full) if i not in delids]
 
                 self._cpool.append(
-                    Cluster(
-                        _cl.get_idxs(),
-                        _cl.get_nrs(),
-                        self._cpool_scell,
-                        self._distances,
-                    )
+                    Cluster(_cl.get_idxs(), _cl.get_nrs(), self._cpool_scell)
                 )
                 self._multiplicities.append(mult)
 
@@ -921,7 +891,6 @@ class ClustersPool:
         cluster_sites=None,
         cluster_species=None,
         tol=1e-3,
-        distances=None,
         no_trans=False,
         cluster_index=None,
         cluster_positions=None,
@@ -979,8 +948,6 @@ class ClustersPool:
             basis function with label ``1`` and ``16`` the basis function with label ``2``.
         ``tol``: float
             tolerance to determine whether cluster and atom positions are the same.
-        ``distances``: 2D array of floats
-             distances of all of the atoms with all of the atoms. Can be used to achieve larger efficiency.
         ``no_trans``: Boolean
             set to True to ignore translations of the parent_lattice inside the SuperCell. Thus
             a reduced orbit is obtained which only contains the symmetry operations of the parent lattice.
@@ -1003,7 +970,7 @@ class ClustersPool:
             cluster_sites = atom_idxs[cluster_index]
             cluster_species = atom_nrs[cluster_index]
             return ClusterOrbit(
-                super_cell, cluster_sites, cluster_species, tol, distances, no_trans
+                super_cell, cluster_sites, cluster_species, tol, no_trans
             )
 
         if cluster_sites is not None and cluster_positions is not None:
@@ -1013,7 +980,7 @@ class ClustersPool:
 
         if cluster_sites is not None:
             return ClusterOrbit(
-                super_cell, cluster_sites, cluster_species, tol, distances, no_trans
+                super_cell, cluster_sites, cluster_species, tol, no_trans
             )
 
         if cluster_positions is not None:
@@ -1022,7 +989,6 @@ class ClustersPool:
                 cluster_positions=cluster_positions,
                 cluster_species=cluster_species,
                 tol=tol,
-                distances=distances,
                 no_trans=no_trans,
             )
 
@@ -1208,7 +1174,6 @@ class ClusterOrbit(ClustersPool):
         cluster_sites=None,
         cluster_species=None,
         tol=1e-3,
-        distances=None,
         no_trans=False,
         json_db_filepath=None,
         cluster_positions=None,
@@ -1233,7 +1198,6 @@ class ClusterOrbit(ClustersPool):
                 cluster_sites,
                 cluster_species,
                 tol,
-                distances,
                 no_trans,
                 cluster_positions,
             )
@@ -1247,7 +1211,6 @@ class ClusterOrbit(ClustersPool):
         cluster_sites=None,
         cluster_species=None,
         tol=1e-3,
-        distances=None,
         no_trans=False,
         cluster_positions=None,
     ):
@@ -1256,7 +1219,6 @@ class ClusterOrbit(ClustersPool):
             cluster_sites=cluster_sites,
             cluster_species=cluster_species,
             tol=tol,
-            distances=distances,
             no_trans=no_trans,
             cluster_positions=cluster_positions,
         )
@@ -1267,7 +1229,6 @@ class ClusterOrbit(ClustersPool):
         cluster_sites=None,
         cluster_species=None,
         tol=1e-3,
-        distances=None,
         no_trans=False,
         cluster_positions=None,
     ):
@@ -1324,8 +1285,6 @@ class ClusterOrbit(ClustersPool):
             basis function with label ``1`` and ``16`` the basis function with label ``2``.
         ``tol``: float
             tolerance to determine whether cluster and atom positions are the same.
-        ``distances``: 2D array of floats
-             distances of all of the atoms with all of the atoms. Can be used to achieve larger efficiency.
         ``no_trans``: Boolean
             set to True to ignore translations of the parent_lattice inside the SuperCell. Thus
             a reduced orbit is obtained which only contains the symmetry operations of the parent lattice.
@@ -1432,9 +1391,7 @@ class ClusterOrbit(ClustersPool):
         orbit = []
 
         for cl_tuple in orbit_list:
-            orbit.append(
-                Cluster(list(cl_tuple), cluster_species, super_cell, distances)
-            )
+            orbit.append(Cluster(list(cl_tuple), cluster_species, super_cell))
 
         for cl in orbit:
             self.add_cluster(cl)
@@ -1445,7 +1402,6 @@ class ClusterOrbit(ClustersPool):
         cluster_sites=None,
         cluster_species=None,
         tol=1e-3,
-        distances=None,
         no_trans=False,
         cluster_positions=None,
     ):
@@ -1502,8 +1458,6 @@ class ClusterOrbit(ClustersPool):
             basis function with label ``1`` and ``16`` the basis function with label ``2``.
         ``tol``: float
             tolerance to determine whether cluster and atom positions are the same.
-        ``distances``: 2D array of floats
-             distances of all of the atoms with all of the atoms. Can be used to achieve larger efficiency.
         ``no_trans``: Boolean
             set to True to ignore translations of the parent_lattice inside the SuperCell. Thus
             a reduced orbit is obtained which only contains the symmetry operations of the parent lattice.
@@ -1537,10 +1491,6 @@ class ClusterOrbit(ClustersPool):
                 super_cell.get_internal_translations()
             )  # Scaled to super_cell
 
-        if distances is None:
-            #distances = super_cell.get_all_distances(mic=False)
-            distances = np.zeros((1,1))
-            
         spos1 = super_cell.get_scaled_positions(
             wrap=True
         )  # Super-cell scaled positions
@@ -1600,9 +1550,7 @@ class ClusterOrbit(ClustersPool):
             if i not in crossedout:
                 weights.append(1)
                 orbit.append(
-                    Cluster(
-                        _orbit[i].get_idxs(), _orbit[i].get_nrs(), super_cell, distances
-                    )
+                    Cluster(_orbit[i].get_idxs(), _orbit[i].get_nrs(), super_cell)
                 )
                 cnt += 1
 
