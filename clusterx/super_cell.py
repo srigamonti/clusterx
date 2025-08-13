@@ -18,7 +18,7 @@ from clusterx.symmetry import (
 )
 
 # from ase.build import make_supercell
-from clusterx.utils import get_cl_idx_sc, make_supercell
+from clusterx.utils import _timed, get_cl_idx_sc, make_supercell
 
 
 class SuperCell(ParentLattice):
@@ -138,14 +138,18 @@ class SuperCell(ParentLattice):
                 sys.exit("SuperCell(Error)")
 
         self.index = int(round(np.linalg.det(self._p)))
-        prist = make_supercell(self._plat.get_pristine(), self._p)
-        subs = [
-            make_supercell(atoms, self._p) for atoms in self._plat.get_substitutions()
-        ]
 
-        prist.wrap()
-        for i in range(len(subs)):
-            subs[i].wrap()
+        with _timed("SuperCell.init: make supercell pristine and subs"):
+            prist = make_supercell(self._plat.get_pristine(), self._p)
+            subs = [
+                make_supercell(atoms, self._p)
+                for atoms in self._plat.get_substitutions()
+            ]
+
+        with _timed("SuperCell.init: wrap all Atom objects"):
+            prist.wrap()
+            for i in range(len(subs)):
+                subs[i].wrap()
 
         if self._sort_key is not None:
             from clusterx.utils import sort_atoms
@@ -154,7 +158,9 @@ class SuperCell(ParentLattice):
             for i in range(len(subs)):
                 subs[i] = sort_atoms(subs[i], key=self._sort_key)
 
-        super(SuperCell, self).__init__(atoms=prist, substitutions=subs)
+        with _timed("SuperCell.init: Calling super... a huge plat"):
+            super(SuperCell, self).__init__(atoms=prist, substitutions=subs)
+
         self._natoms = len(self)
         self.set_pbc(self._plat.get_pbc())
 
@@ -172,9 +178,28 @@ class SuperCell(ParentLattice):
         # self.scaled_positions = None
         self.sym_perm = None
         self.sym_perm_platt = None
-        self._distances = self.get_all_distances(mic=False)
-        self._distances_mic_true = self.get_all_distances(mic=True)
-        self._sdistances = self.get_substitutional_atoms().get_all_distances(mic=True)
+
+        compute_distances = True
+        if compute_distances:
+            with _timed("SuperCell.init: Computing distance matrices"):
+                self._distances = self.get_all_distances(mic=False)
+                print(
+                    f"_distances size: {self._distances.shape} -> {self._distances.nbytes / 1024:.2f} KB"
+                )
+                self._distances_mic_true = self.get_all_distances(mic=True)
+                print(
+                    f"_distances_mic_true size: {self._distances_mic_true.shape} -> {self._distances_mic_true.nbytes / 1024:.2f} KB"
+                )
+                self._sdistances = self.get_substitutional_atoms().get_all_distances(
+                    mic=True
+                )
+                print(
+                    f"_sdistances size: {self._sdistances.shape} -> {self._sdistances.nbytes / 1024:.2f} KB"
+                )
+        else:
+            self._distances = []
+            self._distances_mic_true = []
+            self._sdistances = []
 
     def compute_sym_perm(self, include_sc_trans=True):
         if include_sc_trans:

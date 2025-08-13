@@ -213,9 +213,11 @@ def metropolis(
         case "setup" | "setupmclite" | "setupMClite" | "setup-monte-carlo-lite":
             print(f"Info({get_command_name()}): Setting up MC")
 
-            with _timed("CLI.metropolis (task=setupmclite): unpickling plat and model"):
-                plat = ParentLattice(filepath=plat_filepath)
+            plat = ParentLattice(filepath=plat_filepath)
+            with _timed("CLI.metropolis (task=setupmclite): unpickling model"):
                 energy_model = Model(filepath=model_filepath)
+
+            with _timed("CLI.metropolis (task=setupmclite): building supercell"):
                 scell = SuperCell(plat, sc_shape)
 
             with _timed("CLI.metropolis (task=setupmclite): Create MC instance"):

@@ -78,7 +78,8 @@ class Structure(SuperCell):
         sigmas=None,
         mc=False,
     ):
-        self.scell = super_cell
+        object.__setattr__(self, "scell", super_cell)
+        # self.scell = super_cell
         self.sites = super_cell.get_sites()
         self._pbc = super_cell.get_pbc()
         self._idxs = None
@@ -136,9 +137,35 @@ class Structure(SuperCell):
 
         self.precision_positions = 5
 
-    # Delegate missing attrs/methods to the wrapped instance
     def __getattr__(self, name):
-        return getattr(self.scell, name)
+        # Only called if normal attribute lookup fails
+        try:
+            scell = object.__getattribute__(self, "scell")
+        except AttributeError:
+            raise AttributeError(f"{type(self).__name__} has no attribute {name!r}")
+        return getattr(scell, name)
+
+    def __getstate__(self):
+        """Return dict for pickling. Keep it versionable."""
+        state = self.__dict__.copy()
+        # # If you ever add unpicklable fields, remove/transform them here.
+        # state.setdefault("_state_version", 1)
+        return state
+
+    def __setstate__(self, state):
+        """Restore state. Ensure delegate is set before anything else."""
+        # Pull out delegate first if present under either name
+        scell = state.get("scell", None)
+        if scell is not None:
+            object.__setattr__(self, "scell", scell)
+
+        # Now restore the rest normally
+        self.__dict__.update(state)
+
+        # # Optional: post-load fixes/migrations based on version
+        # ver = state.get("_state_version", 1)
+        # if ver == 1:
+        #     pass  # place migrations here if needed later
 
     def _build_index_maps(self):
         """
