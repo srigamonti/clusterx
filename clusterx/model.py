@@ -403,7 +403,7 @@ class Model:
         indices = self._site_clusters[ind]
         clusters = self._cluster_orbits_array[indices]
         cluster_indices = self._cluster_indices[indices]
-        corrs = np.zeros(max(cluster_indices) + 1, dtype=float)
+        corrs = np.zeros_like(self._multiplicities, dtype=float)
 
         for cluster, cluster_index in zip(clusters, cluster_indices):
             cluster_sites = cluster.get_idxs()
