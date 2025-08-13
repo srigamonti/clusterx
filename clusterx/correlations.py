@@ -546,6 +546,28 @@ def cluster_function(
 
 
 @jit
+def cluster_function_flip_old(
+    cluster_idxs: list,
+    cluster_alphas: np.ndarray,
+    sigmas: np.ndarray,
+    ems: np.ndarray,
+    i_flip: int,
+    sigma_old: int,
+    sigma_new: int,
+    basis_set_values: np.ndarray,
+) -> float:
+    """Old version of cluster_function_flip, kept for later reference."""
+    cf = 1.0
+    for site, alpha, sigma, em in zip(cluster_idxs, cluster_alphas, sigmas, ems):
+        if i_flip == site:
+            cf *= basis_set_values[alpha, sigma_new, em] \
+                - basis_set_values[alpha, sigma_old, em]
+        else:
+            cf *= basis_set_values[alpha, sigma, em]
+    return cf
+
+
+#@jit
 def cluster_function_flip(
     cluster_idxs: list,
     cluster_alphas: np.ndarray,
@@ -556,12 +578,10 @@ def cluster_function_flip(
     sigma_new: int,
     basis_set_values: np.ndarray,
 ) -> float:
-    nbodies = len(cluster_idxs)
-    cf = 1.0
-    for i in range(nbodies):
-        if i == cluster_idxs.index(i_flip):
-            cf *= basis_set_values[cluster_alphas[i], sigma_new, ems[i]] \
-                - basis_set_values[cluster_alphas[i], sigma_old, ems[i]]
-        else:
-            cf *= basis_set_values[cluster_alphas[i], sigmas[i], ems[i]]
-    return cf
+    factors = basis_set_values[cluster_alphas, sigmas, ems]
+    i = cluster_idxs.index(i_flip)
+    factors[i] = (
+          basis_set_values[cluster_alphas[i], sigma_new, ems[i]]
+        - basis_set_values[cluster_alphas[i], sigma_old, ems[i]]
+    )
+    return np.prod(factors)

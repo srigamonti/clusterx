@@ -412,7 +412,7 @@ class Model:
                 cluster_sites,
                 cluster_funcs,
                 structure.sigmas.take(cluster_sites),
-                structure.ems,
+                structure.ems.take(cluster_sites),
                 ind,
                 old_sigma,
                 new_sigma,
