@@ -154,22 +154,27 @@ class ClustersPool:
                 self._cpool_scell = self.get_containing_supercell()
             else:
                 self._cpool_scell = SuperCell(parent_lattice, np.diag([1, 1, 1]))
+                
 
-            # with _timed("Get all distances 1"):
-            #     self._distances = self._cpool_scell.get_all_distances(mic=False)
-            # with _timed("Get all distances 2"):
-            #     self._distances_mic_true = self._cpool_scell.get_all_distances(mic=True)
-            # with _timed("Get all distances 3"):
-            #     self._sdistances = (
-            #         self._cpool_scell.get_substitutional_atoms().get_all_distances(
-            #             mic=True
-            #         )
-            #     )
-
-            self._distances = self._cpool_scell._distances
-            self._distances_mic_true = self._cpool_scell._distances_mic_true
-            self._sdistances = self._cpool_scell._sdistances
-
+            compute_distances = False
+            if compute_distances:
+                with _timed("Get all distances 1"):
+                    self._distances = self._cpool_scell.get_all_distances(mic=False)
+                with _timed("Get all distances 2"):
+                    self._distances_mic_true = self._cpool_scell.get_all_distances(mic=True)
+                with _timed("Get all distances 3"):
+                    self._sdistances = (
+                        self._cpool_scell.get_substitutional_atoms().get_all_distances(mic=True)
+                    )
+            else:
+                #natoms = len( self._cpool_scell)
+                #nsatoms = len(self._cpool_scell.get_substitutional_atoms())
+                natoms = 1
+                nsatoms = 1
+                self._distances = np.zeros((natoms,natoms))
+                self._distances_mic_true = np.zeros((natoms,natoms))
+                self._sdistances = np.zeros((nsatoms,nsatoms))
+                
             self.set_radii(npoints=npoints, radii=radii)
             if 0 in self._npoints:
                 raise ValueError(
@@ -1533,8 +1538,9 @@ class ClusterOrbit(ClustersPool):
             )  # Scaled to super_cell
 
         if distances is None:
-            distances = super_cell.get_all_distances(mic=False)
-
+            #distances = super_cell.get_all_distances(mic=False)
+            distances = np.zeros((1,1))
+            
         spos1 = super_cell.get_scaled_positions(
             wrap=True
         )  # Super-cell scaled positions

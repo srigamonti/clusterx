@@ -95,7 +95,8 @@ class Cluster():
                 if distances is not None:
                     for i1, idx1 in enumerate(self.ais):
                         for idx2 in self.ais[i1+1:]:
-                            d = distances[idx1,idx2]
+                            #d = distances[idx1,idx2]
+                            d = np.abs(idx1-idx2)
                             if r < d:
                                 r = d
                 else:
@@ -126,7 +127,9 @@ class Cluster():
         if self.npoints > 1:
             for i1, idx1 in enumerate(self.ais):
                 for idx2 in self.ais[i1+1:]:
-                    d = distances[idx1,idx2]
+                    d = np.abs(idx1-idx2)
+                    
+                    #d = distances[idx1,idx2]
                     if r < d:
                         r = d
         self.radius = r
