@@ -266,18 +266,24 @@ class MonteCarloLite:
 
         progress = tqdm(range(1, n_mc_steps + 1), total=n_mc_steps, desc="MMC sim.")
 
+        use_arrays_backup_for_rejected_moves = (
+            False  # Very slow, use only for benchmarking
+        )
+
         i_reset = 0
         e_error = 0
         with _timed("Metropolis: MC steps"):
             for i in progress:
                 atom_indices = []
                 new_sigmas = []
+                old_sigmas = []
                 for j in range(n_clics):
                     if ensemble == "grandcanonical":
                         atom_index, sigma_initial, sigma_final = (
                             self.structure.flip_random(self._substitutional_sublattice)
                         )
                         atom_indices.append(atom_index)
+                        old_sigmas.append(sigma_initial)
                         new_sigmas.append(sigma_final)
                     elif ensemble == "canonical":
                         atom_index1, sigma_initial1, sigma_final1 = (
@@ -292,13 +298,17 @@ class MonteCarloLite:
                         )
 
                         atom_indices.append(atom_index1)
+                        old_sigmas.append(sigma_initial1)
                         new_sigmas.append(sigma_final1)
+
                         atom_indices.append(atom_index2)
+                        old_sigmas.append(sigma_initial2)
                         new_sigmas.append(sigma_final2)
 
                 # compute new energy
 
-                self.structure.backup_arrays()
+                if use_arrays_backup_for_rejected_moves:
+                    self.structure.backup_arrays()
                 de = 0.0
                 for atom_index, sigma in zip(atom_indices, new_sigmas):
                     de += self._emodel.predict_flip(
@@ -313,29 +323,38 @@ class MonteCarloLite:
 
                 e1 = e + de
 
-                if e >= e1:
+                if de <= 0:
                     accept_clic = True
                     boltzmann_factor = 0
                 else:
-                    boltzmann_factor = math.exp((e - e1) * scaledbeta)
+                    boltzmann_factor = math.exp(-de * scaledbeta)
 
                     if np.random.uniform(0, 1) <= boltzmann_factor:
                         accept_clic = True
                     else:
                         accept_clic = False
+
                 if accept_clic:
                     e = e1
 
                     mcrun.accepted_steps.append(i)
-                    # mcrun.sigmas.append(tuple(self.structure.get_sigmas()))
                     mcrun.sigmas.append(
                         np.array(self.structure.get_sigmas(), dtype=np.uint8)
                     )
                     mcrun.energies.append(e)
                 else:
-                    self.structure.restore_arrays()
+                    if use_arrays_backup_for_rejected_moves:
+                        self.structure.restore_arrays()
+                    else:
+                        self.structure.update_arrays(
+                            atom_indices=atom_indices[::-1], new_sigmas=old_sigmas[::-1]
+                        )
 
-                if n_error_reset is not None and i % n_error_reset == 0:
+                if (
+                    n_error_reset is not None
+                    and n_error_reset > 0
+                    and i % n_error_reset == 0
+                ):
                     e0 = e
                     e = self._emodel.predict(self.structure)
                     mcrun.energies[-1] = e
