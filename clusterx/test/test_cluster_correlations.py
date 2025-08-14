@@ -15,6 +15,7 @@ from clusterx.structure import Structure
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator, site_basis_function
 from clusterx.utils import PolynomialBasis
+from clusterx.cli.build_ccalc import build_ccalc
 
 
 def scalar_product_basis_set(
@@ -215,6 +216,25 @@ def scell131(plat_quaternary):
 @pytest.fixture
 def ccalc(plat_quaternary, cpool):
     return CorrelationsCalculator("trigonometric", plat_quaternary, cpool)
+
+
+@pytest.fixture
+def structure131(scell131):
+    return Structure(scell131, [1, 1, 1, 6, 7, 1, 1, 2, 1])
+
+
+def test_cli(plat_quaternary, cpool, structure131):
+    """Test CLI build_ccalc command"""
+    plat_quaternary.serialize(filepath="ccalc_test_plat.json")
+    cpool.serialize(filepath="ccalc_test_cpool.json")
+    build_ccalc(
+        basis_name="trigonometric",
+        plat_filepath="ccalc_test_plat.json",
+        cpool_filepath="ccalc_test_cpool.json",
+        ccalc_filepath="ccalc_test_ccalc.pickle",
+    )
+    ccalc = CorrelationsCalculator("ccalc_test_ccalc.pickle")
+    corrs = ccalc.get_cluster_correlations(structure131)
 
 
 def test_serialize_load(ccalc):
