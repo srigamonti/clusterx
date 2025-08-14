@@ -373,9 +373,9 @@ class Model:
         sigma_j = structure.sigmas[j]
 
         de1 = self.predict_flip(structure, i, sigma_i, sigma_j, site_types, reduce)
-        structure.swap(i, j)
+        structure.sigmas[i] = sigma_j
         de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, reduce)
-        structure.swap(i, j)
+        structure.sigmas[i] = sigma_i  # restore original structure
         return de1 + de2
 
     def _compute_delta_e_binary_linear(self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0):

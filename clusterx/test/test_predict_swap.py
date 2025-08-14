@@ -71,7 +71,7 @@ def test_swap_clathrate(basis):
 def test_swap(plat_cubic, model_cubic, reduce):
     seed_rngs(42)
 
-    p = [2, 2, 2]
+    p = [4, 4, 4]  # for 2*2*2 supercell, results are unreliable due to wrapping
     scell = SuperCell(plat_cubic, p)
     structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
     preds_full = []
