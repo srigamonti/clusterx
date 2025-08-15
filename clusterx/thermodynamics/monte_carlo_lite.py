@@ -7,6 +7,7 @@ import os
 import pickle
 import random
 import warnings
+from typing import Optional
 
 import numpy as np
 
@@ -225,19 +226,30 @@ class MonteCarloLite:
             np.random.seed(random_seed)
 
         with _timed("MonteCarloLite.metropolis: Generating initial random structure"):
-            if initial_structure is None:
-                if n_substitutions is not None:
-                    _, sigmas = self._scell.gen_random_decoration(
-                        nsubs={self._substitutional_sublattice: [n_substitutions]}
-                    )
-                else:
-                    raise ValueError(
-                        "MonteCarloLite.metropolis: please provide n_substitutions or initial_structure."
-                    )
-            else:
+            if initial_structure is None and n_substitutions is not None:
+                _, sigmas = self._scell.gen_random_decoration(
+                    nsubs={self._substitutional_sublattice: [n_substitutions]}
+                )
+                self.structure.set_arrays(sigmas=sigmas)
+            elif initial_structure is not None and n_substitutions is None:
                 sigmas = initial_structure.get_sigmas()
+                self.structure.set_arrays(sigmas=sigmas)
+            else:
+                pass
 
-            self.structure.set_arrays(sigmas=sigmas)
+            # if initial_structure is None:
+            #     if n_substitutions is not None:
+            #         _, sigmas = self._scell.gen_random_decoration(
+            #             nsubs={self._substitutional_sublattice: [n_substitutions]}
+            #         )
+            #     else:
+            #         raise ValueError(
+            #             "MonteCarloLite.metropolis: please provide n_substitutions or initial_structure."
+            #         )
+            # else:
+            #     sigmas = initial_structure.get_sigmas()
+
+            # self.structure.set_arrays(sigmas=sigmas)
 
         scaledbeta = self._energy_scale_factor / self._kb / temperature
 
@@ -258,6 +270,7 @@ class MonteCarloLite:
             self._scell.get_transformation(),
             temperature,
             ensemble,
+            n_steps=n_mc_steps,
         )
 
         mcrun.accepted_steps.append(0)
@@ -297,13 +310,17 @@ class MonteCarloLite:
                             )
                         )
 
-                        atom_indices.append(atom_index1)
-                        old_sigmas.append(sigma_initial1)
-                        new_sigmas.append(sigma_final1)
+                        if (
+                            atom_index1 not in atom_indices
+                            and atom_index2 not in atom_indices
+                        ):
+                            atom_indices.append(atom_index1)
+                            old_sigmas.append(sigma_initial1)
+                            new_sigmas.append(sigma_final1)
 
-                        atom_indices.append(atom_index2)
-                        old_sigmas.append(sigma_initial2)
-                        new_sigmas.append(sigma_final2)
+                            atom_indices.append(atom_index2)
+                            old_sigmas.append(sigma_initial2)
+                            new_sigmas.append(sigma_final2)
 
                 # compute new energy
 
@@ -370,7 +387,7 @@ class MonteCarloLite:
             if mcrun_filepath is not None:
                 mcrun.serialize(filepath=mcrun_filepath)
 
-        return mcrun
+        return mcrun, self.structure
 
     def serialize(self, filepath="mcsetup.pickle", fmt="pickle"):
         """Save the structure to a file in the specified format.
@@ -396,12 +413,13 @@ class MonteCarloLite:
 
 
 class MCRun:
-    def __init__(self, plat, scshape, temperature, ensemble):
+    def __init__(self, plat, scshape, temperature, ensemble, n_steps):
         # self.scell = scell
         self.plat = plat
         self.scshape = scshape
         self.temperature = temperature
         self.ensemble = ensemble
+        self.n_steps = n_steps
 
         self.accepted_steps = []
         self.sigmas = []
@@ -425,3 +443,147 @@ class MCRun:
             f"n_steps={len(self.clics)}, n_accepted_steps={len(self.accepted_steps)})>"
             f"acceptance_ratios={len(self.clics) / len(self.accepted_steps) if len(self.accepted_steps) != 0 else 'Undefined'})>"
         )
+
+
+from typing import Dict
+
+
+def specific_heat(
+    mc_setup,
+    mc_run,
+    n_eq: int = 1,
+    n_steps: Optional[int] = None,
+) -> Dict[str, float]:
+    """
+    Compute the (per-site) specific heat from a Monte Carlo trajectory where
+    only ACCEPTED steps were logged.
+
+    The energy after an accepted move is assumed to remain constant until the
+    next accepted move (i.e., rejected steps do not change the energy).
+    We reconstruct the production-time averages by weighting each accepted
+    energy by its 'dwell time' (the number of MC steps it persisted).
+
+    Parameters
+    ----------
+    mc_setup: MonteCarloLite
+        an MC initialized instance
+    mc_run: MCRun
+        the output of mc_setup.metropolis
+    n_eq : int
+        Number of initial MC steps to discard as equilibration (i.e., discard steps [0, n_eq)).
+
+    Returns
+    -------
+    dict with keys:
+        - 'C'      : specific heat per site
+        - 'E_mean' : mean energy over the production window
+        - 'E_var'  : variance of energy over the production window
+        - 'n_prod' : number of MC steps in the production window (after discarding n_eq)
+
+    Notes
+    -----
+    Specific heat is computed as:
+        C = (⟨E²⟩ - ⟨E⟩²) / (N * kB * T²)
+
+    The averages ⟨·⟩ are time averages over MC steps in the production window,
+    reconstructed via dwell-time weighting between accepted moves.
+
+    Edge cases handled:
+      * If there is an accepted move before n_eq, its energy is used as the
+        starting energy at step n_eq.
+      * If the first accepted move occurs after n_eq and there is no earlier
+        accepted move, production starts at that first accepted move (since the
+        prior energy is unknown from the provided data).
+      * If n_eq >= n_steps, an error is raised.
+    """
+    accepted_energies = mc_run.energies
+    accepted_indices = mc_run.accepted_steps
+    T = mc_run.temperature
+    kB = mc_setup._kb
+    N = mc_setup._energy_scale_factor
+    idx = np.asarray(accepted_indices, dtype=np.int64)
+    E = np.asarray(accepted_energies, dtype=np.float64)
+    if idx.size == 0 or E.size == 0 or idx.size != E.size:
+        raise ValueError(
+            "accepted_indices and accepted_energies must be non-empty and of equal length."
+        )
+    if np.any(np.diff(idx) <= 0):
+        raise ValueError("accepted_indices must be strictly increasing.")
+
+    if n_steps is None:
+        if hasattr(mc_run, "n_steps"):
+            n_steps = mc_run.n_steps
+        else:
+            raise ValueError("n_steps (total number of MC steps) must be provided.")
+
+    if n_eq < 0 or n_steps <= 0:
+        raise ValueError("n_eq must be >= 0 and n_steps must be > 0.")
+    if n_eq >= n_steps:
+        raise ValueError("No production steps: n_eq must be less than n_steps.")
+    if T <= 0 or N <= 0 or kB <= 0:
+        raise ValueError("T, N, and kB must be positive.")
+
+    # Determine 0-based vs 1-based indexing automatically:
+    # We'll interpret indices as they are, but all step ranges are half-open [start, end).
+    # User must ensure n_eq and n_steps are on the same convention as 'idx'.
+    # (If you used 1-based steps in logging, pass matching n_eq and n_steps.)
+    start_prod = n_eq
+    end_prod = n_steps
+
+    # Find the index of the last accepted move at or before start_prod.
+    j0 = (
+        np.searchsorted(idx, start_prod, side="right") - 1
+    )  # could be -1 if none before start_prod
+
+    sum_w = 0.0  # total production steps
+    sum_E = 0.0  # Σ (dwell * E)
+    sum_E2 = 0.0  # Σ (dwell * E^2)
+
+    def accumulate(dwell_len: int, energy: float):
+        nonlocal sum_w, sum_E, sum_E2
+        if dwell_len <= 0:
+            return
+        sum_w += dwell_len
+        sum_E += dwell_len * energy
+        sum_E2 += dwell_len * (energy * energy)
+
+    # Case A: we have an accepted move before or exactly at start_prod
+    if j0 >= 0:
+        # The energy at start_prod is E[j0], and it lasts until the next acceptance (or end).
+        next_idx = idx[j0 + 1] if (j0 + 1) < idx.size else end_prod
+        dwell = max(0, min(next_idx, end_prod) - start_prod)
+        accumulate(dwell, E[j0])
+
+        # Now process subsequent full segments between acceptances in [start_prod, end_prod)
+        for j in range(j0 + 1, idx.size):
+            seg_start = idx[j]
+            if seg_start >= end_prod:
+                break
+            seg_end = idx[j + 1] if (j + 1) < idx.size else end_prod
+            if seg_end <= start_prod:
+                continue
+            dwell = min(seg_end, end_prod) - max(seg_start, start_prod)
+            accumulate(dwell, E[j])
+
+    else:
+        # Case B: no accepted move before start_prod.
+        # We don't know the energy at start_prod, so start at the first acceptance >= start_prod.
+        j1 = np.searchsorted(idx, start_prod, side="left")
+        for j in range(j1, idx.size):
+            seg_start = idx[j]
+            if seg_start >= end_prod:
+                break
+            seg_end = idx[j + 1] if (j + 1) < idx.size else end_prod
+            dwell = min(seg_end, end_prod) - seg_start
+            accumulate(dwell, E[j])
+
+    if sum_w <= 0:
+        raise ValueError(
+            "No production data after applying n_eq; check indices and n_steps."
+        )
+
+    E_mean = sum_E / sum_w
+    E_var = max(0.0, (sum_E2 / sum_w) - E_mean**2)  # numerical safety
+    C = E_var / (N * kB * (T**2))
+
+    return {"C": C, "E_mean": E_mean, "E_var": E_var, "n_prod": float(sum_w)}

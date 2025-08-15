@@ -12,8 +12,13 @@ from clusterx.model import Model
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.thermodynamics.monte_carlo import MonteCarlo, MonteCarloTrajectory
-from clusterx.thermodynamics.monte_carlo_lite import MCRun, MonteCarloLite
+from clusterx.thermodynamics.monte_carlo_lite import (
+    MCRun,
+    MonteCarloLite,
+    specific_heat,
+)
 from clusterx.utils import _process_deprecated, _timed
+from clusterx.visualization import plot_property
 
 commands = ["metropolis"]
 
@@ -79,7 +84,7 @@ commands = ["metropolis"]
     energy_scale_factor=(
         "Float is used to adjust the energy from ``energy_model`` to give the total energy for the simulation supercell",
         "option",
-        "scf",
+        "escf",
         float,
     ),
     temperature=(
@@ -130,6 +135,7 @@ def metropolis(
     model_filepath: str = "model.pickle",
     mcsetup_filepath: str = "mc-setup.pickle",
     mcrun_filepath: str = "mc-run.pickle",
+    mcrun_filepaths: list[str] = ["mc-run.pickle"],
     mcscell_filepath: str = "mc-scell.pickle",
     traj_filepath: str = "mc-trajectory.json",
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = 1,
@@ -144,8 +150,11 @@ def metropolis(
     n_error_reset: Optional[int] = None,
     # metropolis sampling arguments
     n_mc_steps: int = 100,
+    n_mc_eq: int = 1,
+    n_clics: int = 1,
     energy_scale_factor: float | None = None,
     temperature: float = 1.0,
+    temperatures: Optional[List[float]] = None,
     boltzmann_constant: float = 1.0,
     initial_decoration: Optional[List[int]] = None,
     acceptance_ratio: Optional[float] = None,
@@ -249,11 +258,74 @@ def metropolis(
                     n_error_reset=n_error_reset,
                     mcrun_filepath=mcrun_filepath,
                     random_seed=random_seed,
+                    n_clics=n_clics,
                 )
 
-        case "plot-mc-run":
-            from clusterx.visualization import plot_property
+        case "run-simulated-annealing":
+            print(f"Info({get_command_name()}): Reading MC setup")
 
+            with _timed("from_file"):
+                mclite = MonteCarloLite.from_file(mcsetup_filepath)
+
+            print(f"Info({get_command_name()}): Running Metropolis MC simulation")
+
+            energies_accepted = []
+            steps_accepted = []
+
+            # Equilibration
+
+            mcrun, final_structure = mclite.metropolis(
+                temperature=temperature,
+                n_mc_steps=n_mc_steps,
+                ensemble="canonical",
+                n_substitutions=n_substitutions,
+                mcrun_filepath=f"temp-0-equilibration-{mcrun_filepath}",
+                random_seed=random_seed,
+                n_clics=n_clics,
+            )
+            for e, s in zip(mcrun.energies, mcrun.accepted_steps):
+                energies_accepted.append(e)
+                steps_accepted.append(s)
+
+            for itemp, temperature in enumerate(temperatures):
+                temp_str = str(temperature).replace(".", "p")
+                mcrun, final_structure = mclite.metropolis(
+                    temperature=temperature,
+                    n_mc_steps=n_mc_steps,
+                    ensemble="canonical",
+                    mcrun_filepath=f"temp-{temp_str}-{mcrun_filepath}",
+                    n_clics=n_clics,
+                )
+
+                for e, s in zip(mcrun.energies, mcrun.accepted_steps):
+                    energies_accepted.append(e)
+                    steps_accepted.append(s + (itemp + 1) * n_mc_steps)
+
+        case "compute_specific_heat":
+            mc_setup = MonteCarloLite.from_file(mcsetup_filepath)
+            specific_heats = []
+            temperatures = []
+            for fp in mcrun_filepaths:
+                mc_run = MCRun.from_file(fp)
+                temperatures.append(mc_run.temperature)
+                specific_heat_dict = specific_heat(
+                    mc_setup,
+                    mc_run,
+                    n_eq=n_mc_eq,
+                    n_steps=n_mc_steps,
+                )
+
+                specific_heats.append(specific_heat_dict["C"])
+
+            plot_property(
+                temperatures,
+                specific_heats,
+                prop_name="Specific heat",
+                xaxis_label="Temperature",
+                yaxis_label="Specific heat",
+            )
+
+        case "plot-mc-run":
             with _timed("MCRun.from_file"):
                 mcrun = MCRun.from_file(filepath=mcrun_filepath)
             energies_accepted = mcrun.energies
@@ -268,8 +340,6 @@ def metropolis(
                 )
 
         case "plot-mc-trajectory":
-            from clusterx.visualization import plot_property
-
             traj = MonteCarloTrajectory(filename=traj_filepath, read=True)
             energies_accepted = traj.get_energies()
             steps_accepted = traj.get_sampling_step_nos()
