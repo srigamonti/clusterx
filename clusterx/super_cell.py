@@ -468,7 +468,7 @@ class SuperCell(ParentLattice):
         tags = self.get_tags()  # tags[atom_index] = site_type
 
         decoration = self.get_atomic_numbers()
-        sigmas = np.zeros(len(tags), dtype=np.int8)
+        sigmas = np.zeros(len(tags), dtype=np.uint8)
         for tag, nsub in nsubs.items():
             # list all atom indices with the given tag or site_type
             sub_idxs = np.where(tags == tag)[0]

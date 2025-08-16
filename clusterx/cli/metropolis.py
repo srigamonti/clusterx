@@ -134,8 +134,8 @@ def metropolis(
     plat_filepath: str = "plat.json",
     model_filepath: str = "model.pickle",
     mcsetup_filepath: str = "mc-setup.pickle",
-    mcrun_filepath: str = "mc-run.pickle",
-    mcrun_filepaths: list[str] = ["mc-run.pickle"],
+    mcrun_filepath: str = None,
+    mcrun_filepaths: list[str] = None,
     mcscell_filepath: str = "mc-scell.pickle",
     traj_filepath: str = "mc-trajectory.json",
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = 1,
@@ -152,6 +152,7 @@ def metropolis(
     n_mc_steps: int = 100,
     n_mc_eq: int = 1,
     n_clics: int = 1,
+    runs: Optional[dict] = None,
     energy_scale_factor: float | None = None,
     temperature: float = 1.0,
     temperatures: Optional[List[float]] = None,
@@ -240,26 +241,62 @@ def metropolis(
             with _timed("CLI.metropolis(setupMClite): MonteCarloLite serialization"):
                 mclite.serialize(mcsetup_filepath)
 
-        case "run" | "runmclite" | "runMClite" | "run-monte-carlo-lite":
-            print(f"Info({get_command_name()}): Reading MC setup")
+        case (
+            "run"
+            | "run-metropolis"
+            | "runmclite"
+            | "runMClite"
+            | "run-monte-carlo-lite"
+        ):
+            print(f"Info({get_command_name()}): Read MC setup")
 
             with _timed("from_file"):
                 mclite = MonteCarloLite.from_file(mcsetup_filepath)
 
             print(f"Info({get_command_name()}): Running Metropolis MC simulation")
 
-            with _timed("metropolis"):
-                mclite.metropolis(
+            n_substitutions0 = n_substitutions
+
+            for irun, run in enumerate(runs):
+                temperature = run["temperature"]
+                n_mc_steps = run["n_mc_steps"]
+                mcrun_filepath = run["mcrun_filepath"]
+                ignore = run.get("ignore", False)
+                equilibration_run = run.get("equilibration_run", False)
+                n_substitutions = run.get("n_substitutions", n_substitutions0)
+
+                if ignore:
+                    continue
+
+                mcrun = mclite.metropolis(
                     temperature=temperature,
                     n_mc_steps=n_mc_steps,
                     ensemble=ensemble,
                     n_substitutions=n_substitutions,
-                    chemical_potential=chemical_potential,
-                    n_error_reset=n_error_reset,
                     mcrun_filepath=mcrun_filepath,
                     random_seed=random_seed,
                     n_clics=n_clics,
                 )
+
+            # print(f"Info({get_command_name()}): Reading MC setup")
+
+            # with _timed("from_file"):
+            #     mclite = MonteCarloLite.from_file(mcsetup_filepath)
+
+            # print(f"Info({get_command_name()}): Running Metropolis MC simulation")
+
+            # with _timed("metropolis"):
+            #     mclite.metropolis(
+            #         temperature=temperature,
+            #         n_mc_steps=n_mc_steps,
+            #         ensemble=ensemble,
+            #         n_substitutions=n_substitutions,
+            #         chemical_potential=chemical_potential,
+            #         n_error_reset=n_error_reset,
+            #         mcrun_filepath=mcrun_filepath,
+            #         random_seed=random_seed,
+            #         n_clics=n_clics,
+            #     )
 
         case "run-simulated-annealing":
             print(f"Info({get_command_name()}): Reading MC setup")
@@ -267,39 +304,36 @@ def metropolis(
             with _timed("from_file"):
                 mclite = MonteCarloLite.from_file(mcsetup_filepath)
 
-            print(f"Info({get_command_name()}): Running Metropolis MC simulation")
+            print(f"Info({get_command_name()}): Running simulated annealing")
 
-            energies_accepted = []
-            steps_accepted = []
+            for irun, run in enumerate(runs):
+                temperature = run["temperature"]
+                n_mc_steps = run["n_mc_steps"]
+                mcrun_filepath = run["mcrun_filepath"]
+                ignore = run.get("ignore", False)
+                equilibration_run = run.get("equilibration_run", False)
 
-            # Equilibration
+                if ignore:
+                    continue
 
-            mcrun, final_structure = mclite.metropolis(
-                temperature=temperature,
-                n_mc_steps=n_mc_steps,
-                ensemble="canonical",
-                n_substitutions=n_substitutions,
-                mcrun_filepath=f"temp-0-equilibration-{mcrun_filepath}",
-                random_seed=random_seed,
-                n_clics=n_clics,
-            )
-            for e, s in zip(mcrun.energies, mcrun.accepted_steps):
-                energies_accepted.append(e)
-                steps_accepted.append(s)
-
-            for itemp, temperature in enumerate(temperatures):
-                temp_str = str(temperature).replace(".", "p")
-                mcrun, final_structure = mclite.metropolis(
-                    temperature=temperature,
-                    n_mc_steps=n_mc_steps,
-                    ensemble="canonical",
-                    mcrun_filepath=f"temp-{temp_str}-{mcrun_filepath}",
-                    n_clics=n_clics,
-                )
-
-                for e, s in zip(mcrun.energies, mcrun.accepted_steps):
-                    energies_accepted.append(e)
-                    steps_accepted.append(s + (itemp + 1) * n_mc_steps)
+                if equilibration_run:
+                    mcrun = mclite.metropolis(
+                        temperature=temperature,
+                        n_mc_steps=n_mc_steps,
+                        ensemble="canonical",
+                        n_substitutions=n_substitutions,
+                        mcrun_filepath=mcrun_filepath,
+                        random_seed=random_seed,
+                        n_clics=n_clics,
+                    )
+                else:
+                    mcrun = mclite.metropolis(
+                        temperature=temperature,
+                        n_mc_steps=n_mc_steps,
+                        ensemble="canonical",
+                        mcrun_filepath=mcrun_filepath,
+                        n_clics=n_clics,
+                    )
 
         case "compute_specific_heat":
             mc_setup = MonteCarloLite.from_file(mcsetup_filepath)
@@ -326,18 +360,33 @@ def metropolis(
             )
 
         case "plot-mc-run":
-            with _timed("MCRun.from_file"):
-                mcrun = MCRun.from_file(filepath=mcrun_filepath)
-            energies_accepted = mcrun.energies
-            steps_accepted = mcrun.accepted_steps
-            with _timed("plot_property"):
-                plot_property(
-                    steps_accepted,
-                    energies_accepted,
-                    prop_name="Energy of visited structures",
-                    xaxis_label="step no.",
-                    yaxis_label="Energy [eV/#sites]",
+            # for e, s in zip(mcrun.energies, mcrun.accepted_steps):
+            #     energies_accepted.append(e)
+            #     steps_accepted.append(s + (itemp + 1) * n_mc_steps)
+
+            if mcrun_filepath is not None and mcrun_filepaths is not None:
+                raise ValueError(
+                    "Provide either `mcrun_filepath` or `mcrun_filepaths`, not both."
                 )
+
+            if mcrun_filepaths is None:
+                if mcrun_filepath is not None:
+                    mcrun_filepaths = [mcrun_filepath]
+                else:
+                    mcrun_filepaths = []
+
+            for mcrun_filepath in mcrun_filepaths:
+                mcrun = MCRun.from_file(filepath=mcrun_filepath)
+                energies_accepted = mcrun.energies
+                steps_accepted = mcrun.accepted_steps
+                with _timed("plot_property"):
+                    plot_property(
+                        steps_accepted,
+                        energies_accepted,
+                        prop_name="Energy of visited structures",
+                        xaxis_label="step no.",
+                        yaxis_label="Energy [eV/#sites]",
+                    )
 
         case "plot-mc-trajectory":
             traj = MonteCarloTrajectory(filename=traj_filepath, read=True)

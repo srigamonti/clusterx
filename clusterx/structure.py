@@ -111,7 +111,7 @@ class Structure(SuperCell):
         else:
             self.decor = np.zeros(len(sigmas), dtype=np.int8)
             self.ems = np.zeros(len(sigmas), dtype=np.int8)
-            self.sigmas = sigmas
+            self.sigmas = np.array(sigmas, dtype=np.uint8)
             for idx, sigma in enumerate(sigmas):
                 self.decor[idx] = self.sites[idx][sigma]
                 self.ems[idx] = len(self.sites[idx])
