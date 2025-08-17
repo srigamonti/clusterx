@@ -7,8 +7,9 @@ import os
 import pickle
 import random
 import warnings
+from collections import deque
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 
@@ -167,7 +168,12 @@ class MonteCarloLite:
             )
 
     def _load_or_create_mcrun(
-        self, mcrun_filepath: Optional[str], temperature: float, ensemble: str
+        self,
+        mcrun_filepath: Optional[str],
+        temperature: float,
+        ensemble: str,
+        is_simulated_annelaing: bool,
+        keep_sigmas=1,
     ):
         """
         Load an MCRun from file if possible, otherwise create a new instance.
@@ -199,9 +205,10 @@ class MonteCarloLite:
                 self._scell.get_transformation(),
                 temperature,
                 ensemble,
+                keep_sigmas=keep_sigmas,
             )
 
-        if path.exists():
+        if path.exists() and not is_simulated_annelaing:
             mcrun = MCRun.from_file(path)
 
             # Warn if stored temperature differs from requested one
@@ -212,56 +219,36 @@ class MonteCarloLite:
                     UserWarning,
                 )
 
+            if mcrun.keep_sigmas != keep_sigmas:
+                warnings.warn(
+                    f"keep_sitmas in saved MC run ({mcrun.keep_sigmas}) "
+                    f"differs from requested keep_sigmas ({keep_sigmas})."
+                    f"Setting keep_sigmas to ({keep_sigmas}).",
+                    UserWarning,
+                )
+
             mcrun.resume_from_last_step()  # resume after last recorded step
+            mcrun.set_keep_sigmas(keep_sigmas)
             return mcrun
 
-        warnings.warn(
-            f"MC run file not found at: {path}. Starting a new run instance.",
-            UserWarning,
-        )
+        if not is_simulated_annelaing:
+            warnings.warn(
+                f"MC run file not found at: {path}. Starting a new run instance.",
+                UserWarning,
+            )
+        else:
+            warnings.warn(
+                f"Simulated annealing. Starting a new run instance and ignoring state at {path}.",
+                UserWarning,
+            )
+
         return MCRun(
             self._scell.get_parent_lattice(),
             self._scell.get_transformation(),
             temperature,
             ensemble,
+            keep_sigmas=keep_sigmas,
         )
-
-    def _compute_acceptance_ratio(self, mcrun, i: int, window: int = 100) -> float:
-        """
-        Compute the acceptance ratio for the Monte Carlo run.
-
-        If `i` <= window, computes ratio = total accepted steps / i.
-        If `i` > window, computes the ratio over the last `window` iterations only.
-
-        Parameters
-        ----------
-        mcrun : MCRun
-            The Monte Carlo run object.
-        i : int
-            Current iteration index.
-        window : int, optional
-            Number of most recent iterations to use when computing the ratio
-            if `i` is greater than this value. Default is 100.
-
-        Returns
-        -------
-        float
-            Acceptance ratio.
-        """
-        if i <= 0:
-            return 0.0  # avoid division by zero
-
-        if i > window:
-            lower_bound = i - window
-            recent_accepts = 0
-            # Iterate backwards until we exit the window range
-            for step in reversed(mcrun.accepted_steps):
-                if step <= lower_bound:
-                    break
-                recent_accepts += 1
-            return recent_accepts / window
-        else:
-            return len(mcrun.accepted_steps) / i
 
     def metropolis(
         self,
@@ -274,8 +261,10 @@ class MonteCarloLite:
         initial_sigmas=None,
         chemical_potential=None,
         mcrun_filepath=None,
+        keep_sigmas=1,
         n_error_reset=None,
         random_seed: Optional[int] = None,
+        is_simulated_annelaing=False,
         **kwargs,
     ):
         r"""Perform Monte-Carlo Metropolis simulation
@@ -353,7 +342,9 @@ class MonteCarloLite:
             random.seed(random_seed)
             np.random.seed(random_seed)
 
-        mcrun = self._load_or_create_mcrun(mcrun_filepath, temperature, ensemble)
+        mcrun = self._load_or_create_mcrun(
+            mcrun_filepath, temperature, ensemble, is_simulated_annelaing, keep_sigmas
+        )
 
         self._validate_initialization_args_metropolis(
             initial_sigmas, initial_structure, n_substitutions
@@ -482,7 +473,7 @@ class MonteCarloLite:
                     e_error = e - e0
                     i_reset = i
 
-                ratio = self._compute_acceptance_ratio(mcrun, i, window=1000)
+                ratio = mcrun.acceptance_ratio_last(1000)
                 progress.set_description(
                     f"MMC sim. | Acc. ratio: {ratio:.4f} | E-reset@{i_reset}: {e_error:.3e}"
                 )
@@ -519,63 +510,139 @@ class MonteCarloLite:
 
 
 class MCRun:
-    def __init__(self, plat, scshape, temperature, ensemble, n_steps):
+    def __init__(self, plat, scshape, temperature, ensemble, keep_sigmas: int = 1):
+        """
+        keep_sigmas : int >= 0, default 1
+            0 = keep none; 1 = keep only the latest; n = keep the last n.
+        """
+        if keep_sigmas < 0:
+            raise ValueError("keep_sigmas must be >= 0")
+
         # Core metadata
         self.plat = plat
         self.scshape = scshape
         self.temperature = temperature
         self.ensemble = ensemble
-        self.n_steps = n_steps
 
-        # Trajectory data
+        # Trajectory (lightweight; keep full history)
         self.accepted_steps: List[int] = []
-        self.sigmas: List[np.ndarray] = []
         self.energies: List[float] = []
 
-        # Index offset for continuing runs
+        # Sigmas (bounded)
+        self._keep_sigmas = int(keep_sigmas)
+        self.sigmas = deque(maxlen=self._keep_sigmas) if self._keep_sigmas > 0 else None
+
+        # Offset for continuing runs
         self._step_offset: int = 0
+
+    # --- Retention control -------------------------------------------------
+    @property
+    def keep_sigmas(self) -> int:
+        return self._keep_sigmas
+
+    def set_keep_sigmas(self, n: int) -> None:
+        """Change retention; shrinking discards oldest immediately."""
+        if n < 0:
+            raise ValueError("keep_sigmas must be >= 0")
+        n = int(n)
+        if n == self._keep_sigmas:
+            return
+
+        if n == 0:
+            self.sigmas = None
+        else:
+            recent = []
+            if self.sigmas is not None:
+                recent = list(self.sigmas)[-n:]
+            self.sigmas = deque(recent, maxlen=n)
+
+        self._keep_sigmas = n
 
     # --- Offset management -------------------------------------------------
     def set_step_offset(self, offset: int) -> None:
-        """Manually set the step index offset used by `add_step`."""
         if offset < 0:
             raise ValueError("step offset must be non-negative")
         self._step_offset = offset
 
     def resume_from_last_step(self) -> None:
-        """
-        Set the step offset based on the last recorded step.
-        """
-        if not self.accepted_steps:
-            self._step_offset = 0
-            return
-        self._step_offset = self.accepted_steps[-1] + 1
+        self._step_offset = (self.accepted_steps[-1] + 1) if self.accepted_steps else 0
 
     @property
     def step_offset(self) -> int:
-        """Current step index offset used by `add_step`."""
         return self._step_offset
 
     # --- Recording steps ---------------------------------------------------
     def add_step(self, step_index: int, sigmas, energy: float) -> None:
-        """
-        Append a Monte Carlo step to the run history.
-
-        The stored step index is `step_index + step_offset`.
-
-        Parameters
-        ----------
-        step_index : int
-            Index relative to the *current segment* (e.g., 0..N during this run).
-        sigmas : array_like
-            Sigma values for the structure at this step.
-        energy : float
-            Energy associated with the step.
-        """
+        """Append a Monte Carlo step to the run history."""
         global_index = self._step_offset + int(step_index)
         self.accepted_steps.append(global_index)
-        self.sigmas.append(np.array(sigmas, dtype=np.uint8))
         self.energies.append(float(energy))
+        if self._keep_sigmas > 0:
+            self.sigmas.append(np.array(sigmas, dtype=np.uint8))
+
+    # --- Convenience -------------------------------------------------------
+    def last_sigma(self) -> Optional[np.ndarray]:
+        if self._keep_sigmas == 0 or not self.sigmas:
+            return None
+        return self.sigmas[-1]
+
+    def iter_recent_sigmas(self) -> Iterable[Tuple[int, np.ndarray]]:
+        """
+        Yield (step, sigma) for the retained window, oldest -> newest.
+        Uses the invariant: retained sigmas correspond to the last len(sigmas)
+        entries in accepted_steps.
+        """
+        if self._keep_sigmas == 0 or not self.sigmas:
+            return iter(())
+        k = len(self.sigmas)
+        steps = self.accepted_steps[-k:]
+        # materialize sigmas to align indexes (deque iterable is fine, but we might resize later)
+        sigs = list(self.sigmas)
+        return zip(steps, sigs)
+
+    def last_sigma_with_step(self) -> Tuple[Optional[int], Optional[np.ndarray]]:
+        """
+        Convenience: return (last_step, last_sigma) or (None, None) if none retained.
+        """
+        if self._keep_sigmas == 0 or not self.sigmas:
+            return None, None
+        return self.accepted_steps[-1], self.sigmas[-1]
+
+    def acceptance_ratio_last(self, m: int) -> float:
+        """
+        Estimate the acceptance ratio over the span that covers the last `m`
+        accepted steps.
+
+        We only store accepted step indices (self.accepted_steps). Let the last
+        m accepted global indices be [i_1, ..., i_m] (i_1 <= ... <= i_m).
+        The number of attempts spanned by this window is (i_m - i_1 + 1).
+        The number of accepted moves in this window is m.
+        The ratio is m / (i_m - i_1 + 1).
+
+        Notes
+        -----
+        - If fewer than m accepted steps exist, this uses all that are available.
+        - If there are no accepted steps recorded, returns 0.0.
+        - This ratio reflects acceptance **over the attempted steps covered by
+          those m accepts**, not “last m attempts”.
+        """
+        if m <= 0:
+            raise ValueError("m must be a positive integer")
+
+        n_acc = len(self.accepted_steps)
+        if n_acc == 0:
+            return 0.0
+
+        m_used = min(m, n_acc)
+        first_idx = self.accepted_steps[-m_used]
+        last_idx = self.accepted_steps[-1]
+        attempts_spanned = last_idx - first_idx + 1
+
+        # attempts_spanned should be >= m_used always; guard just in case
+        if attempts_spanned <= 0:
+            return 0.0
+
+        return m_used / attempts_spanned
 
     def serialize(self, filepath: str = None):
         """Serialize the MCRun object using pickle."""
@@ -633,7 +700,7 @@ def specific_heat(mc_setup, mc_run, n_eq: int = 1) -> Dict[str, float]:
         raise ValueError(
             "accepted_indices and accepted_energies must be non-empty and of equal length."
         )
-    if np.any(np.diff(idx) <= 0):
+    if np.any(np.diff(idx) < 0):
         raise ValueError("accepted_indices must be strictly increasing.")
 
     n_steps = int(

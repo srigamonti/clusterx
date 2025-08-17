@@ -136,6 +136,7 @@ def metropolis(
     mcsetup_filepath: str = "mc-setup.pickle",
     mcrun_filepath: str = None,
     mcrun_filepaths: list[str] = None,
+    keep_sigmas: Optional[int] = 1,
     mcscell_filepath: str = "mc-scell.pickle",
     traj_filepath: str = "mc-trajectory.json",
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = 1,
@@ -276,27 +277,8 @@ def metropolis(
                     mcrun_filepath=mcrun_filepath,
                     random_seed=random_seed,
                     n_clics=n_clics,
+                    keep_sigmas=keep_sigmas,
                 )
-
-            # print(f"Info({get_command_name()}): Reading MC setup")
-
-            # with _timed("from_file"):
-            #     mclite = MonteCarloLite.from_file(mcsetup_filepath)
-
-            # print(f"Info({get_command_name()}): Running Metropolis MC simulation")
-
-            # with _timed("metropolis"):
-            #     mclite.metropolis(
-            #         temperature=temperature,
-            #         n_mc_steps=n_mc_steps,
-            #         ensemble=ensemble,
-            #         n_substitutions=n_substitutions,
-            #         chemical_potential=chemical_potential,
-            #         n_error_reset=n_error_reset,
-            #         mcrun_filepath=mcrun_filepath,
-            #         random_seed=random_seed,
-            #         n_clics=n_clics,
-            #     )
 
         case "run-simulated-annealing":
             print(f"Info({get_command_name()}): Reading MC setup")
@@ -325,6 +307,8 @@ def metropolis(
                         mcrun_filepath=mcrun_filepath,
                         random_seed=random_seed,
                         n_clics=n_clics,
+                        is_simulated_annelaing=True,
+                        keep_sigmas=keep_sigmas,
                     )
                 else:
                     mcrun = mclite.metropolis(
@@ -333,6 +317,8 @@ def metropolis(
                         ensemble="canonical",
                         mcrun_filepath=mcrun_filepath,
                         n_clics=n_clics,
+                        is_simulated_annelaing=True,
+                        keep_sigmas=keep_sigmas,
                     )
 
         case "compute_specific_heat":
@@ -342,12 +328,7 @@ def metropolis(
             for fp in mcrun_filepaths:
                 mc_run = MCRun.from_file(fp)
                 temperatures.append(mc_run.temperature)
-                specific_heat_dict = specific_heat(
-                    mc_setup,
-                    mc_run,
-                    n_eq=n_mc_eq,
-                    n_steps=n_mc_steps,
-                )
+                specific_heat_dict = specific_heat(mc_setup, mc_run, n_eq=n_mc_eq)
 
                 specific_heats.append(specific_heat_dict["C"])
 
@@ -379,13 +360,14 @@ def metropolis(
                 mcrun = MCRun.from_file(filepath=mcrun_filepath)
                 energies_accepted = mcrun.energies
                 steps_accepted = mcrun.accepted_steps
+                temperature = mcrun.temperature
                 with _timed("plot_property"):
                     plot_property(
                         steps_accepted,
                         energies_accepted,
-                        prop_name="Energy of visited structures",
-                        xaxis_label="step no.",
-                        yaxis_label="Energy [eV/#sites]",
+                        prop_name=f"MC Run, T={temperature}",
+                        xaxis_label="Step number",
+                        yaxis_label="Energy",
                     )
 
         case "plot-mc-trajectory":
