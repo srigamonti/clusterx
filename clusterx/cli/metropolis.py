@@ -10,6 +10,8 @@ import plac
 from clusterx.cli.config_utils import cmd_message, get_command_name
 from clusterx.model import Model
 from clusterx.parent_lattice import ParentLattice
+from clusterx.structure import Structure
+from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
 from clusterx.thermodynamics.monte_carlo import MonteCarlo, MonteCarloTrajectory
 from clusterx.thermodynamics.monte_carlo_lite import (
@@ -369,6 +371,30 @@ def metropolis(
                         xaxis_label="Step number",
                         yaxis_label="Energy",
                     )
+
+        case "collect-structures" | "create-structures-set-from-mcrun":
+            mc_setup = MonteCarloLite.from_file(mcsetup_filepath)
+            scell = mc_setup._scell
+            plat = scell.get_parent_lattice()
+            sset = StructuresSet(parent_lattice=plat)
+
+            if mcrun_filepath is not None and mcrun_filepaths is not None:
+                raise ValueError(
+                    "Provide either `mcrun_filepath` or `mcrun_filepaths`, not both."
+                )
+
+            if mcrun_filepaths is None:
+                if mcrun_filepath is not None:
+                    mcrun_filepaths = [mcrun_filepath]
+                else:
+                    mcrun_filepaths = []
+
+            for mcrun_filepath in mcrun_filepaths:
+                mcrun = MCRun.from_file(filepath=mcrun_filepath)
+                sigmas = mcrun.last_sigma()
+                sset.add_structure(Structure(super_cell=scell, sigmas=sigmas))
+
+            sset.serialize(filepath="sset.db", overwrite=True)
 
         case "plot-mc-trajectory":
             traj = MonteCarloTrajectory(filename=traj_filepath, read=True)

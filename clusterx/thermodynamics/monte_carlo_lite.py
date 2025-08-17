@@ -658,8 +658,8 @@ class MCRun:
     def __repr__(self):
         return (
             f"<MCRun(ensemble={self.ensemble}, T={self.temperature}, "
-            f"n_steps={len(self.clics)}, n_accepted_steps={len(self.accepted_steps)})>"
-            f"acceptance_ratios={len(self.clics) / len(self.accepted_steps) if len(self.accepted_steps) != 0 else 'Undefined'})>"
+            f"n_steps={self.accepted_steps[-1]}, n_accepted_steps={len(self.accepted_steps)})>"
+            f"acceptance_ratio={self.acceptance_ratio_last(1000)})>"
         )
 
 
