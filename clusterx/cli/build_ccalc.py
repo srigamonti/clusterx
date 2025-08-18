@@ -12,7 +12,7 @@ commands = ["build_ccalc"]
 
 
 @plac.opt(
-    "basis_name",
+    "basis",
     abbrev="b",
     help="""cluster basis to be used. Possible values are: indicator-binary, trigonometric, 
         polynomial, and chebyshev. For a precise definition look into the parameter 
@@ -35,7 +35,7 @@ commands = ["build_ccalc"]
     help="The created CorrelationsCalculator object is saved to the indicated pickle file.",
 )
 def build_ccalc(
-    basis_name: str = "trigonometric",
+    basis: str = "trigonometric",
     plat_filepath: str = "plat.json",
     cpool_filepath: str = "cpool.json",
     ccalc_filepath: str = "ccalc.pickle",
@@ -47,6 +47,6 @@ def build_ccalc(
     cpool = ClustersPool(filepath=cpool_filepath)
 
     ccalc = CorrelationsCalculator(
-        basis_name=basis_name, parent_lattice=plat, clusters_pool=cpool
+        basis_name=basis, parent_lattice=plat, clusters_pool=cpool
     )
     ccalc.serialize(filepath=ccalc_filepath)

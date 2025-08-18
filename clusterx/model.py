@@ -723,7 +723,7 @@ class ModelBuilder:
             corrc = CorrelationsCalculator(self.basis, self.plat, self.cpool)
         else:
             self.cpool = corrc._cpool
-            self.basis = corrc.basis
+            self.basis = corrc.basis_name
 
         if verbose:
             print("ModelBuilder: Build correlations matrix")
