@@ -128,6 +128,10 @@ def metropolis(
     energy_model = Model(filepath=model_filepath)
     scell = SuperCell(plat, sc_shape)
     models_aux = [Model(filepath=fp) for fp in models_aux_filepaths]
+    if isinstance(nsubs, dict):
+        nsubs = {int(k): v for k, v in nsubs.items()}
+    elif isinstance(nsubs, int):
+        nsubs = {0: [nsubs]}
 
     mc = MonteCarlo(
         energy_model=energy_model,
