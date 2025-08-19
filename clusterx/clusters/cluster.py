@@ -29,15 +29,11 @@ class Cluster:
         and numbers) are set. Otherwise, a complete definition is set up, containing
         atom coordinates, basis function indices, site types (which indicate which
         sublattices a cluster point belongs to), etc.
-    ``distances``: matrix of float (default: ``None``)
-        to speed up the calculation of the cluster radius on initialization, the
-        distances between all pairs of atoms in the supercell may be passed in
-        this argument.
 
     **Methods:**
     """
 
-    def __init__(self, atom_indexes, atom_numbers, super_cell=None, distances=None):
+    def __init__(self, atom_indexes, atom_numbers, super_cell=None):
         if len(atom_indexes) != len(atom_numbers):
             raise ValueError(
                 "Initialization error, number of sites in cluster different from number of species."
@@ -69,58 +65,26 @@ class Cluster:
 
             self.positions_cartesian = np.zeros((self.npoints, 3))
             # self.positions_scaled = np.zeros((self.npoints,3))
+            positions_car = super_cell.get_positions()
             for ip, idx in enumerate(atom_indexes):
-                # self.positions_cartesian[ip] = super_cell.get_positions(wrap=True)[idx]
-                self.positions_cartesian[ip] = super_cell.get_positions()[idx]
-                # self.positions_scaled[ip] = super_cell.get_scaled_positions(wrap=True)[idx]
+                self.positions_cartesian[ip] = positions_car[idx]
                 self.site_type[ip] = tags[idx]
                 self.alphas[ip] = np.argwhere(sites[idx] == self.ans[ip])[0, 0]
-
-            """
-            # Set radius
-            r = 0.0
-            if self.npoints > 1:
-                for i1, idx1 in enumerate(self.ais):
-                    for idx2 in self.ais[i1+1:]:
-                        if distances is not None:
-                            d = distances[idx1,idx2]
-                        else:
-                            d = super_cell.get_distance(idx1,idx2,mic=False,vector=False)
-                        if r < d:
-                            r = d
-            self.radius = r
-            """
 
             # Set radius
             # FIX this! Radius cannot be based on distance in supercell, as it will fail for small supercells and large clusters wrapped into it.
             r = 0.0
             if self.npoints > 1:
-                if distances is not None:
-                    for i1, idx1 in enumerate(self.ais):
-                        for idx2 in self.ais[i1 + 1 :]:
-                            d = distances[idx1, idx2]
-                            if r < d:
-                                r = d
-                else:
-                    for i1 in range(self.npoints - 1):
-                        for i2 in range(i1 + 1, self.npoints):
-                            d = np.linalg.norm(
-                                self.positions_cartesian[i1]
-                                - self.positions_cartesian[i2]
-                            )
-                            if r < d:
-                                r = d
+                for i1 in range(self.npoints - 1):
+                    for i2 in range(i1 + 1, self.npoints):
+                        d = np.linalg.norm(
+                            self.positions_cartesian[i1] - self.positions_cartesian[i2]
+                        )
+                        if r < d:
+                            r = d
             self.radius = r
 
         self.myhash = self.__hash__()
-
-    """
-    def __lt__(self,other):
-        if self.npoints == other.npoints:
-            return self.radius < other.radius
-        else:
-            return self.npoints < other.npoints
-    """
 
     def get_alphas(self):
         """Return labels of point basis-functions of cluster"""

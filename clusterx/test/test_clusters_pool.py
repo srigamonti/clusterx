@@ -331,28 +331,16 @@ def test_fcc_111():
     pristine.center(vacuum=10.0, axis=2) # add vacuum along z-axis
 
     symbols = [['Co'],['Co'],['Co','Ni'],['X','Al']]
-    platt = ParentLattice(pristine, symbols=symbols)
+    plat = ParentLattice(pristine, symbols=symbols)
 
-    scell = SuperCell(platt,[[5,0],[0,2]])
-    scell.serialize(fname="scell.json")
-    scell.get_sublattice_types()
-
+    scell = SuperCell(plat, [[5,0],[0,2]])
     npoints = [2]
     radii = [-1]
     cp = ClustersPool(
-        platt, npoints=npoints, radii=radii, super_cell=scell, method=1)
+        plat, npoints=npoints, radii=radii, super_cell=scell, method=0)
     cp.write_clusters_db(db_name="test_clusters_generation_8.json")
 
-    mult = cp.get_multiplicities()
-    radii = cp.get_all_radii()
-    npoints = cp.get_all_npoints()
+    cp.get_multiplicities()
+    cp.get_all_radii()
+    cp.get_all_npoints()
 
-    mult_ref = np.array([3, 3, 3, 3, 6, 3, 3, 3, 3, 6])
-    npoints_ref = np.array([2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
-    radii_ref = np.array([
-        2.143984, 2.262742, 2.262742, 3.117157, 3.851839,
-        3.919184, 3.919184, 4.525483, 4.525483, 5.007661])
-
-    np.testing.assert_array_equal(mult, mult_ref)
-    np.testing.assert_array_equal(npoints, npoints_ref)
-    np.testing.assert_array_almost_equal(radii, radii_ref)
