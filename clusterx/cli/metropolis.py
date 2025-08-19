@@ -388,9 +388,6 @@ def metropolis(
 
 
         case "info-mc-run":
-            # for e, s in zip(mcrun.energies, mcrun.accepted_steps):
-            #     energies_accepted.append(e)
-            #     steps_accepted.append(s + (itemp + 1) * n_mc_steps)
 
             if mcrun_filepath is not None and mcrun_filepaths is not None:
                 raise ValueError(
@@ -437,6 +434,54 @@ def metropolis(
                 sset.add_structure(Structure(super_cell=scell, sigmas=sigmas))
 
             sset.serialize(filepath="sset.db", overwrite=True)
+
+        case "compute-property" :
+
+            property_model = Model(filepath=model_filepath)
+            mc_setup = MonteCarloLite.from_file(mcsetup_filepath)
+
+            scell = mc_setup._scell
+            plat = scell.get_parent_lattice()
+            sset = StructuresSet(parent_lattice=plat)
+
+            if mcrun_filepath is not None and mcrun_filepaths is not None:
+                raise ValueError(
+                    "Provide either `mcrun_filepath` or `mcrun_filepaths`, not both."
+                )
+
+            if mcrun_filepaths is None:
+                if mcrun_filepath is not None:
+                    mcrun_filepaths = [mcrun_filepath]
+                else:
+                    mcrun_filepaths = []
+
+            property_values = []
+            temperatures = []
+            number_of_substituents = []
+            fractional_concentrations = []
+            
+            for mcrun_filepath in enumerate(mcrun_filepaths):
+
+                mcrun = MCRun.from_file(filepath=mcrun_filepath)
+
+                
+                sigmas = mcrun.last_sigma():
+
+                structure = Structure(super_cell=scell, sigmas=sigmas)
+                
+                property_value = property_model.predict(structure,flag{})
+                
+                if flag["computed_orbits_from_scratch"]:
+                    print("Metropolis (task=averaged-property): CE Model computed orbits from scratch")
+                    print("... serializing Model to save new orbits and save time in later calls")
+                    property_model.serialize(filepath=model_filepath)
+
+                    
+                property_values.append(property_value)
+                temperatures.append(mcrun.temperature)
+
+                fractional_concentrations = structure.get_fractional_concentrations()
+                number_of_substitutions.append()
 
         case "plot-mc-trajectory":
             traj = MonteCarloTrajectory(filename=traj_filepath, read=True)

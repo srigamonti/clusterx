@@ -266,7 +266,7 @@ class Model:
         """Return correlations calculator of the Model object"""
         return self.corrc
 
-    def predict(self, structure):
+    def predict(self, structure, flag=None):
         """Predict property with the optimal cluster expansion model.
 
         **Parameters:**
@@ -274,10 +274,23 @@ class Model:
         ``structure``: Structure object
             structure object to calculate property to.
 
+        ``flag``: dict or None
+            it flags whether the member corrc correlationsCalculator computed 
+            orbits from scratch. This can be useful to konw, in order to serialize the 
+            model instance to accelerate next property predictions
+            Example usage:
+
+                model = Model(filepath="myfilepath.pickle")
+                model.predict(structure,flag={})
+                if  flag["computed_orbits_from_scratch"]:
+                   print("INFO: correlations calculator computed orbits from scrach.")
+                   model.serialize(filepath="myfilepath.pickle")
+
+
         """
         # with _timed("Model.predict: Get cluster correlations"):
-        corrs = self.corrc.get_cluster_correlations(structure)
-
+        corrs = self.corrc.get_cluster_correlations(structure, flag=flag)
+        
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1, -1))[0]
         else:

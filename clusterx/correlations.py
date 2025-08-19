@@ -259,7 +259,7 @@ class CorrelationsCalculator:
             lengths[i] = len(orbit)
         return lengths
 
-    def get_cluster_orbits_for_scell(self, scell: SuperCell, verbose: bool = False):
+    def get_cluster_orbits_for_scell(self, scell: SuperCell, verbose: bool = False, **kwargs):
         """Return array of cluster orbits for a given supercell
 
         **Parameters**
@@ -271,7 +271,8 @@ class CorrelationsCalculator:
             If ``True``, prints the progress of the calculation to the console.
         """
         cluster_orbits = None
-
+        flag = kwargs.get("flag")
+        
         # Check if cluster_orbit is already computed
         for scell_ref, cluster_orbits_ref in zip(
             self._scells, self._cluster_orbits_set
@@ -282,9 +283,13 @@ class CorrelationsCalculator:
                 cluster_orbits = cluster_orbits_ref
                 break
 
-        # Compute cluster_orbit from scratch if not available
+        if flag is not None:
+            flag["computed_orbits_from_scratch"] = False
 
+        # Compute cluster_orbit from scratch if not available
         if cluster_orbits is None:
+            if flag is not None:
+                flag["computed_orbits_from_scratch"] = True
             if verbose:
                 print("Calculating cluster orbits from scratch for scell")
             # Add new super cell and calculate cluster orbits for it.
@@ -371,7 +376,7 @@ class CorrelationsCalculator:
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
 
-    def get_cluster_correlations(self, structure: Structure, verbose: bool = False):
+    def get_cluster_correlations(self, structure: Structure, verbose: bool = False, flag = None):
         """Get cluster correlations for a structure
         **Parameters:**
 
@@ -389,7 +394,7 @@ class CorrelationsCalculator:
                 "CorrelationsCalculator.get_cluster_correlations: get cluster orbits in correlations"
             ):
                 cluster_orbits = self.get_cluster_orbits_for_scell(
-                    structure.get_supercell(), verbose=verbose
+                    structure.get_supercell(), verbose=verbose, flag=flag
                 )
             if self._mc is True:
                 self._num_mc_calls = 1
