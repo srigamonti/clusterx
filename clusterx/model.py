@@ -265,7 +265,7 @@ class Model:
 
     def _init_interaction_dict(self, super_cell: SuperCell):
         """Alternative for interaction_dictionary, based on ase NeighborList."""
-        print("Info(Model): setting up dictionary of interactions **new**.")
+        print("Info(Model): setting up dictionary of interactions.")
         cluster_orbits = self.corrc.get_cluster_orbits_for_scell(super_cell)
         cluster_indices = []  # to which primitive cluster each cluster belongs
         cluster_orbits_array = []  # all clusters from all orbits
@@ -278,13 +278,10 @@ class Model:
 
         # List of lists, where each sublist contains indices
         # from cluster_orbits_array
-        site_clusters = []
-        for site in range(len(super_cell)):
-            involved_clusters = []
-            for index, cluster in enumerate(cluster_orbits_array):
-                if site in cluster.get_idxs():
-                    involved_clusters.append(index)
-            site_clusters.append(involved_clusters)
+        site_clusters = [[] for _ in range(len(super_cell))]
+        for index, cluster in enumerate(cluster_orbits_array):
+            for site in cluster.get_idxs():
+                site_clusters[site].append(index)
         n_interactions = sum([len(sc) for sc in site_clusters])
         print(f"Info(Model): # saved interactions: {n_interactions}")
 
