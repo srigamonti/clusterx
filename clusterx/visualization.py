@@ -707,6 +707,7 @@ def plot_property(
     xaxis_label=None,
     yaxis_label=None,
     show_plot=True,
+    save_plot=False,
     scale=1.0,
 ):
     """yvalues versus xvalues"""
@@ -714,6 +715,16 @@ def plot_property(
 
     from matplotlib import rc, rcParams
 
+    data = {}
+    data["property_name"] = prop_name
+    data["xaxis_label"] = xaxis_label
+    data["yaxis_label"] = yaxis_label
+    data["xvalues"] = xvalues
+    data["yvalues"] = yvalues
+
+    if not save_plot and not show_plot:
+        return data
+    
     width = 15.0 * scale
     fs = int(width * 1.8)
     ticksize = fs
@@ -760,9 +771,10 @@ def plot_property(
 
     if show_plot:
         plt.show()
-    else:
+    if save_plot:
         plt.savefig(prop_name + "_plot.png")
 
+    return data
 
 def plot_property_persistent(
     xvalues,

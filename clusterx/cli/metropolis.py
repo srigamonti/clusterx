@@ -6,6 +6,7 @@ from typing import List, Optional, Union
 
 import numpy as np
 import plac
+import json
 
 from clusterx.cli.config_utils import cmd_message, get_command_name
 from clusterx.model import Model
@@ -36,6 +37,7 @@ commands = ["metropolis"]
     model_filepath=("Output Model file path.", "option", "mofp", str),
     mcsetup_filepath=("MC setup file path.", "option", "sufp", str),
     mcrun_filepath=("MC run file path.", "option", "mcrfp", str),
+    mcrun_filepaths=("MC run file path.", "option", "mcrfps", list),
     mcscell_filepath=("MC scell file path.", "option", "scfp", str),
     traj_filepath=(
         "Filename for the output trajectory",
@@ -138,6 +140,9 @@ def metropolis(
     mcsetup_filepath: str = "mc-setup.pickle",
     mcrun_filepath: str = None,
     mcrun_filepaths: list[str] = None,
+    plotdata_filepath: str =None,
+    show_plot=True,
+    save_plot=False,
     keep_sigmas: Optional[int] = 1,
     mcscell_filepath: str = "mc-scell.pickle",
     traj_filepath: str = "mc-trajectory.json",
@@ -323,7 +328,7 @@ def metropolis(
                         keep_sigmas=keep_sigmas,
                     )
 
-        case "compute_specific_heat":
+        case "compute_specific_heat" | "compute-specific-heat":
             mc_setup = MonteCarloLite.from_file(mcsetup_filepath)
             specific_heats = []
             temperatures = []
@@ -334,14 +339,22 @@ def metropolis(
 
                 specific_heats.append(specific_heat_dict["C"])
 
-            plot_property(
+            plot_data = plot_property(
                 temperatures,
                 specific_heats,
                 prop_name="Specific heat",
                 xaxis_label="Temperature",
                 yaxis_label="Specific heat",
+                show_plot = show_plot,
+                save_plot =save_plot
             )
 
+            if plotdata_filepath is not None:
+                with open(plotdata_filepath, "w+", encoding="utf-8") as outfile:
+                    json.dump(
+                        plot_data, outfile, indent=2, separators=(",", ":")
+                    )
+                    
         case "plot-mc-run":
             # for e, s in zip(mcrun.energies, mcrun.accepted_steps):
             #     energies_accepted.append(e)
@@ -372,6 +385,35 @@ def metropolis(
                         yaxis_label="Energy",
                     )
 
+
+
+        case "info-mc-run":
+            # for e, s in zip(mcrun.energies, mcrun.accepted_steps):
+            #     energies_accepted.append(e)
+            #     steps_accepted.append(s + (itemp + 1) * n_mc_steps)
+
+            if mcrun_filepath is not None and mcrun_filepaths is not None:
+                raise ValueError(
+                    "Provide either `mcrun_filepath` or `mcrun_filepaths`, not both."
+                )
+
+            if mcrun_filepaths is None:
+                if mcrun_filepath is not None:
+                    mcrun_filepaths = [mcrun_filepath]
+                else:
+                    mcrun_filepaths = []
+
+            for mcrun_filepath in mcrun_filepaths:
+                mcrun = MCRun.from_file(filepath=mcrun_filepath)
+                energies_accepted = mcrun.energies
+                steps_accepted = mcrun.accepted_steps
+                temperature = mcrun.temperature
+                print("---------------------------------------------------------------")
+                print(mcrun_filepath)
+                print(temperature)
+                print(steps_accepted[-1])
+                print(f"{steps_accepted[-1]:e}")
+                    
         case "collect-structures" | "create-structures-set-from-mcrun":
             mc_setup = MonteCarloLite.from_file(mcsetup_filepath)
             scell = mc_setup._scell
