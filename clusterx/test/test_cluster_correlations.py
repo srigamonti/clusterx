@@ -233,7 +233,7 @@ def test_cli(plat_quaternary, cpool, structure131):
         cpool_filepath="ccalc_test_cpool.json",
         ccalc_filepath="ccalc_test_ccalc.pickle",
     )
-    ccalc = CorrelationsCalculator("ccalc_test_ccalc.pickle")
+    ccalc = CorrelationsCalculator(filepath="ccalc_test_ccalc.pickle")
     assert ccalc.basis_set_values is not None
     assert np.count_nonzero(np.isnan(ccalc.basis_set_values)) == 0, \
         "NaN values found in loaded basis_set_values"
@@ -241,7 +241,7 @@ def test_cli(plat_quaternary, cpool, structure131):
 
 def test_serialize_load(ccalc):
     ccalc.serialize(filepath="ccalc_test_ccalc.pickle", fmt="pickle")
-    ccalc_loaded = CorrelationsCalculator("ccalc_test_ccalc.pickle")
+    ccalc_loaded = CorrelationsCalculator(filepath="ccalc_test_ccalc.pickle")
     assert ccalc_loaded.basis_set_values is not None
     assert np.count_nonzero(np.isnan(ccalc_loaded.basis_set_values)) == 0, \
         "NaN values found in loaded basis_set_values"
