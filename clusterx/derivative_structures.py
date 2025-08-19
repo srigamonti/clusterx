@@ -5,6 +5,7 @@
 import logging
 import pickle
 import random
+import tracemalloc
 import warnings
 from itertools import combinations, product
 from random import sample
@@ -19,14 +20,18 @@ from clusterx.super_cell import SuperCell
 from clusterx.utils import _is_integer_matrix
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 def _filter_property_names(property_name, property_names):
     if property_name and property_names:
         raise ValueError("Only one of property_name or property_names can be provided.")
     if not (property_name or property_names):
-        raise ValueError("At least one of property_name or property_names must be provided.")
+        raise ValueError(
+            "At least one of property_name or property_names must be provided."
+        )
 
 
 class DSGenerator:
@@ -77,7 +82,9 @@ class DSGenerator:
             dss = pickle.load(f)
 
         if not isinstance(dss, cls):
-            raise TypeError(f"Expected object of type {cls.__name__}, but got {type(dss).__name__}")
+            raise TypeError(
+                f"Expected object of type {cls.__name__}, but got {type(dss).__name__}"
+            )
 
         return dss
 
@@ -93,7 +100,9 @@ class DSGenerator:
 
     def get_configurations(self, mask_name=None):
         if mask_name is not None:
-            return self.configurations[self.configurations["config_id"] in self.get_mask(mask_name)]
+            return self.configurations[
+                self.configurations["config_id"] in self.get_mask(mask_name)
+            ]
         return self.configurations
 
     def get_property(self, config_id, property_name):
@@ -115,7 +124,9 @@ class DSGenerator:
         result = self.configurations[self.configuration["config_id"] == config_id]
         if not result.empty:
             if property_name not in self.configurations.columns:
-                raise ValueError(f"Property '{property_name}' does not exist in the configurations DataFrame.")
+                raise ValueError(
+                    f"Property '{property_name}' does not exist in the configurations DataFrame."
+                )
 
             return result.iloc[0][property_name]
         raise KeyError(f"Shape ID {config_id} not found.")
@@ -225,9 +236,13 @@ class DSGenerator:
             _value_func = _subtract_linear_reference(_value_func)
 
         if property_name:  # single property is computed
-            self.set_property_values_iteratively(property_name=property_name, value_func=_value_func)
+            self.set_property_values_iteratively(
+                property_name=property_name, value_func=_value_func
+            )
         elif property_names:  # multiple properties are computed
-            self.set_property_values_iteratively(property_names=property_names, value_func=_value_func)
+            self.set_property_values_iteratively(
+                property_names=property_names, value_func=_value_func
+            )
 
         if linear_reference == "least-squares":
             # get linear reference from linear fit with y = a * conc + b
@@ -237,7 +252,9 @@ class DSGenerator:
             concentrations = self.configurations["frconc_binary"]
             for column in property_names:
                 values = self.configurations[column]
-                a, b = np.polyfit(concentrations, values, deg=1)  # might raise warning if only one unique value
+                a, b = np.polyfit(
+                    concentrations, values, deg=1
+                )  # might raise warning if only one unique value
                 linref = a * concentrations + b
                 self.set_property_values_from_array(column, values - linref)
         elif linear_reference == "concentration-endpoints":
@@ -269,7 +286,9 @@ class DSGenerator:
         round_precision = 6
         # Check if the parent lattice corresponds to a binary compound
         if not self.plat.is_nary(2):
-            raise ValueError("The system should be a binary for this function to be used.")
+            raise ValueError(
+                "The system should be a binary for this function to be used."
+            )
 
         # Dictionary to cache fractional concentration values
         frconc_dict = {}
@@ -312,7 +331,9 @@ class DSGenerator:
             frconc_dict[key] = conc
             return conc
 
-        self.set_property_values_iteratively(value_func=_compute_frcon, property_name="frconc_binary")
+        self.set_property_values_iteratively(
+            value_func=_compute_frcon, property_name="frconc_binary"
+        )
 
     def add_property_column(self, property_name, default_value=None):
         """
@@ -328,12 +349,19 @@ class DSGenerator:
         column_name = property_name
 
         if column_name in self.configurations.columns:
-            raise ValueError(f"Column '{column_name}' already exists in the configurations DataFrame.")
+            raise ValueError(
+                f"Column '{column_name}' already exists in the configurations DataFrame."
+            )
 
         self.configurations[column_name] = default_value
 
     def set_property_values_iteratively(
-        self, value_func, property_name=None, property_names=None, create_if_missing=True, **kwargs
+        self,
+        value_func,
+        property_name=None,
+        property_names=None,
+        create_if_missing=True,
+        **kwargs,
     ):
         """
         Sets property values iteratively using a function to compute values on the fly.
@@ -377,9 +405,13 @@ class DSGenerator:
                 if create_if_missing:
                     self.configurations[column_name] = None
                     self.property_names.add(column_name)
-                    print(f"Created new column '{column_name}' in the configurations DataFrame.")
+                    print(
+                        f"Created new column '{column_name}' in the configurations DataFrame."
+                    )
                 else:
-                    raise ValueError(f"Column '{column_name}' does not exist in the configurations DataFrame.")
+                    raise ValueError(
+                        f"Column '{column_name}' does not exist in the configurations DataFrame."
+                    )
 
         if len(column_names) == 1:
             self.configurations[column_names[0]] = self.configurations.apply(
@@ -390,7 +422,9 @@ class DSGenerator:
                 lambda row: value_func(row, **kwargs), axis=1, result_type="expand"
             )
 
-    def set_property_values_from_array(self, property_name, values, create_if_missing=True):
+    def set_property_values_from_array(
+        self, property_name, values, create_if_missing=True
+    ):
         """
         Sets property values using a provided array of values.
 
@@ -409,9 +443,13 @@ class DSGenerator:
             if create_if_missing:
                 self.configurations[column_name] = None
                 self.property_names.add(column_name)
-                print(f"Created new column '{column_name}' in the configurations DataFrame.")
+                print(
+                    f"Created new column '{column_name}' in the configurations DataFrame."
+                )
             else:
-                raise ValueError(f"Column '{column_name}' does not exist in the configurations DataFrame.")
+                raise ValueError(
+                    f"Column '{column_name}' does not exist in the configurations DataFrame."
+                )
 
         if len(values) != len(self.configurations):
             raise ValueError(
@@ -433,7 +471,9 @@ class DSGenerator:
 
         sc_size = int(round(np.linalg.det(shape)))
 
-        match = self.scell_shapes[self.scell_shapes["shape"].apply(lambda x: np.array_equal(x, shape))]
+        match = self.scell_shapes[
+            self.scell_shapes["shape"].apply(lambda x: np.array_equal(x, shape))
+        ]
         if not match.empty:
             return match.iloc[0]["shape_id"]
 
@@ -441,7 +481,9 @@ class DSGenerator:
         self.scell_shapes = pd.concat(
             [
                 self.scell_shapes,
-                pd.DataFrame({"shape_id": [new_id], "shape": [shape], "size": [sc_size]}),
+                pd.DataFrame(
+                    {"shape_id": [new_id], "shape": [shape], "size": [sc_size]}
+                ),
             ],
             ignore_index=True,
         )
@@ -495,7 +537,9 @@ class DSGenerator:
         self.configurations = pd.concat(
             [
                 self.configurations,
-                pd.DataFrame({"config_id": [new_id], "sigma": [sigma], "shape_id": [shape_id]}),
+                pd.DataFrame(
+                    {"config_id": [new_id], "sigma": [sigma], "shape_id": [shape_id]}
+                ),
             ],
             ignore_index=True,
         )
@@ -509,6 +553,7 @@ class DSGenerator:
         sc_shapes=None,
         n_random=None,
         random_state=None,
+        recursive=True,
     ):
         """Generate derivative structures
 
@@ -523,18 +568,23 @@ class DSGenerator:
             formed with the integers [1,0,-1]. If you pass a list of integers to this argument,
             the passed list will be used insted of the default [1,0,-1]. If False, the original
             HNFs determine the supercell shapes.
-         ``num_subs_list``: ragged list of lists or arrays of integers, or list of dict for multilattice case
+        ``num_subs_list``: ragged list of lists or arrays of integers, or list of dict for multilattice case
             every list or array in the ragged list, indicate the number of substituents to be
             considered in a given supercell. The first dimension must coincide with the
             dimension of ``supercell_sizes``.
-         ``sc_shape``: 3x3 matrix or None
+        ``sc_shape``: 3x3 matrix or None
             if only decorations for a single supercell are wanted, specify it here.
-         ``sc_shapes``: list of 3x3 matrix or None
+        ``sc_shapes``: list of 3x3 matrix or None
             list of sc_shapes to generate decorations.
         ``n_random``: int or None
             If provided, generate only this number of random configurations per (shape, nsubs).
          ``random_state``: int or None
             If provided, used to seed the random number generators for reproducibility.
+        ``recursive``: Bool, default True
+            Use fast recursive algorithm for finding derivative structures. If all configurations
+            for ``n`` substitutions are seek, the recursive algorithm finds before all of ``n-1``.
+            Thus, a calculation with  ``num_subs_list=[[0,1,2,3]]`` takes the same numerical
+            effort as ``num_subs_list=[[3]]`` when recursive is ``True``.
         """
         # TODO: make supercell_sizes positional and required argument, as this
         # method does not work without it.
@@ -573,12 +623,28 @@ class DSGenerator:
                 )
 
                 for nsubs in num_subs:
-                    self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs, n_random=n_random)
+                    self.generate_for_shape_nsubs(
+                        sc_shape=t, nsubs=nsubs, n_random=n_random, recursive=recursive
+                    )
 
-        print(f"Enumeration complete. Found {len(self.configurations)} unique configurations.\n")
+                # if recursive:
+                #     self.generate_for_shape_nsubs(
+                #         sc_shape=t, nsubs=max(num_subs), n_random=n_random, recursive=recursive
+                #     )
+                # else:
+                #     for nsubs in num_subs:
+                #         self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs, n_random=n_random, recursive=recursive)
+
+        print(
+            f"Enumeration complete. Found {len(self.configurations)} unique configurations.\n"
+        )
 
     def generate_for_shape_nsubs(
-        self, sc_shape: List[List[int]], nsubs: Optional[Union[int, dict]] = None, n_random: Optional[int] = None
+        self,
+        sc_shape: List[List[int]],
+        nsubs: Optional[Union[int, dict]] = None,
+        n_random: Optional[int] = None,
+        recursive: bool = True,
     ):
         """
         Generate derivative structures.
@@ -600,30 +666,99 @@ class DSGenerator:
         self._validate_inputs(sc_shape, nsubs)
         shape_id = self.add_scell_shape(shape=sc_shape)
 
-        logging.info("Start enum for supercell size: %s, nsubs: %s", self.get_scell_size(shape_id), nsubs)
+        logging.info(
+            "Start enum for supercell size: %s, nsubs: %s",
+            self.get_scell_size(shape_id),
+            nsubs,
+        )
 
         scell = SuperCell(self.plat, sc_shape)
         natoms = scell.get_natoms()
         symper = scell.get_sym_perm()
+        nsites_per_type = scell.get_nsites_per_type()
+        ems = scell.get_ems()
         ssites = scell.get_substitutional_sites()
+        stypes = scell.get_tags()
+        scindex = np.abs(scell.get_index())
+        stypes_plat = self.plat.get_sublattice_types()
+
+        symper_tuples = [tuple(per) for per in symper]
 
         if isinstance(nsubs, int):
             if nsubs > len(ssites):
                 logging.error("nsubs cannot exceed the number of substitutional sites.")
-                raise ValueError("nsubs cannot exceed the number of substitutional sites.")
-
-            if n_random is None:
-                num_conf = self._generate_all_configurations(ssites, nsubs, natoms, shape_id, symper)
-            else:
-                num_conf = self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
-        elif isinstance(nsubs, dict):
-            tags = scell.get_tags()
-            sltypes = scell.get_sublattice_types()
-
-            if n_random is None:
-                num_conf = self._generate_all_configurations_multilattice(
-                    nsubs, natoms, shape_id, symper, tags, sltypes
+                raise ValueError(
+                    "nsubs cannot exceed the number of substitutional sites."
                 )
+
+            if n_random is None:
+                if recursive:
+                    partial_binom_sum = lambda N, n: (
+                        0
+                        if n < 0
+                        else partial_binom_sum(N, n - 1) + scipy.special.binom(N, n)
+                    )
+                    n_max = int(partial_binom_sum(len(ssites), nsubs) / scindex)
+                    with tqdm(total=n_max, desc="Finding unique sigmas") as pbar:
+                        num_conf = self._generate_all_configurations_recursive(
+                            ssites,
+                            {0: [nsubs]},
+                            natoms,
+                            shape_id,
+                            symper_tuples,
+                            ems,
+                            stypes,
+                            pbar=pbar,
+                        )
+                else:
+                    num_conf = self._generate_all_configurations(
+                        ssites, nsubs, natoms, shape_id, symper
+                    )
+
+            else:
+                num_conf = self._generate_random_configurations(
+                    ssites, nsubs, natoms, shape_id, symper, n_random
+                )
+
+        elif isinstance(nsubs, dict):
+            site_type_by_index = scell.get_tags()
+
+            partial_binom_sum = lambda N, n: (
+                0 if n < 0 else partial_binom_sum(N, n - 1) + scipy.special.binom(N, n)
+            )
+            estimated_nconf = 1
+            for site_type, nsites in nsites_per_type.items():
+                nsubs_in_type = np.sum(nsubs.get(str(site_type), [0]))
+                if len(stypes_plat[site_type]) > 1:
+                    if recursive:
+                        estimated_nconf *= partial_binom_sum(
+                            nsites_per_type[int(site_type)], nsubs_in_type
+                        )
+                    else:
+                        estimated_nconf *= scipy.special.binom(nsites, nsubs_in_type)
+            estimated_nconf /= scindex
+            estimated_nconf = int(estimated_nconf)
+
+            if n_random is None:
+                if recursive:
+                    with tqdm(
+                        total=estimated_nconf, desc="Finding unique sigmas"
+                    ) as pbar:
+                        num_conf = self._generate_all_configurations_recursive(
+                            ssites,
+                            nsubs,
+                            natoms,
+                            shape_id,
+                            symper_tuples,
+                            ems,
+                            stypes,
+                            pbar=pbar,
+                        )
+                else:
+                    num_conf = self._generate_all_configurations_multilattice(
+                        nsubs, natoms, shape_id, symper, site_type_by_index
+                    )
+
             else:
                 raise NotImplementedError()
                 # num_conf = self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
@@ -635,7 +770,135 @@ class DSGenerator:
             natoms,
         )
 
-    def _generate_all_configurations(self, ssites, nsubs, natoms, shape_id, symper):
+    @staticmethod
+    def _validate_sigma(sigma: Tuple[int], nsubs, stypes, exact=False):
+        isok = True
+
+        sigma_nsubs = {}
+        for site_type in nsubs:
+            sigma_nsubs[site_type] = []
+            for _ in nsubs[site_type]:
+                sigma_nsubs[site_type].append(0)
+
+        for site_type, max_nsubs_list in nsubs.items():
+            for i, max_nsubs in enumerate(max_nsubs_list):
+                n = 0
+                for sigma_j, stype_j in zip(sigma, stypes):
+                    if sigma_j == i + 1 and stype_j == int(site_type):
+                        n += 1
+                        sigma_nsubs[site_type][int(i)] += 1
+                        if not exact and n > max_nsubs:
+                            return False
+
+        if not exact:
+            return isok
+        else:
+            for site_type, max_nsubs_list in nsubs.items():
+                for i, j in zip(sigma_nsubs[site_type], nsubs[site_type]):
+                    if i != j:
+                        return False
+
+    def get_child_sigmas(
+        self,
+        sigma: Tuple[int],
+        ssites: List[int],
+        symper_tuples: List[tuple],
+        ems: List[int],
+        seen,
+        nsubs,
+        stypes,
+    ):
+
+        children = set()
+        for site in ssites:
+            for sigmai in range(1, ems[site]):
+                if sigmai != sigma[site]:
+                    newsigma = sigma[:site] + (sigmai,) + sigma[site + 1 :]
+                    if DSGenerator._validate_sigma(newsigma, nsubs, stypes):
+                        children.add(newsigma)
+
+        unique_children = set()
+        for child in children:
+            if hash(child) not in seen:
+                all_hashes = {
+                    hash(tuple(child[i] for i in per)) for per in symper_tuples
+                }
+                seen |= all_hashes
+                unique_children.add(child)
+
+        return unique_children, seen
+
+    def _generate_all_configurations_recursive(
+        self,
+        ssites,
+        nsubs,
+        natoms,
+        shape_id,
+        symper_tuples,
+        ems,
+        stypes,
+        sigma0=None,
+        seen=None,
+        current_nsubs=0,
+        pbar=None,
+        all_configs=None,
+    ):
+
+        if sigma0 is None:
+            sigma0 = (0,) * natoms
+
+        if seen is None:
+            seen = set()
+
+        if all_configs is None:
+            all_configs = set()
+
+        self.add_configuration(sigma=sigma0, shape_id=shape_id)
+        all_configs.add(hash(sigma0))
+
+        if pbar:
+            pbar.update(1)
+
+        if DSGenerator._validate_sigma(sigma0, nsubs, stypes, exact=True):
+            return
+
+        children, seen = self.get_child_sigmas(
+            sigma0, ssites, symper_tuples, ems, seen, nsubs, stypes
+        )
+        if pbar and len(children) != 0:
+            pbar.set_postfix(
+                nseen=len(seen),
+                nchildren=len(children),
+                nsub=sum(1 for x in list(children)[0] if x != 0),
+            )
+        for child in children:
+            self._generate_all_configurations_recursive(
+                ssites,
+                nsubs,
+                natoms,
+                shape_id,
+                symper_tuples,
+                ems,
+                stypes,
+                sigma0=child,
+                seen=seen,
+                current_nsubs=current_nsubs + 1,
+                pbar=pbar,
+                all_configs=all_configs,
+            )
+
+        if DSGenerator._validate_sigma(sigma0, nsubs, stypes, exact=True):
+            return len(all_configs)
+
+    def _generate_all_configurations(
+        self,
+        ssites,
+        nsubs,
+        natoms,
+        shape_id,
+        symper,
+        cache_quota_bytes=2 * 1024 * 1024 * 1024,
+    ):
         n_max = int(scipy.special.binom(len(ssites), nsubs))
         logging.info(
             "Max number of configurations for %s substitutions in %s-atom size scell (no sym accounted): %s",
@@ -643,27 +906,81 @@ class DSGenerator:
             natoms,
             n_max,
         )
-
-        full_list: Set[Tuple[int, ...]] = set()
         logging.info("Starting to find unique configurations...")
-
+        tracemalloc.start()
         num_conf_start = len(self.configurations)
-        for con in tqdm(combinations(ssites, nsubs), total=n_max, desc="Finding unique sigmas"):
-            sigma = self._create_sigma_array(natoms, con)
-            if tuple(sigma) not in full_list:
-                self.add_configuration(sigma=sigma, shape_id=shape_id)
-                self._update_full_list(sigma, symper, full_list)
+
+        pbar = tqdm(
+            combinations(ssites, nsubs), total=n_max, desc="Finding unique sigmas"
+        )
+        full_list = set()
+
+        # Precompute permutations as index tuples
+        self._symper_tuples = [tuple(per) for per in symper]
+
+        mode = "fast"
+        switched_mode = False
+
+        for con in pbar:
+            current_mem, _ = tracemalloc.get_traced_memory()
+
+            sigma_trial = self._create_sigma_array(natoms, con)
+
+            if current_mem > cache_quota_bytes and not switched_mode:
+                mode = "slow"
+                switched_mode = True
+                logging.info("Cache quota exceeded, switching to slow mode.")
+                full_list = set()
+                for sigma in self.configurations["sigma"]:
+                    sigma_hash_canonical = min(
+                        hash(tuple(sigma_trial[i] for i in per))
+                        for per in self._symper_tuples
+                    )
+                    full_list.add(sigma_hash_canonical)
+
+            if mode == "fast":
+                sigma_hash = hash(tuple(sigma_trial))
+
+                if sigma_hash not in full_list:
+                    all_hashes = {
+                        hash(tuple(sigma_trial[i] for i in per))
+                        for per in self._symper_tuples
+                    }
+                    full_list |= all_hashes
+                    self.add_configuration(sigma=sigma_trial, shape_id=shape_id)
+
+            else:
+                # Slow path: only store the canonical hash
+                sigma_hash_canonical = min(
+                    hash(tuple(sigma_trial[i] for i in per))
+                    for per in self._symper_tuples
+                )
+                if sigma_hash_canonical not in full_list:
+                    full_list.add(sigma_hash_canonical)
+                    self.add_configuration(sigma=sigma_trial, shape_id=shape_id)
+
+            # Show memory usage in tqdm postfix
+            pbar.set_postfix(
+                mem=self._format_bytes(current_mem),
+                mode=mode,
+                nconf=len(self.configurations["sigma"]),
+            )
+
+        tracemalloc.stop()
 
         return len(self.configurations) - num_conf_start
 
-    def _generate_all_configurations_multilattice(self, nsubs, natoms, shape_id, symper, tags, sublattice_types):
-
+    def _generate_all_configurations_multilattice(
+        self, nsubs, natoms, shape_id, symper, site_type_by_index
+    ):
         full_list: Set[Tuple[int, ...]] = set()
         logging.info("Starting to find unique configurations...")
 
         num_conf_start = len(self.configurations)
 
-        configurations = DSGenerator._generate_multilattice_configurations(natoms, tags, sublattice_types, nsubs)
+        configurations = DSGenerator._generate_multilattice_configurations(
+            natoms, site_type_by_index, nsubs
+        )
 
         for sigma in configurations:
             if tuple(sigma) not in full_list:
@@ -673,32 +990,33 @@ class DSGenerator:
         return len(self.configurations) - num_conf_start
 
     @staticmethod
-    def _generate_multilattice_configurations(n, tags, sublattice_types, nsubs):
-        tags = np.array(tags)
+    def _generate_multilattice_configurations(natoms, site_type_by_index, nsubs):
+        site_type_by_index = np.array(site_type_by_index)
 
-        # Map ems key -> list of positions in `tags` that match that ems key
         sublattice_positions = {
-            sublattice_type: list(np.where(tags == sublattice_type)[0]) for sublattice_type in nsubs
+            sublattice_type: list(
+                np.where(site_type_by_index == int(sublattice_type))[0]
+            )
+            for sublattice_type in nsubs
         }
-
         # Create generators for each domain
 
         sublattice_labelings = {
             sublattice_type: DSGenerator._generate_labelings_for_sublattice(
-                n, sublattice_positions[sublattice_type], nsubs[sublattice_type]
+                natoms, sublattice_positions[sublattice_type], nsubs[sublattice_type]
             )
             for sublattice_type in nsubs
         }
 
         # Use product of generators
         for combo in product(*sublattice_labelings.values()):
-            combined = np.zeros(n, dtype=int)
+            combined = np.zeros(natoms, dtype=int)
             for arr in combo:
                 combined += arr  # safe because positions are disjoint
             yield combined
 
     @staticmethod
-    def _generate_labelings_for_sublattice(n, sublattice_positions, nsubs):
+    def _generate_labelings_for_sublattice(natoms, sublattice_positions, nsubs):
         """
         Returns generator of labelings for a sublattice
 
@@ -728,44 +1046,139 @@ class DSGenerator:
                     yield [(level + 1, indices)] + rest
 
         for assignment in recursive_build(0, set()):
-            full_arr = np.zeros(n, dtype=int)
+            full_arr = np.zeros(natoms, dtype=int)
             for value, idxs in assignment:
                 for idx in idxs:
                     full_arr[idx] = value
             yield full_arr
 
-    def _generate_random_configurations(self, ssites, nsubs, natoms, shape_id, symper, n_random):
+    @staticmethod
+    def _format_bytes(size_bytes):
+        """Convert bytes into human-readable format (KB, MB, GB)."""
+        if size_bytes < 1024:
+            return f"{size_bytes:.2f} B"
+        elif size_bytes < 1024**2:
+            return f"{size_bytes / 1024:.2f} KB"
+        elif size_bytes < 1024**3:
+            return f"{size_bytes / 1024**2:.2f} MB"
+        else:
+            return f"{size_bytes / 1024**3:.2f} GB"
+
+    def _generate_random_configurations(
+        self, ssites, nsubs, natoms, shape_id, symper, n_random
+    ):
 
         full_list: Set[Tuple[int, ...]] = set()
         attempts = 0
-        max_attempts = n_random * 10  # Limit attempts to avoid infinite loops
+        attempts_total = 0
+        # max_attempts = n_random * 10  # Limit attempts to avoid infinite loops
+        max_attempts = 1000  # Limit attempts to avoid infinite loops
 
-        logging.info("Starting to generate %s random unique configurations...", n_random)
+        logging.info(
+            "Starting to generate %s random unique configurations...", n_random
+        )
 
         num_conf_start = len(self.configurations)
-        while len(self.configurations) - num_conf_start < n_random and attempts < max_attempts:
+
+        pbar = tqdm(total=n_random, desc="Generating configurations")
+        tracemalloc.start()
+
+        while (
+            len(self.configurations) - num_conf_start < n_random
+            and attempts < max_attempts
+        ):
+            con = tuple(sorted(sample(ssites, nsubs)))
+            sigma = self._create_sigma_array(natoms, con)
+
+            is_new = not any(
+                tuple(sigma.take(per, axis=0)) in full_list for per in symper
+            )
+
+            if is_new:
+                self.add_configuration(sigma=sigma, shape_id=shape_id)
+                full_list.add(tuple(sigma))
+                pbar.update(1)
+
+                # Snapshot memory after update
+                current, peak = tracemalloc.get_traced_memory()
+                pbar.set_postfix(mem=self._format_bytes(current))
+                attempts = 0
+
+            attempts += 1
+            attempts_total += 1
+
+        pbar.close()
+        tracemalloc.stop()
+
+        num_conf = len(self.configurations) - num_conf_start
+
+        if num_conf < n_random:
+            logging.info(
+                "%s unique configurations could be generated after %s attempts. Desired number: %s",
+                num_conf,
+                attempts_total,
+                n_random,
+            )
+        return num_conf
+
+    def _generate_random_configurations2(
+        self, ssites, nsubs, natoms, shape_id, symper, n_random
+    ):
+
+        full_list: Set[Tuple[int, ...]] = set()
+        attempts = 0
+        attempts_total = 0
+        # max_attempts = n_random * 10  # Limit attempts to avoid infinite loops
+        max_attempts = 1000  # Limit attempts to avoid infinite loops
+
+        logging.info(
+            "Starting to generate %s random unique configurations...", n_random
+        )
+
+        num_conf_start = len(self.configurations)
+
+        pbar = tqdm(total=n_random, desc="Generating configurations")
+        tracemalloc.start()
+
+        while (
+            len(self.configurations) - num_conf_start < n_random
+            and attempts < max_attempts
+        ):
             con = tuple(sorted(sample(ssites, nsubs)))
             sigma = self._create_sigma_array(natoms, con)
 
             if tuple(sigma) not in full_list:
                 self.add_configuration(sigma=sigma, shape_id=shape_id)
                 self._update_full_list(sigma, symper, full_list)
+                attempts = 0
+                pbar.update(1)
+
+                # Snapshot memory after update
+                current, peak = tracemalloc.get_traced_memory()
+                pbar.set_postfix(mem=self._format_bytes(current))
 
             attempts += 1
+            attempts_total += 1
+
+        pbar.close()
+        tracemalloc.stop()
 
         num_conf = len(self.configurations) - num_conf_start
 
         if num_conf < n_random:
-            logging.warning(
-                "Only %s unique configurations could be generated after %s attempts.",
+            logging.info(
+                "%s unique configurations could be generated after %s attempts. Desired number: %s",
                 num_conf,
-                attempts,
+                attempts_total,
+                n_random,
             )
         return num_conf
 
     def _validate_inputs(self, sc_shape, nsubs):
         if not (
-            isinstance(sc_shape, (list, np.ndarray)) and len(sc_shape) == 3 and all(len(row) == 3 for row in sc_shape)
+            isinstance(sc_shape, (list, np.ndarray))
+            and len(sc_shape) == 3
+            and all(len(row) == 3 for row in sc_shape)
         ):
             raise ValueError("sc_shape must be a 3x3 list or array of integers.")
 
@@ -1088,4 +1501,6 @@ def get_unique_supercells_nearest_orthogonal(n, parent_lattice: object, elements
             harray,
         )
 
-    return [SuperCell(parent_lattice, p) for p in small_angle_sc_shapes], small_angle_sc_shapes
+    return [
+        SuperCell(parent_lattice, p) for p in small_angle_sc_shapes
+    ], small_angle_sc_shapes

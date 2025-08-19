@@ -21,8 +21,8 @@ from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
 from clusterx.utils import normalize_nsubs_list, normalize_shape_input
 from clusterx.visualization import (
+    plot_predictions_vs_target,
     plot_property_vs_concentration,
-    plot_predictions_vs_target
 )
 
 commands = ["generate_derivative_structures"]
@@ -47,6 +47,7 @@ commands = ["generate_derivative_structures"]
     n_random=("Number of random structures to include.", "option", None, int),
     random_state=("Seed for random number generators.", "option", None, int),
     task=("Task to perform.", "option", "task", str),
+    non_recursive=("Use slow non-recursive method for finding derivative structures", "flag", "rec", bool),
 )
 def generate_derivative_structures(
     sc_sizes: Optional[List[int]] = None,
@@ -55,7 +56,7 @@ def generate_derivative_structures(
     sset_filepath: Optional[str] = None,
     model_filepath: Optional[str] = None,
     plat_filepath: Optional[str] = None,
-    dss_filepath: Optional[str] = None,
+    dss_filepath: Optional[str] = "dss.pickle",
     property_name: Optional[str] = None,
     property_names: Optional[List[str]] = None,
     property_solver: Optional[dict] = None,
@@ -71,6 +72,7 @@ def generate_derivative_structures(
     colors=None,
     markers=None,
     sizes=None,
+    non_recursive=False,
 ):
     """Generate derivative structures
 
@@ -144,6 +146,7 @@ def generate_derivative_structures(
                 shapes_nearest_orthogonal=shapes_nearest_orthogonal,
                 sc_shape=sc_shape,
                 dss_filepath=dss_filepath,
+                recursive=not non_recursive,
             )
 
         # Compute property with CE model
@@ -210,9 +213,12 @@ def generate_derivative_structures(
             assert sset_filepath is not None, "sset_filepath needs to be provided"
             assert model_filepath is not None, "model_filepath needs to be provided"
             assert property_name is not None, "property_name needs to be provided"
-            print((
-                "Plotting predictions vs. target. This is only a rough plot, "
-                "for full plot, see clusterx.visualization module"))
+            print(
+                (
+                    "Plotting predictions vs. target. This is only a rough plot, "
+                    "for full plot, see clusterx.visualization module"
+                )
+            )
             sset = StructuresSet(filepath=sset_filepath)
             cemodel = Model(filepath=model_filepath)
             plot_predictions_vs_target(
@@ -270,11 +276,11 @@ def generate_derivative_structures(
 
                 scell = scell_cache[shape_id]
                 sset.add_structure(Structure(scell, sigmas=sigma), mask=mask_name)
-                
+
             for property_name in dss.get_property_names():
                 sset.set_property_values(property_name=property_name, property_vals=data[property_name].tolist())
 
-            print("serializing sset to json")
+            print("serializing sset")
             sset.serialize(filepath=sset_filepath, overwrite=True)
 
         case 100:
@@ -354,6 +360,7 @@ def _do_full_enumeration(
     shapes_nearest_orthogonal: Union[bool, List[int]] = False,
     sc_shape: Optional[List[List[int]]] = None,
     dss_filepath: str = "dss.pickle",
+    recursive=True,
 ) -> None:
 
     dsgen = DSGenerator(plat)
@@ -363,6 +370,7 @@ def _do_full_enumeration(
         supercell_sizes=sc_sizes,
         shapes_nearest_orthogonal=shapes_nearest_orthogonal,
         sc_shape=sc_shape,
+        recursive=recursive,
     )
 
     with open(dss_filepath, "wb") as f:

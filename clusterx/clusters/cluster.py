@@ -140,6 +140,8 @@ class Cluster():
         elif distances is not None:
             self._compute_radius(distances)
             return self.radius
+        else:
+            return 0.0
 
     def _get_idxs_norm(self):
         return np.linalg.norm(self.ais)
@@ -147,7 +149,8 @@ class Cluster():
     def __lt__(self,other):
         # TODO: fix ordering? This seems not a good ordering, some inequivalent
         # clusters may have the same norm.
-        if self.npoints == other.npoints and abs(self.radius-other.radius)<1e-5:
+        if self.npoints == other.npoints and \
+            abs(self.get_radius()-other.get_radius()) < 1e-5:
             ns = self._get_idxs_norm()
             no = other._get_idxs_norm()
             return ns < no
@@ -155,6 +158,19 @@ class Cluster():
             return self.radius < other.radius
         else:
             return self.npoints < other.npoints
+
+    def __le__(self,other):
+        # TODO: fix ordering? This seems not a good ordering, some inequivalent
+        # clusters may have the same norm.
+        if self.npoints == other.npoints and \
+            abs(self.get_radius()-other.get_radius()) < 1e-5:
+            ns = self._get_idxs_norm()
+            no = other._get_idxs_norm()
+            return ns <= no
+        elif self.npoints == other.npoints:
+            return self.radius <= other.radius
+        else:
+            return self.npoints <= other.npoints
 
     def __repr__(self):
         return "Cluster["+str(list(zip(self.ais,self.ans)))+"]"
