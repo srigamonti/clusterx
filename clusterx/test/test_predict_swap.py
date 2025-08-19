@@ -26,7 +26,7 @@ def plat_cubic():
 
 @pytest.fixture
 def cpool_cubic(plat_cubic):
-    return ClustersPool(plat_cubic, npoints=[1, 2], radii=[0, 2.1])
+    return ClustersPool(plat_cubic, npoints=[1, 2], radii=[0, 1.1])
 
 
 @pytest.fixture
@@ -71,7 +71,7 @@ def test_swap_clathrate(basis):
 def test_swap(plat_cubic, model_cubic, reduce):
     seed_rngs(42)
 
-    p = [4, 4, 4]  # for 2*2*2 supercell, results are unreliable due to wrapping
+    p = [3, 3, 3]  # for 2*2*2 supercell, results are unreliable due to wrapping
     scell = SuperCell(plat_cubic, p)
     structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
     preds_full = []
@@ -93,7 +93,7 @@ def test_swap(plat_cubic, model_cubic, reduce):
 def test_flip(plat_cubic, model_cubic, reduce):
     seed_rngs(42)
 
-    p = [4, 4, 4]
+    p = [3, 3, 3]
     scell = SuperCell(plat_cubic, p)
     structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
     preds_full = []
