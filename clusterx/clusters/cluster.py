@@ -55,7 +55,7 @@ class Cluster:
         self.positions_cartesian = None
         self.alphas = None
         # self.positions_scaled = None
-        self.radius = None
+        self._radius = None  # should only be accessed via get_radius()
         if super_cell is not None:
             # Set alphas, site_type, and positions
             self.alphas = np.zeros(len(atom_indexes), dtype=int)
@@ -71,44 +71,48 @@ class Cluster:
                 self.site_type[ip] = tags[idx]
                 self.alphas[ip] = np.argwhere(sites[idx] == self.ans[ip])[0, 0]
 
-            # Set radius
-            # FIX this! Radius cannot be based on distance in supercell, as it will fail for small supercells and large clusters wrapped into it.
-            r = 0.0
-            if self.npoints > 1:
-                for i1 in range(self.npoints - 1):
-                    for i2 in range(i1 + 1, self.npoints):
-                        d = np.linalg.norm(
-                            self.positions_cartesian[i1] - self.positions_cartesian[i2]
-                        )
-                        if r < d:
-                            r = d
-            self.radius = r
-
         self.myhash = self.__hash__()
 
     def get_alphas(self):
         """Return labels of point basis-functions of cluster"""
         return self.alphas
 
-    def _compute_radius(self, distances):
+    def _compute_radius_positions(self):
+        """Compute cluster radius based on positions"""
+        # TODO: FIX this! Radius cannot be based on distance in supercell, as it will fail for small supercells and large clusters wrapped into it.
         r = 0.0
         if self.npoints > 1:
-            for i1, idx1 in enumerate(self.ais):
-                for idx2 in self.ais[i1 + 1 :]:
-                    d = distances[idx1, idx2]
+            for i1 in range(self.npoints - 1):
+                for i2 in range(i1 + 1, self.npoints):
+                    d = np.linalg.norm(
+                        self.positions_cartesian[i1] - self.positions_cartesian[i2]
+                    )
                     if r < d:
                         r = d
-        self.radius = r
+        self._radius = r
+
+    def _compute_radius_distances(self, distances):
+        """Compute cluster radius based on distances matrix"""
+        self._radius = np.max(distances)
+
+    def set_radius(self, radius):
+        """Set cluster radius manually"""
+        if radius < 0:
+            raise ValueError("Cluster radius cannot be negative")
+        self._radius = radius
 
     def get_radius(self, distances=None):
         """Return cluster radius
         The radius of a cluster is the maximum distance between any pair of its points.
         """
-        if self.radius is not None:
-            return self.radius
-        elif distances is not None:
-            self._compute_radius(distances)
-            return self.radius
+        if distances is not None:
+            self._compute_radius_distances(distances)
+            return self._radius
+        elif self.positions_cartesian is not None:
+            self._compute_radius_positions()
+            return self._radius
+        elif self._radius is not None:
+            return self._radius
         else:
             return 0.0
 
@@ -126,7 +130,7 @@ class Cluster:
             no = other._get_idxs_norm()
             return ns < no
         elif self.npoints == other.npoints:
-            return self.radius < other.radius
+            return self.get_radius() < other.get_radius()
         else:
             return self.npoints < other.npoints
 
@@ -141,7 +145,7 @@ class Cluster:
             no = other._get_idxs_norm()
             return ns <= no
         elif self.npoints == other.npoints:
-            return self.radius <= other.radius
+            return self.get_radius() <= other.get_radius()
         else:
             return self.npoints <= other.npoints
 

@@ -219,7 +219,7 @@ def test_clusters_selector_compare_ref():
     for i, c in enumerate(cp2):
         clset.append(i)
         npoints.append(c.npoints)
-        radius.append(c.radius)
+        radius.append(c.get_radius())
 
     # plot_optimization_vs_number_of_clusters(clsel)
     # plot_predictions_vs_target(clsel, energies)

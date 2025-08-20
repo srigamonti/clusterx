@@ -84,7 +84,7 @@ def test_init_supercell():
     c = Cluster([0, 1], [13, 14], super_cell=sc)
     np.testing.assert_array_equal(c.get_alphas(), [1, 0])
     assert c.get_radius() > 0.0, "Cluster radius should be greater than zero"
-    c.radius = None  # Reset radius to test if it is recalculated
+    c.set_radius(0.0)  # Reset radius to test if it is recalculated
     distances = np.array([[0.0, 2.0], [2.0, 0.0]])
     assert c.get_radius(distances) == 2.0, (
         "Cluster radius should 2.0 when distances is set manually"
@@ -99,7 +99,7 @@ def test_init_index():
     assert c.npoints == 4
     assert c.positions_cartesian is None
     assert c.alphas is None
-    assert c.radius is None
+    assert c.get_radius() == 0.0
     assert c.myhash == hash(str(list(zip(c.ais, c.ans)))), (
         "Hash not equal to expected value"
     )

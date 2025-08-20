@@ -236,7 +236,7 @@ class ClustersSelector:
 
             clset0 = []
             for icl, cl in enumerate(self.cpool):
-                if cl.npoints <= nb and cl.radius <= r + 1e-4:
+                if cl.npoints <= nb and cl.get_radius() <= r + 1e-4:
                     clset0.append(icl)
 
             from sklearn import linear_model

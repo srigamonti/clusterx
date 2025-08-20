@@ -51,9 +51,6 @@ def test_0_point_raises():
         ClustersPool(pl, npoints=[0, 1], radii=[0, 0.1])
 
 
-@pytest.mark.xfail(
-    raises=AssertionError, reason="methods are known to produce different results"
-)
 def test_methods():
     cp_list = []
     for method in [0, 1]:

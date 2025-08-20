@@ -292,7 +292,7 @@ class ClustersPool:
         """
         unique_radii = []
         for cl in self._cpool:
-            unique_radii.append(cl.radius)
+            unique_radii.append(cl.get_radius())
 
         unique_radii = np.unique(np.around(np.array(unique_radii), decimals=5))
 
@@ -302,7 +302,7 @@ class ClustersPool:
         """Return array containing the radius of each cluster in the pool"""
         radii = np.zeros(len(self))
         for icl, cl in enumerate(self._cpool):
-            radii[icl] = cl.radius
+            radii[icl] = cl.get_radius()
 
         return radii
 
@@ -355,7 +355,7 @@ class ClustersPool:
                 for r in unique_radii:
                     _clset = []
                     for icl, cl in enumerate(self._cpool):
-                        if cl.npoints <= np and cl.radius <= r + 1e-4:
+                        if cl.npoints <= np and cl.get_radius() <= r + 1e-4:
                             _clset.append(icl)
 
                     # Check whether in _clset there's at least one cluster with np number of points
@@ -403,7 +403,7 @@ class ClustersPool:
             _clset0 = []
             _clset1 = []
             for icl, cl in enumerate(self._cpool):
-                if cl.npoints <= np and cl.radius <= r + 1e-4:
+                if cl.npoints <= np and cl.get_radius() <= r + 1e-4:
                     _clset0.append(icl)
                 else:
                     _clset1.append(icl)
@@ -1131,12 +1131,12 @@ class ClustersPool:
         for i, cl in enumerate(self._cpool):
             if ecis is None:
                 info_str += "\n|{0:^19d}|{1:^19d}|{2:^19.3f}|{3:^19d}|".format(
-                    i, cl.npoints, cl.radius, self._multiplicities[i]
+                    i, cl.npoints, cl.get_radius(), self._multiplicities[i]
                 )
             else:
                 info_str += (
                     "\n|{0:^19d}|{1:^19d}|{2:^19.3f}|{3:^19d}|{4:^19.4f}|".format(
-                        i, cl.npoints, cl.radius, self._multiplicities[i], ecis[i]
+                        i, cl.npoints, cl.get_radius(), self._multiplicities[i], ecis[i]
                     )
                 )
 
