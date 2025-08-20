@@ -20,7 +20,7 @@ from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
 from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions
-from clusterx.utils import PolynomialBasis, _timed, get_cl_idx_sc
+from clusterx.utils import PolynomialBasis, get_cl_idx_sc
 
 
 class CorrelationsCalculator:
@@ -259,7 +259,9 @@ class CorrelationsCalculator:
             lengths[i] = len(orbit)
         return lengths
 
-    def get_cluster_orbits_for_scell(self, scell: SuperCell, verbose: bool = False, **kwargs):
+    def get_cluster_orbits_for_scell(
+        self, scell: SuperCell, verbose: bool = False, **kwargs
+    ):
         """Return array of cluster orbits for a given supercell
 
         **Parameters**
@@ -272,7 +274,7 @@ class CorrelationsCalculator:
         """
         cluster_orbits = None
         flag = kwargs.get("flag")
-        
+
         # Check if cluster_orbit is already computed
         for scell_ref, cluster_orbits_ref in zip(
             self._scells, self._cluster_orbits_set
@@ -376,7 +378,9 @@ class CorrelationsCalculator:
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
 
-    def get_cluster_correlations(self, structure: Structure, verbose: bool = False, flag = None):
+    def get_cluster_correlations(
+        self, structure: Structure, verbose: bool = False, flag=None
+    ):
         """Get cluster correlations for a structure
         **Parameters:**
 
@@ -390,12 +394,12 @@ class CorrelationsCalculator:
         if self._mc and self._cluster_orbits_set != [] and self._num_mc_calls != 0:
             cluster_orbits = self._cluster_orbits_mc
         else:
-            with _timed(
-                "CorrelationsCalculator.get_cluster_correlations: get cluster orbits in correlations"
-            ):
-                cluster_orbits = self.get_cluster_orbits_for_scell(
-                    structure.get_supercell(), verbose=verbose, flag=flag
-                )
+            # with _timed(
+            #     "CorrelationsCalculator.get_cluster_correlations: get cluster orbits in correlations"
+            # ):
+            cluster_orbits = self.get_cluster_orbits_for_scell(
+                structure.get_supercell(), verbose=verbose, flag=flag
+            )
             if self._mc is True:
                 self._num_mc_calls = 1
                 self._cluster_orbits_mc = cluster_orbits

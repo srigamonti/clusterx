@@ -1,12 +1,12 @@
 # Copyright (c) 2015-2024, CELL Developers.
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
+import json
 import random
 from typing import List, Optional, Union
 
 import numpy as np
 import plac
-import json
 
 from clusterx.cli.config_utils import cmd_message, get_command_name
 from clusterx.model import Model
@@ -140,7 +140,7 @@ def metropolis(
     mcsetup_filepath: str = "mc-setup.pickle",
     mcrun_filepath: str = None,
     mcrun_filepaths: list[str] = None,
-    plotdata_filepath: str =None,
+    plotdata_filepath: str = None,
     show_plot=True,
     save_plot=False,
     keep_sigmas: Optional[int] = 1,
@@ -345,16 +345,14 @@ def metropolis(
                 prop_name="Specific heat",
                 xaxis_label="Temperature",
                 yaxis_label="Specific heat",
-                show_plot = show_plot,
-                save_plot =save_plot
+                show_plot=show_plot,
+                save_plot=save_plot,
             )
 
             if plotdata_filepath is not None:
                 with open(plotdata_filepath, "w+", encoding="utf-8") as outfile:
-                    json.dump(
-                        plot_data, outfile, indent=2, separators=(",", ":")
-                    )
-                    
+                    json.dump(plot_data, outfile, indent=2, separators=(",", ":"))
+
         case "plot-mc-run":
             # for e, s in zip(mcrun.energies, mcrun.accepted_steps):
             #     energies_accepted.append(e)
@@ -385,10 +383,7 @@ def metropolis(
                         yaxis_label="Energy",
                     )
 
-
-
         case "info-mc-run":
-
             if mcrun_filepath is not None and mcrun_filepaths is not None:
                 raise ValueError(
                     "Provide either `mcrun_filepath` or `mcrun_filepaths`, not both."
@@ -410,7 +405,7 @@ def metropolis(
                 print(temperature)
                 print(steps_accepted[-1])
                 print(f"{steps_accepted[-1]:e}")
-                    
+
         case "collect-structures" | "create-structures-set-from-mcrun":
             mc_setup = MonteCarloLite.from_file(mcsetup_filepath)
             scell = mc_setup._scell
@@ -435,14 +430,15 @@ def metropolis(
 
             sset.serialize(filepath="sset.db", overwrite=True)
 
-        case "compute-property" :
-
+        case "compute-property":
             property_model = Model(filepath=model_filepath)
             mc_setup = MonteCarloLite.from_file(mcsetup_filepath)
 
             scell = mc_setup._scell
-            plat = scell.get_parent_lattice()
-            sset = StructuresSet(parent_lattice=plat)
+            if not scell.is_nary(2):
+                raise RuntimeError("Invalid supercell: expected binary (n=2).")
+
+            substitutional_sublattice = scell.get_substitutional_tags()[0]
 
             if mcrun_filepath is not None and mcrun_filepaths is not None:
                 raise ValueError(
@@ -455,33 +451,73 @@ def metropolis(
                 else:
                     mcrun_filepaths = []
 
-            property_values = []
-            temperatures = []
-            number_of_substituents = []
-            fractional_concentrations = []
-            
-            for mcrun_filepath in enumerate(mcrun_filepaths):
+            data = {}
+            data["property_name"] = property_model.property_name
+            data["number_of_substitutional_sites"] = scell.get_n_sub_sites(unique=False)
+            data["property_values"] = []
+            data["temperatures"] = []
+            data["number_of_substituents"] = []
+            data["fractional_concentrations"] = []
 
+            for mcrun_filepath in mcrun_filepaths:
                 mcrun = MCRun.from_file(filepath=mcrun_filepath)
 
-                
-                sigmas = mcrun.last_sigma():
+                sigmas = mcrun.last_sigma()
 
                 structure = Structure(super_cell=scell, sigmas=sigmas)
-                
-                property_value = property_model.predict(structure,flag{})
-                
+
+                flag = {}
+                property_value = property_model.predict(structure, flag=flag)
+
                 if flag["computed_orbits_from_scratch"]:
-                    print("Metropolis (task=averaged-property): CE Model computed orbits from scratch")
-                    print("... serializing Model to save new orbits and save time in later calls")
+                    print(
+                        "Metropolis (task=averaged-property): CE Model computed orbits from scratch"
+                    )
+                    print(
+                        "... serializing Model to save new orbits and save time in later calls"
+                    )
                     property_model.serialize(filepath=model_filepath)
 
-                    
-                property_values.append(property_value)
-                temperatures.append(mcrun.temperature)
+                data["property_values"].append(float(property_value))
+                data["temperatures"].append(mcrun.temperature)
 
-                fractional_concentrations = structure.get_fractional_concentrations()
-                number_of_substitutions.append()
+                data["fractional_concentrations"].append(
+                    structure.get_fractional_concentrations()[
+                        int(substitutional_sublattice)
+                    ][1]
+                )
+                data["number_of_substituents"].append(np.count_nonzero(sigmas))
+
+            if not np.all(data["temperatures"][0] == data["temperatures"]):
+                plot_property(
+                    data["temperatures"],
+                    data["property_values"],
+                    prop_name=data["property_name"],
+                    xaxis_label="Temperature",
+                    yaxis_label=data["property_name"],
+                    show_plot=show_plot,
+                    save_plot=save_plot,
+                )
+
+            if not np.all(
+                data["number_of_substituents"][0]
+                == np.array(data["number_of_substituents"])
+            ):
+                plot_property(
+                    data["fractional_concentrations"],
+                    data["property_values"],
+                    prop_name=data["property_name"],
+                    xaxis_label="Temperature",
+                    yaxis_label=data["property_name"],
+                    show_plot=show_plot,
+                    save_plot=save_plot,
+                )
+
+            if plotdata_filepath is not None:
+                with open(plotdata_filepath, "w+", encoding="utf-8") as outfile:
+                    json.dump(data, outfile, indent=2, separators=(",", ":"))
+
+            print(data)
 
         case "plot-mc-trajectory":
             traj = MonteCarloTrajectory(filename=traj_filepath, read=True)
