@@ -15,9 +15,24 @@ commands = ["find_lowest"]
 
 @plac.annotations(
     sset_filepath=("Path to the serialized StructuresSet object.", "option", None, str),
-    property_name=("Name of the property used to determine the lowest structure(s).", "option", None, str),
-    sset_higher_filepath=("Path to store StructuresSet with non-lowest structures.", "option", "ssh", str),
-    sset_lowest_filepath=("Path to store StructuresSet with lowest structures.", "option", "ssl", str),
+    property_name=(
+        "Name of the property used to determine the lowest structure(s).",
+        "option",
+        None,
+        str,
+    ),
+    sset_higher_filepath=(
+        "Path to store StructuresSet with non-lowest structures.",
+        "option",
+        "ssh",
+        str,
+    ),
+    sset_lowest_filepath=(
+        "Path to store StructuresSet with lowest structures.",
+        "option",
+        "ssl",
+        str,
+    ),
 )
 def find_lowest(
     sset_filepath: str = "sset.json",

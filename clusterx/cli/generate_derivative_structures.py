@@ -30,24 +30,69 @@ commands = ["generate_derivative_structures"]
 
 @plac.annotations(
     sc_sizes=("List of supercell sizes.", "option", "scsi", list),
-    shapes_nearest_orthogonal=("Generate supercell shapes with angles closest to orthogonal", "flag", "sno", bool),
-    nsubs_list=("List of lists indicating number of substitutions for each supercell.", "option", "nsl", list),
+    shapes_nearest_orthogonal=(
+        "Generate supercell shapes with angles closest to orthogonal",
+        "flag",
+        "sno",
+        bool,
+    ),
+    nsubs_list=(
+        "List of lists indicating number of substitutions for each supercell.",
+        "option",
+        "nsl",
+        list,
+    ),
     sset_filepath=("Path to a serialized StructuresSet object.", "option", "ssfp", str),
     model_filepath=("Filepath of a serialized CE model object.", "option", "mfp", str),
-    plat_filepath=("Filepath of a serialized ParentLattice object.", "option", "plfp", str),
-    dss_filepath=("Filepath to serialize or retrieve derivative structures.", "option", "dssfp", str),
-    property_name=("Name of the property to request from the structures set.", "option", "plab", str),
-    property_names=("Names of the property to request from the structures set.", "option", "plabs", list),
-    property_solver=("Dictionary of parameters for the property solver.", "option", "psol", dict),
+    plat_filepath=(
+        "Filepath of a serialized ParentLattice object.",
+        "option",
+        "plfp",
+        str,
+    ),
+    dss_filepath=(
+        "Filepath to serialize or retrieve derivative structures.",
+        "option",
+        "dssfp",
+        str,
+    ),
+    property_name=(
+        "Name of the property to request from the structures set.",
+        "option",
+        "plab",
+        str,
+    ),
+    property_names=(
+        "Names of the property to request from the structures set.",
+        "option",
+        "plabs",
+        list,
+    ),
+    property_solver=(
+        "Dictionary of parameters for the property solver.",
+        "option",
+        "psol",
+        dict,
+    ),
     sc_shape=("3x3 integer matrix to specify supercell shape.", "option", "scsh", list),
     per_formula_unit=("Flag: compute per formula unit.", "flag", "pfu", bool),
-    linear_reference=("Linear reference for property correction.", "option", "lref", list),
+    linear_reference=(
+        "Linear reference for property correction.",
+        "option",
+        "lref",
+        list,
+    ),
     mask_name=("Name of the mask for applicable tasks.", "option", "mn", str),
     n_lowest=("Number of lowest-energy structures to include.", "option", None, int),
     n_random=("Number of random structures to include.", "option", None, int),
     random_state=("Seed for random number generators.", "option", None, int),
     task=("Task to perform.", "option", "task", str),
-    non_recursive=("Use slow non-recursive method for finding derivative structures", "flag", "rec", bool),
+    non_recursive=(
+        "Use slow non-recursive method for finding derivative structures",
+        "flag",
+        "rec",
+        bool,
+    ),
 )
 def generate_derivative_structures(
     sc_sizes: Optional[List[int]] = None,
@@ -151,7 +196,9 @@ def generate_derivative_structures(
 
         # Compute property with CE model
         case "compute_property_with_ce_model" | "compute_property_ce":
-            model = Model(filepath=model_filepath) if model_filepath is not None else None
+            model = (
+                Model(filepath=model_filepath) if model_filepath is not None else None
+            )
             _do_compute_properties(
                 cem=model,
                 property_name=property_name,
@@ -162,9 +209,10 @@ def generate_derivative_structures(
 
         # Compute property using custom property solver
         case "compute_property_with_custom_solver":
-
             module_path = os.path.join(os.getcwd(), property_solver["filename"])
-            spec = importlib.util.spec_from_file_location("custom_property_solver", module_path)
+            spec = importlib.util.spec_from_file_location(
+                "custom_property_solver", module_path
+            )
             module = importlib.util.module_from_spec(spec)
             sys.modules["custom_property_solver"] = module
             spec.loader.exec_module(module)
@@ -187,8 +235,14 @@ def generate_derivative_structures(
         case "plot_property_vs_concentration" | "plot_property":
             if sset_filepath is not None:
                 sset = StructuresSet(filepath=sset_filepath)
-                model = Model(filepath=model_filepath) if model_filepath is not None else None
-                _do_plot_properties(dss_filepath, property_name=property_name, sset=sset, cem=model)
+                model = (
+                    Model(filepath=model_filepath)
+                    if model_filepath is not None
+                    else None
+                )
+                _do_plot_properties(
+                    dss_filepath, property_name=property_name, sset=sset, cem=model
+                )
             else:
                 # _do_plot_properties(dss_filepath, property_name=property_name, mask_name=mask_name)
                 with open(dss_filepath, "rb") as f:
@@ -198,7 +252,9 @@ def generate_derivative_structures(
                 x = dsgen.configurations["frconc_binary"].to_numpy()
 
                 if property_name is not None and property_names is not None:
-                    raise ValueError("Only one of 'property_name' or 'property_names' should be provided, not both.")
+                    raise ValueError(
+                        "Only one of 'property_name' or 'property_names' should be provided, not both."
+                    )
 
                 if property_name is not None:
                     property_names = [property_name]
@@ -207,7 +263,9 @@ def generate_derivative_structures(
                 for property_name in property_names:
                     ys.append(dsgen.configurations[property_name].to_numpy())
 
-                _plot_multiple_scatter(x, ys, colors, markers, sizes, save_filepath=plotdata_filepath)
+                _plot_multiple_scatter(
+                    x, ys, colors, markers, sizes, save_filepath=plotdata_filepath
+                )
 
         case "plot_predictions_vs_target":
             assert sset_filepath is not None, "sset_filepath needs to be provided"
@@ -230,14 +288,20 @@ def generate_derivative_structures(
                 yaxis_label=f"Predicted {property_name} [arb. units]",
             )
         case "plot_property_vs_concentration2":
-            _do_plot_properties2(dss_filepath, mask_name=mask_name, property_names=[property_name])
+            _do_plot_properties2(
+                dss_filepath, mask_name=mask_name, property_names=[property_name]
+            )
         case "plot_property_vs_concentration3":
-            _do_plot_properties3(dss_filepath, mask_name=mask_name, property_names=[property_name])
+            _do_plot_properties3(
+                dss_filepath, mask_name=mask_name, property_names=[property_name]
+            )
         case "mark_lowest_property_per_concentration":
             _do_mark_lowest(property_name, mask_name, dss_filepath)
 
         case "mark_lowest_and_random_properties_per_concentration":
-            _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest, n_random)
+            _do_mark_lowest_and_random(
+                property_name, mask_name, dss_filepath, n_lowest, n_random
+            )
 
         case "to_sset" | "convert_to_sset":
             # Requires
@@ -271,20 +335,27 @@ def generate_derivative_structures(
                 shape_id = data.iloc[i]["shape_id"]
 
                 if shape_id not in scell_cache:
-                    sc_shape = sc_shapes.loc[sc_shapes["shape_id"] == shape_id, "shape"].iloc[0]
+                    sc_shape = sc_shapes.loc[
+                        sc_shapes["shape_id"] == shape_id, "shape"
+                    ].iloc[0]
                     scell_cache[shape_id] = SuperCell(plat, sc_shape)
 
                 scell = scell_cache[shape_id]
                 sset.add_structure(Structure(scell, sigmas=sigma), mask=mask_name)
 
             for property_name in dss.get_property_names():
-                sset.set_property_values(property_name=property_name, property_vals=data[property_name].tolist())
+                sset.set_property_values(
+                    property_name=property_name,
+                    property_vals=data[property_name].tolist(),
+                )
 
             print("serializing sset")
             sset.serialize(filepath=sset_filepath, overwrite=True)
 
         case 100:
-            model = Model(filepath=model_filepath) if model_filepath is not None else None
+            model = (
+                Model(filepath=model_filepath) if model_filepath is not None else None
+            )
             plat = ParentLattice(filepath=plat_filepath)
             sset = StructuresSet(filepath=sset_filepath)
 
@@ -318,7 +389,9 @@ def _do_mark_lowest(property_name, mask_name, dss_filepath):
         pickle.dump(dss, f)
 
 
-def _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest, n_random):
+def _do_mark_lowest_and_random(
+    property_name, mask_name, dss_filepath, n_lowest, n_random
+):
     """
     Group by fractional concentration;
     then mark the n_lowest configurations with lowest properties per concentration and
@@ -343,7 +416,9 @@ def _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest,
     marked_ids = sorted_groups.groupby("frconc_binary").head(n_lowest)["config_id"]
     # sample selects n_random random configurations; If for a specific concentration there is less than
     # n_random configurations the number of available configurations is chosen for n
-    marked_ids2 = sorted_groups.groupby("frconc_binary").apply(lambda x: x.sample(n=min(n_random, len(x))))["config_id"]
+    marked_ids2 = sorted_groups.groupby("frconc_binary").apply(
+        lambda x: x.sample(n=min(n_random, len(x)))
+    )["config_id"]
     # concatenate the marked ids and exclude duplicates
     combined_ids = pd.concat([marked_ids, marked_ids2]).drop_duplicates()
 
@@ -362,7 +437,6 @@ def _do_full_enumeration(
     dss_filepath: str = "dss.pickle",
     recursive=True,
 ) -> None:
-
     dsgen = DSGenerator(plat)
 
     dsgen.generate(
@@ -384,7 +458,9 @@ def process_linear_reference(
         return None
 
     # If it's a list of dicts, convert to list of [x, y]
-    if isinstance(linear_reference, list) and all(isinstance(item, dict) for item in linear_reference):
+    if isinstance(linear_reference, list) and all(
+        isinstance(item, dict) for item in linear_reference
+    ):
         try:
             return [[item["x"], item["y"]] for item in linear_reference]
         except KeyError as e:
@@ -405,7 +481,6 @@ def _do_compute_properties(
     per_formula_unit: bool = False,
     linear_reference: Optional[Union[List[List[float]], List[dict]]] = None,
 ) -> None:
-
     linear_reference = process_linear_reference(linear_reference)
 
     with open(dss_filepath, "rb") as f:
@@ -470,7 +545,7 @@ def _plot_multiple_scatter(
             color=colors[i % len(colors)],
             marker=markers[i % len(markers)],
             s=sizes[i % len(sizes)],
-            label=f"Series {i+1}",
+            label=f"Series {i + 1}",
         )
 
     plt.xlabel("X")
@@ -490,7 +565,9 @@ def _plot_multiple_scatter(
         np.savez(save_filepath, **data_dict)
 
 
-def _do_plot_properties(dss_filepath, property_name: str = "property", sset=None, cem=None, mask_name=None):
+def _do_plot_properties(
+    dss_filepath, property_name: str = "property", sset=None, cem=None, mask_name=None
+):
     with open(dss_filepath, "rb") as f:
         dsgen = pickle.load(f)
 
@@ -591,7 +668,9 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
 
     # Prepare data sources
     source = ColumnDataSource(configurations)
-    mask1_source = ColumnDataSource(configurations[configurations["config_id"].isin(masks[mask_name])])
+    mask1_source = ColumnDataSource(
+        configurations[configurations["config_id"].isin(masks[mask_name])]
+    )
 
     # Create a Bokeh figure
     p = figure(
@@ -640,7 +719,9 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
     )
 
     # Add hover tool to display config_id
-    hover = HoverTool(tooltips=[("Config ID", "@config_id"), ("frconc_binary", "@frconc_binary")])
+    hover = HoverTool(
+        tooltips=[("Config ID", "@config_id"), ("frconc_binary", "@frconc_binary")]
+    )
     p.add_tools(hover)
 
     # Style the plot

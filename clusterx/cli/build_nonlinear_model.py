@@ -18,13 +18,43 @@ commands = ["build_nonlinear_model"]
 
 
 @plac.annotations(
-    property_name=("Property to be modelled. Must be present in the StructuresSet object.", "positional", None, str),
-    ccalc_filepath=("Path to the pickle file of a serialized CorrelationsCalculator object.", "option", None, str),
-    xp_filepath=("Path to the npz file of a serialized correlation matrix (from compute_comat).", "option", None, str),
-    model_filepath=("Path to serialize the created Model object.", "option", "mof", str),
+    property_name=(
+        "Property to be modelled. Must be present in the StructuresSet object.",
+        "positional",
+        None,
+        str,
+    ),
+    ccalc_filepath=(
+        "Path to the pickle file of a serialized CorrelationsCalculator object.",
+        "option",
+        None,
+        str,
+    ),
+    xp_filepath=(
+        "Path to the npz file of a serialized correlation matrix (from compute_comat).",
+        "option",
+        None,
+        str,
+    ),
+    model_filepath=(
+        "Path to serialize the created Model object.",
+        "option",
+        "mof",
+        str,
+    ),
     regression_model=("Dictionary of estimator options.", "option", "rm", dict),
-    nonlinear_transformation=("Dictionary of nonlinear transformation settings.", "option", "nt", dict),
-    weights_filepath=("Sample weights for fitting and evaluating the weighted MSE.", "option", None, str),
+    nonlinear_transformation=(
+        "Dictionary of nonlinear transformation settings.",
+        "option",
+        "nt",
+        dict,
+    ),
+    weights_filepath=(
+        "Sample weights for fitting and evaluating the weighted MSE.",
+        "option",
+        None,
+        str,
+    ),
     standardize=("Standardize the input data.", "flag", "std", bool),
 )
 def build_nonlinear_model(
@@ -62,7 +92,10 @@ def build_nonlinear_model(
     }
     if nonlinear_transformation is None:
         nonlinear_transformation = {}
-    nonlinear_transformation = {**default_nonlinear_transformation, **nonlinear_transformation}
+    nonlinear_transformation = {
+        **default_nonlinear_transformation,
+        **nonlinear_transformation,
+    }
 
     print(f"Info({get_command_name()}): Computing model")
 

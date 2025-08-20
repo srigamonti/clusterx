@@ -25,7 +25,7 @@ commands = ["build_model"]
     estimator_type=("Estimator type.", "option", "et", str),
     estimator_opts=("Estimator options.", "option", "eo", dict),
     plot_optimization_vs_sparsity=("Plot config.", "option", "plotovsd", dict),
-    weights_filepath=("Path to npz file containing weights.", "option", "wf", str)
+    weights_filepath=("Path to npz file containing weights.", "option", "wf", str),
 )
 def build_model(
     property_name: str,
@@ -38,7 +38,7 @@ def build_model(
     estimator_type: str = "skl_LinearRegression",
     estimator_opts: dict = {"fit_intercept": True},
     plot_optimization_vs_sparsity: Optional[dict] = None,
-    weights_filepath: Optional[str] = None
+    weights_filepath: Optional[str] = None,
 ):
     """Compute CE model"""
     cmd_message("head")
@@ -65,7 +65,9 @@ def build_model(
     model = mb.build(sset, cpool, property_name, corrc=ccalc, **kwargs)
 
     if plot_optimization_vs_sparsity is not None:
-        print(f"Info({get_command_name()}): Generating plot of optimization vs sparsity")
+        print(
+            f"Info({get_command_name()}): Generating plot of optimization vs sparsity"
+        )
 
         from clusterx.visualization import plot_optimization_vs_sparsity as povs
 

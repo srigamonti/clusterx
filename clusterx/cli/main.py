@@ -125,7 +125,11 @@ def main():
         commands_ = [
             key
             for key, value in config_dict.items()
-            if isinstance(value, dict) or (isinstance(value, list) and all(isinstance(item, dict) for item in value))
+            if isinstance(value, dict)
+            or (
+                isinstance(value, list)
+                and all(isinstance(item, dict) for item in value)
+            )
         ]
 
         commands = config_dict.get("do", commands_)
@@ -140,7 +144,9 @@ def main():
                 print("Argument dict from TOML file: ", arg_dict_from_toml)
 
                 # Check if arg_dict_from_toml is a list of dictionaries
-                if isinstance(arg_dict_from_toml, list) and all(isinstance(item, dict) for item in arg_dict_from_toml):
+                if isinstance(arg_dict_from_toml, list) and all(
+                    isinstance(item, dict) for item in arg_dict_from_toml
+                ):
                     # Execute func for each dictionary in the list
                     for params in arg_dict_from_toml:
                         ignore_flag = params.pop("ignore", None)
@@ -158,7 +164,9 @@ def main():
                         print(f"Executing {command} with params: {arg_dict_from_toml}")
                         func(**arg_dict_from_toml)
                 else:
-                    print(f"Invalid format for arguments in command '{command}': {arg_dict_from_toml}")
+                    print(
+                        f"Invalid format for arguments in command '{command}': {arg_dict_from_toml}"
+                    )
                     sys.exit(1)
             else:
                 print(f"Unknown command: {command}")

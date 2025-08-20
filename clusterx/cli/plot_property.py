@@ -14,14 +14,39 @@ commands = ["plot_property"]
 
 
 @plac.annotations(
-    sset_filepath=("Path to file of serialized StructuresSet object.", "positional", None, str),
+    sset_filepath=(
+        "Path to file of serialized StructuresSet object.",
+        "positional",
+        None,
+        str,
+    ),
     property_name=("Name of the property to be plotted.", "positional", None, str),
-    sset_gss_filepath=("Path to file of serialized StructuresSet object for GS structures.", "option", "gss", str),
+    sset_gss_filepath=(
+        "Path to file of serialized StructuresSet object for GS structures.",
+        "option",
+        "gss",
+        str,
+    ),
     model_filepath=("Path to file of serialized Model object.", "option", None, str),
     output=("How to output the plot. 1: show, 2: save, 3: both.", "option", None, int),
-    fig_fname=("Filepath to save generated figure if output is 2 or 3.", "option", "fn", str),
-    mark_min=("Mark points with the lowest property value (e.g. ground states).", "flag", "mm", bool),
-    show_loo_predictions=("Show Leave-One-Out cross-validation predictions.", "flag", "loo", bool),
+    fig_fname=(
+        "Filepath to save generated figure if output is 2 or 3.",
+        "option",
+        "fn",
+        str,
+    ),
+    mark_min=(
+        "Mark points with the lowest property value (e.g. ground states).",
+        "flag",
+        "mm",
+        bool,
+    ),
+    show_loo_predictions=(
+        "Show Leave-One-Out cross-validation predictions.",
+        "flag",
+        "loo",
+        bool,
+    ),
 )
 def plot_property(
     sset_filepath: str,
@@ -45,7 +70,11 @@ def plot_property(
             fig_fname = "plot_property.png"
 
     sset = StructuresSet(filepath=sset_filepath)
-    sset_gss = StructuresSet(filepath=sset_gss_filepath) if sset_gss_filepath is not None else None
+    sset_gss = (
+        StructuresSet(filepath=sset_gss_filepath)
+        if sset_gss_filepath is not None
+        else None
+    )
 
     model = Model(filepath=model_filepath) if model_filepath is not None else None
 
