@@ -15,9 +15,7 @@ from ase.build.supercells import (  # needed by make_supercell
 from ase.data import chemical_symbols as cs
 
 
-def grid_mapping(
-    grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple
-):
+def grid_mapping(grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple):
     """Map values from grid to reduced grid around grid index i_grid.
 
     **parameters**
@@ -28,11 +26,11 @@ def grid_mapping(
     d = len(grid.shape) - 1
     plat_index = i_grid[-1]
     indices = np.indices(p_reduced)
-    offset = i_grid[:-1] - np.array(p_reduced)//2
-    offset = offset.reshape([-1] + [1]*d)
+    offset = i_grid[:-1] - np.array(p_reduced) // 2
+    offset = offset.reshape([-1] + [1] * d)
     indices += offset
-    indices %= np.array(grid.shape[:-1]).reshape([-1] + [1]*d)
-    i_grid_new = np.array((np.array(p_reduced)//2).tolist() + [plat_index])
+    indices %= np.array(grid.shape[:-1]).reshape([-1] + [1] * d)
+    i_grid_new = np.array((np.array(p_reduced) // 2).tolist() + [plat_index])
     return grid[*indices, :], i_grid_new
 
 
@@ -52,16 +50,16 @@ def lattice_wrap_index(index, lattice_shape):
     ``lattice_shape``: tuple
         the shape of the lattice to index to
     """
-    if not hasattr(index, '__iter__'):
-        raise ValueError(f'wrap index does not support integer index: {index}')
+    if not hasattr(index, "__iter__"):
+        raise ValueError(f"wrap index does not support integer index: {index}")
     if len(index) != len(lattice_shape):
-        raise ValueError(f'index {index} has incompatible shape with {lattice_shape}')
+        raise ValueError(f"index {index} has incompatible shape with {lattice_shape}")
     if any(isinstance(i, slice) for i in index):
-        raise ValueError('wrap index does not suppport slices')
+        raise ValueError("wrap index does not suppport slices")
     if len(index) == len(lattice_shape):
-        mod_index = tuple(((i%s + s)%s for i,s in zip(index, lattice_shape)))
+        mod_index = tuple(((i % s + s) % s for i, s in zip(index, lattice_shape)))
         return mod_index
-    raise ValueError(f'Unexpected index: {index}, given shape {lattice_shape}')
+    raise ValueError(f"Unexpected index: {index}, given shape {lattice_shape}")
 
 
 class SupercellError(Exception):
@@ -209,7 +207,9 @@ def _is_integrable(s):
         return False
 
 
-def list_integer_named_folders(root=".", prefix="", suffix="", containing_files=[], not_containing_files=[]):
+def list_integer_named_folders(
+    root=".", prefix="", suffix="", containing_files=[], not_containing_files=[]
+):
     """Return array of integer named folders.
 
     Scans folders in ``root`` and detects those which are named
@@ -466,7 +466,9 @@ def atat_to_cell(
         for inr, nr in enumerate(species):
             nrs[inr] = int(nr[0])
 
-        plat = ParentLattice(Atoms(positions=r, cell=cell, numbers=nrs, pbc=pbc), sites=species, pbc=pbc)
+        plat = ParentLattice(
+            Atoms(positions=r, cell=cell, numbers=nrs, pbc=pbc), sites=species, pbc=pbc
+        )
         return plat
     if interpret_as == "super_cell":
         from clusterx.structure import Structure
@@ -544,7 +546,9 @@ def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
         sdistances = cdist(
             cl, sc, metric="euclidean"
         )  # Evaluate all (scaled) distances between cluster points to scell sites
-        idxs = np.argwhere(np.abs(sdistances) < tol)[:, 1]  # Atom indexes of the transformed cluster
+        idxs = np.argwhere(np.abs(sdistances) < tol)[
+            :, 1
+        ]  # Atom indexes of the transformed cluster
 
     return idxs
 
@@ -746,7 +750,12 @@ class PolynomialFunction:
     def print_polynomial(self):
         outstring = ""
         for exponential in self.exponentials:
-            outstring += str(exponential.coefficient) + " *  x^" + str(exponential.exponent) + " + "
+            outstring += (
+                str(exponential.coefficient)
+                + " *  x^"
+                + str(exponential.exponent)
+                + " + "
+            )
         outstring = outstring[:-3]
         print(outstring)
 
@@ -858,7 +867,9 @@ def sort_atoms(atoms, key=(2, 1, 0)):
         _nrs = np.delete(np.array(_pn), [0, 1, 2], 1).flatten()
         from ase import Atoms
 
-        return Atoms(positions=_poss, numbers=_nrs, cell=atoms.get_cell(), pbc=atoms.get_pbc())
+        return Atoms(
+            positions=_poss, numbers=_nrs, cell=atoms.get_cell(), pbc=atoms.get_pbc()
+        )
 
 
 def remove_vacancies(at):
@@ -966,7 +977,9 @@ def make_supercell(prim, P, wrap=True, tol=1e-5):
     # check number of atoms is correct
     n_target = np.abs(int(np.round(np.linalg.det(supercell_matrix) * len(prim))))
     if n_target != len(superatoms):
-        msg = "Number of atoms in supercell: {}, expected: {}".format(n_target, len(superatoms))
+        msg = "Number of atoms in supercell: {}, expected: {}".format(
+            n_target, len(superatoms)
+        )
         raise SupercellError(msg)
 
     if wrap:
@@ -1100,7 +1113,9 @@ def sset_equivalence_check(
     elif comat is None:
         from clusterx.correlations import CorrelationsCalculator
 
-        ccalc = CorrelationsCalculator(basis=basis, parent_lattice=sset.get_parent_lattice(), clusters_pool=cpool)
+        ccalc = CorrelationsCalculator(
+            basis=basis, parent_lattice=sset.get_parent_lattice(), clusters_pool=cpool
+        )
         comat = ccalc.get_correlation_matrix(sset)
 
     nstr = len(sset)
@@ -1118,7 +1133,6 @@ def sset_equivalence_check(
                 atoms_i = sset[i].get_atoms()
 
             for j in range(i + 1, nstr):
-
                 if comat is not None:
                     corr_j = comat[j, :]
                     check = isclose(corr_i, corr_j)
@@ -1188,7 +1202,6 @@ def atoms_equivalence_check(atoms, to_primitive=True, pretty_print=False):
             atoms_i = atoms[i]
 
             for j in range(i + 1, nstr):
-
                 atoms_j = atoms[j]
                 check = comp.compare(atoms_i, atoms_j)
 
@@ -1204,7 +1217,9 @@ def atoms_equivalence_check(atoms, to_primitive=True, pretty_print=False):
     return id_str_list
 
 
-def report_sset_equivalence_check(sset, sset_equivalence_check_output, property_name=None, tol=0.0):
+def report_sset_equivalence_check(
+    sset, sset_equivalence_check_output, property_name=None, tol=0.0
+):
     """Generate report of equivalent structures
 
     Writes to files: ``sset_unique_sym.json`` and ``sset_unique_gss.json``.
@@ -1293,7 +1308,11 @@ def normalize_shape_input(sc_shape):
         return None
     elif isinstance(sc_shape, int):
         return np.diag([sc_shape] * 3)
-    elif isinstance(sc_shape, (list, tuple)) and len(sc_shape) == 3 and all(isinstance(x, int) for x in sc_shape):
+    elif (
+        isinstance(sc_shape, (list, tuple))
+        and len(sc_shape) == 3
+        and all(isinstance(x, int) for x in sc_shape)
+    ):
         return np.diag(sc_shape)
     elif (
         isinstance(sc_shape, (list, tuple))
@@ -1302,10 +1321,14 @@ def normalize_shape_input(sc_shape):
     ):
         return np.array(sc_shape)
     else:
-        raise ValueError("Invalid sc_shape format: must be None, int, 3-vector of ints, or 3x3 matrix of ints.")
+        raise ValueError(
+            "Invalid sc_shape format: must be None, int, 3-vector of ints, or 3x3 matrix of ints."
+        )
 
 
-def normalize_nsubs_list(nsubs_list: Optional[Union[int, List[int], List[List[int]]]]) -> Optional[List[List[int]]]:
+def normalize_nsubs_list(
+    nsubs_list: Optional[Union[int, List[int], List[List[int]]]],
+) -> Optional[List[List[int]]]:
     """
     Normalize the input `nsubs_list` into a list of lists of integers.
 
@@ -1341,6 +1364,9 @@ def normalize_nsubs_list(nsubs_list: Optional[Union[int, List[int], List[List[in
     if isinstance(nsubs_list, list):
         if all(isinstance(i, int) for i in nsubs_list):
             return [nsubs_list]
-        if all(isinstance(i, list) and all(isinstance(j, int) for j in i) for i in nsubs_list):
+        if all(
+            isinstance(i, list) and all(isinstance(j, int) for j in i)
+            for i in nsubs_list
+        ):
             return nsubs_list
     raise ValueError("Invalid format for nsubs_list")

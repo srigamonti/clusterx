@@ -70,7 +70,14 @@ class Structure(SuperCell):
     **Methods:**
     """
 
-    def __init__(self, super_cell, decoration=None, decoration_symbols=None, sigmas=None, mc=False):
+    def __init__(
+        self,
+        super_cell,
+        decoration=None,
+        decoration_symbols=None,
+        sigmas=None,
+        mc=False,
+    ):
         self.scell = super_cell
         self.sites = super_cell.get_sites()
         self._pbc = super_cell.get_pbc()
@@ -89,10 +96,14 @@ class Structure(SuperCell):
 
             for idx, species in enumerate(decoration):
                 if species not in self.sites[idx]:
-                    raise AttributeError("Error (Structure): decoration not compatible with parent lattice definition.")
+                    raise AttributeError(
+                        "Error (Structure): decoration not compatible with parent lattice definition."
+                    )
 
             for idx, species in enumerate(decoration):
-                self.sigmas[idx] = np.argwhere(np.array(self.sites[idx], dtype=int) == species)[0, 0]
+                self.sigmas[idx] = np.argwhere(
+                    np.array(self.sites[idx], dtype=int) == species
+                )[0, 0]
                 self.ems[idx] = len(self.sites[idx])
         else:
             self.decor = np.zeros(len(sigmas), dtype=np.int8)
@@ -109,7 +120,9 @@ class Structure(SuperCell):
             cell=super_cell.get_cell(),
             pbc=super_cell.get_pbc(),
         )
-        super(Structure, self).__init__(super_cell.get_parent_lattice(), super_cell.get_transformation())
+        super(Structure, self).__init__(
+            super_cell.get_parent_lattice(), super_cell.get_transformation()
+        )
 
         self._mc = mc
 
@@ -123,7 +136,11 @@ class Structure(SuperCell):
                 idxs = []
                 lens = []
                 for i, el in enumerate(sublats[key]):
-                    idx = [index for index in range(len(self.decor)) if self.sigmas[index] == i and tags[index] == key]
+                    idx = [
+                        index
+                        for index in range(len(self.decor))
+                        if self.sigmas[index] == i and tags[index] == key
+                    ]
                     lidx = len(idx)
                     idxs.append(idx)
                     lens.append(lidx)
@@ -171,8 +188,10 @@ class Structure(SuperCell):
     def from_sigma_grid(cls, super_cell: SuperCell, sigma_grid: np.ndarray):
         p = super_cell.get_transformation()
         if not is_diagonal(p):
-            raise ValueError("Structure cannot be initialized from sigma grid "
-            "with non-diagonal super cell transformation.")
+            raise ValueError(
+                "Structure cannot be initialized from sigma grid "
+                "with non-diagonal super cell transformation."
+            )
         return cls(super_cell=super_cell, sigmas=sigma_grid.ravel())
 
     @staticmethod
@@ -260,7 +279,9 @@ class Structure(SuperCell):
         """
 
         structure_dict = Structure._decode_ase_dict(structure_dict)
-        parent_lattice = ParentLattice.plat_from_dict(structure_dict["metadata"]["parent_lattice"])
+        parent_lattice = ParentLattice.plat_from_dict(
+            structure_dict["metadata"]["parent_lattice"]
+        )
         tmat = structure_dict[1]["data"]["tmat"]
         numbers = structure_dict[1]["numbers"]
 
@@ -328,8 +349,10 @@ class Structure(SuperCell):
         """Return the sigmas in the form of a 4-dim numpy array."""
         p = self.scell.get_transformation()
         if not is_diagonal(p):
-            raise ValueError("Sigma grid cannot be generated, super cell "
-            "transformation is not diagonal.")
+            raise ValueError(
+                "Sigma grid cannot be generated, super cell "
+                "transformation is not diagonal."
+            )
         grid_shape = np.diag(p).tolist() + [len(self.get_parent_lattice())]
         sigmas = self.get_sigmas()
         return np.reshape(sigmas, grid_shape)
@@ -339,13 +362,12 @@ class Structure(SuperCell):
         Given transformation p, around site index."""
         sigma_grid = self.get_sigma_grid()
         index_grid = list(np.unravel_index(index, sigma_grid.shape))
-        sigma_grid_reduced, index_grid_reduced = grid_mapping(
-            sigma_grid, index_grid, p)
+        sigma_grid_reduced, index_grid_reduced = grid_mapping(sigma_grid, index_grid, p)
         scell_reduced = SuperCell(self.scell.get_parent_lattice(), p)
-        structure_reduced = Structure.from_sigma_grid(
-            scell_reduced, sigma_grid_reduced)
-        index_reduced = int(np.ravel_multi_index(
-            index_grid_reduced, sigma_grid_reduced.shape))
+        structure_reduced = Structure.from_sigma_grid(scell_reduced, sigma_grid_reduced)
+        index_reduced = int(
+            np.ravel_multi_index(index_grid_reduced, sigma_grid_reduced.shape)
+        )
         return structure_reduced, index_reduced
 
     def get_supercell(self):
@@ -390,13 +412,16 @@ class Structure(SuperCell):
         """
         if fname is not None:
             warnings.warn(
-                "'fname' is deprecated and will be removed in a future version. " "Please use 'filepath' instead.",
+                "'fname' is deprecated and will be removed in a future version. "
+                "Please use 'filepath' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
             filepath = fname
 
-        file_ext = os.path.splitext(filepath)[1].lower().lstrip(".")  # remove leading dot
+        file_ext = (
+            os.path.splitext(filepath)[1].lower().lstrip(".")
+        )  # remove leading dot
         fmt = fmt or file_ext  # use file extension as format if fmt is not provided
 
         if fmt == "json":
@@ -497,7 +522,9 @@ class Structure(SuperCell):
 
         len_subs = len(self.idx_subs[site_type])
         if len_subs > 2:
-            sigma_swap = np.sort(np.random.choice(np.arange(len_subs), 2, replace=False))
+            sigma_swap = np.sort(
+                np.random.choice(np.arange(len_subs), 2, replace=False)
+            )
         else:
             sigma_swap = np.arange(len_subs)
 

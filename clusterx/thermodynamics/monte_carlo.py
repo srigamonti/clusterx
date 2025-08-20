@@ -129,7 +129,9 @@ class MonteCarlo:
                             self._sublattice_indices.remove(key)
 
             except AttributeError:
-                raise AttributeError("Sublattice for the sampling is not properly assigned, look at the documentation.")
+                raise AttributeError(
+                    "Sublattice for the sampling is not properly assigned, look at the documentation."
+                )
         else:
             self._sublattice_indices = sublattice_indices
 
@@ -141,7 +143,9 @@ class MonteCarlo:
                         )
 
         if not self._sublattice_indices:
-            raise AttributeError("Sublattice for the sampling is not correctly assigned, look at the documatation.")
+            raise AttributeError(
+                "Sublattice for the sampling is not correctly assigned, look at the documatation."
+            )
 
         self._models = []
         if models:
@@ -170,7 +174,7 @@ class MonteCarlo:
         serialize=False,
         filename=None,
         reduce_super_cell=False,
-        **kwargs
+        **kwargs,
     ):
         r"""Perform Monte-Carlo Metropolis simulation
 
@@ -220,7 +224,7 @@ class MonteCarlo:
 
         ``filename``: string (default: ``trajectory.json``)
             Name of a Json file in which the trajectory is serialized after the sampling if ``serialize`` is **True**.
-        
+
         ``reduce_super_cell``: boolean (default: False)
             If **True**, the super cell is reduced to the smallest possible size
             that contains all clusters.
@@ -263,7 +267,9 @@ class MonteCarlo:
             if not bol:
                 import sys
 
-                sys.exit("Number of substitutents does not coincides with them from the inital decoration.")
+                sys.exit(
+                    "Number of substitutents does not coincides with them from the inital decoration."
+                )
 
         else:
             if self._nsubs is not None:
@@ -288,7 +294,7 @@ class MonteCarlo:
             boltzmann_constant=boltzmann_constant,
             scale_factor=scale_factor,
             acceptance_ratio=acceptance_ratio,
-            **kwargs
+            **kwargs,
         )
         if self._no_of_swaps > 1:
             raise NotImplementedError("No. of swaps > 1 functionality not implemented")
@@ -297,7 +303,9 @@ class MonteCarlo:
             key_value_pairs = {}
             for m, mo in enumerate(self._models):
                 key_value_pairs.update({mo.property_name: mo.predict(struc)})
-            traj.add_decoration(0, e_last, [], decoration=struc.decor, key_value_pairs=key_value_pairs)
+            traj.add_decoration(
+                0, e_last, [], decoration=struc.decor, key_value_pairs=key_value_pairs
+            )
         else:
             traj.add_decoration(0, e_last, [], decoration=struc.decor)
 
@@ -306,16 +314,27 @@ class MonteCarlo:
             ar = acceptance_ratio
             hist = np.zeros(nar, dtype=int)
 
-        for i in tqdm(range(1, no_of_sampling_steps + 1), total=no_of_sampling_steps, desc="MMC simulation"):
+        for i in tqdm(
+            range(1, no_of_sampling_steps + 1),
+            total=no_of_sampling_steps,
+            desc="MMC simulation",
+        ):
             indices_list = []
 
             for j in range(self._no_of_swaps):
                 ind1, ind2, site_type, rindices = struc.get_random_swap(
-                    self._sublattice_indices)
+                    self._sublattice_indices
+                )
                 indices_list.append([ind1, ind2, [site_type, rindices]])
 
             if self._control_flag:
-                de = self._em.predict_swap(struc, i=ind1, j=ind2, site_types=self._sublattice_indices, reduce=reduce_super_cell)
+                de = self._em.predict_swap(
+                    struc,
+                    i=ind1,
+                    j=ind2,
+                    site_types=self._sublattice_indices,
+                    reduce=reduce_super_cell,
+                )
             else:
                 struc.swap(ind1, ind2)
                 de = self._em.predict(struc) - e_last
@@ -340,10 +359,17 @@ class MonteCarlo:
                     key_value_pairs = {}
                     for m, mo in enumerate(self._models):
                         key_value_pairs.update({mo.property_name: mo.predict(struc)})
-                    traj.add_decoration(i, e_last, [[li[0], li[1]] for li in indices_list], key_value_pairs=key_value_pairs)
+                    traj.add_decoration(
+                        i,
+                        e_last,
+                        [[li[0], li[1]] for li in indices_list],
+                        key_value_pairs=key_value_pairs,
+                    )
 
                 else:
-                    traj.add_decoration(i, e_last, [[li[0], li[1]] for li in indices_list])
+                    traj.add_decoration(
+                        i, e_last, [[li[0], li[1]] for li in indices_list]
+                    )
 
                 if acceptance_ratio:
                     ar = poppush(hist, 1)
@@ -354,7 +380,9 @@ class MonteCarlo:
 
             if acceptance_ratio:
                 if i % 10 == 0 and i >= nar:
-                    scale_factor_product *= math.exp((acceptance_ratio / 100.0 - ar) / 10.0)
+                    scale_factor_product *= math.exp(
+                        (acceptance_ratio / 100.0 - ar) / 10.0
+                    )
 
         if serialize:
             traj.serialize()
@@ -447,7 +475,9 @@ class MonteCarloTrajectory:
         predict_swap = kwargs.pop("predict_swap", False)
         print("predict swap ?", predict_swap)
 
-        sx = Structure(self._scell, decoration=self._trajectory[0]["decoration"], mc=True)
+        sx = Structure(
+            self._scell, decoration=self._trajectory[0]["decoration"], mc=True
+        )
         for m, mo in enumerate(models):
             mo.corrc.reset_mc(mc=True)
 
@@ -458,14 +488,12 @@ class MonteCarloTrajectory:
 
             sdict = {}
             if predict_swap:
-
                 if t == 0:
                     movalue = np.zeros(len(models))
                     for m, mo in enumerate(models):
                         movalue[m] = mo.predict(sx)
                         sdict.update({mo.property_name: movalue[m]})
                 else:
-
                     for m, mo in enumerate(models):
                         # only works for single swaps
                         dmo = mo.predict_swap(
@@ -473,7 +501,7 @@ class MonteCarloTrajectory:
                             i=indices_list[0][0],
                             j=indices_list[0][1],
                             site_types=self._sublattice_indices,
-                            reduce=self._reduce_supercell
+                            reduce=self._reduce_supercell,
                         )
                         movalue[m] = movalue[m] + dmo
                         sdict.update({mo.property_name: movalue[m]})
@@ -487,7 +515,9 @@ class MonteCarloTrajectory:
 
             self._trajectory[t]["key_value_pairs"].update(sdict)
 
-    def add_decoration(self, step, energy, indices_list, decoration=None, key_value_pairs={}):
+    def add_decoration(
+        self, step, energy, indices_list, decoration=None, key_value_pairs={}
+    ):
         """Add entry of the structure visited in the sampling to the trajectory."""
         if indices_list:
             self._trajectory.append(
@@ -590,7 +620,6 @@ class MonteCarloTrajectory:
         return np.asarray(energies)
 
     def get_model_total_energies(self):
-
         return self.get_energies()
 
     def get_energy(self, nid):
@@ -598,7 +627,6 @@ class MonteCarloTrajectory:
         return self._trajectory[nid]["energy"]
 
     def get_model_total_energy(self, nid):
-
         self.get_energy(nid)
 
     def get_properties(self, prop):
@@ -606,7 +634,6 @@ class MonteCarloTrajectory:
         if prop == "energy":
             return self.get_energies()
         else:
-
             try:
                 props = []
                 for tr in self._trajectory:
@@ -627,7 +654,12 @@ class MonteCarloTrajectory:
             return self._trajectory[nid]["key_value_pairs"][prop]
 
     def calculate_average_property(
-        self, prop_name="U", no_of_equilibration_steps=0, average_func=None, props_list=None, **kwargs
+        self,
+        prop_name="U",
+        no_of_equilibration_steps=0,
+        average_func=None,
+        props_list=None,
+        **kwargs,
     ):
         """Get averaged property of property with name ``prop_name`` after discarding at the start a given number of
            equilibration steps. The average can only be obtained from a property that was already calculated before,
@@ -722,7 +754,9 @@ class MonteCarloTrajectory:
                 for p in prop_array:
                     ediff += np.subtract(p, prop_average) * np.subtract(p, prop_average)
 
-                const = 1.0 * np.multiply((self._temperature) ** 2, (self._boltzmann_constant) ** 2)
+                const = 1.0 * np.multiply(
+                    (self._temperature) ** 2, (self._boltzmann_constant) ** 2
+                )
 
                 return np.divide(ediff, (const * len_prop * 1 / (1.0 * factor)))
 
@@ -748,7 +782,6 @@ class MonteCarloTrajectory:
         return np.asarray(arrayid)
 
     def write_to_file(self, filename=None):
-
         self.serialize(filename=filename)
 
     def serialize(self, filename=None):
@@ -779,7 +812,9 @@ class MonteCarloTrajectory:
             trajdic.update({str(j): dec})
 
         with open(self._filename, "w+", encoding="utf-8") as outfile:
-            json.dump(trajdic, outfile, cls=NumpyEncoder, indent=2, separators=(",", ":"))
+            json.dump(
+                trajdic, outfile, cls=NumpyEncoder, indent=2, separators=(",", ":")
+            )
 
     def read(self, filename=None, append=False):
         """Read trajectory from the Json file with name ``filename``. If ``filename`` is not defined, it uses
@@ -828,22 +863,39 @@ class MonteCarloTrajectory:
 
             _trajz = self._trajectory[0]
 
-            nsp = sorted([int(el) for el in set(_trajz["super_cell_definition"]["parent_lattice"]["numbers"])])
+            nsp = sorted(
+                [
+                    int(el)
+                    for el in set(
+                        _trajz["super_cell_definition"]["parent_lattice"]["numbers"]
+                    )
+                ]
+            )
             species = []
             for n in nsp:
-                species.append(_trajz["super_cell_definition"]["parent_lattice"]["numbers"][str(n)])
+                species.append(
+                    _trajz["super_cell_definition"]["parent_lattice"]["numbers"][str(n)]
+                )
 
             _plat = ParentLattice(
                 atoms=Atoms(
-                    positions=_trajz["super_cell_definition"]["parent_lattice"]["positions"],
+                    positions=_trajz["super_cell_definition"]["parent_lattice"][
+                        "positions"
+                    ],
                     cell=_trajz["super_cell_definition"]["parent_lattice"]["unit_cell"],
                     numbers=np.zeros(len(species)),
-                    pbc=np.asarray(_trajz["super_cell_definition"]["parent_lattice"]["pbc"]),
+                    pbc=np.asarray(
+                        _trajz["super_cell_definition"]["parent_lattice"]["pbc"]
+                    ),
                 ),
                 sites=np.asarray(species),
-                pbc=np.asarray(_trajz["super_cell_definition"]["parent_lattice"]["pbc"]),
+                pbc=np.asarray(
+                    _trajz["super_cell_definition"]["parent_lattice"]["pbc"]
+                ),
             )
-            self._scell = SuperCell(_plat, np.asarray(_trajz["super_cell_definition"]["tmat"]))
+            self._scell = SuperCell(
+                _plat, np.asarray(_trajz["super_cell_definition"]["tmat"])
+            )
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -853,7 +905,6 @@ class NumpyEncoder(json.JSONEncoder):
     """
 
     def default(self, obj):
-
         if isinstance(obj, list):
             return obj.tolist()
         elif isinstance(

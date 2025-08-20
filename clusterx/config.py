@@ -6,42 +6,42 @@ import os
 import json
 import numpy as np
 
-class CellConfig():
 
-    def __init__(self,filename="cellconfig.json"):
+class CellConfig:
+    def __init__(self, filename="cellconfig.json"):
         cwd = os.getcwd()
-        self.configpath = os.path.join(cwd,"cellconfig.json")
+        self.configpath = os.path.join(cwd, "cellconfig.json")
         self.config = {}
         self.filename = filename
         self.set_defaults()
 
-    def set_defaults(self):    
-        self.config['GENERAL'] = {
-            'PRECISION': '8',
-            'PBC': {"a1":  True, "a2": True, "a3": True}
+    def set_defaults(self):
+        self.config["GENERAL"] = {
+            "PRECISION": "8",
+            "PBC": {"a1": True, "a2": True, "a3": True},
         }
 
-    def read(self):    
+    def read(self):
         try:
-            configstr = open(self.configpath,'r').read()
+            configstr = open(self.configpath, "r").read()
             self.config = json.loads(configstr)[0]
             print(self.config)
         except:
-            #print("No %s file present\n"%(self.filename))
+            # print("No %s file present\n"%(self.filename))
             pass
 
-    def write(self):    
-        with open(self.configpath, 'w+') as configfile:
-            json.dump(self.config,configfile,indent=4)
+    def write(self):
+        with open(self.configpath, "w+") as configfile:
+            json.dump(self.config, configfile, indent=4)
 
     def get_pbc(self):
-        pbc = self.config['GENERAL']['PBC']
-        
-        return np.array([pbc['a1'],pbc['a2'],pbc['a3']])
+        pbc = self.config["GENERAL"]["PBC"]
+
+        return np.array([pbc["a1"], pbc["a2"], pbc["a3"]])
 
     def is_2D(self):
         pbc = self.get_pbc()
-        if (pbc == [True,True,False]).all():
+        if (pbc == [True, True, False]).all():
             return True
         else:
             return False

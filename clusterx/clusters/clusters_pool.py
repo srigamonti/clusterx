@@ -153,8 +153,9 @@ class ClustersPool:
                 self._cpool_scell = SuperCell(parent_lattice, np.diag([1, 1, 1]))
 
             if 0 in self._npoints:
-                raise ValueError("npoints cannot contain 0,\
-                zero-point clusters are deprecated. Use fit intercept instead.")
+                raise ValueError(
+                    "npoints cannot contain 0, zero-point clusters are deprecated. Use fit intercept instead."
+                )
             if self._npoints.size != 0:
                 self.gen_clusters(method=method)
 
@@ -524,7 +525,6 @@ class ClustersPool:
                     leave=False,
                     disable=disable_tqdm,
                 ):
-
                     idxs = [widx]
                     for idx in idxs_:
                         idxs.append(idx)
@@ -774,7 +774,7 @@ class ClustersPool:
 
         call(["rm", "-f", db_name])
         atoms_db = JSONDatabase(filename=db_name)
-        #atoms_db = connect(db_name, append=False) # for future reference
+        # atoms_db = connect(db_name, append=False) # for future reference
 
         cpool_atoms = self.get_cpool_atoms(
             orbit=orbit,

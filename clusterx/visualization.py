@@ -212,7 +212,6 @@ def plot_optimization_vs_number_of_clusters(
     if (clsel.clusters_sets == "combinations") or (
         clsel.clusters_sets == "size+combinations"
     ):
-
         opt_r = []
         opt_cv = []
         opt_s = []

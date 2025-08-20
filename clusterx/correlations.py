@@ -129,7 +129,9 @@ class CorrelationsCalculator:
         self._2pi = 2 * np.pi
         self.use_sym_table = use_sym_table
 
-        self.basis_set_values = self.compute_basis_set_values(self._plat, self.basis_name)
+        self.basis_set_values = self.compute_basis_set_values(
+            self._plat, self.basis_name
+        )
 
         self._mc = False
         self._num_mc_calls = 0
@@ -379,8 +381,7 @@ class CorrelationsCalculator:
                 self._num_mc_calls = 1
                 self._cluster_orbits_mc = cluster_orbits
 
-        return cluster_correlations(
-            structure, cluster_orbits, self.basis_set_values)
+        return cluster_correlations(structure, cluster_orbits, self.basis_set_values)
 
     def get_correlation_matrix(
         self, structures_set: StructuresSet, outfile: str = None, verbose: bool = False
@@ -441,12 +442,7 @@ def cluster_correlations(structure, cluster_orbits, basis_set_values):
 
 
 def cluster_correlations_flip(
-    structure,
-    cluster_orbits,
-    basis_set_values,
-    i_flip,
-    sigma_old,
-    sigma_new
+    structure, cluster_orbits, basis_set_values, i_flip, sigma_old, sigma_new
 ) -> np.ndarray:
     correlations = np.zeros(len(cluster_orbits))
 
@@ -560,8 +556,10 @@ def cluster_function_flip(
     flipped = False  # only flip once, otherwise, could go wrong for wrapped sites
     for site, alpha, sigma, em in zip(cluster_sites, cluster_alphas, sigmas, ems):
         if i_flip == site and not flipped:
-            cf *= basis_set_values[alpha, sigma_new, em] \
+            cf *= (
+                basis_set_values[alpha, sigma_new, em]
                 - basis_set_values[alpha, sigma_old, em]
+            )
             flipped = True
         else:
             cf *= basis_set_values[alpha, sigma, em]

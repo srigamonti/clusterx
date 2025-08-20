@@ -8,9 +8,9 @@ from clusterx.correlations import CorrelationsCalculator
 import numpy as np
 
 
-class StructureSelector():
+class StructureSelector:
     """Structure selector class
-    
+
     Objects of this class are used to select optimal structures to enhance the predictive performance
     of the current cluster expansion model.
 
@@ -25,182 +25,238 @@ class StructureSelector():
         If it remains 'None', the class can only assess the training set.
     ``correlations_calculator``: CorrelationsCalculator object
         Used to calculate the correlations of structures and clusters.
-        IF THIS IS LEFT EMPTY (or set to None) the correlations are calculated with 
+        IF THIS IS LEFT EMPTY (or set to None) the correlations are calculated with
         a trigonometric basis.
 
     """
 
-    def __init__(self, cluster_pool, training_set, candidate_set = None, correlations_calculator = None):
-        'Barricade against bad input:'
-        if not(isinstance(cluster_pool, ClustersPool)):
-            raise TypeError('cluster_pool needs to be a ClustersPool object.')
-        if not(isinstance(training_set, StructuresSet)):
-            raise TypeError('training_set needs to be a StructuresSet object.')
-        if not(candidate_set is None or isinstance(candidate_set, StructuresSet)):
-            raise TypeError('candidate_set needs to be a StructuresSet object or None.')
-        if not(correlations_calculator is None or isinstance(correlations_calculator, CorrelationsCalculator)):
-            raise TypeError('correlations_calculator needs to be a CorrelationsCalculator object or None.')
+    def __init__(
+        self,
+        cluster_pool,
+        training_set,
+        candidate_set=None,
+        correlations_calculator=None,
+    ):
+        "Barricade against bad input:"
+        if not (isinstance(cluster_pool, ClustersPool)):
+            raise TypeError("cluster_pool needs to be a ClustersPool object.")
+        if not (isinstance(training_set, StructuresSet)):
+            raise TypeError("training_set needs to be a StructuresSet object.")
+        if not (candidate_set is None or isinstance(candidate_set, StructuresSet)):
+            raise TypeError("candidate_set needs to be a StructuresSet object or None.")
+        if not (
+            correlations_calculator is None
+            or isinstance(correlations_calculator, CorrelationsCalculator)
+        ):
+            raise TypeError(
+                "correlations_calculator needs to be a CorrelationsCalculator object or None."
+            )
 
         self._cluster_pool = cluster_pool
         self._training_set = training_set
         self._candidate_set = candidate_set
 
-        if(correlations_calculator is None):
-            self._correlations_calculator = CorrelationsCalculator("trigonometric", training_set.get_parent_lattice(), cluster_pool)
+        if correlations_calculator is None:
+            self._correlations_calculator = CorrelationsCalculator(
+                "trigonometric", training_set.get_parent_lattice(), cluster_pool
+            )
         else:
             self._correlations_calculator = correlations_calculator
 
-        'Calculate covariance matrix'
-        correlation_matrix = self._correlations_calculator.get_correlation_matrix(self._training_set)
-        self._covariance_matrix = np.linalg.inv(np.dot(correlation_matrix.T, correlation_matrix))
+        "Calculate covariance matrix"
+        correlation_matrix = self._correlations_calculator.get_correlation_matrix(
+            self._training_set
+        )
+        self._covariance_matrix = np.linalg.inv(
+            np.dot(correlation_matrix.T, correlation_matrix)
+        )
 
     def set_candidate_set(self, new_candidate_set):
-        '''Set the candidate set
-        
+        """Set the candidate set
+
         Changes the set of candidates to be selected for the training set.
         The input parameter is, thus, a StructureSet object.
-        
+
         Parameters:
-        
+
         new_candidate_set: StructureSet object
             The new set of candidate structures.
-        
-        '''
-        if not(isinstance(new_candidate_set, StructuresSet)):
-            raise TypeError('set_candidate_set() needs a StructuresSet object as input.')
+
+        """
+        if not (isinstance(new_candidate_set, StructuresSet)):
+            raise TypeError(
+                "set_candidate_set() needs a StructuresSet object as input."
+            )
         self._candidate_set = new_candidate_set
 
-    def calculate_population_variance(self, domain_calculation_method = 'averagedConcentration', concentration = None):
-        '''Calculate the cluster expansions prediction variance of the structural property
-        averaged over all possible structures. 
-        
+    def calculate_population_variance(
+        self, domain_calculation_method="averagedConcentration", concentration=None
+    ):
+        """Calculate the cluster expansions prediction variance of the structural property
+        averaged over all possible structures.
+
         The input parameter 'domain_calculation_method'
         defines with which method the domain matrix is calculated (see Mueller2010 PRB 82, 184107).
-	
+
         The options for this input parameter are 'averagedConcentration', 'infiniteCrystalFiniteClusters', 'byConcentration', 'vdWalleAndCeder'.
         If 'byConcentration' is chosen, one needs to supply the routine with a second input parameter, the 'concentration'.
-	
+
         'concentration' is limited to the range [0, 1] and means the concentration of one of the binaries in the alloy.
-        
+
         Parameters:
-	
+
         domain_calculation_method: string
             Defines the method used to calculate the domain matrix.
         concentration: float
             Defines the concentration for which the domain matrix should be evaluated.
-        '''
+        """
 
-        domain_matrix = self._calculate_domain_matrix(method = domain_calculation_method, concentration = concentration)
+        domain_matrix = self._calculate_domain_matrix(
+            method=domain_calculation_method, concentration=concentration
+        )
         covariance_matrix = self._covariance_matrix
 
-        'compute Hadamard product and sum'
-        population_variance = np.sum(np.sum(np.multiply(domain_matrix, covariance_matrix)))
+        "compute Hadamard product and sum"
+        population_variance = np.sum(
+            np.sum(np.multiply(domain_matrix, covariance_matrix))
+        )
 
         return population_variance
-        
-    def select_structure(self, method = None, concentration = None):
-        '''Select a structure to enter the training set
-	
+
+    def select_structure(self, method=None, concentration=None):
+        """Select a structure to enter the training set
+
         This method needs a candidate set. If no candidate set was passed to the class object, set it with set_candidate_set().
-	
+
         The routine takes each structure and adds it temporarily to the training set. With the enlarged training set
-        the population variance is computed. To compute the population variance, supply a 'method' parameter, and maybe a 
+        the population variance is computed. To compute the population variance, supply a 'method' parameter, and maybe a
         'concentration' (see calculate_population_variance). Afterwards the structure is removed from the training set,
         and the next structure is taken. The routine selects the structure that minimizes the population variance.
-	
+
         Parameters:
-	
+
         method: string
             Defines the method used to calculate the domain matrix. Options are
             'global_averagedConcentration', 'global_infiniteCrystalFiniteClusters', 'global_byConcentration', 'global_vdWalleAndCeder'
         concentration: float
             Defines the concentration for which the domain matrix should be evaluated.
-        '''
-        if(self._candidate_set is None):
-            raise ValueError('There are no candidate structures, use set_candidate_set')
-        if not(isinstance(method, str) and (method[:6] == 'greedy' or method[:6] == 'global')):
-            raise ValueError('Method needs to be a string starting with "greedy" or "global_".')
+        """
+        if self._candidate_set is None:
+            raise ValueError("There are no candidate structures, use set_candidate_set")
+        if not (
+            isinstance(method, str)
+            and (method[:6] == "greedy" or method[:6] == "global")
+        ):
+            raise ValueError(
+                'Method needs to be a string starting with "greedy" or "global_".'
+            )
 
         global_or_greedy = method[:6]
         covariance_matrix = self._covariance_matrix
 
-        if(global_or_greedy == 'global'):
-            domain_calculation_method = method.replace("global_","")
-            domain_matrix = self._calculate_domain_matrix(method = domain_calculation_method, concentration = concentration)
+        if global_or_greedy == "global":
+            domain_calculation_method = method.replace("global_", "")
+            domain_matrix = self._calculate_domain_matrix(
+                method=domain_calculation_method, concentration=concentration
+            )
 
-            candidate_correlations = self._correlations_calculator.get_correlation_matrix(self._candidate_set)
+            candidate_correlations = (
+                self._correlations_calculator.get_correlation_matrix(
+                    self._candidate_set
+                )
+            )
 
-            number_candidates ,number_clusters = candidate_correlations.shape
+            number_candidates, number_clusters = candidate_correlations.shape
 
-            'score vector for each structure in selection'
+            "score vector for each structure in selection"
             candidate_scores = np.zeros(number_candidates)
 
             for candidate_idx in range(number_candidates):
-                candidate_corr = candidate_correlations[candidate_idx,:]
+                candidate_corr = candidate_correlations[candidate_idx, :]
                 scaled_correlation = np.dot(covariance_matrix, candidate_corr)
-                denominator = 1+np.dot(candidate_corr, scaled_correlation)
-                numerator = np.dot(scaled_correlation, np.dot(domain_matrix, scaled_correlation))
-                candidate_scores[candidate_idx] = numerator/denominator
+                denominator = 1 + np.dot(candidate_corr, scaled_correlation)
+                numerator = np.dot(
+                    scaled_correlation, np.dot(domain_matrix, scaled_correlation)
+                )
+                candidate_scores[candidate_idx] = numerator / denominator
 
             return np.argmax(candidate_scores)
 
-        elif(global_or_greedy == 'greedy'):
-            candidate_correlations = self._correlations_calculator.get_correlation_matrix(self._candidate_set)
+        elif global_or_greedy == "greedy":
+            candidate_correlations = (
+                self._correlations_calculator.get_correlation_matrix(
+                    self._candidate_set
+                )
+            )
 
-            number_candidates ,number_clusters = candidate_correlations.shape
+            number_candidates, number_clusters = candidate_correlations.shape
 
-            'score vector for each structure in selection'
+            "score vector for each structure in selection"
             candidate_scores = np.zeros(number_candidates)
 
             for candidate_idx in range(number_candidates):
-                candidate_corr= candidate_correlations[candidate_idx,:]
-                candidate_scores[candidate_idx] = np.dot(candidate_corr, np.dot(covariance_matrix, candidate_corr))
+                candidate_corr = candidate_correlations[candidate_idx, :]
+                candidate_scores[candidate_idx] = np.dot(
+                    candidate_corr, np.dot(covariance_matrix, candidate_corr)
+                )
 
             return np.argmax(candidate_scores)
 
         else:
-            raise ValueError('No valid selector chosen.')
-    
-    def _calculate_domain_matrix(self, method = None, concentration = None):
-        if(method is None):
-            raise ValueError('No method for calculation chosen.')
-        method_list = ['averagedConcentration', 'infiniteCrystalFiniteClusters', 'byConcentration', 'vdWalleAndCeder']
-        if not(method is s for s in method_list):
-            raise ValueError('No valid method for calculation chosen. Choose one of: ' + str(method_list))
+            raise ValueError("No valid selector chosen.")
 
-        '''
+    def _calculate_domain_matrix(self, method=None, concentration=None):
+        if method is None:
+            raise ValueError("No method for calculation chosen.")
+        method_list = [
+            "averagedConcentration",
+            "infiniteCrystalFiniteClusters",
+            "byConcentration",
+            "vdWalleAndCeder",
+        ]
+        if not (method is s for s in method_list):
+            raise ValueError(
+                "No valid method for calculation chosen. Choose one of: "
+                + str(method_list)
+            )
+
+        """
         Calculate domain matrix from Mueller2010 paper PRB 82, 184107
-        '''
-        
+        """
+
         npoints = self._cluster_pool.get_all_npoints()
         number_clusters = len(npoints)
-        domain_matrix = np.zeros((number_clusters, number_clusters), dtype = float)
+        domain_matrix = np.zeros((number_clusters, number_clusters), dtype=float)
 
-        'Domain matrix uniformly averaged over concentration for structures in infinite crystal'
-        if(method == 'averagedConcentration'):
-            'Number of occupations a cluster depends on'
+        "Domain matrix uniformly averaged over concentration for structures in infinite crystal"
+        if method == "averagedConcentration":
+            "Number of occupations a cluster depends on"
 
             for rowIdx in range(number_clusters):
                 for colIdx in range(number_clusters):
                     sum_points = npoints[rowIdx] + npoints[colIdx]
-                    domain_matrix[rowIdx, colIdx] = 1/(sum_points + 1)*((sum_points + 1) % 2)
-                    
-        elif(method == 'infiniteCrystalFiniteClusters'):
-            'The crystal be infinite, the clusters have finite number of points they depend on'
-            domain_matrix[0,0] = 1
-        elif(method == 'byConcentration'):
-            'Calculate domain matrix for infinite crystal at given concentration'
-            if not(isinstance(concentration, float)):
-                raise TypeError('Concentration needs to be a float.')
-            'Number of occupations a cluster depends on'
+                    domain_matrix[rowIdx, colIdx] = (
+                        1 / (sum_points + 1) * ((sum_points + 1) % 2)
+                    )
+
+        elif method == "infiniteCrystalFiniteClusters":
+            "The crystal be infinite, the clusters have finite number of points they depend on"
+            domain_matrix[0, 0] = 1
+        elif method == "byConcentration":
+            "Calculate domain matrix for infinite crystal at given concentration"
+            if not (isinstance(concentration, float)):
+                raise TypeError("Concentration needs to be a float.")
+            "Number of occupations a cluster depends on"
             for rowIdx in range(number_clusters):
                 for colIdx in range(number_clusters):
-                    domain_matrix[rowIdx, colIdx] = np.power((2*concentration - 1), npoints[rowIdx] + npoints[colIdx])
+                    domain_matrix[rowIdx, colIdx] = np.power(
+                        (2 * concentration - 1), npoints[rowIdx] + npoints[colIdx]
+                    )
 
-        elif(method == 'vdWalleAndCeder'):
-            'Use A. vd Walles and G. Ceders method'
+        elif method == "vdWalleAndCeder":
+            "Use A. vd Walles and G. Ceders method"
             domain_matrix = domain_matrix + np.identity(number_clusters)
         else:
-            raise ValueError(f'Invalid method: {method}')
+            raise ValueError(f"Invalid method: {method}")
 
         return domain_matrix

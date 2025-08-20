@@ -292,7 +292,6 @@ class Model:
         self._delta_e_calc = self._compute_delta_e
         self.initialized_interactions = True
 
-
     def predict_flip(
         self,
         structure: Structure,
@@ -300,7 +299,7 @@ class Model:
         old_sigma: int,
         new_sigma: int,
         site_types=[0],
-        reduce: bool = False
+        reduce: bool = False,
     ):
         """Predict property change by flipping a species.
 
@@ -322,27 +321,24 @@ class Model:
         if reduce:
             p = np.diag(structure.get_supercell().get_transformation()).tolist()
             if not is_diagonal(p):
-                raise ValueError("Reduced structure cannot be initialized "
-                "with non-diagonal super cell transformation.")
+                raise ValueError(
+                    "Reduced structure cannot be initialized "
+                    "with non-diagonal super cell transformation."
+                )
 
             if self.scell_reduced is None:
                 self.init_reduced_model()
             p_reduced = np.diag(self.scell_reduced.get_transformation())
             multiplicity_factor = np.prod(p) / np.prod(p_reduced)
 
-            structure, index = structure.get_reduced_structure(
-                p_reduced, index)
+            structure, index = structure.get_reduced_structure(p_reduced, index)
         else:
             multiplicity_factor = 1.0
 
         if not self.initialized_interactions:
             self._init_interaction_dict(structure.get_supercell())
         return self._delta_e_calc(
-            structure,
-            index,
-            old_sigma,
-            new_sigma,
-            multiplicity_factor
+            structure, index, old_sigma, new_sigma, multiplicity_factor
         )
 
     def predict_swap(
@@ -375,7 +371,9 @@ class Model:
         structure.sigmas[i] = sigma_i  # restore original structure
         return de1 + de2
 
-    def _compute_delta_e_binary_linear(self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0):
+    def _compute_delta_e_binary_linear(
+        self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0
+    ):
         # TODO: implement new interactions dict, currently not working
         sgn = new_sigma - old_sigma
         corrs = np.zeros(self._mc_nclusters)
@@ -396,7 +394,9 @@ class Model:
         corrs /= multiplicity_factor
         return np.dot(self.ecis, corrs)
 
-    def _compute_delta_e(self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0):
+    def _compute_delta_e(
+        self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0
+    ):
         indices = self._site_clusters[ind]
         clusters = self._cluster_orbits_array[indices]
         cluster_indices = self._cluster_indices[indices]
@@ -423,7 +423,10 @@ class Model:
 
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
-            res = self.estimator.predict(corrs.reshape(1, -1))[0] - self.estimator.intercept_
+            res = (
+                self.estimator.predict(corrs.reshape(1, -1))[0]
+                - self.estimator.intercept_
+            )
         else:
             res = np.dot(self.ecis, corrs)
         return res
@@ -526,7 +529,6 @@ class Model:
         x_mat = self.corrc.get_correlation_matrix(sset)
         y = sset.get_property_values(self.property_name)
 
-
         # cross_val_score internally clones the estimator, so the optimal one in Model is not changed.
         cvs = cross_val_score(
             self.estimator,
@@ -536,7 +538,9 @@ class Model:
             cv=LeaveOneOut(),
             scoring="neg_mean_squared_error",
         )
-        pred_cv = cross_val_predict(self.estimator, x_mat, y, params=params, cv=LeaveOneOut())
+        pred_cv = cross_val_predict(
+            self.estimator, x_mat, y, params=params, cv=LeaveOneOut()
+        )
 
         absolute_errors = np.sqrt(-cvs)
         cv = np.sqrt(-np.mean(cvs))
@@ -592,7 +596,6 @@ class ModelBuilder:
     """
 
     def __new__(cls, *args, **kwargs):
-
         if len(args) == 0 and len(kwargs) == 0:
             inst = super(ModelBuilder, cls).__new__(cls, *args, **kwargs)
             return inst
@@ -635,7 +638,6 @@ class ModelBuilder:
         filepath=None,
         standardize=False,
     ):
-
         self.basis = basis
         self.selector_type = selector_type
         self.selector_opts = selector_opts
@@ -733,15 +735,21 @@ class ModelBuilder:
 
         # Select optimal clusters using the clusters_selector module
         if self.selector != "identity":
-            self.selector = ClustersSelector(basis=self.basis, method=self.selector_type, **self.selector_opts)
-            self.opt_cpool = self.selector.select_clusters(sset, cpool, prop, comat=self.ini_comat)
+            self.selector = ClustersSelector(
+                basis=self.basis, method=self.selector_type, **self.selector_opts
+            )
+            self.opt_cpool = self.selector.select_clusters(
+                sset, cpool, prop, comat=self.ini_comat
+            )
             self.opt_comat = self.selector.optimal_comat
 
         self.opt_corrc = CorrelationsCalculator(self.basis, self.plat, self.opt_cpool)
 
         # Find out the ECIs using an estimator
         if not self.standardize:
-            self.opt_estimator = EstimatorFactory.create(self.estimator_type, **self.estimator_opts)
+            self.opt_estimator = EstimatorFactory.create(
+                self.estimator_type, **self.estimator_opts
+            )
         else:
             from sklearn.preprocessing import StandardScaler
             from sklearn.pipeline import make_pipeline
