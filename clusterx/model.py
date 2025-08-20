@@ -289,7 +289,6 @@ class Model:
         self._cluster_indices = np.array(cluster_indices, dtype=int)
         self._multiplicities = np.array(multiplicities, dtype=int)
         self._site_clusters = site_clusters
-        self._delta_e_calc = self._compute_delta_e
         self.initialized_interactions = True
 
     def predict_flip(
@@ -337,7 +336,7 @@ class Model:
 
         if not self.initialized_interactions:
             self._init_interaction_dict(structure.get_supercell())
-        return self._delta_e_calc(
+        return self._compute_delta_e(
             structure, index, old_sigma, new_sigma, multiplicity_factor
         )
 
@@ -370,29 +369,6 @@ class Model:
         de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, reduce)
         structure.sigmas[i] = sigma_i  # restore original structure
         return de1 + de2
-
-    def _compute_delta_e_binary_linear(
-        self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0
-    ):
-        # TODO: implement new interactions dict, currently not working
-        sgn = new_sigma - old_sigma
-        corrs = np.zeros(self._mc_nclusters)
-        for ifi, icl in zip(
-            self._interactions_dict[ind]["cluster_sites_index_for_ind"],
-            self._interactions_dict[ind]["interactions_list"],
-        ):
-            cluster_index = self._clusters_list[icl]["cluster_index"]
-            cluster_sites = self._clusters_list[icl]["cluster_sites"]
-            sigmas = structure.sigmas.take(cluster_sites).copy()
-            sigmas[ifi] = sgn
-            ss = set(sigmas)
-
-            if 0 not in ss:
-                corrs[cluster_index] += sgn
-
-        corrs /= self._multiplicities
-        corrs /= multiplicity_factor
-        return np.dot(self.ecis, corrs)
 
     def _compute_delta_e(
         self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0
