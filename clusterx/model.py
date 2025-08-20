@@ -5,7 +5,6 @@
 from typing import List, Optional
 import pickle
 import os
-import time
 import warnings
 
 import numpy as np
@@ -13,7 +12,7 @@ import numpy as np
 from clusterx.super_cell import SuperCell
 from clusterx.correlations import (
     CorrelationsCalculator,
-    cluster_function_flip,
+    cluster_correlations_flip,
 )
 from clusterx.structure import Structure
 from clusterx.estimators.estimator_factory import EstimatorFactory
@@ -336,9 +335,27 @@ class Model:
 
         if not self.initialized_interactions:
             self._init_interaction_dict(structure.get_supercell())
-        return self._compute_delta_e(
-            structure, index, old_sigma, new_sigma, multiplicity_factor
+
+        correlations = cluster_correlations_flip(
+            structure=structure,
+            ind=index,
+            old_sigma=old_sigma,
+            new_sigma=new_sigma,
+            site_clusters=self._site_clusters,
+            cluster_orbits_array=self._cluster_orbits_array,
+            cluster_indices=self._cluster_indices,
+            basis_set_values=self.corrc.basis_set_values,
+            multiplicities=self._multiplicities,
+            multiplicity_factor=multiplicity_factor,
         )
+        if self.estimator is not None:
+            # Intercept must be subctracted from computation of energy change.
+            return (
+                self.estimator.predict(correlations.reshape(1, -1))[0]
+                - self.estimator.intercept_
+            )
+        else:
+            return np.dot(self.ecis, correlations)
 
     def predict_swap(
         self, structure, i, j, correlation=False, site_types=[0], reduce=False
@@ -369,43 +386,6 @@ class Model:
         de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, reduce)
         structure.sigmas[i] = sigma_i  # restore original structure
         return de1 + de2
-
-    def _compute_delta_e(
-        self, structure, ind, old_sigma, new_sigma, multiplicity_factor: float = 1.0
-    ):
-        indices = self._site_clusters[ind]
-        clusters = self._cluster_orbits_array[indices]
-        cluster_indices = self._cluster_indices[indices]
-        corrs = np.zeros_like(self._multiplicities, dtype=float)
-
-        for cluster, cluster_index in zip(clusters, cluster_indices):
-            cluster_sites = cluster.get_idxs()
-            cluster_funcs = cluster.alphas
-            cf = cluster_function_flip(
-                cluster_sites,
-                cluster_funcs,
-                structure.sigmas.take(cluster_sites),
-                structure.ems.take(cluster_sites),
-                ind,
-                old_sigma,
-                new_sigma,
-                self.corrc.basis_set_values,
-            )
-            corrs[cluster_index] += cf
-
-        corrs /= self._multiplicities
-        corrs /= multiplicity_factor
-        corrs = np.around(corrs, decimals=12)
-
-        if self.estimator is not None:
-            # Intercept must be subctracted from computation of energy change.
-            res = (
-                self.estimator.predict(corrs.reshape(1, -1))[0]
-                - self.estimator.intercept_
-            )
-        else:
-            res = np.dot(self.ecis, corrs)
-        return res
 
     def report_errors(self, sset):
         """Report fit and CV scores

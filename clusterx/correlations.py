@@ -442,30 +442,42 @@ def cluster_correlations(structure, cluster_orbits, basis_set_values):
 
 
 def cluster_correlations_flip(
-    structure, cluster_orbits, basis_set_values, i_flip, sigma_old, sigma_new
+    structure: Structure,
+    ind: int,
+    old_sigma: int,
+    new_sigma: int,
+    site_clusters: list,
+    cluster_orbits_array: np.ndarray,
+    cluster_indices: np.ndarray,
+    basis_set_values: np.ndarray,
+    multiplicities: np.ndarray,
+    multiplicity_factor: float = 1.0,
 ) -> np.ndarray:
-    correlations = np.zeros(len(cluster_orbits))
+    """Calculate cluster correlations for a structure with a flipped site,
+    using cached cluster orbit array and multiplicities."""
+    indices = site_clusters[ind]
+    clusters = cluster_orbits_array[indices]
+    cluster_indices = cluster_indices[indices]
+    corrs = np.zeros_like(multiplicities, dtype=float)
 
-    for icl, cluster_orbit in enumerate(cluster_orbits):
-        cluster_orbit_arr = cluster_orbit.as_array()
-        weights = cluster_orbit.get_weights()
+    for cluster, cluster_index in zip(clusters, cluster_indices):
+        cluster_sites = cluster.get_idxs()
+        cluster_funcs = cluster.alphas
+        cf = cluster_function_flip(
+            cluster_sites,
+            cluster_funcs,
+            structure.sigmas.take(cluster_sites),
+            structure.ems.take(cluster_sites),
+            ind,
+            old_sigma,
+            new_sigma,
+            basis_set_values,
+        )
+        corrs[cluster_index] += cf
 
-        for weight, cluster in zip(weights, cluster_orbit_arr):
-            cf = cluster_function_flip(
-                cluster.get_idxs(),
-                cluster.alphas,
-                structure.sigmas,
-                structure.ems,
-                i_flip,
-                sigma_old,
-                sigma_new,
-                basis_set_values,
-            )
-            correlations[icl] += weight * cf
-
-        correlations[icl] /= np.sum(weights)
-
-    return np.around(correlations, decimals=12)
+    corrs /= multiplicities
+    corrs /= multiplicity_factor
+    return np.around(corrs, decimals=12)
 
 
 @jit
