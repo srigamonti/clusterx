@@ -15,8 +15,7 @@ from clusterx.test.defaults import get_clathrate_plat
 
 
 def check_orbit_standard(
-    scell, orbit, orbit_expected, weights_expected, mult_expected,
-    rmult_expected
+    scell, orbit, orbit_expected, weights_expected, mult_expected, rmult_expected
 ):
     """Check the cluster orbit against expected values."""
     weights = orbit.get_weights()
@@ -25,211 +24,362 @@ def check_orbit_standard(
 
     rel1 = scell.get_index()
     rel2 = np.sum(weights)
-    assert rel1 * rmult == rel2, "Sum of weights not equal to number of \
+    assert rel1 * rmult == rel2, (
+        "Sum of weights not equal to number of \
         primitive cells in supercell times reduced multiplicity"
+    )
     assert mult == mult_expected, "Multiplicity not equal to expected value"
-    assert rmult == rmult_expected, "Reduced multiplicity not equal to \
+    assert rmult == rmult_expected, (
+        "Reduced multiplicity not equal to \
         expected value"
-    assert (weights == weights_expected).all(), "Weights not equal to \
+    )
+    assert (weights == weights_expected).all(), (
+        "Weights not equal to \
         expected values"
+    )
 
     orbit_idxs = [cluster.get_idxs() for cluster in orbit]
-    np.testing.assert_array_equal(
-        np.array(orbit_idxs), np.sort(orbit_expected))
+    np.testing.assert_array_equal(np.array(orbit_idxs), np.sort(orbit_expected))
 
 
 def test_clathrate():
     """Clathrate 2x1x1 supercell. This contains spectator atoms."""
     plat = get_clathrate_plat()
-    scell = SuperCell(plat, [(2,0,0),(0,1,0),(0,0,1)])
+    scell = SuperCell(plat, [(2, 0, 0), (0, 1, 0), (0, 0, 1)])
     cl = ClustersPool(plat)
-    orbit = cl.get_cluster_orbit(scell, [19,17],[13,13]) # 24k-24k pair cluster
-    db_name = 'test_cluster_orbit_clathrate.json'
+    orbit = cl.get_cluster_orbit(scell, [19, 17], [13, 13])  # 24k-24k pair cluster
+    db_name = "test_cluster_orbit_clathrate.json"
     cl.write_clusters_db(orbit, scell, db_name)
 
     orbit_expected = np.array(
-        [[17,19],[71,73],[70,72],[16,18],[ 4,60],[ 6,58],[ 7,59],[ 5,61],
-         [12,14],[66,68],[67,69],[13,15],[62,64],[ 8,10],[63,65],[ 9,11],
-         [20,22],[74,76],[75,77],[21,23],[54,56],[ 0, 2],[ 1, 3],[55,57]])
+        [
+            [17, 19],
+            [71, 73],
+            [70, 72],
+            [16, 18],
+            [4, 60],
+            [6, 58],
+            [7, 59],
+            [5, 61],
+            [12, 14],
+            [66, 68],
+            [67, 69],
+            [13, 15],
+            [62, 64],
+            [8, 10],
+            [63, 65],
+            [9, 11],
+            [20, 22],
+            [74, 76],
+            [75, 77],
+            [21, 23],
+            [54, 56],
+            [0, 2],
+            [1, 3],
+            [55, 57],
+        ]
+    )
 
     weights_expected = np.array(
-        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1])
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    )
     mult_expected = 12
     rmult_expected = 12
 
     check_orbit_standard(
-        scell, orbit, orbit_expected, weights_expected, mult_expected,
-        rmult_expected
+        scell, orbit, orbit_expected, weights_expected, mult_expected, rmult_expected
     )
 
 
 def test_cubic():
     """Perfect cubic lattice. The tested cluster is such that many interactions
     with the periodic images of the crystal are present."""
-    a = 3.62/np.sqrt(2.0)
-    positions = [(0,0,0)]
-    cell = [(a,0,0),(0,a,0),(0,0,a)]
-    pbc = (True,True,True)
-    pri = Atoms('Cu', positions=positions, cell=cell, pbc=pbc)
-    sub = Atoms('Al', positions=positions, cell=cell, pbc=pbc)
-    sub2 = Atoms('Na', positions=positions, cell=cell, pbc=pbc)
+    a = 3.62 / np.sqrt(2.0)
+    positions = [(0, 0, 0)]
+    cell = [(a, 0, 0), (0, a, 0), (0, 0, a)]
+    pbc = (True, True, True)
+    pri = Atoms("Cu", positions=positions, cell=cell, pbc=pbc)
+    sub = Atoms("Al", positions=positions, cell=cell, pbc=pbc)
+    sub2 = Atoms("Na", positions=positions, cell=cell, pbc=pbc)
 
-    plat = ParentLattice(pri, substitutions=[sub,sub2], pbc=pbc)
-    scell = SuperCell(plat,[(5,0,0),(0,2,0),(0,0,1)])
+    plat = ParentLattice(pri, substitutions=[sub, sub2], pbc=pbc)
+    scell = SuperCell(plat, [(5, 0, 0), (0, 2, 0), (0, 0, 1)])
 
     cl = ClustersPool(plat)
 
-    orbit = cl.get_cluster_orbit(scell, [0,2], [11,11])
-    db_name = 'test_cluster_orbit_cubic.json'
+    orbit = cl.get_cluster_orbit(scell, [0, 2], [11, 11])
+    db_name = "test_cluster_orbit_cubic.json"
     cl.write_clusters_db(orbit, scell, db_name)
 
     orbit_expected = np.array(
-        [[0,2],[1,3],[2,4],[3,5],[4,6],
-         [5,7],[6,8],[7,9],[0,8],[1,9],
-         [0,1],[2,3],[4,5],[6,7],[8,9],
-         [0,0],[1,1],[2,2],[3,3],[4,4],
-         [5,5],[6,6],[7,7],[8,8],[9,9]])
-        
+        [
+            [0, 2],
+            [1, 3],
+            [2, 4],
+            [3, 5],
+            [4, 6],
+            [5, 7],
+            [6, 8],
+            [7, 9],
+            [0, 8],
+            [1, 9],
+            [0, 1],
+            [2, 3],
+            [4, 5],
+            [6, 7],
+            [8, 9],
+            [0, 0],
+            [1, 1],
+            [2, 2],
+            [3, 3],
+            [4, 4],
+            [5, 5],
+            [6, 6],
+            [7, 7],
+            [8, 8],
+            [9, 9],
+        ]
+    )
+
     weights_expected = np.array(
-        [1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1])
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    )
     mult_expected = 3
     rmult_expected = 3
 
     check_orbit_standard(
-        scell, orbit, orbit_expected, weights_expected, mult_expected,
-        rmult_expected
+        scell, orbit, orbit_expected, weights_expected, mult_expected, rmult_expected
     )
 
 
 def test_fcc():
     """FCC lattice"""
-    pri = bulk('Cu', 'fcc', a=3.6)
-    sub = bulk('Al', 'fcc', a=3.6)
+    pri = bulk("Cu", "fcc", a=3.6)
+    sub = bulk("Al", "fcc", a=3.6)
 
     plat = ParentLattice(pri, substitutions=[sub], pbc=pri.get_pbc())
-    scell = SuperCell(plat,np.diag([2,2,2]))
+    scell = SuperCell(plat, np.diag([2, 2, 2]))
 
     cl = ClustersPool(plat)
 
-    orbit = cl.get_cluster_orbit(scell, [0,2],[13,13])
-    db_name = 'test_cluster_orbit_fcc.json'
+    orbit = cl.get_cluster_orbit(scell, [0, 2], [13, 13])
+    db_name = "test_cluster_orbit_fcc.json"
     cl.write_clusters_db(orbit, scell, db_name)
 
     orbit_expected = np.array(
-        [[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7],
-         [0,5],[1,4],[2,7],[3,6],[0,3],[1,2],[4,7],[5,6],
-         [0,1],[2,3],[4,5],[6,7],[0,6],[1,7],[2,4],[3,5]])
+        [
+            [0, 2],
+            [1, 3],
+            [4, 6],
+            [5, 7],
+            [0, 4],
+            [1, 5],
+            [2, 6],
+            [3, 7],
+            [0, 5],
+            [1, 4],
+            [2, 7],
+            [3, 6],
+            [0, 3],
+            [1, 2],
+            [4, 7],
+            [5, 6],
+            [0, 1],
+            [2, 3],
+            [4, 5],
+            [6, 7],
+            [0, 6],
+            [1, 7],
+            [2, 4],
+            [3, 5],
+        ]
+    )
 
-    weights_expected = np.array([2]*len(orbit_expected))
+    weights_expected = np.array([2] * len(orbit_expected))
     mult_expected = 6
     rmult_expected = 6
 
     check_orbit_standard(
-        scell, orbit, orbit_expected,
-        weights_expected,
-        mult_expected,
-        rmult_expected
+        scell, orbit, orbit_expected, weights_expected, mult_expected, rmult_expected
     )
 
 
 def test_al_na_surface():
     """Al(111) surface with Na substitution on the first layer.
     Test a 3-point cluster."""
-    pri = fcc111('Al', size=(1,1,3), vacuum=10.0)
+    pri = fcc111("Al", size=(1, 1, 3), vacuum=10.0)
     sub = pri.copy()
     for atom in sub:
         if atom.tag == 1:
             atom.number = 11
 
-    plat = ParentLattice(atoms=pri,substitutions=[sub])
-    scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)])
+    plat = ParentLattice(atoms=pri, substitutions=[sub])
+    scell = SuperCell(plat, [(4, 0, 0), (0, 4, 0), (0, 0, 1)])
 
     cl = ClustersPool(plat)
-    orbit = cl.get_cluster_orbit(scell, [2,14,5],[11,11,11])
-    db_name = 'test_cluster_orbit_al_na_surface.json'
+    orbit = cl.get_cluster_orbit(scell, [2, 14, 5], [11, 11, 11])
+    db_name = "test_cluster_orbit_al_na_surface.json"
     cl.write_clusters_db(orbit, scell, db_name)
 
     orbit_expected = np.array(
-        [[ 2, 14,  5],
-         [ 5, 17,  8],
-         [ 8, 20, 11],
-         [11, 23,  2],
-         [14, 26, 17],
-         [17, 29, 20],
-         [20, 32, 23],
-         [23, 35, 14],
-         [26, 38, 29],
-         [29, 41, 32],
-         [32, 44, 35],
-         [35, 47, 26],
-         [38,  2, 41],
-         [41,  5, 44],
-         [44,  8, 47],
-         [47, 11, 38]])
-    weights_expected = np.array([1]*len(orbit_expected))
+        [
+            [2, 14, 5],
+            [5, 17, 8],
+            [8, 20, 11],
+            [11, 23, 2],
+            [14, 26, 17],
+            [17, 29, 20],
+            [20, 32, 23],
+            [23, 35, 14],
+            [26, 38, 29],
+            [29, 41, 32],
+            [32, 44, 35],
+            [35, 47, 26],
+            [38, 2, 41],
+            [41, 5, 44],
+            [44, 8, 47],
+            [47, 11, 38],
+        ]
+    )
+    weights_expected = np.array([1] * len(orbit_expected))
     mult_expected = 1
     rmult_expected = 1
 
     check_orbit_standard(
-        scell,
-        orbit,
-        orbit_expected,
-        weights_expected,
-        mult_expected,
-        rmult_expected
+        scell, orbit, orbit_expected, weights_expected, mult_expected, rmult_expected
     )
 
 
 def test_al_na_o_surface():
-    pri = fcc111('Al', size=(1,1,3))
-    add_adsorbate(pri,'X',1.5,'ontop')
+    pri = fcc111("Al", size=(1, 1, 3))
+    add_adsorbate(pri, "X", 1.5, "ontop")
     pri.center(vacuum=10.0, axis=2)
 
-    sub1 = pri.copy() # Na substitution on the first Al layer
+    sub1 = pri.copy()  # Na substitution on the first Al layer
     for atom in sub1:
         if atom.tag == 1:
             atom.number = 11
 
-    sub2 = pri.copy() # O on-top adsorbates
+    sub2 = pri.copy()  # O on-top adsorbates
     for atom in sub2:
         if atom.tag == 0:
             atom.number = 8
 
-    plat = ParentLattice(atoms=pri,substitutions=[sub1,sub2])
-    scell = SuperCell(plat,[(4,0,0),(0,4,0),(0,0,1)])
+    plat = ParentLattice(atoms=pri, substitutions=[sub1, sub2])
+    scell = SuperCell(plat, [(4, 0, 0), (0, 4, 0), (0, 0, 1)])
 
     cl = ClustersPool(plat)
-    orbit = cl.get_cluster_orbit(scell, [3,18],[8,11])
-    db_name = 'test_cluster_orbit_al_na_o_surface.json'
+    orbit = cl.get_cluster_orbit(scell, [3, 18], [8, 11])
+    db_name = "test_cluster_orbit_al_na_o_surface.json"
     cl.write_clusters_db(orbit, scell, db_name)
 
     orbit_expected = np.array(
-        [[ 3, 18],[ 7, 22],[11, 26],[15, 30],[19, 34],[23, 38],[27, 42],
-         [31, 46],[35, 50],[39, 54],[43, 58],[47, 62],[51,  2],[55,  6],
-         [59, 10],[63, 14],[ 3, 54],[ 7, 58],[11, 62],[15, 50],[19,  6],
-         [23, 10],[27, 14],[31,  2],[35, 22],[39, 26],[43, 30],[47, 18],
-         [51, 38],[55, 42],[59, 46],[63, 34],[ 3, 14],[ 7,  2],[11,  6],
-         [15, 10],[19, 30],[23, 18],[27, 22],[31, 26],[35, 46],[39, 34],
-         [43, 38],[47, 42],[51, 62],[55, 50],[59, 54],[63, 58],[ 3, 30],
-         [ 7, 18],[11, 22],[15, 26],[19, 46],[23, 34],[27, 38],[31, 42],
-         [35, 62],[39, 50],[43, 54],[47, 58],[51, 14],[55,  2],[59,  6],
-         [63, 10],[ 3, 50],[ 7, 54],[11, 58],[15, 62],[19,  2],[23,  6],
-         [27, 10],[31, 14],[35, 18],[39, 22],[43, 26],[47, 30],[51, 34],
-         [55, 38],[59, 42],[63, 46],[ 3,  6],[ 7, 10],[11, 14],[15,  2],
-         [19, 22],[23, 26],[27, 30],[31, 18],[35, 38],[39, 42],[43, 46],
-         [47, 34],[51, 54],[55, 58],[59, 62],[63, 50]])
+        [
+            [3, 18],
+            [7, 22],
+            [11, 26],
+            [15, 30],
+            [19, 34],
+            [23, 38],
+            [27, 42],
+            [31, 46],
+            [35, 50],
+            [39, 54],
+            [43, 58],
+            [47, 62],
+            [51, 2],
+            [55, 6],
+            [59, 10],
+            [63, 14],
+            [3, 54],
+            [7, 58],
+            [11, 62],
+            [15, 50],
+            [19, 6],
+            [23, 10],
+            [27, 14],
+            [31, 2],
+            [35, 22],
+            [39, 26],
+            [43, 30],
+            [47, 18],
+            [51, 38],
+            [55, 42],
+            [59, 46],
+            [63, 34],
+            [3, 14],
+            [7, 2],
+            [11, 6],
+            [15, 10],
+            [19, 30],
+            [23, 18],
+            [27, 22],
+            [31, 26],
+            [35, 46],
+            [39, 34],
+            [43, 38],
+            [47, 42],
+            [51, 62],
+            [55, 50],
+            [59, 54],
+            [63, 58],
+            [3, 30],
+            [7, 18],
+            [11, 22],
+            [15, 26],
+            [19, 46],
+            [23, 34],
+            [27, 38],
+            [31, 42],
+            [35, 62],
+            [39, 50],
+            [43, 54],
+            [47, 58],
+            [51, 14],
+            [55, 2],
+            [59, 6],
+            [63, 10],
+            [3, 50],
+            [7, 54],
+            [11, 58],
+            [15, 62],
+            [19, 2],
+            [23, 6],
+            [27, 10],
+            [31, 14],
+            [35, 18],
+            [39, 22],
+            [43, 26],
+            [47, 30],
+            [51, 34],
+            [55, 38],
+            [59, 42],
+            [63, 46],
+            [3, 6],
+            [7, 10],
+            [11, 14],
+            [15, 2],
+            [19, 22],
+            [23, 26],
+            [27, 30],
+            [31, 18],
+            [35, 38],
+            [39, 42],
+            [43, 46],
+            [47, 34],
+            [51, 54],
+            [55, 58],
+            [59, 62],
+            [63, 50],
+        ]
+    )
 
-    weights_expected = np.array([1]*len(orbit_expected))
+    weights_expected = np.array([1] * len(orbit_expected))
     mult_expected = 6
     rmult_expected = 6
 
     check_orbit_standard(
-        scell,
-        orbit,
-        orbit_expected,
-        weights_expected,
-        mult_expected,
-        rmult_expected
+        scell, orbit, orbit_expected, weights_expected, mult_expected, rmult_expected
     )
 
 
@@ -239,17 +389,17 @@ def test_al_na_o_surface():
 def test_load_from_db():
     """Test loading clusters from a database."""
     plat = get_clathrate_plat()
-    scell = SuperCell(plat, [(2,0,0),(0,1,0),(0,0,1)])
+    scell = SuperCell(plat, [(2, 0, 0), (0, 1, 0), (0, 0, 1)])
     cl = ClustersPool(plat)
-    orbit = cl.get_cluster_orbit(scell, [19,17],[13,13]) # 24k-24k pair cluster
-    db_name = 'test_cluster_orbit_clathrate.json'
+    orbit = cl.get_cluster_orbit(scell, [19, 17], [13, 13])  # 24k-24k pair cluster
+    db_name = "test_cluster_orbit_clathrate.json"
     orbit.serialize(db_name)
     orbit_loaded = ClusterOrbit(db_name)
 
     weights = orbit.get_weights()
     weights_loaded = orbit_loaded.get_weights()
     assert (weights == weights_loaded).all(), "Weights not equal after loading from db"
-    
+
     mult = orbit.get_multiplicity_in_parent_lattice()
     mult_loaded = orbit_loaded.get_multiplicity_in_parent_lattice()
     assert mult == mult_loaded, "Multiplicity not equal after loading from db"
@@ -260,6 +410,4 @@ def test_load_from_db():
 
     orbit_idxs = [cluster.get_idxs() for cluster in orbit]
     orbit_idxs_loaded = [cluster.get_idxs() for cluster in orbit_loaded]
-    np.testing.assert_array_equal(
-        np.sort(orbit_idxs),
-        np.sort(orbit_idxs_loaded))
+    np.testing.assert_array_equal(np.sort(orbit_idxs), np.sort(orbit_idxs_loaded))

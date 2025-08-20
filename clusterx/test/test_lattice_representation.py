@@ -10,33 +10,39 @@ from clusterx.utils import dict_compare
 from ase import Atoms
 import numpy as np
 
+
 def test_concentration():
-    """Test calculation of concentration
-    """
+    """Test calculation of concentration"""
 
-    cell = [[4,0,0],
-            [0,1,0],
-            [0,0,5]]
-    positions = [
-        [0,0,0],
-        [1,0,0],
-        [2,0,0],
-        [3,0,0]]
-    pbc = [True,True,False]
+    cell = [[4, 0, 0], [0, 1, 0], [0, 0, 5]]
+    positions = [[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0]]
+    pbc = [True, True, False]
 
-    pri = Atoms(['H','Ba','H','Ba'], positions=positions, cell=cell, pbc=pbc)
-    su1 = Atoms(['C','Ba','H','Ba'], positions=positions, cell=cell, pbc=pbc)
-    su2 = Atoms(['H','He','H','He'], positions=positions, cell=cell, pbc=pbc)
-    su3 = Atoms(['H','N','H','N'], positions=positions, cell=cell, pbc=pbc)
+    pri = Atoms(["H", "Ba", "H", "Ba"], positions=positions, cell=cell, pbc=pbc)
+    su1 = Atoms(["C", "Ba", "H", "Ba"], positions=positions, cell=cell, pbc=pbc)
+    su2 = Atoms(["H", "He", "H", "He"], positions=positions, cell=cell, pbc=pbc)
+    su3 = Atoms(["H", "N", "H", "N"], positions=positions, cell=cell, pbc=pbc)
 
-    plat = ParentLattice(pri,substitutions=[su1,su2,su3],pbc=pbc)
+    plat = ParentLattice(pri, substitutions=[su1, su2, su3], pbc=pbc)
 
-    scell = SuperCell(plat,np.array([(1,0,0),(0,3,0),(0,0,1)]))
-    s = Structure(scell,
-                  decoration_symbols=["C","He","H","Ba",
-                                      "H","He","H","N",
-                                      "H","Ba","H","He"]
-                  )
+    scell = SuperCell(plat, np.array([(1, 0, 0), (0, 3, 0), (0, 0, 1)]))
+    s = Structure(
+        scell,
+        decoration_symbols=[
+            "C",
+            "He",
+            "H",
+            "Ba",
+            "H",
+            "He",
+            "H",
+            "N",
+            "H",
+            "Ba",
+            "H",
+            "He",
+        ],
+    )
 
     # From atoms:
     tags = s.get_tags()
@@ -62,7 +68,7 @@ def test_concentration():
     numbers = s.get_atomic_numbers()
     sigmas = s.get_sigmas()
 
-    print("tags",repr(tags))
+    print("tags", repr(tags))
     print("natoms", natoms)
     print("n_sub_sites", n_sub_sites)
     print("sub_sites", sub_sites)
@@ -80,24 +86,41 @@ def test_concentration():
     print("numbers", repr(numbers))
     print("sigmas", repr(sigmas))
 
-
     isok = True
     isok *= (tags == [1, 2, 0, 2, 1, 2, 0, 2, 1, 2, 0, 2]).all()
     isok *= natoms == 12
     isok *= n_sub_sites == 2
     isok *= (np.asarray(sub_sites) == [0, 1, 3, 4, 5, 7, 8, 9, 11]).all()
-    isok *= (sub_tags == [1,2]).all()
+    isok *= (sub_tags == [1, 2]).all()
     isok *= (spect_sites == np.array([2, 6, 10])).all()
     isok *= (spect_tags == np.array([0])).all()
     isok *= dict_compare(nsites_per_type, {0: 3, 1: 3, 2: 6})
-    isok *= dict_compare(sites, {0: np.array([1, 6]), 1: np.array([56,  2,  7]), 2: np.array([1]), 3: np.array([56,  2,  7]), 4: np.array([1, 6]), 5: np.array([56,  2,  7]), 6: np.array([1]), 7: np.array([56,  2,  7]), 8: np.array([1, 6]), 9: np.array([56,  2,  7]), 10: np.array([1]), 11: np.array([56,  2,  7])})
-    isok *= dict_compare(idx_subs, {0: np.array([1]), 1: np.array([1, 6]), 2: np.array([56,  2,  7])})
+    isok *= dict_compare(
+        sites,
+        {
+            0: np.array([1, 6]),
+            1: np.array([56, 2, 7]),
+            2: np.array([1]),
+            3: np.array([56, 2, 7]),
+            4: np.array([1, 6]),
+            5: np.array([56, 2, 7]),
+            6: np.array([1]),
+            7: np.array([56, 2, 7]),
+            8: np.array([1, 6]),
+            9: np.array([56, 2, 7]),
+            10: np.array([1]),
+            11: np.array([56, 2, 7]),
+        },
+    )
+    isok *= dict_compare(
+        idx_subs, {0: np.array([1]), 1: np.array([1, 6]), 2: np.array([56, 2, 7])}
+    )
     isok *= index == 3
-    isok *= (trafo == [[1, 0, 0],[0, 3, 0],[0, 0, 1]]).all()
-    isok *= (atidx_site0 == np.array([ 2,  6, 10])).all()
+    isok *= (trafo == [[1, 0, 0], [0, 3, 0], [0, 0, 1]]).all()
+    isok *= (atidx_site0 == np.array([2, 6, 10])).all()
     isok *= (atidx_site1 == np.array([0, 4, 8])).all()
-    isok *= (atidx_site2 == np.array([ 1,  3,  5,  7,  9, 11])).all()
-    isok *= (numbers == [ 6,  2,  1, 56,  1,  2,  1,  7,  1, 56,  1,  2]).all()
+    isok *= (atidx_site2 == np.array([1, 3, 5, 7, 9, 11])).all()
+    isok *= (numbers == [6, 2, 1, 56, 1, 2, 1, 7, 1, 56, 1, 2]).all()
     isok *= (sigmas == [1, 1, 0, 0, 0, 1, 0, 2, 0, 0, 0, 1]).all()
 
     assert isok

@@ -24,24 +24,24 @@ def test_clathrate_mc():
     cpsc = cpool.get_cpool_scell()
     s = cn["Al"]
     cpool.add_cluster(Cluster([], [], cpsc))
-    cpool.add_cluster(Cluster([ 0], [s], cpsc))
+    cpool.add_cluster(Cluster([0], [s], cpsc))
     cpool.add_cluster(Cluster([24], [s], cpsc))
     cpool.add_cluster(Cluster([40], [s], cpsc))
-    cpool.add_cluster(Cluster([ 6, 4], [s,s], cpsc))
-    cpool.add_cluster(Cluster([37,32], [s,s], cpsc))
-    cpool.add_cluster(Cluster([39,12], [s,s], cpsc))
-    cpool.add_cluster(Cluster([16,43], [s,s], cpsc))
-    cpool.add_cluster(Cluster([35,11], [s,s], cpsc))
-    cpool.add_cluster(Cluster([39,30], [s,s], cpsc))
-    cpool.add_cluster(Cluster([22,17], [s,s], cpsc))
-    cpool.add_cluster(Cluster([35,42], [s,s], cpsc))
-    cpool.add_cluster(Cluster([32,14], [s,s], cpsc))
-    cpool.add_cluster(Cluster([11,10], [s,s], cpsc))
-    cpool.add_cluster(Cluster([18, 9], [s,s], cpsc))
-    cpool.add_cluster(Cluster([18,43], [s,s], cpsc))
+    cpool.add_cluster(Cluster([6, 4], [s, s], cpsc))
+    cpool.add_cluster(Cluster([37, 32], [s, s], cpsc))
+    cpool.add_cluster(Cluster([39, 12], [s, s], cpsc))
+    cpool.add_cluster(Cluster([16, 43], [s, s], cpsc))
+    cpool.add_cluster(Cluster([35, 11], [s, s], cpsc))
+    cpool.add_cluster(Cluster([39, 30], [s, s], cpsc))
+    cpool.add_cluster(Cluster([22, 17], [s, s], cpsc))
+    cpool.add_cluster(Cluster([35, 42], [s, s], cpsc))
+    cpool.add_cluster(Cluster([32, 14], [s, s], cpsc))
+    cpool.add_cluster(Cluster([11, 10], [s, s], cpsc))
+    cpool.add_cluster(Cluster([18, 9], [s, s], cpsc))
+    cpool.add_cluster(Cluster([18, 43], [s, s], cpsc))
 
     # Energy
-    cpoolE = cpool.get_subpool([0,1,2,3,4,5,6,7,9,15])
+    cpoolE = cpool.get_subpool([0, 1, 2, 3, 4, 5, 6, 7, 9, 15])
     ecisE = [
         -78407.3247588,
         47.164484875,
@@ -52,27 +52,29 @@ def test_clathrate_mc():
         0.0108175321899,
         0.0101521144776,
         0.00121744613474,
-        0.000413664306204
+        0.000413664306204,
     ]
-    multE = [1,24,16,6,12,8,48,24,24,24]
+    multE = [1, 24, 16, 6, 12, 8, 48, 24, 24, 24]
     corcE = CorrelationsCalculator("binary-linear", plat, cpoolE)
-    corcE.reset_mc(mc = True)
+    corcE.reset_mc(mc=True)
 
-    scellE = SuperCell(plat,[(2,0,0),(0,2,0),(0,0,2)])
+    scellE = SuperCell(plat, [(2, 0, 0), (0, 2, 0), (0, 0, 2)])
 
     nmc = 10
-    
+
     for i in range(nmc):
-        struc = scellE.gen_random_structure({0:[16]})
+        struc = scellE.gen_random_structure({0: [16]})
         corrs = corcE.get_cluster_correlations(struc)
         print(corrs)
         erg = 0
         for j in range(len(ecisE)):
             erg += multE[j] * ecisE[j] * corrs[j]
 
-        print(i,erg)
+        print(i, erg)
 
-    cpool.write_clusters_db(cpool.get_cpool(),cpool.get_cpool_scell(),"test_clathrate_mc-cpool.json")
+    cpool.write_clusters_db(
+        cpool.get_cpool(), cpool.get_cpool_scell(), "test_clathrate_mc-cpool.json"
+    )
 
 
 if __name__ == "__main__":

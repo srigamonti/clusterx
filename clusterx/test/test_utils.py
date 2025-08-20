@@ -8,7 +8,7 @@ from clusterx.utils import (
     PolynomialFunction,
     PolynomialBasis,
     lattice_wrap_index,
-    grid_mapping
+    grid_mapping,
 )
 
 
@@ -19,13 +19,14 @@ from clusterx.utils import (
         ((10, 10, 10, 2), np.array([3, 3, 3, 0]), (4, 4, 4)),
         ((10, 10, 10, 3), np.array([9, 9, 9, 2]), (3, 3, 3)),
         ((10, 10, 1), np.array([9, 9, 0]), (3, 3)),
-    ]
+    ],
 )
 def test_grid_mapping(grid_shape, i_grid, p_reduced):
     grid = np.arange(np.prod(grid_shape)).reshape(grid_shape)
     grid_reduced, i_new = grid_mapping(grid, i_grid, p_reduced)
     np.testing.assert_array_equal(
-        grid_reduced.shape, list(p_reduced) + [grid_shape[-1]])
+        grid_reduced.shape, list(p_reduced) + [grid_shape[-1]]
+    )
     assert np.all(np.array(p_reduced) - i_new[:-1] > 0)
     assert np.all(i_new[-1] >= 0)
     val = grid[*i_grid]
@@ -53,7 +54,7 @@ def test_lattice_wrap_index():
         [(10, 10), 33.0],  # double wrapping
         [[slice(0, 10), 1], False],  # no slice indexing
         [1, False],  # no integer indexing
-        [(1,2,3), False],  # wrong shape of index
+        [(1, 2, 3), False],  # wrong shape of index
     ]  # [index, expected value]
     for idx, value in test_vals:
         if isinstance(value, float):

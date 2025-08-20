@@ -12,31 +12,25 @@ from clusterx.structure import Structure
 
 @pytest.fixture
 def parent_lattice():
-    cell = [
-        [3,0,0],
-        [0,1,0],
-        [0,0,5]]
-    positions = [
-        [0,0,0],
-        [1,0,0],
-        [2,0,0]]
-    pbc = [True,True,False]
-    pri = Atoms(['H','H','H'], positions=positions, cell=cell, pbc=pbc)
-    su1 = Atoms(['C','H','H'], positions=positions, cell=cell, pbc=pbc)
-    su2 = Atoms(['H','He','H'], positions=positions, cell=cell, pbc=pbc)
-    su3 = Atoms(['H','N','H'], positions=positions, cell=cell, pbc=pbc)
+    cell = [[3, 0, 0], [0, 1, 0], [0, 0, 5]]
+    positions = [[0, 0, 0], [1, 0, 0], [2, 0, 0]]
+    pbc = [True, True, False]
+    pri = Atoms(["H", "H", "H"], positions=positions, cell=cell, pbc=pbc)
+    su1 = Atoms(["C", "H", "H"], positions=positions, cell=cell, pbc=pbc)
+    su2 = Atoms(["H", "He", "H"], positions=positions, cell=cell, pbc=pbc)
+    su3 = Atoms(["H", "N", "H"], positions=positions, cell=cell, pbc=pbc)
 
-    return ParentLattice(pri, substitutions=[su1,su2,su3], pbc=pbc)
+    return ParentLattice(pri, substitutions=[su1, su2, su3], pbc=pbc)
 
 
 @pytest.fixture
 def super_cell(parent_lattice):
-    return SuperCell(parent_lattice, [(1,0,0),(0,3,0),(0,0,1)])
+    return SuperCell(parent_lattice, [(1, 0, 0), (0, 3, 0), (0, 0, 1)])
 
 
 @pytest.fixture
 def structure(super_cell):
-    return Structure(super_cell, decoration=[1]*len(super_cell))
+    return Structure(super_cell, decoration=[1] * len(super_cell))
 
 
 def test_reduced_structure(parent_lattice):
@@ -64,16 +58,21 @@ def test_serialize_load(structure):
 
 def test_sigma_grid_pristine(super_cell):
     sigma_grid = np.array(
-        [[[[0, 0, 0],
-           [0, 0, 0],
-           [0, 0, 0],]]],
-        dtype=int
+        [
+            [
+                [
+                    [0, 0, 0],
+                    [0, 0, 0],
+                    [0, 0, 0],
+                ]
+            ]
+        ],
+        dtype=int,
     )
     sigmas = sigma_grid.flatten()
     struct_flat = Structure(super_cell, sigmas=sigmas)
     struct_grid = Structure.from_sigma_grid(super_cell, sigma_grid)
-    np.testing.assert_array_equal(
-        struct_flat.get_sigmas(), struct_grid.get_sigmas())
+    np.testing.assert_array_equal(struct_flat.get_sigmas(), struct_grid.get_sigmas())
 
 
 def test_sigma_grid_orthorhombic(parent_lattice):
@@ -87,10 +86,10 @@ def test_sigma_grid_orthorhombic(parent_lattice):
 
     struct_flat = Structure(super_cell, sigmas=sigmas)
     struct_grid = Structure.from_sigma_grid(super_cell, sigma_grid)
+    np.testing.assert_array_equal(struct_flat.get_sigmas(), struct_grid.get_sigmas())
     np.testing.assert_array_equal(
-        struct_flat.get_sigmas(), struct_grid.get_sigmas())
-    np.testing.assert_array_equal(
-        struct_flat.get_sigma_grid(), struct_grid.get_sigma_grid())
+        struct_flat.get_sigma_grid(), struct_grid.get_sigma_grid()
+    )
 
 
 def test_initializations(parent_lattice):
@@ -113,7 +112,8 @@ def test_initializations(parent_lattice):
     for other in others:
         assert reference == other
         np.testing.assert_array_equal(
-            reference.get_sigma_grid(), other.get_sigma_grid())
+            reference.get_sigma_grid(), other.get_sigma_grid()
+        )
 
 
 def test_swap(super_cell):
@@ -127,9 +127,7 @@ def test_swap(super_cell):
 
 
 def test_sigma_grid_non_diag(parent_lattice):
-    p = [[1, 1, 0],
-        [-1, 1, 0],
-        [ 0, 0, 2]]
+    p = [[1, 1, 0], [-1, 1, 0], [0, 0, 2]]
     super_cell = SuperCell(parent_lattice, p)
     with pytest.raises(ValueError):
         Structure.from_sigma_grid(super_cell, [])

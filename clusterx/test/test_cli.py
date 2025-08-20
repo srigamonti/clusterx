@@ -26,9 +26,7 @@ def test_help(command):
 
 def run_build_parent_lattice(path):
     command = (
-        "cell build_parent_lattice "
-        "--species=Si,Ge "
-        f"--filepath={path / 'plat.json'} "
+        f"cell build_parent_lattice --species=Si,Ge --filepath={path / 'plat.json'} "
     )
     response = run_command(command)
     assert response.returncode == 0, err_str(command, response)
