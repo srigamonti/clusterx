@@ -66,6 +66,9 @@ class Cluster:
             self.positions_cartesian = np.zeros((self.npoints, 3))
             # self.positions_scaled = np.zeros((self.npoints,3))
             positions_car = super_cell.get_positions()
+            self.positions_cartesian = np.zeros((self.npoints, 3))
+            # self.positions_scaled = np.zeros((self.npoints,3))
+            positions_car = super_cell.get_positions()
             for ip, idx in enumerate(atom_indexes):
                 self.positions_cartesian[ip] = positions_car[idx]
                 self.site_type[ip] = tags[idx]

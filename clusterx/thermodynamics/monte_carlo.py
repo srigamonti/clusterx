@@ -173,7 +173,6 @@ class MonteCarlo:
         acceptance_ratio=None,
         serialize=False,
         filename=None,
-        reduce_super_cell=False,
         **kwargs,
     ):
         r"""Perform Monte-Carlo Metropolis simulation
@@ -279,6 +278,7 @@ class MonteCarlo:
 
         self._em.reset_mc(mc=True)
         e_last = self._em.predict(struc)
+        print("Initial energy:", e_last)
 
         if filename is not None:
             self._filename = filename
@@ -314,6 +314,10 @@ class MonteCarlo:
             ar = acceptance_ratio
             hist = np.zeros(nar, dtype=int)
 
+        if self._error_reset is not None:
+            error_steps = int(self._error_reset)
+            x = 1
+
         for i in tqdm(
             range(1, no_of_sampling_steps + 1),
             total=no_of_sampling_steps,
@@ -322,23 +326,35 @@ class MonteCarlo:
             indices_list = []
 
             for j in range(self._no_of_swaps):
-                ind1, ind2, site_type, rindices = struc.get_random_swap(
+                ind1, ind2, site_type, rindices = struc.get_swap_random(
                     self._sublattice_indices
                 )
                 indices_list.append([ind1, ind2, [site_type, rindices]])
 
             if self._control_flag:
-                de = self._em.predict_swap(
-                    struc,
-                    i=ind1,
-                    j=ind2,
-                    site_types=self._sublattice_indices,
-                    reduce=reduce_super_cell,
-                )
+                if self._error_reset:
+                    if x > error_steps:
+                        x = 1
+                        struc.swap(ind1, ind2, site_type, rindices)
+                        de = self._em.predict(struc) - e_last
+                        struc.swap(ind1, ind2, site_type, rindices)
+                    else:
+                        x += 1
+                        de = self._em.predict_swap(
+                            struc,
+                            ind1,
+                            ind2,
+                            site_types=self._sublattice_indices,
+                        )
+                else:
+                    de = self._em.predict_swap(
+                        struc, ind1, ind2, site_types=self._sublattice_indices
+                    )
             else:
-                struc.swap(ind1, ind2)
+                struc.swap(ind1, ind2, site_type, rindices)
                 de = self._em.predict(struc) - e_last
-                struc.swap(ind1, ind2)
+                struc.swap(ind1, ind2, site_type, rindices)
+            print("Energy change:", de)
 
             if de <= 0:
                 accept_swap = True
@@ -352,7 +368,7 @@ class MonteCarlo:
                     accept_swap = False
 
             if accept_swap:
-                struc.swap(ind1, ind2)
+                struc.swap(ind1, ind2, site_type, rindices)
                 e_last += de
 
                 if self._models:
@@ -498,10 +514,9 @@ class MonteCarloTrajectory:
                         # only works for single swaps
                         dmo = mo.predict_swap(
                             sx,
-                            i=indices_list[0][0],
-                            j=indices_list[0][1],
+                            indices_list[0][0],
+                            indices_list[0][1],
                             site_types=self._sublattice_indices,
-                            reduce=self._reduce_supercell,
                         )
                         movalue[m] = movalue[m] + dmo
                         sdict.update({mo.property_name: movalue[m]})

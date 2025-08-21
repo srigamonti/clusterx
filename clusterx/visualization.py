@@ -2,19 +2,21 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from typing import Optional, List, Dict, Union
-from numpy.typing import NDArray
+from typing import Dict, List, Optional, Union
+
+import matplotlib.pyplot as plt
 import numpy as np
 from ase.data import chemical_symbols as cs
-import matplotlib.pyplot as plt
-from clusterx.structures_set import StructuresSet
+from numpy.typing import NDArray
+
 from clusterx.model import Model
+from clusterx.structures_set import StructuresSet
 from clusterx.visualization_utils import (
-    scatter_plot,
-    save_plot_data,
-    auto_scale_yaxis,
     _set_rc_params,
+    auto_scale_yaxis,
     marker_styles,
+    save_plot_data,
+    scatter_plot,
 )
 
 
@@ -34,10 +36,10 @@ def juview(plat, n=None):
         nglview display object
     """
     import nglview
-    from clusterx.parent_lattice import ParentLattice
-    from clusterx.structures_set import StructuresSet
-    from clusterx.structures_set import Structure
+
     from clusterx.clusters.clusters_pool import ClustersPool
+    from clusterx.parent_lattice import ParentLattice
+    from clusterx.structures_set import Structure, StructuresSet
 
     if isinstance(plat, Structure):
         return _makeview([plat.get_atoms()])
@@ -85,8 +87,9 @@ def _makeview(images):
 
     ``images``: Array of Atoms (or descendant) objects
     """
-    import nglview
     import math
+
+    import nglview
 
     views = []
     for im in images:
@@ -414,8 +417,9 @@ def plot_predictions_vs_target(
     ``cemodel``: Model object
     ``prop_name``: string
     """
-    from matplotlib import rc
     import math
+
+    from matplotlib import rc
 
     energies = sset.get_property_values(property_name=prop_name)
     predictions = sset.get_predictions(cemodel)
@@ -703,12 +707,24 @@ def plot_property(
     xaxis_label=None,
     yaxis_label=None,
     show_plot=True,
+    save_plot=False,
     scale=1.0,
 ):
     """yvalues versus xvalues"""
     import math
+
     from matplotlib import rc, rcParams
 
+    data = {}
+    data["property_name"] = prop_name
+    data["xaxis_label"] = xaxis_label
+    data["yaxis_label"] = yaxis_label
+    data["xvalues"] = xvalues
+    data["yvalues"] = yvalues
+
+    if not save_plot and not show_plot:
+        return data
+    
     width = 15.0 * scale
     fs = int(width * 1.8)
     ticksize = fs
@@ -755,8 +771,118 @@ def plot_property(
 
     if show_plot:
         plt.show()
-    else:
+    if save_plot:
         plt.savefig(prop_name + "_plot.png")
+
+    return data
+
+def plot_property_persistent(
+    xvalues,
+    yvalues,
+    prop_name=None,
+    xaxis_label=None,
+    yaxis_label=None,
+    show_plot=True,
+    scale=1.0,
+):
+    """Persistent, updating plot of yvalues versus xvalues."""
+    import math
+
+    import matplotlib.pyplot as plt
+    from matplotlib import rc, rcParams
+
+    # --- one-time setup (cached on the function) ---
+    if not hasattr(plot_property, "_state"):
+        plt.ion()  # interactive, non-blocking
+        width = 15.0 * scale
+        fs = int(width * 1.8)
+        ticksize = fs
+        golden_ratio = (math.sqrt(5) - 0.9) / 2.0
+        height = float(width * golden_ratio)
+
+        rc("axes", linewidth=3 * scale)
+        rcParams["savefig.format"] = "png"
+
+        fig, ax = plt.subplots(figsize=(width, height))
+        ax.tick_params(width=3 * scale, size=10 * scale, pad=10 * scale)
+        plt.xticks(fontsize=ticksize)
+        plt.yticks(fontsize=ticksize)
+
+        # create a single Line2D we will update on each call
+        (line,) = ax.plot(
+            [],
+            [],
+            marker=".",
+            color="b",
+            markersize=15 * scale,
+            markeredgewidth=2.0 * scale,
+            linewidth=2.2 * scale,
+            label=prop_name or "",
+        )
+
+        plot_property._state = {
+            "fig": fig,
+            "ax": ax,
+            "line": line,
+            "fs": fs,
+            "scale": scale,
+        }
+
+        if prop_name:
+            leg = ax.legend(
+                loc="best",
+                borderaxespad=scale,
+                borderpad=scale,
+                labelspacing=1 * scale,
+                handlelength=2 * scale,
+                handletextpad=scale,
+                fontsize=fs,
+            )
+            leg.get_frame().set_linewidth(3 * scale)
+
+        if xaxis_label:
+            ax.set_xlabel(xaxis_label, fontsize=fs)
+        if yaxis_label:
+            ax.set_ylabel(yaxis_label, fontsize=fs)
+
+    # --- updates on every call ---
+    st = plot_property._state
+    fig, ax, line = st["fig"], st["ax"], st["line"]
+
+    # update labels/legend text if they change
+    if xaxis_label:
+        ax.set_xlabel(xaxis_label, fontsize=st["fs"])
+    if yaxis_label:
+        ax.set_ylabel(yaxis_label, fontsize=st["fs"])
+    if prop_name is not None:
+        line.set_label(prop_name)
+        if not ax.get_legend():
+            leg = ax.legend(
+                loc="best",
+                borderaxespad=st["scale"],
+                borderpad=st["scale"],
+                labelspacing=1 * st["scale"],
+                handlelength=2 * st["scale"],
+                handletextpad=st["scale"],
+                fontsize=st["fs"],
+            )
+            leg.get_frame().set_linewidth(3 * st["scale"])
+        else:
+            ax.legend_.draw_frame(True)
+
+    # set new data + rescale
+    line.set_data(xvalues, yvalues)
+    ax.relim()
+    ax.autoscale_view()
+
+    # redraw without blocking the loop
+    fig.canvas.draw_idle()
+    fig.canvas.flush_events()
+    if show_plot:
+        # Tiny pause lets the GUI event loop process the draw
+        plt.pause(0.001)
+    else:
+        fig.savefig((prop_name or "property") + "_plot.png")
 
 
 def _wls_normalize_histogram_for_plotting(histogram, shift_y_first_nonzero=False):

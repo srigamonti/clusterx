@@ -228,7 +228,7 @@ def test_cli(plat_quaternary, cpool, structure131):
     plat_quaternary.serialize(filepath="ccalc_test_plat.json")
     cpool.serialize(filepath="ccalc_test_cpool.json")
     build_ccalc(
-        basis="trigonometric",
+        basis_name="trigonometric",
         plat_filepath="ccalc_test_plat.json",
         cpool_filepath="ccalc_test_cpool.json",
         ccalc_filepath="ccalc_test_ccalc.pickle",

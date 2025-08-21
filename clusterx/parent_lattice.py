@@ -656,7 +656,7 @@ class ParentLattice(Atoms):
 
         numbers = np.zeros(len(positions), dtype=int)
         for site_index, nrs in _numbers.items():
-            numbers[site_index] = nrs[0]
+            numbers[int(site_index)] = nrs[0]
 
         prist = Atoms(positions=positions, numbers=numbers, cell=cell, pbc=pbc)
         return ParentLattice(atoms=prist, numbers=_numbers, pbc=pbc)

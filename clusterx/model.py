@@ -2,12 +2,14 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from typing import List, Optional
-import pickle
 import os
 import warnings
+from pathlib import Path
+import pickle
+from typing import Optional, List
 
 import numpy as np
+from sklearn.pipeline import Pipeline
 
 from clusterx.super_cell import SuperCell
 from clusterx.correlations import (
@@ -16,8 +18,8 @@ from clusterx.correlations import (
 )
 from clusterx.structure import Structure
 from clusterx.estimators.estimator_factory import EstimatorFactory
-from clusterx.clusters_selector import ClustersSelector
 from clusterx.utils import is_diagonal
+from clusterx.clusters_selector import ClustersSelector
 
 
 class Model:
@@ -75,8 +77,29 @@ class Model:
 
         self.corrc = corrc
         self.property_name = property_name
+
+        if ecis is not None and estimator is not None:
+            raise ValueError(
+                "Only one of 'ecis' or 'estimator' should be provided, not both."
+            )
+
         self.estimator = estimator
         self.ecis = ecis
+
+        # Extract coefficients from estimator if given
+        if isinstance(estimator, Pipeline):
+            final_estimator = estimator[-1]
+            self.ecis = final_estimator.coef_
+            self.intercept = final_estimator.intercept_
+        elif estimator is not None:
+            self.ecis = estimator.coef_
+            self.intercept = estimator.intercept_
+        elif ecis is not None:
+            self.ecis = ecis
+            self.intercept = 0
+        else:
+            raise ValueError("Either 'ecis' or 'estimator' must be provided.")
+
         self.standardize = standardize
         self._basis = None
         self._mc = False
@@ -100,8 +123,19 @@ class Model:
     def _load_from_pickle(filepath: str) -> "Model":
         """Load Model object from a pickle file."""
         try:
+            stem = Path(filepath).stem
+            dirname = os.path.dirname(filepath)
+            filepath_corrc = os.path.join(dirname, stem + "_CCALC.pickle")
+
+            with open(filepath_corrc, "rb") as fcorrc:
+                corrc = pickle.load(fcorrc)
+
             with open(filepath, "rb") as f:
-                return pickle.load(f)
+                model = pickle.load(f)
+
+            model.corrc = corrc
+            return model
+
         except (FileNotFoundError, pickle.UnpicklingError) as e:
             raise ValueError(f"Error loading model from pickle file: {e}") from e
 
@@ -155,8 +189,6 @@ class Model:
         ``db_name``: (DEPRECATED) string
             Name of the json file containing the database
         """
-        from pathlib import Path
-        import os
 
         if filepath is None and db_name is None:
             filepath = "cemodel.pickle"
@@ -184,8 +216,9 @@ class Model:
                 pickle.dump(self, f)
 
         if fmt == "json_db":
-            from ase.db.jsondb import JSONDatabase
             from subprocess import call
+
+            from ase.db.jsondb import JSONDatabase
 
             call(["rm", "-f", db_name])
             atoms_db = JSONDatabase(filename=db_name)
@@ -232,19 +265,20 @@ class Model:
 
     def get_ecis(self):
         """Return array of effective cluster interactions (ECIs) of the model"""
-        if self.ecis is not None:
-            return self.ecis
-        else:
-            if self.standardize:
-                return self.estimator[-1].coef_
-            else:
-                return self.estimator.coef_
+        return self.ecis
+        # if self.ecis is not None:
+        #     return self.ecis
+        # else:
+        #     if self.standardize:
+        #         return self.estimator[-1].coef_
+        #     else:
+        #         return self.estimator.coef_
 
     def get_correlations_calculator(self):
         """Return correlations calculator of the Model object"""
         return self.corrc
 
-    def predict(self, structure):
+    def predict(self, structure, flag=None):
         """Predict property with the optimal cluster expansion model.
 
         **Parameters:**
@@ -252,9 +286,23 @@ class Model:
         ``structure``: Structure object
             structure object to calculate property to.
 
-        """
-        corrs = self.corrc.get_cluster_correlations(structure)
+        ``flag``: dict or None
+            it flags whether the member corrc correlationsCalculator computed 
+            orbits from scratch. This can be useful to konw, in order to serialize the 
+            model instance to accelerate next property predictions
+            Example usage:
 
+                model = Model(filepath="myfilepath.pickle")
+                model.predict(structure,flag={})
+                if  flag["computed_orbits_from_scratch"]:
+                   print("INFO: correlations calculator computed orbits from scrach.")
+                   model.serialize(filepath="myfilepath.pickle")
+
+
+        """
+        # with _timed("Model.predict: Get cluster correlations"):
+        corrs = self.corrc.get_cluster_correlations(structure, flag=flag)
+        
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1, -1))[0]
         else:
@@ -479,8 +527,11 @@ class Model:
         ``params``: dictionary
             Parameters to pass to the fit method of the estimator.
         """
-        from sklearn.model_selection import cross_val_score, cross_val_predict
-        from sklearn.model_selection import LeaveOneOut
+        from sklearn.model_selection import (
+            LeaveOneOut,
+            cross_val_predict,
+            cross_val_score,
+        )
 
         x_mat = self.corrc.get_correlation_matrix(sset)
         y = sset.get_property_values(self.property_name)

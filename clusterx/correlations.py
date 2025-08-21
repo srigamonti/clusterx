@@ -4,15 +4,15 @@
 
 import os
 import pickle
+import warnings
 from subprocess import call
 from typing import Optional
-import warnings
 
-from numba import jit
 import numpy as np
-from ase.db.core import Database
 from ase.db import connect
+from ase.db.core import Database
 from ase.db.jsondb import JSONDatabase
+from numba import jit
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
@@ -259,7 +259,9 @@ class CorrelationsCalculator:
             lengths[i] = len(orbit)
         return lengths
 
-    def get_cluster_orbits_for_scell(self, scell: SuperCell, verbose: bool = False):
+    def get_cluster_orbits_for_scell(
+        self, scell: SuperCell, verbose: bool = False, **kwargs
+    ):
         """Return array of cluster orbits for a given supercell
 
         **Parameters**
@@ -271,17 +273,25 @@ class CorrelationsCalculator:
             If ``True``, prints the progress of the calculation to the console.
         """
         cluster_orbits = None
+        flag = kwargs.get("flag")
 
         # Check if cluster_orbit is already computed
-        for i, _scell in enumerate(self._scells):
-            if cluster_orbits is None:
-                if len(scell.get_positions()) == len(_scell.get_positions()):
-                    if np.allclose(scell._p, _scell._p):
-                        cluster_orbits = self._cluster_orbits_set[i]
-                        break
+        for scell_ref, cluster_orbits_ref in zip(
+            self._scells, self._cluster_orbits_set
+        ):
+            if len(scell.get_positions()) == len(
+                scell_ref.get_positions()
+            ) and np.allclose(scell._p, scell_ref._p):
+                cluster_orbits = cluster_orbits_ref
+                break
+
+        if flag is not None:
+            flag["computed_orbits_from_scratch"] = False
 
         # Compute cluster_orbit from scratch if not available
         if cluster_orbits is None:
+            if flag is not None:
+                flag["computed_orbits_from_scratch"] = True
             if verbose:
                 print("Calculating cluster orbits from scratch for scell")
             # Add new super cell and calculate cluster orbits for it.
@@ -293,10 +303,18 @@ class CorrelationsCalculator:
                 pass
             elif isinstance(scell, ParentLattice):
                 scell = SuperCell(scell, [1, 1, 1])
-
+            # with _timed("INIT: Computing cluster orbits for all clusters"):
             cpool = ClustersPool(scell.get_parent_lattice(), super_cell=scell)
+            # with _timed("Computing cluster orbits for all clusters"):
+            from tqdm import tqdm
 
-            for icl, cluster in enumerate(self._cpool.get_cpool_list()):
+            for icl, cluster in enumerate(
+                tqdm(
+                    self._cpool.get_cpool_list(),
+                    desc="Computing cluster orbits in super cell",
+                    unit="cluster",
+                )
+            ):
                 _cluster_orbit = cpool.get_cluster_orbit(
                     scell,
                     cluster_positions=cluster.get_positions(),
@@ -360,7 +378,9 @@ class CorrelationsCalculator:
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
 
-    def get_cluster_correlations(self, structure: Structure, verbose: bool = False):
+    def get_cluster_correlations(
+        self, structure: Structure, verbose: bool = False, flag=None
+    ):
         """Get cluster correlations for a structure
         **Parameters:**
 
@@ -374,8 +394,11 @@ class CorrelationsCalculator:
         if self._mc and self._cluster_orbits_set != [] and self._num_mc_calls != 0:
             cluster_orbits = self._cluster_orbits_mc
         else:
+            # with _timed(
+            #     "CorrelationsCalculator.get_cluster_correlations: get cluster orbits in correlations"
+            # ):
             cluster_orbits = self.get_cluster_orbits_for_scell(
-                structure.get_supercell(), verbose=verbose
+                structure.get_supercell(), verbose=verbose, flag=flag
             )
             if self._mc is True:
                 self._num_mc_calls = 1

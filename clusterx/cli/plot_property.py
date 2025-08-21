@@ -7,6 +7,7 @@ from typing import Optional
 import plac
 
 from clusterx.cli.config_utils import cmd_message
+from clusterx.model import Model
 from clusterx.structures_set import StructuresSet
 from clusterx.visualization import plot_property_vs_concentration
 

@@ -4,6 +4,9 @@
 
 import copy
 import os
+import time
+import warnings
+from contextlib import contextmanager
 from typing import List, Optional, Union
 
 import numpy as np
@@ -61,6 +64,37 @@ def lattice_wrap_index(index, lattice_shape):
         mod_index = tuple(((i % s + s) % s for i, s in zip(index, lattice_shape)))
         return mod_index
     raise ValueError(f"Unexpected index: {index}, given shape {lattice_shape}")
+
+
+@contextmanager
+def _timed(label):
+    print(f"[{label}] ...starting")  # print immediately
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        end = time.perf_counter()
+        print(f"[{label}] completed in {end - start:.4f} seconds")
+
+
+# @contextmanager
+# def _timed(label):
+#     start = time.perf_counter()
+#     yield
+#     end = time.perf_counter()
+#     print(f"[{label}] {end - start:.4f} seconds")
+
+
+def _process_deprecated(new_value, deprecated_value, new_name, deprecated_name):
+    if deprecated_value is not None:
+        warnings.warn(
+            f"'{deprecated_name}' is deprecated and will be removed in a future version. "
+            f"Please use '{new_name}' instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return deprecated_value
+    return new_value
 
 
 class SupercellError(Exception):

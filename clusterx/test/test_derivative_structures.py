@@ -310,7 +310,10 @@ def test_get_unique_supercells():
                     Structure(scell, scell.get_atomic_numbers()), write_to_db=True
                 )
 
-            sset.serialize(filepath="test_get_unique_supercells-fcc.json")
+            sset.serialize(
+                filepath="test_get_unique_supercells-fcc.json",
+                overwrite=True,
+            )
             print(
                 "Found ",
                 len(unique_scs),
@@ -340,7 +343,9 @@ def test_get_unique_supercells():
                     Structure(scell, scell.get_atomic_numbers()), write_to_db=True
                 )
 
-            sset.serialize(filepath="test_get_unique_supercells-sc.json")
+            sset.serialize(filepath="test_get_unique_supercells-sc.json",
+                overwrite=True,
+            )
             print(
                 "Found ",
                 len(unique_scs),

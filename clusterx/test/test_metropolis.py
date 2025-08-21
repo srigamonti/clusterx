@@ -190,10 +190,10 @@ def test_cli(plat, model):
         no_of_swaps=1,
         predict_swap=True,
         error_reset=None,
-        filename="trajectory.json",
+        traj_filepath="trajectory.json",
         # metropolis sampling arguments
-        no_of_sampling_steps=100,
-        scale_factor=[1.0],
+        n_mc_steps=100,
+        energy_scale_factor=1.0,
         temperature=1.0,
         boltzmann_constant=1.0,
         initial_decoration=None,
