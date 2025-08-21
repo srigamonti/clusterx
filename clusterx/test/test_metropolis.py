@@ -174,15 +174,16 @@ def test_cli(plat, model):
     plat_filepath = "plat_mc.json"
     plat.serialize(plat_filepath)
     sc_shape = [8, 8]
-    nsubs = {
+    n_substitutions = {
         0: [int(np.prod(sc_shape) / 2)]
     }  # one substitution for the whole supercell
     metropolis(
+        task="runmc",
         # class init arguments
         plat_filepath=plat_filepath,
         model_filepath=model_filepath,
         sc_shape=sc_shape,
-        nsubs=nsubs,
+        n_substitutions=n_substitutions,
         ensemble="canonical",
         sublattice_indices=[],
         chemical_potentials=None,

@@ -278,7 +278,6 @@ class MonteCarlo:
 
         self._em.reset_mc(mc=True)
         e_last = self._em.predict(struc)
-        print("Initial energy:", e_last)
 
         if filename is not None:
             self._filename = filename
@@ -354,7 +353,6 @@ class MonteCarlo:
                 struc.swap(ind1, ind2, site_type, rindices)
                 de = self._em.predict(struc) - e_last
                 struc.swap(ind1, ind2, site_type, rindices)
-            print("Energy change:", de)
 
             if de <= 0:
                 accept_swap = True
