@@ -31,7 +31,8 @@ def grid_mapping(grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple):
     indices += offset
     indices %= np.array(grid.shape[:-1]).reshape([-1] + [1] * d)
     i_grid_new = np.array((np.array(p_reduced) // 2).tolist() + [plat_index])
-    return grid[*indices, :], i_grid_new
+    # return grid[*indices, :], i_grid_new  # threw an error in CI, see next line
+    return grid[tuple(indices) + (slice(None),)], i_grid_new
 
 
 def is_diagonal(x: np.ndarray):
