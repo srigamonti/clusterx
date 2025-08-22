@@ -167,10 +167,10 @@ def metropolis(
     boltzmann_constant: float = 1.0,
     initial_decoration: Optional[List[int]] = None,
     acceptance_ratio: Optional[float] = None,
+    random_seed: Optional[int] = None,
     # deprecated
     scale_factor: Optional[List[float]] = None,  # use energy_scale_factor instead
     filename: Optional[str] = None,  # use traj_filepath instead
-    random_seed: Optional[int] = None,
     **sampling_kwargs,
 ):
     """Perform Metropolis sampling
