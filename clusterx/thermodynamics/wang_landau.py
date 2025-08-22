@@ -783,6 +783,7 @@ class WangLandau:
         acc_prob_init_structure=1e-3,
         acc_prob_dist_init_structure="gaussian",
         itmax_init_structure=int(1e8),
+        niter_per_sweep=100000,
         nproc=0,
         seed=None,
         **kwargs,
@@ -957,7 +958,7 @@ class WangLandau:
             # print(f"Info (Wang-Landau): Modification factor: {f}")
             # print(f"Info (Wang-Landau): Histogram flatness: {histogram_flatness}")
             struc, e, g, ibin, cdos, hist_cond, niter = self.flat_histogram(
-                struc, e, g, ibin, f, cdos, histogram_flatness, energy_bin_width
+                struc, e, g, ibin, f, cdos, histogram_flatness, energy_bin_width, niter_per_sweep
             )
 
             # print(f"Info (Wang-Landau): Number of MC steps: {niter}")
@@ -1010,7 +1011,7 @@ class WangLandau:
         return hist_min, hist_avg, n_nonzero_bins
 
     def flat_histogram(
-        self, struc, e, g, inde, f, cdos, histogram_flatness, energy_bin_width
+        self, struc, e, g, inde, f, cdos, histogram_flatness, energy_bin_width, niter_per_sweep=100000,
     ):
         hist_min = 0
         hist_avg = 1
@@ -1020,7 +1021,6 @@ class WangLandau:
         cdos[:, 2] = 0  # Initialize histogram
 
         niter = 0
-        niter_per_sweep = 100000
         nonzero_bins_thresh = 5
 
         # print("Building flat histogram.")
