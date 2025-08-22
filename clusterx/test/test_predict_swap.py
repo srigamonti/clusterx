@@ -67,8 +67,7 @@ def test_swap_clathrate(basis):
     np.testing.assert_allclose(e1 - e0, e_diff_swap)
 
 
-@pytest.mark.parametrize("reduce", [False, True])
-def test_swap(plat_cubic, model_cubic, reduce):
+def test_swap(plat_cubic, model_cubic):
     seed_rngs(42)
 
     p = [3, 3, 3]  # for 2*2*2 supercell, results are unreliable due to wrapping
@@ -81,7 +80,7 @@ def test_swap(plat_cubic, model_cubic, reduce):
             if j > i:
                 continue
             pred_init = model_cubic.predict(structure)
-            pred_swap = model_cubic.predict_swap(structure, i, j, reduce=reduce)
+            pred_swap = model_cubic.predict_swap(structure, i, j)
             structure.swap(i, j)
             pred_final = model_cubic.predict(structure)
             preds_full.append(pred_final - pred_init)
@@ -132,14 +131,3 @@ def test_metropolis_cubic(plat_cubic, model_cubic):
     )
     traj_swap = mc_swap.metropolis(temperature=100, no_of_sampling_steps=nsteps)
     np.testing.assert_allclose(traj_swap.get_energies(), traj_full.get_energies())
-
-    seed_rngs(42)
-    mc_swap_reduced = MonteCarlo(
-        energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=True
-    )
-    traj_swap_reduced = mc_swap_reduced.metropolis(
-        temperature=100, no_of_sampling_steps=nsteps, reduce_super_cell=True
-    )
-    np.testing.assert_allclose(
-        traj_swap_reduced.get_energies(), traj_full.get_energies()
-    )
