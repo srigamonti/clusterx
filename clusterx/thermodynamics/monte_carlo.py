@@ -241,6 +241,12 @@ class MonteCarlo:
 
         from clusterx.utils import poppush
 
+        scale_factor = (
+            scale_factor
+            if scale_factor is not None
+            else [self._scell.get_index()]
+        )
+
         scale_factor_product = boltzmann_constant * temperature
         for el in scale_factor:
             scale_factor_product *= el

@@ -95,9 +95,7 @@ class MonteCarloLite:
             self.e_pristine = self._emodel.predict(self.structure)
 
         with _timed("MonteCarloLite.init(): Initialize interaction dictionaries"):
-            self._emodel._initialize_interaction_dictionaries(
-                self._scell, [self._substitutional_sublattice]
-            )
+            self._emodel._init_interaction_dict(self._scell)
 
         print("\n" + "=" * 70)
         print("MonteCarloLite Initialized")
@@ -424,15 +422,16 @@ class MonteCarloLite:
                 if use_arrays_backup_for_rejected_moves:
                     self.structure.backup_arrays()
                 de = 0.0
-                for atom_index, sigma in zip(atom_indices, new_sigmas):
+                for atom_index, new_sigma, old_sigma in zip(atom_indices, new_sigmas, old_sigmas):
                     de += self._emodel.predict_flip(
                         self.structure,
-                        atom_index=atom_index,
-                        new_sigma=sigma,
+                        index=atom_index,
+                        old_sigma=old_sigma,
+                        new_sigma=new_sigma,
                         site_types=[self._substitutional_sublattice],
                     )
                     self.structure.update_arrays(
-                        atom_indices=[atom_index], new_sigmas=[sigma]
+                        atom_indices=[atom_index], new_sigmas=[new_sigma]
                     )
 
                 e1 = e + de

@@ -184,8 +184,8 @@ def cli_kwargs():
     args["keep_sigmas"]: Optional[int] = 1
     args["mcscell_filepath"]: str = "mc-scell.pickle"
     args["traj_filepath"]: str = "mc-trajectory.json"
-    args["sc_shape"]: Optional[Union[int, List[int], List[List[int]]]] = 1
-    args["n_substitutions"]: Optional[Union[int, dict]] = None
+    args["sc_shape"]: Optional[Union[int, List[int], List[List[int]]]] = 2
+    args["n_substitutions"]: Optional[Union[int, dict]] = 1
     args["ensemble"]: str = "canonical"
     args["sublattice_indices"]: List[int] = []
     args["chemical_potential"]: float = 0.0
@@ -214,9 +214,8 @@ def cli_kwargs():
     [
         ("usage", []),
         ("runmc", []),
-        # TODO: how to use the runs parameter?
-        pytest.param("setup", ["mc-setup.pickle"], marks=pytest.mark.xfail),
-        pytest.param("run", ["mc-run.pickle"], marks=pytest.mark.xfail),
+        ("setup", ["mc-setup.pickle"]),
+        ("run", ["mc-run.pickle"]),
     ],
 )
 def test_cli(plat, model, cli_kwargs, task, filelist):
@@ -226,7 +225,7 @@ def test_cli(plat, model, cli_kwargs, task, filelist):
     model.serialize(model_filepath)
     plat_filepath = "plat.json"
     plat.serialize(plat_filepath)
-    sc_shape = [8, 8]
+    cli_kwargs["task"] = task
     metropolis(**cli_kwargs)
     for filename in filelist:
         print(filename)

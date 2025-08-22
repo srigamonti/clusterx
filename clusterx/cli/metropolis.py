@@ -218,7 +218,7 @@ def metropolis(
             )
             mc.metropolis(
                 no_of_sampling_steps=n_mc_steps,
-                scale_factor=[1 / energy_scale_factor],
+                scale_factor=[1 / energy_scale_factor] if energy_scale_factor is not None else None,
                 temperature=temperature,
                 boltzmann_constant=boltzmann_constant,
                 initial_decoration=initial_decoration,
@@ -265,10 +265,13 @@ def metropolis(
 
             n_substitutions0 = n_substitutions
 
+            if runs is None:
+                runs = [{}]
+
             for irun, run in enumerate(runs):
-                temperature = run["temperature"]
-                n_mc_steps = run["n_mc_steps"]
-                mcrun_filepath = run["mcrun_filepath"]
+                temperature = run.get("temperature", temperature)
+                n_mc_steps = run.get("n_mc_steps", n_mc_steps)
+                mcrun_filepath = run.get("mcrun_filepath", mcrun_filepath)
                 ignore = run.get("ignore", False)
                 equilibration_run = run.get("equilibration_run", False)
                 n_substitutions = run.get("n_substitutions", n_substitutions0)
