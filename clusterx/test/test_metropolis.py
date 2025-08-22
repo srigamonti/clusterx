@@ -2,9 +2,15 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-import clusterx as c
-import subprocess
+import os
+from typing import Optional, Union, List
+
+import pytest
 from ase.spacegroup import crystal
+from ase.data import atomic_numbers as cn
+from ase import Atoms
+import numpy as np
+
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.clusters.clusters_pool import ClustersPool
@@ -16,12 +22,6 @@ from clusterx.thermodynamics.monte_carlo import MonteCarloTrajectory
 from clusterx.utils import isclose
 from clusterx.utils import dict_compare
 from clusterx.cli.metropolis import metropolis
-
-import pytest
-from ase.data import atomic_numbers as cn
-from ase import Atoms
-import numpy as np
-import os
 
 
 @pytest.fixture
@@ -168,38 +168,69 @@ def cemodel_full_sub(plat_full_sub):
     return Model(corrc, "energy2", ecis=np.multiply(ecis, mult))
 
 
-def test_cli(plat, model):
-    model_filepath = "model_mc.pickle"
+@pytest.fixture
+def cli_kwargs():
+    """Collection of reproducible default arguments."""
+    args = {}
+    args["task"]: str = "usage"
+    args["plat_filepath"]: str = "plat.json"
+    args["model_filepath"]: str = "model.pickle"
+    args["mcsetup_filepath"]: str = "mc-setup.pickle"
+    args["mcrun_filepath"]: str = "mc-run.pickle"
+    args["mcrun_filepaths"]: list[str] = None
+    args["plotdata_filepath"]: str = None
+    args["show_plot"] = True
+    args["save_plot"] = False
+    args["keep_sigmas"]: Optional[int] = 1
+    args["mcscell_filepath"]: str = "mc-scell.pickle"
+    args["traj_filepath"]: str = "mc-trajectory.json"
+    args["sc_shape"]: Optional[Union[int, List[int], List[List[int]]]] = 1
+    args["n_substitutions"]: Optional[Union[int, dict]] = None
+    args["ensemble"]: str = "canonical"
+    args["sublattice_indices"]: List[int] = []
+    args["chemical_potential"]: float = 0.0
+    args["chemical_potentials"]: Optional[dict] = None
+    args["models_aux_filepaths"]: List[str] = []
+    args["no_of_swaps"]: int = 1
+    args["predict_swap"]: bool = True
+    args["n_error_reset"]: Optional[int] = None
+    # metropolis sampling arguments
+    args["n_mc_steps"]: int = 100
+    args["n_mc_eq"]: int = 1
+    args["n_clics"]: int = 1
+    args["runs"]: Optional[dict] = None
+    args["energy_scale_factor"]: float | None = None
+    args["temperature"]: float = 1.0
+    args["temperatures"]: Optional[List[float]] = None
+    args["boltzmann_constant"]: float = 1.0
+    args["initial_decoration"]: Optional[List[int]] = None
+    args["acceptance_ratio"]: Optional[float] = None
+    args["random_seed"]: Optional[int] = None
+    return args
+
+
+@pytest.mark.parametrize(
+    "task,filelist",
+    [
+        ("usage", []),
+        ("runmc", []),
+        # TODO: how to use the runs parameter?
+        pytest.param("setup", ["mc-setup.pickle"], marks=pytest.mark.xfail),
+        pytest.param("run", ["mc-run.pickle"], marks=pytest.mark.xfail),
+    ],
+)
+def test_cli(plat, model, cli_kwargs, task, filelist):
+    """Perform the specified task from cli function and check that correct
+    files are generated."""
+    model_filepath = "model.pickle"
     model.serialize(model_filepath)
-    plat_filepath = "plat_mc.json"
+    plat_filepath = "plat.json"
     plat.serialize(plat_filepath)
     sc_shape = [8, 8]
-    n_substitutions = {
-        0: [int(np.prod(sc_shape) / 2)]
-    }  # one substitution for the whole supercell
-    metropolis(
-        task="runmc",
-        # class init arguments
-        plat_filepath=plat_filepath,
-        model_filepath=model_filepath,
-        sc_shape=sc_shape,
-        n_substitutions=n_substitutions,
-        ensemble="canonical",
-        sublattice_indices=[],
-        chemical_potentials=None,
-        models_aux_filepaths=[],
-        no_of_swaps=1,
-        predict_swap=True,
-        error_reset=None,
-        traj_filepath="trajectory.json",
-        # metropolis sampling arguments
-        n_mc_steps=100,
-        energy_scale_factor=1.0,
-        temperature=1.0,
-        boltzmann_constant=1.0,
-        initial_decoration=None,
-        acceptance_ratio=None,
-    )
+    metropolis(**cli_kwargs)
+    for filename in filelist:
+        print(filename)
+        assert os.path.exists(filename)
 
 
 @pytest.mark.xfail(raises=AssertionError, reason="Ref values not updated")
