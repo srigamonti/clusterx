@@ -146,10 +146,9 @@ class SuperCell(ParentLattice):
             make_supercell(atoms, self._p) for atoms in self._plat.get_substitutions()
         ]
 
-        with _timed("SuperCell.init: wrap all Atom objects"):
-            prist.wrap()
-            for i in range(len(subs)):
-                subs[i].wrap()
+        prist.wrap()
+        for i in range(len(subs)):
+            subs[i].wrap()
 
         if self._sort_key is not None:
             from clusterx.utils import sort_atoms
@@ -158,17 +157,13 @@ class SuperCell(ParentLattice):
             for i in range(len(subs)):
                 subs[i] = sort_atoms(subs[i], key=self._sort_key)
 
-        with _timed(
-            "SuperCell.init: Initialize parent ParentLattice object of SuperCell"
-        ):
-            super(SuperCell, self).__init__(atoms=prist, substitutions=subs)
+        super(SuperCell, self).__init__(atoms=prist, substitutions=subs)
 
         self._natoms = len(self)
         self.set_pbc(self._plat.get_pbc())
 
         if sym_table == True:
-            with _timed("SuperCell.init: Compute symmetry table"):
-                self._sym_table = self.get_symmetry_table()
+            self._sym_table = self.get_symmetry_table()
         else:
             self._sym_table = []
 
