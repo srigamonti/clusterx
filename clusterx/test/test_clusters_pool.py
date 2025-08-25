@@ -14,21 +14,40 @@ from clusterx.parent_lattice import ParentLattice
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.super_cell import SuperCell
 from clusterx.test.defaults import get_clathrate_plat
+from clusterx.cli.build_cpool import build_cpool
 
 
 @pytest.fixture
-def cpool():
+def plat():
     cell = [[3, 0, 0], [0, 1, 0], [0, 0, 5]]
     positions = [[0, 0, 0], [1, 0, 0], [2, 0, 0]]
     pbc = [True, True, False]
-
     pri = Atoms(["H", "H", "H"], positions=positions, cell=cell, pbc=pbc)
     su1 = Atoms(["C", "H", "H"], positions=positions, cell=cell, pbc=pbc)
     su2 = Atoms(["H", "He", "H"], positions=positions, cell=cell, pbc=pbc)
     su3 = Atoms(["H", "N", "H"], positions=positions, cell=cell, pbc=pbc)
+    return ParentLattice(pri, substitutions=[su1, su2, su3], pbc=pbc)
 
-    pl = ParentLattice(pri, substitutions=[su1, su2, su3], pbc=pbc)
-    return ClustersPool(pl, npoints=[1, 2, 3], radii=[0, 2.1, 2.1])
+
+@pytest.fixture
+def cpool(plat):
+    return ClustersPool(plat, npoints=[1, 2, 3], radii=[0, 2.1, 2.1])
+
+
+@pytest.mark.parametrize("method", [0, 1])
+def test_cli(plat, method):
+    filepath_plat = "test_clusters_pool_plat.json"
+    plat.serialize(filepath_plat)
+    build_cpool(
+        [1, 2, 3],  # List[int] or str
+        [0, 2.1, 2.1],  # List[float] or str
+        sset_filepath=None,  # Optional[str]
+        plat_filepath=filepath_plat,  # Optional[str]
+        psc=2,  # Supercell definition
+        method=method,  # int
+        cpool_filepath="cpool.json",  # str
+        vacancy_atomic_number=0,  # int
+    )
 
 
 def test_serialize_load(cpool):

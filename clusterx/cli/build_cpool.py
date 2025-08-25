@@ -53,7 +53,7 @@ def build_cpool(
     sset_filepath=None,  # Optional[str]
     plat_filepath=None,  # Optional[str]
     psc=1,  # Supercell definition
-    method=1,  # int
+    method=0,  # int
     cpool_filepath="cpool.json",  # str
     vacancy_atomic_number=0,  # int
 ):
