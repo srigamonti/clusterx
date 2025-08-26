@@ -111,6 +111,23 @@ def test_flip(plat_cubic, model_cubic, reduce):
     np.testing.assert_allclose(preds_flip, preds_full)
 
 
+def test_flip_scale_sc(plat_cubic, model_cubic):
+    for i in range(3, 10):
+        model_cubic.reset_mc(True)
+        p = [3, 3, 3 * i]
+        scell = SuperCell(plat_cubic, p)
+        structure = scell.get_pristine_structure()
+        pred_init = model_cubic.predict(structure)
+        old_sigma = structure.sigmas[0]
+        new_sigma = 1 - old_sigma
+        pred_flip = model_cubic.predict_flip(
+            structure, 0, old_sigma, new_sigma
+        )
+        structure.sigmas[i] = new_sigma
+        pred_final = model_cubic.predict(structure)
+        np.testing.assert_allclose(pred_flip, pred_final - pred_init)
+
+
 def test_metropolis_cubic(plat_cubic, model_cubic):
     seed_rngs(42)
 
