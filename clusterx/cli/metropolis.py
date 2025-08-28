@@ -7,6 +7,7 @@ from typing import List, Optional, Union
 
 import numpy as np
 import plac
+import matplotlib.pyplot as plt
 
 from clusterx.cli.config_utils import cmd_message, get_command_name
 from clusterx.model import Model
@@ -385,6 +386,31 @@ def metropolis(
                         xaxis_label="Step number",
                         yaxis_label="Energy",
                     )
+
+        case "plot-mc-runs":
+            """Plot multiple runs in one frame."""
+            scale = 1.0
+            width = 15.0 * scale
+            golden_ratio = (np.sqrt(5) - 0.9) / 2.0
+            height = float(width * golden_ratio)
+            fig, ax = plt.subplots(figsize=(width, height))
+            for i, mcrun_filepath in enumerate(mcrun_filepaths):
+                mcrun = MCRun.from_file(filepath=mcrun_filepath)
+                energies_accepted = mcrun.energies
+                steps_accepted = mcrun.accepted_steps
+                temperature = mcrun.temperature
+                ax.plot(
+                    steps_accepted,
+                    energies_accepted,
+                    marker=".",
+                    markersize=15 * scale,
+                    markeredgewidth=2.0 * scale,
+                    linewidth=2.2 * scale,
+                    label=f"T={temperature}",
+                )
+            plt.legend()
+            plt.show()
+            fig.savefig("mc-runs.png")
 
         case "info-mc-run":
             if mcrun_filepath is not None and mcrun_filepaths is not None:
