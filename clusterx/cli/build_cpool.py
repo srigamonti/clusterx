@@ -66,7 +66,7 @@ def build_cpool(
         sset_filepath: Path to the structure set file (optional).
         plat_filepath: Path to the parent lattice file (optional).
         psc: Supercell definition (default: 1).
-        method: Method ID used to construct clusters (default: 1).
+        method: Method ID used to construct clusters (default: 0).
         cpool_filepath: Output filepath for the cluster pool (default: "cpool.json").
         vacancy_atomic_number: Atomic number for vacancy site (default: 0).
 

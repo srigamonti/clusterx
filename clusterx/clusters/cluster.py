@@ -2,6 +2,8 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+from itertools import combinations
+
 import numpy as np
 
 
@@ -95,8 +97,14 @@ class Cluster:
         self._radius = r
 
     def _compute_radius_distances(self, distances):
-        """Compute cluster radius based on distances matrix"""
-        self._radius = np.max(distances)
+        """Compute cluster radius based on distances matrix.
+        Distances contains all distances of the plat/scell."""
+        r_max = 0.0
+        for i, j in combinations(self.ais, 2):
+            r = distances[i, j]
+            if r > r_max:
+                r_max = r
+        self._radius = r_max
 
     def set_radius(self, radius):
         """Set cluster radius manually"""
@@ -107,6 +115,7 @@ class Cluster:
     def get_radius(self, distances=None):
         """Return cluster radius
         The radius of a cluster is the maximum distance between any pair of its points.
+        Distances (optional) contains all distances of the plat/scell.
         """
         if distances is not None:
             self._compute_radius_distances(distances)
