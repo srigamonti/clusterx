@@ -11,7 +11,7 @@ from sklearn.linear_model import LinearRegression
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.model import Model
+from clusterx.model import Model, ModelBuilder
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.structures_set import StructuresSet
@@ -53,13 +53,23 @@ def structures_set_empty(plat):
 
 @pytest.fixture
 def structures_set(structures_set_empty, scell):
+    sset = structures_set_empty
     np.random.seed(10)
     n_structures = 10
     for i in range(n_structures):
-        structures_set_empty.add_structure(scell.gen_random_structure())
-    strset.set_calculator(EMT2())
-    energies = strset.compute_property_values()
-    return structures_set_empty
+        sset.add_structure(scell.gen_random_structure())
+    sset.set_calculator(EMT2())
+    sset.compute_property_values(property_name="energy_emt2")
+
+    def a_prop(i, structure, **kwargs):
+        at = structure.get_atoms()
+        at.calc = EMT2()
+        return at.get_potential_energy() * 0.1 - 10
+
+    sset.compute_property_values(
+        property_name="energy_shift", property_calc=a_prop
+    )
+    return sset
 
 
 @pytest.fixture
@@ -99,3 +109,21 @@ def test_ecis_estimator_init(model, model_estimator, structure):
     prediction = model.predict(structure)
     prediction_estimator = model_estimator.predict(structure)
     np.testing.assert_allclose(prediction_estimator, prediction)
+
+
+def test_model_builder(structures_set, cpool, corrc):
+    model = ModelBuilder(
+        basis="trigonometric",
+        selector_type="identity",
+        selector_opts={},
+        estimator_type="skl_LinearRegression",
+        estimator_opts={},
+        standardize=False,
+    )
+    model.build(
+        sset=structures_set,
+        cpool=cpool,
+        prop="energy_emt2",
+        corrc=corrc,
+        verbose=False
+    )
