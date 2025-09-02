@@ -3,6 +3,7 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import warnings
+from typing import List
 
 import numpy as np
 from ase.calculators.calculator import Calculator
@@ -987,21 +988,31 @@ class StructuresSet:
         """Return list of stored property names."""
         return list(self._props.keys())
 
-    def get_property_values(self, property_name):
+    def get_property_values(self, property_name: str | List[str]):
         """Return list of property values.
 
         **Parameters:**
 
-        ``property_name``: String
-            Name of the property. If not sure, a list of property names can be
-            obtained ``StructuresSet.get_property_names()``.
+        ``property_name``: String | list of String
+            Name of the property or list of property names. If not sure,
+            a list of property names can be obtained
+            ``StructuresSet.get_property_names()``.
 
         **Returns:**
 
         ``props``: python array
-            A python array with the property values
+            A python array with the property values. If property_name is list,
+            return list of lists with property values, otherwise return simple
+            list of property values.
         """
-        return self._props[property_name]
+        if isinstance(property_name, list):
+            props = []
+            for name in property_name:
+                props.append(self._props[name])
+        elif isinstance(property_name, str):
+            return self._props[property_name]
+        else:
+            raise TypeError("property_name has to be either str or list of str.")
 
     def get_predictions(self, cemodel):
         """Get predictions of CE model on structures set

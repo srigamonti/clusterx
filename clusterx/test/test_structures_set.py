@@ -78,6 +78,21 @@ def test_compute_property_values(structures_set):
     )
 
 
+def test_get_property_values(structures_set):
+    sset = structures_set
+    property_names = sset.get_property_names()
+    # get properties one-by-one
+    props_single = []
+    for property_name in property_names:
+        properties = sset.get_property_values(property_name=property_name)
+        props_single.append(properties)
+    # get all properties at once
+    props_multi = sset.get_property_values(property_name=property_names)
+    np.testing.assert_array_equal(props_single, props_multi)
+    with pytest.raises(TypeError):
+        sset.get_property_values(property_name=1)
+
+
 def test_set_property_values(structures_set):
     structures_set.set_property_values(
         property_name="set_prop", property_vals=[1.0] * len(structures_set)
