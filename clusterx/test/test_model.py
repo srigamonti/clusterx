@@ -66,9 +66,7 @@ def structures_set(structures_set_empty, scell):
         at.calc = EMT2()
         return at.get_potential_energy() * 0.1 - 10
 
-    sset.compute_property_values(
-        property_name="energy_shift", property_calc=a_prop
-    )
+    sset.compute_property_values(property_name="energy_shift", property_calc=a_prop)
     return sset
 
 
@@ -124,15 +122,20 @@ def test_model_builder(structures_set, cpool, corrc, props):
     property_names = structures_set.get_property_names()
     if props == "single":
         prop = property_names[0]
+        shape = ()
     elif props == "multi":
         prop = property_names
+        shape = (2,)
     model = mb.build(
-        sset=structures_set,
-        cpool=cpool,
-        prop=prop,
-        corrc=corrc,
-        verbose=False
+        sset=structures_set, cpool=cpool, prop=prop, corrc=corrc, verbose=False
     )
-    prediction = model.predict(structures_set[0])
-    print(prediction, prediction.shape)
-
+    structure = structures_set[0]
+    prediction = model.predict(structure)
+    np.testing.assert_array_equal(prediction.shape, shape)
+    prediction = model.predict_flip(
+        structure,
+        index=0,
+        old_sigma=0,
+        new_sigma=1,
+    )
+    np.testing.assert_array_equal(prediction.shape, shape)
