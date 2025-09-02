@@ -520,12 +520,12 @@ class ClustersSelector:
 
             if opt_cv <= 0:
                 opt_cv = mean_cv
-                opt_clset = [i for i, e in enumerate(ecimult) if e != 0]
+                opt_clset = [i for i, e in enumerate(ecimult) if np.count_nonzero(e) > 0]
                 self.opt_sparsity = sparsity
             else:
                 if opt_cv > mean_cv:
                     opt_cv = mean_cv
-                    opt_clset = [i for i, e in enumerate(ecimult) if e != 0]
+                    opt_clset = [i for i, e in enumerate(ecimult) if np.count_nonzero(e) > 0]
                     self.opt_sparsity = sparsity
 
             if self.sparsity_step == 0.0:
@@ -599,7 +599,7 @@ class ClustersSelector:
             self.set_sizes = np.ones(len(est[-1].alphas_))
             self.lasso_sparsities = est[-1].alphas_
 
-        opt_clset = [i for i, e in enumerate(ecimult) if e != 0]
+        opt_clset = [i for i, e in enumerate(ecimult) if np.count_nonzero(e) > 0]
         if not self.standardize:
             self.opt_sparsity = est.alpha_
         else:

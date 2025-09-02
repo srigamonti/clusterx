@@ -174,3 +174,45 @@ def test_cli(structures_set, cpool, corrc, props):
         weights_filepath=None,
     )
     assert os.path.exists(model_filepath)
+
+
+@pytest.mark.parametrize("props", ["single", "multi"])
+def test_cli_lasso(structures_set, cpool, corrc, props):
+    sset_filepath = "test_model_sset.json"
+    structures_set.serialize(sset_filepath, overwrite=True)
+    cpool_filepath = "test_model_cpool.json"
+    cpool.serialize(cpool_filepath)
+    ccalc_filepath = "test_model_ccalc.pickle"
+    corrc.serialize(ccalc_filepath)
+    model_filepath = "test_model_path.pickle"
+    property_names = structures_set.get_property_names()
+
+    if props == "single":
+        prop = property_names[0]
+    elif props == "multi":
+        prop = property_names
+
+    selector_type = "lasso_cv"
+    selector_opts = {
+        "sparsity_max": 1,
+        "sparsity_min": 1e-3,
+        "sparsity_step": 0.0,
+        "max_iter": 1_000_000,
+        "cv_type": "10-fold",
+        "cv_shuffle": True
+    }
+
+    build_model(
+        property_name=prop,
+        ccalc_filepath=ccalc_filepath,
+        sset_filepath=sset_filepath,
+        cpool_filepath=cpool_filepath,
+        model_filepath=model_filepath,
+        selector_type=selector_type,
+        selector_opts=selector_opts,
+        estimator_type="skl_LinearRegression",
+        estimator_opts={"fit_intercept": True},
+        plot_optimization_vs_sparsity=None,
+        weights_filepath=None,
+    )
+    assert os.path.exists(model_filepath)

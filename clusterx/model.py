@@ -757,7 +757,7 @@ class ModelBuilder:
             self.opt_cpool = self.selector.select_clusters(
                 sset,
                 cpool,
-                prop,  # TODO: fix this for list of properties
+                prop,
                 comat=self.ini_comat,
             )
             self.opt_comat = self.selector.optimal_comat
