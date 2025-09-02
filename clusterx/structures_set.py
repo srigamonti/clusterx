@@ -1000,17 +1000,19 @@ class StructuresSet:
 
         **Returns:**
 
-        ``props``: python array
+        ``props``: np.array
             A python array with the property values. If property_name is list,
-            return list of lists with property values, otherwise return simple
+            return list of lists with property values, first axis is
+            number of samples, second axis is property. Otherwise return simple
             list of property values.
         """
         if isinstance(property_name, list):
             props = []
             for name in property_name:
                 props.append(self._props[name])
+            return np.array(props).reshape((-1, len(property_name)))
         elif isinstance(property_name, str):
-            return self._props[property_name]
+            return np.array(self._props[property_name])
         else:
             raise TypeError("property_name has to be either str or list of str.")
 

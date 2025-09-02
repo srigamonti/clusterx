@@ -111,8 +111,9 @@ def test_ecis_estimator_init(model, model_estimator, structure):
     np.testing.assert_allclose(prediction_estimator, prediction)
 
 
-def test_model_builder(structures_set, cpool, corrc):
-    model = ModelBuilder(
+@pytest.mark.parametrize("props", ["single", "multi"])
+def test_model_builder(structures_set, cpool, corrc, props):
+    mb = ModelBuilder(
         basis="trigonometric",
         selector_type="identity",
         selector_opts={},
@@ -120,10 +121,18 @@ def test_model_builder(structures_set, cpool, corrc):
         estimator_opts={},
         standardize=False,
     )
-    model.build(
+    property_names = structures_set.get_property_names()
+    if props == "single":
+        prop = property_names[0]
+    elif props == "multi":
+        prop = property_names
+    model = mb.build(
         sset=structures_set,
         cpool=cpool,
-        prop="energy_emt2",
+        prop=prop,
         corrc=corrc,
         verbose=False
     )
+    prediction = model.predict(structures_set[0])
+    print(prediction, prediction.shape)
+

@@ -6,17 +6,19 @@ import os
 import warnings
 from pathlib import Path
 import pickle
-from typing import Optional, List
+from typing import List
 
 import numpy as np
 from sklearn.pipeline import Pipeline
 
+from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.super_cell import SuperCell
 from clusterx.correlations import (
     CorrelationsCalculator,
     cluster_correlations_flip,
 )
 from clusterx.structure import Structure
+from clusterx.structures_set import StructuresSet
 from clusterx.estimators.estimator_factory import EstimatorFactory
 from clusterx.utils import is_diagonal
 from clusterx.clusters_selector import ClustersSelector
@@ -31,8 +33,8 @@ class Model:
 
     corrc : CorrelationsCalculator, optional
         The correlations calculator corresponding to the optimal model.
-    property_name : str, optional
-        The name of the property to be queried in `StructureSet`.
+    property_name : str or list of str, optional
+        The name of the property/properties to be queried in `StructureSet`.
     estimator : object, optional
         An estimator object to predict property values. Alternatively, ECIs can be set.
     ecis : List[float], optional
@@ -64,11 +66,11 @@ class Model:
 
     def __init__(
         self,
-        corrc: Optional[CorrelationsCalculator] = None,
-        property_name: Optional[str] = None,
-        estimator: Optional[object] = None,
-        ecis: Optional[List[float]] = None,
-        filepath: Optional[str] = None,
+        corrc: CorrelationsCalculator | None = None,
+        property_name: str | List[str] | None = None,
+        estimator: object | None = None,
+        ecis: List[float] | None = None,
+        filepath: str | None = None,
         standardize: bool = False,
     ):
         if filepath:
@@ -287,8 +289,8 @@ class Model:
             structure object to calculate property to.
 
         ``flag``: dict or None
-            it flags whether the member corrc correlationsCalculator computed 
-            orbits from scratch. This can be useful to konw, in order to serialize the 
+            it flags whether the member corrc correlationsCalculator computed
+            orbits from scratch. This can be useful to konw, in order to serialize the
             model instance to accelerate next property predictions
             Example usage:
 
@@ -297,12 +299,10 @@ class Model:
                 if  flag["computed_orbits_from_scratch"]:
                    print("INFO: correlations calculator computed orbits from scrach.")
                    model.serialize(filepath="myfilepath.pickle")
-
-
         """
         # with _timed("Model.predict: Get cluster correlations"):
         corrs = self.corrc.get_cluster_correlations(structure, flag=flag)
-        
+
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1, -1))[0]
         else:
@@ -311,7 +311,7 @@ class Model:
             return np.dot(self.ecis, corrs)
 
     def _init_interaction_dict(self, super_cell: SuperCell):
-        """Alternative for interaction_dictionary, based on ase NeighborList."""
+        """Construct list of which sites are contained in which orbit."""
         print("Info(Model): setting up dictionary of interactions.")
         cluster_orbits = self.corrc.get_cluster_orbits_for_scell(super_cell)
         cluster_indices = []  # to which primitive cluster each cluster belongs
@@ -694,7 +694,15 @@ class ModelBuilder:
         """Return estimator object used to create the optimal model"""
         return self.opt_estimator
 
-    def build(self, sset, cpool, prop, corrc=None, verbose=False, **kwargs):
+    def build(
+        self,
+        sset: StructuresSet,
+        cpool: ClustersPool,
+        prop: str | List[str],
+        corrc: CorrelationsCalculator | None = None,
+        verbose: bool = False,
+        **kwargs,
+    ):
         """Build optimal cluster expansion model
 
         Acts as a Model factory.
@@ -708,9 +716,10 @@ class ModelBuilder:
             clusters pool from which to select the best model using the method
             indicated in ``selector_type``.
 
-        ``prop``: String
-            Property name. Must be a valid name as stored in ``sset``. The list of names
-            can be obtained using ``sset.get_property_names()``.
+        ``prop``: String | list of Strings
+            Property name or list of property names.
+            Must be a valid name as stored in ``sset``. The list of names can
+            be obtained using ``sset.get_property_names()``.
 
         ``corrc``: CorrelationsCalculator object (default: None)
             If not None, cpool and basis are overriden
@@ -741,12 +750,15 @@ class ModelBuilder:
         self.opt_comat = self.ini_comat
 
         # Select optimal clusters using the clusters_selector module
-        if self.selector != "identity":
+        if self.selector_type != "identity":
             self.selector = ClustersSelector(
                 basis=self.basis, method=self.selector_type, **self.selector_opts
             )
             self.opt_cpool = self.selector.select_clusters(
-                sset, cpool, prop, comat=self.ini_comat
+                sset,
+                cpool,
+                prop,  # TODO: fix this for list of properties
+                comat=self.ini_comat,
             )
             self.opt_comat = self.selector.optimal_comat
 
@@ -768,8 +780,8 @@ class ModelBuilder:
 
         self.opt_estimator.fit(self.opt_comat, self.target, **kwargs)
         return Model(
-            self.opt_corrc,
-            prop,
+            corrc=self.opt_corrc,
+            property_name=prop,
             estimator=self.opt_estimator,
             standardize=self.standardize,
         )

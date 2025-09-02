@@ -39,6 +39,26 @@ def structures_set(structures_set_empty, super_cell):
     return structures_set_empty
 
 
+@pytest.fixture
+def structures_set_prop(structures_set):
+    sset = structures_set
+    sset.set_calculator(EMT())
+    sset.compute_property_values(property_name="tote")
+
+    def a_prop(i, structure, **kwargs):
+        at = structure.get_atoms()
+        at.calc = EMT()
+        return at.get_potential_energy() * 0.1 - 10
+
+    sset.compute_property_values(
+        property_name="a_prop0", property_calc=a_prop
+    )
+    sset.compute_property_values(
+        property_name="a_prop1", property_calc=a_prop
+    )
+    return sset
+
+
 def test_write_input_files_defaults(structures_set):
     n = len(structures_set)
     structures_set.write_input_files()
@@ -78,14 +98,15 @@ def test_compute_property_values(structures_set):
     )
 
 
-def test_get_property_values(structures_set):
-    sset = structures_set
+def test_get_property_values(structures_set_prop):
+    sset = structures_set_prop
     property_names = sset.get_property_names()
     # get properties one-by-one
     props_single = []
     for property_name in property_names:
         properties = sset.get_property_values(property_name=property_name)
         props_single.append(properties)
+    props_single = np.array(props_single).reshape((-1, len(property_names)))
     # get all properties at once
     props_multi = sset.get_property_values(property_name=property_names)
     np.testing.assert_array_equal(props_single, props_multi)
