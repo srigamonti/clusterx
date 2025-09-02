@@ -4,6 +4,8 @@
 
 """Tests for clusterx.model module."""
 
+import os
+
 import pytest
 from ase.build import bulk
 import numpy as np
@@ -16,6 +18,7 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.structures_set import StructuresSet
 from clusterx.calculators.emt import EMT2
+from clusterx.cli.build_model import build_model
 
 
 @pytest.fixture
@@ -139,3 +142,35 @@ def test_model_builder(structures_set, cpool, corrc, props):
         new_sigma=1,
     )
     np.testing.assert_array_equal(prediction.shape, shape)
+
+
+@pytest.mark.parametrize("props", ["single", "multi"])
+def test_cli(structures_set, cpool, corrc, props):
+    sset_filepath = "test_model_sset.json"
+    structures_set.serialize(sset_filepath, overwrite=True)
+    cpool_filepath = "test_model_cpool.json"
+    cpool.serialize(cpool_filepath)
+    ccalc_filepath = "test_model_ccalc.pickle"
+    corrc.serialize(ccalc_filepath)
+    model_filepath = "test_model_path.pickle"
+    property_names = structures_set.get_property_names()
+
+    if props == "single":
+        prop = property_names[0]
+    elif props == "multi":
+        prop = property_names
+
+    build_model(
+        property_name=prop,
+        ccalc_filepath=ccalc_filepath,
+        sset_filepath=sset_filepath,
+        cpool_filepath=cpool_filepath,
+        model_filepath=model_filepath,
+        selector_type="identity",
+        selector_opts={"fit_intercept": True},
+        estimator_type="skl_LinearRegression",
+        estimator_opts={"fit_intercept": True},
+        plot_optimization_vs_sparsity=None,
+        weights_filepath=None,
+    )
+    assert os.path.exists(model_filepath)
