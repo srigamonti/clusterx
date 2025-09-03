@@ -183,6 +183,8 @@ def generate_derivative_structures(
         # Find derivative structures
         case "do_full_enumeration" | "find_derivative_structures":
             plat = ParentLattice(filepath=plat_filepath)
+            sc_shape = normalize_shape_input(sc_shape)
+            nsubs_list = normalize_nsubs_list(nsubs_list)
 
             _do_full_enumeration(
                 plat,
