@@ -37,6 +37,7 @@ def build_model(
     selector_opts: dict = {"fit_intercept": True},
     estimator_type: str = "skl_LinearRegression",
     estimator_opts: dict = {"fit_intercept": True},
+    report_errors: bool = True,
     plot_optimization_vs_sparsity: Optional[dict] = None,
     weights_filepath: Optional[str] = None,
 ):
@@ -78,6 +79,9 @@ def build_model(
         )
 
     print(f"Info({get_command_name()}): Updating model and ccalc")
+
+    if report_errors:
+        model.report_errors(sset)
 
     model.serialize(filepath=model_filepath)
     ccalc.serialize(filepath=ccalc_filepath)

@@ -443,39 +443,34 @@ class Model:
         ``sset``: StructuresSet object
             the scores are computed for the give structures set
         """
-        errfit = self.get_errors(sset)
-        errcv = self.get_cv_score(sset)
+        properties = self.property_name if isinstance(self.property_name, list) else [self.property_name]
+        for prop in properties:
+            errfit = self.get_errors(sset, prop)
+            errcv = self.get_cv_score(sset, prop)
 
-        print("\n+-----------------------------------------------------------+")
-        print("|                Report of Fit and CV scores                |")
-        print("+-----------------------------------------------------------+")
-        print(f"|{'':<19}|{'Fit':^19}|{'CV':^19}|")
-        print("+-----------------------------------------------------------+")
-        print(f"|{'RMSE':^19}|{errfit['RMSE']:^19.5f}|{errcv['RMSE-CV']:^19.5f}|")
-        print(f"|{'MAE':^19}|{errfit['MAE']:^19.5f}|{errcv['MAE-CV']:^19.5f}|")
-        print(f"|{'MaxAE':^19}|{errfit['MaxAE']:^19.5f}|{errcv['MaxAE-CV']:^19.5f}|")
-        print("+-----------------------------------------------------------+\n")
+            print("\n+-----------------------------------------------------------+")
+            print(f"|     Report of Fit and CV scores: {prop:25}|")
+            print("+-----------------------------------------------------------+")
+            print(f"|{'':<19}|{'Fit':^19}|{'CV':^19}|")
+            print("+-----------------------------------------------------------+")
+            print(f"|{'RMSE':^19}|{errfit['RMSE']:^19.5f}|{errcv['RMSE-CV']:^19.5f}|")
+            print(f"|{'MAE':^19}|{errfit['MAE']:^19.5f}|{errcv['MAE-CV']:^19.5f}|")
+            print(f"|{'MaxAE':^19}|{errfit['MaxAE']:^19.5f}|{errcv['MaxAE-CV']:^19.5f}|")
+            print("+-----------------------------------------------------------+\n")
 
-    def get_errors(self, sset):
+    def get_errors(self, sset, property_name_single):
         """Compute RMSE, MAE and MaxAE for model in structures set."""
-        calc_vals = sset.get_property_values(property_name=self.property_name)
+        calc_vals = sset.get_property_values(property_name=property_name_single)
         predictions = sset.get_predictions(self)
-        rmse = 0
-        mae = 0
-        maxae = 0
-        i_sample = 0
-        i_sample_max = 0
-        for e, p in zip(calc_vals, predictions):
-            rmse += (e - p) * (e - p)
-            mae += np.abs(e - p)
-            if np.abs(e - p) > maxae:
-                i_sample_max = i_sample
-                maxae = np.abs(e - p)
+        if isinstance(self.property_name, list):
+            index_prop = self.property_name.index(property_name_single)
+            predictions = predictions[:, index_prop]
 
-            i_sample += 1
-
-        rmse = np.sqrt(rmse / len(calc_vals))
-        mae = mae / len(calc_vals)
+        abs_errors = np.abs(predictions - calc_vals)
+        rmse = np.sqrt(np.mean(np.square(abs_errors)))
+        mae = np.mean(abs_errors)
+        maxae = np.max(abs_errors)
+        i_sample_max = np.argmax(abs_errors)
 
         return {
             "RMSE": rmse,
@@ -519,7 +514,7 @@ class Model:
         else:
             return straes
 
-    def get_cv_score(self, sset, params=None):
+    def get_cv_score(self, sset, property_name_single, params=None):
         """Get leave-one-out cross-validation score over structures set.
 
         **Parameters:**
@@ -534,7 +529,7 @@ class Model:
         )
 
         x_mat = self.corrc.get_correlation_matrix(sset)
-        y = sset.get_property_values(self.property_name)
+        y = sset.get_property_values(property_name=property_name_single)
 
         # cross_val_score internally clones the estimator, so the optimal one in Model is not changed.
         cvs = cross_val_score(
