@@ -40,24 +40,52 @@ def ds_generator_full(ds_generator_empty):
     return ds_generator_empty
 
 
-@pytest.mark.parametrize("n_random", [0, 1, 4, None])
+@pytest.mark.parametrize("recursive", [False, True])
+@pytest.mark.parametrize("n_random", [2, None])
 @pytest.mark.parametrize(
-    "supercell_sizes,num_subs_list,sc_shape,sc_shapes",
+    "supercell_sizes,num_subs_list,sc_shape,sc_shapes,shapes_nearest_orthogonal",
     [
-        ([1, 2], [[1], [2]], None, None),
-        (None, [[1]], np.diag([2, 2, 2]), None),
-        (None, [[1], [2]], None, [np.diag([2, 2, 2]), np.diag([3, 3, 3])]),
+        ([1, 2], [[1], [2]], None, None, False),
+        ([1, 2], [[1], [2]], None, None, True),
+        (None, [[1]], np.diag([2, 2, 2]), None, False),
+        (None, [[1], [2]], None, [np.diag([2, 2, 2]), np.diag([3, 3, 3])], False),
     ],
 )
-def test_generate(supercell_sizes, num_subs_list, sc_shape, sc_shapes, n_random, ds_generator_empty):
+def test_generate(
+    supercell_sizes,
+    shapes_nearest_orthogonal,
+    num_subs_list,
+    sc_shape,
+    sc_shapes,
+    n_random,
+    recursive,
+    ds_generator_empty
+):
     ds_generator_empty.generate(
         supercell_sizes=supercell_sizes,
+        shapes_nearest_orthogonal=shapes_nearest_orthogonal,
         num_subs_list=num_subs_list,
         sc_shape=sc_shape,
         sc_shapes=sc_shapes,
         n_random=1,
         random_state=42,
+        recursive=recursive,
     )
+
+
+def test_generate_pure(ds_generator_empty):
+    ds_generator_empty.generate(
+        supercell_sizes=[2],
+        num_subs_list=[[0]],
+        sc_shape=None,
+        sc_shapes=None,
+        n_random=None,
+        random_state=42,
+        recursive=False,
+    )
+    for _, row in ds_generator_empty.configurations.iterrows():
+        assert np.all(row["sigma"] == 0)
+    assert len(ds_generator_empty.configurations) == 1
 
 
 def test_compute_emt(ds_generator_full):
