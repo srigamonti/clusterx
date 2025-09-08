@@ -73,7 +73,8 @@ def test_generate(
     )
 
 
-def test_generate_pure(ds_generator_empty):
+@pytest.mark.parametrize("recursive", [False, True])
+def test_generate_pure(ds_generator_empty, recursive):
     ds_generator_empty.generate(
         supercell_sizes=[2],
         num_subs_list=[[0]],
@@ -81,7 +82,7 @@ def test_generate_pure(ds_generator_empty):
         sc_shapes=None,
         n_random=None,
         random_state=42,
-        recursive=False,
+        recursive=recursive,
     )
     for _, row in ds_generator_empty.configurations.iterrows():
         assert np.all(row["sigma"] == 0)
