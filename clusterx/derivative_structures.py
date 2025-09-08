@@ -586,8 +586,6 @@ class DSGenerator:
             Thus, a calculation with  ``num_subs_list=[[0,1,2,3]]`` takes the same numerical
             effort as ``num_subs_list=[[3]]`` when recursive is ``True``.
         """
-        # TODO: make supercell_sizes positional and required argument, as this
-        # method does not work without it.
         if random_state is not None:
             random.seed(random_state)
             np.random.seed(random_state)
