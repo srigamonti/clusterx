@@ -75,17 +75,18 @@ def test_generate(
 
 @pytest.mark.parametrize("recursive", [False, True])
 def test_generate_pure(ds_generator_empty, recursive):
+    p = np.diag([2, 2, 2])
     ds_generator_empty.generate(
-        supercell_sizes=[2],
+        supercell_sizes=None,
         num_subs_list=[[0]],
-        sc_shape=None,
+        sc_shape=p,
         sc_shapes=None,
         n_random=None,
         random_state=42,
         recursive=recursive,
     )
     for _, row in ds_generator_empty.configurations.iterrows():
-        assert np.all(row["sigma"] == 0)
+        assert np.all(np.array(row["sigma"]) == 0)
     assert len(ds_generator_empty.configurations) == 1
 
 
@@ -313,7 +314,7 @@ def test_get_unique_supercells():
                 scell = SuperCell(pl, t)
                 sset.add_structure(Structure(scell, scell.get_atomic_numbers()), write_to_db=True)
 
-            sset.serialize(filepath="test_get_unique_supercells-fcc.json")
+            sset.serialize(filepath="test_get_unique_supercells-fcc.json", overwrite=True)
             print("Found ", len(unique_scs), " unique HNFs for a FCC lattice of index ", index)
             # print("SCS: ", unique_scs)
             # print("TRA: ", unique_trafos)
@@ -336,7 +337,7 @@ def test_get_unique_supercells():
                 scell = SuperCell(pl, t)
                 sset.add_structure(Structure(scell, scell.get_atomic_numbers()), write_to_db=True)
 
-            sset.serialize(filepath="test_get_unique_supercells-sc.json")
+            sset.serialize(filepath="test_get_unique_supercells-sc.json", overwrite=True)
             print("Found ", len(unique_scs), " unique HNFs for a simple cubic lattice of index ", index)
             # print("SCS: ", unique_scs)
             # print("TRA: ", unique_trafos)
