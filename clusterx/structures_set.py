@@ -1007,10 +1007,10 @@ class StructuresSet:
             list of property values.
         """
         if isinstance(property_name, list):
-            props = []
-            for name in property_name:
-                props.append(self._props[name])
-            return np.array(props).reshape((-1, len(property_name)))
+            props = np.zeros((self.get_nstr(), len(property_name)))
+            for i, name in enumerate(property_name):
+                props[:, i] = np.array(self._props[name])
+            return props
         elif isinstance(property_name, str):
             return np.array(self._props[property_name])
         else:

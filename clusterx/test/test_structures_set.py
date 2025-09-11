@@ -106,7 +106,7 @@ def test_get_property_values(structures_set_prop):
     for property_name in property_names:
         properties = sset.get_property_values(property_name=property_name)
         props_single.append(properties)
-    props_single = np.array(props_single).reshape((-1, len(property_names)))
+    props_single = np.array(props_single).T
     # get all properties at once
     props_multi = sset.get_property_values(property_name=property_names)
     np.testing.assert_array_equal(props_single, props_multi)
