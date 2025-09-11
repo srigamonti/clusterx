@@ -55,7 +55,27 @@ def structures_set_empty(plat):
 
 
 @pytest.fixture
-def structures_set(structures_set_empty, scell):
+def model(cpool, corrc):
+    """Init with ECIS, default."""
+    mult = cpool.get_multiplicities()
+    model = Model(corrc, "energy", ecis=mult)
+    return model
+
+
+@pytest.fixture
+def dummy_ce_11(cpool, corrc):
+    model = Model(corrc, "energy", ecis=[1, 1])
+    return model
+
+
+@pytest.fixture
+def dummy_ce_12(cpool, corrc):
+    model = Model(corrc, "energy", ecis=[1, 2])
+    return model
+
+
+@pytest.fixture
+def structures_set(structures_set_empty, scell, dummy_ce_11, dummy_ce_12):
     sset = structures_set_empty
     np.random.seed(10)
     n_structures = 10
@@ -67,22 +87,18 @@ def structures_set(structures_set_empty, scell):
     def a_prop(i, structure, **kwargs):
         at = structure.get_atoms()
         at.calc = EMT2()
-        return at.get_potential_energy() * 0.1 - 10
+        return at.get_potential_energy()
 
     sset.compute_property_values(property_name="energy_shift", property_calc=a_prop)
+    ce_preds_11 = sset.get_predictions(dummy_ce_11)
+    sset.set_property_values("dummy_ce_11", ce_preds_11)
+    ce_preds_12 = sset.get_predictions(dummy_ce_12)
+    sset.set_property_values("dummy_ce_12", ce_preds_12)
     return sset
 
 
 @pytest.fixture
-def model(plat, cpool, corrc):
-    """Init with ECIS, default."""
-    mult = cpool.get_multiplicities()
-    model = Model(corrc, "energy", ecis=mult)
-    return model
-
-
-@pytest.fixture
-def model_estimator(plat, cpool, corrc):
+def model_estimator(cpool, corrc):
     """Init with estimator."""
     mult = cpool.get_multiplicities()
     estimator = LinearRegression()
@@ -92,7 +108,7 @@ def model_estimator(plat, cpool, corrc):
     return model
 
 
-def test_raise_init(plat, cpool, corrc):
+def test_raise_init(cpool, corrc):
     with pytest.raises(ValueError):
         Model(corrc, "energy", ecis=None, estimator=None)
 
@@ -112,8 +128,8 @@ def test_ecis_estimator_init(model, model_estimator, structure):
     np.testing.assert_allclose(prediction_estimator, prediction)
 
 
-@pytest.mark.parametrize("props", ["single", "multi"])
-def test_model_builder(structures_set, cpool, corrc, props):
+@pytest.mark.parametrize("mode", ["single", "multi"])
+def test_model_builder(structures_set, cpool, corrc, mode):
     mb = ModelBuilder(
         basis="trigonometric",
         selector_type="identity",
@@ -122,11 +138,11 @@ def test_model_builder(structures_set, cpool, corrc, props):
         estimator_opts={},
         standardize=False,
     )
-    property_names = structures_set.get_property_names()
-    if props == "single":
+    property_names = ["dummy_ce_11", "dummy_ce_12"]
+    if mode == "single":
         prop = property_names[0]
         shape = ()
-    elif props == "multi":
+    elif mode == "multi":
         prop = property_names
         shape = (2,)
     model = mb.build(
@@ -144,8 +160,8 @@ def test_model_builder(structures_set, cpool, corrc, props):
     np.testing.assert_array_equal(prediction.shape, shape)
 
 
-@pytest.mark.parametrize("props", ["single", "multi"])
-def test_cli(structures_set, cpool, corrc, props):
+@pytest.mark.parametrize("mode", ["single", "multi"])
+def test_cli(structures_set, cpool, corrc, mode):
     sset_filepath = "test_model_sset.json"
     structures_set.serialize(sset_filepath, overwrite=True)
     cpool_filepath = "test_model_cpool.json"
@@ -153,12 +169,11 @@ def test_cli(structures_set, cpool, corrc, props):
     ccalc_filepath = "test_model_ccalc.pickle"
     corrc.serialize(ccalc_filepath)
     model_filepath = "test_model_path.pickle"
-    property_names = structures_set.get_property_names()
 
-    if props == "single":
-        prop = property_names[0]
-    elif props == "multi":
-        prop = property_names
+    if mode == "single":
+        prop = "dummy_ce_11"
+    elif mode == "multi":
+        prop = ["dummy_ce_11", "dummy_ce_12"]
 
     build_model(
         property_name=prop,

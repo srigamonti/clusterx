@@ -449,7 +449,7 @@ class Model:
             errcv = self.get_cv_score(sset, prop)
 
             print("\n+-----------------------------------------------------------+")
-            print(f"|     Report of Fit and CV scores: {prop:25}|")
+            print(f"|{f'Report of Fit and CV scores: {prop}':^59}|")
             print("+-----------------------------------------------------------+")
             print(f"|{'':<19}|{'Fit':^19}|{'CV':^19}|")
             print("+-----------------------------------------------------------+")
