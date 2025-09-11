@@ -140,13 +140,14 @@ def test_model_builder(structures_set, cpool, corrc, mode):
     )
     property_names = ["dummy_ce_11", "dummy_ce_12"]
     if mode == "single":
-        prop = property_names[0]
+        property_names = property_names[0]
+        prop_list = [property_names]
         shape = ()
     elif mode == "multi":
-        prop = property_names
+        prop_list = property_names
         shape = (2,)
     model = mb.build(
-        sset=structures_set, cpool=cpool, prop=prop, corrc=corrc, verbose=False
+        sset=structures_set, cpool=cpool, prop=property_names, corrc=corrc, verbose=False
     )
     structure = structures_set[0]
     prediction = model.predict(structure)
@@ -158,6 +159,11 @@ def test_model_builder(structures_set, cpool, corrc, mode):
         new_sigma=1,
     )
     np.testing.assert_array_equal(prediction.shape, shape)
+    for property_name in prop_list:
+        errors = model.get_errors(structures_set, property_name)
+        np.testing.assert_allclose(errors["RMSE"], 0.0, atol=1e-10)
+        np.testing.assert_allclose(errors["MAE"], 0.0, atol=1e-10)
+        np.testing.assert_allclose(errors["MaxAE"], 0.0, atol=1e-10)
 
 
 @pytest.mark.parametrize("mode", ["single", "multi"])
