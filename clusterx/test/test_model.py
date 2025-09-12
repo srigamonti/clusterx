@@ -129,11 +129,23 @@ def test_ecis_estimator_init(model, model_estimator, structure):
 
 
 @pytest.mark.parametrize("mode", ["single", "multi"])
-def test_model_builder(structures_set, cpool, corrc, mode):
+@pytest.mark.parametrize(
+    "selector_type,selector_opts",
+    [
+        ("identity", {}),
+        ("skl_lasso_cv", {"sparsity_max": 5,
+                      "sparsity_min": 1e-3,
+                      "sparsity_step": 1e-1,
+                      "max_iter": 1_000_000,
+                      "cv_type": "10-fold",
+                      "cv_shuffle": True})
+    ]
+)
+def test_model_builder(structures_set, cpool, corrc, mode, selector_type, selector_opts):
     mb = ModelBuilder(
         basis="trigonometric",
-        selector_type="identity",
-        selector_opts={},
+        selector_type=selector_type,
+        selector_opts=selector_opts,
         estimator_type="skl_LinearRegression",
         estimator_opts={},
         standardize=False,

@@ -756,6 +756,7 @@ class ModelBuilder:
                 comat=self.ini_comat,
             )
             self.opt_comat = self.selector.optimal_comat
+        self.opt_cpool.print_info()
 
         self.opt_corrc = CorrelationsCalculator(self.basis, self.plat, self.opt_cpool)
 

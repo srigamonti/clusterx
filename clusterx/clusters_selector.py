@@ -287,7 +287,7 @@ class ClustersSelector:
             opt = self._select_clusters_skl_omp(x, p)
 
         self.optimal_cluster_indices = opt
-        self.optimal_comat = self.ini_comat[np.ix_(np.arange(len(p)), opt)]
+        self.optimal_comat = self.ini_comat[:, opt]
 
         self.optimal_clusters = self.cpool.get_subpool(opt)
 
@@ -548,7 +548,10 @@ class ClustersSelector:
         return opt_clset
 
     def _select_clusters_skl_lasso_cv(self, x, p):
-        from sklearn.linear_model import LassoCV
+        if p.ndim > 1:
+            from sklearn.linear_model import MultiTaskLassoCV as LassoCV
+        else:
+            from sklearn.linear_model import LassoCV
 
         opt_clset = []
 
@@ -580,7 +583,6 @@ class ClustersSelector:
 
         ecimult = []
         if not self.standardize:
-            ecimult.append(mod.intercept_)
             for coef in mod.coef_:
                 ecimult.append(coef)
             self.cvs = np.mean(est.mse_path_)
@@ -590,7 +592,6 @@ class ClustersSelector:
             self.lasso_sparsities = est.alphas_
 
         else:
-            ecimult.append(est[-1].intercept_)
             for coef in est[-1].coef_:
                 ecimult.append(coef)
             self.cvs = np.mean(est[-1].mse_path_)
