@@ -22,7 +22,10 @@ from clusterx.clusters_selector import ClustersSelector
 # from clusterx.visualization import plot_predictions_vs_target
 
 
-@pytest.mark.parametrize("method", ["lasso", "linreg"])
+@pytest.mark.parametrize(
+    "method",
+    ["identity", "lasso_cv", "skl_lasso_cv", "linreg", "omp"]
+)
 def test_clusters_selector_execute(method):
     cell = [[3, 0, 0], [0, 1, 0], [0, 0, 5]]
     positions = [[0, 0, 0], [1, 0, 0], [2, 0, 0]]
@@ -105,7 +108,7 @@ def test_clusters_selector_execute(method):
     # Get the DATA(comat) + TARGET(energies)
     strset.set_calculator(EMT2())
     strset.calculate_property()  # calculate 'energy' property
-    clsel = ClustersSelector(method=method, clusters_sets="size")
+    clsel = ClustersSelector(selector_type=method, clusters_sets="size")
     clsel.select_clusters(strset, cpool, "energy")
 
 
@@ -206,7 +209,7 @@ def test_clusters_selector_compare_ref():
 
     # fitter_model = Fitter(method = "skl_LinearRegression")
 
-    clsel = ClustersSelector(method="linreg", clusters_sets="size")
+    clsel = ClustersSelector(selector_type="linreg", clusters_sets="size")
 
     clsel.select_clusters(strset, cpool, "energy")
 

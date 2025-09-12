@@ -555,7 +555,7 @@ class ClustersSelector:
         if not self.standardize:
             est = LassoCV(
                 eps=1e-5,
-                n_alphas=50,
+                alphas=50,
                 fit_intercept=self.fit_intercept,
                 n_jobs=-1,
                 verbose=True,
@@ -568,7 +568,7 @@ class ClustersSelector:
                 StandardScaler(),
                 LassoCV(
                     eps=1e-5,
-                    n_alphas=50,
+                    alphas=50,
                     fit_intercept=self.fit_intercept,
                     n_jobs=-1,
                     verbose=True,
