@@ -554,12 +554,13 @@ class ClustersSelector:
             from sklearn.linear_model import LassoCV
 
         opt_clset = []
+        alphas = np.geomspace(self.sparsity_min, self.sparsity_max, num=100)
 
         if not self.standardize:
             est = LassoCV(
-                eps=1e-5,
-                alphas=50,
+                alphas=alphas,
                 fit_intercept=self.fit_intercept,
+                max_iter=self.max_iter,
                 n_jobs=-1,
                 verbose=True,
             )
@@ -570,17 +571,15 @@ class ClustersSelector:
             est = make_pipeline(
                 StandardScaler(),
                 LassoCV(
-                    eps=1e-5,
-                    alphas=50,
+                    alphas=alphas,
                     fit_intercept=self.fit_intercept,
+                    max_iter=self.max_iter,
                     n_jobs=-1,
                     verbose=True,
                 ),
             )
 
-        x_ = x[:, 1:]
-        mod = est.fit(x_, p)
-
+        mod = est.fit(x, p)
         ecimult = []
         if not self.standardize:
             for coef in mod.coef_:

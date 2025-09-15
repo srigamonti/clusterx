@@ -133,12 +133,8 @@ def test_ecis_estimator_init(model, model_estimator, structure):
     "selector_type,selector_opts",
     [
         ("identity", {}),
-        ("skl_lasso_cv", {"sparsity_max": 5,
-                      "sparsity_min": 1e-3,
-                      "sparsity_step": 1e-1,
-                      "max_iter": 1_000_000,
-                      "cv_type": "10-fold",
-                      "cv_shuffle": True})
+        ("lasso_cv", {}),
+        ("skl_lasso_cv", {})
     ]
 )
 def test_model_builder(structures_set, cpool, corrc, mode, selector_type, selector_opts):
