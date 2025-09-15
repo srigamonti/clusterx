@@ -637,7 +637,7 @@ class MonteCarloTrajectory:
         nid = 0
         try:
             nid = np.where(steps == nstep)[0][0]
-        except:
+        except IndexError:
             if nstep > steps[-1]:
                 nid = len(steps) - 1
             else:
@@ -670,17 +670,14 @@ class MonteCarloTrajectory:
         if prop == "energy":
             return self.get_energies()
         else:
-            try:
-                props = []
-                for tr in self._trajectory:
-                    props.append(tr["key_value_pairs"][prop])
-                return np.asarray(props)
-
-            except:
-                if prop not in [mo.property_name for mo in self._models]:
-                    print("Model of property is not given, look at the documentation.")
-                else:
-                    print("Property is not calculated, look at the documentation.")
+            if prop not in [mo.property_name for mo in self._models]:
+                raise KeyError(
+                    f"Model for property '{prop}' is not defined. Found keys: {[mo.property_name for mo in self._models]}"
+                )
+            props = []
+            for tr in self._trajectory:
+                props.append(tr["key_value_pairs"][prop])
+            return np.asarray(props)
 
     def get_property(self, nid, prop):
         """Return property of entry at index ``nid`` in trajectory."""
