@@ -41,12 +41,24 @@ def cpool(plat):
 
 
 @pytest.fixture
-def model(plat, cpool):
+def corrc(plat, cpool):
+    return CorrelationsCalculator("trigonometric", plat, cpool)
+
+
+@pytest.fixture
+def model(plat, cpool, corrc):
     # Ising-like model
-    corc = CorrelationsCalculator("trigonometric", plat, cpool)
     ecisE = [0.0, -1.0]
     multT = cpool.get_multiplicities()
-    cemodel = Model(corc, "energy", ecis=np.multiply(ecisE, multT))
+    cemodel = Model(corrc, "energy", ecis=np.multiply(ecisE, multT))
+    return cemodel
+
+
+@pytest.fixture
+def model_multi(plat, cpool, corrc):
+    # Model for two properties in parallel
+    ecis = np.array([[-1.0, -2.0], [-2.0, -4.0]])
+    cemodel = Model(corrc, ["energy", "energy_double"], ecis=ecis)
     return cemodel
 
 
@@ -229,35 +241,33 @@ def test_cli(plat, model, cli_kwargs, task, filelist):
         assert os.path.exists(filename)
 
 
+def test_metropolis_single(plat, model):
+    scell = SuperCell(plat, 4)
+    mc = MonteCarlo(model, scell, nsubs={0: [4]})
+    mc.metropolis(no_of_sampling_steps=10, temperature=600)
+
+
+def test_metropolis_multi(plat, model_multi):
+    scell = SuperCell(plat, 4)
+    mc = MonteCarlo(model_multi, scell, nsubs={0: [4]})
+    mc.metropolis(no_of_sampling_steps=10, temperature=600)
+
+
 def test_metropolis_clathrate_full_subs(
     plat_full_sub,
     cemodel_full_sub,
 ):
-    print("Cpool: ", cemodel_full_sub.corrc.get_cpool().get_cpool_list())
     scell = SuperCell(plat_full_sub, 2)
     mc = MonteCarlo(
         cemodel_full_sub,
         scell,
         nsubs={0: [112, 16], 1: [0]},
-        ensemble="canonical",
-        sublattice_indices=[],
-        chemical_potentials=None,
-        models=[],
-        no_of_swaps=1,
-        predict_swap=True,
-        error_reset=None,
-        filename=None,
     )
-
     nmc = 30
-    temp = 600
-    scale_factor = []
     kb = float(3.16681009610757e-6)
-
     traj = mc.metropolis(
         no_of_sampling_steps=nmc,
-        scale_factor=scale_factor,
-        temperature=temp,
+        temperature=600,
         boltzmann_constant=kb,
         serialize=True,
         filename="trajectory-ternary.json",
