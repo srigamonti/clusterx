@@ -17,7 +17,8 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.clusters.cluster import Cluster
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.model import Model
-from clusterx.thermodynamics.monte_carlo import MonteCarlo
+from clusterx.thermodynamics.monte_carlo import MonteCarlo, MonteCarloTrajectory
+from clusterx.thermodynamics.monte_carlo_lite import MonteCarloLite
 from clusterx.cli.metropolis import metropolis
 
 
@@ -241,16 +242,29 @@ def test_cli(plat, model, cli_kwargs, task, filelist):
         assert os.path.exists(filename)
 
 
-def test_metropolis_single(plat, model):
+@pytest.mark.parametrize("model_", ["model", "model_multi"])
+def test_metropolis(plat, model_, request):
+    # prime example of using multiple fixtures with parametrize
     scell = SuperCell(plat, 4)
+    model = request.getfixturevalue(model_)
     mc = MonteCarlo(model, scell, nsubs={0: [4]})
-    mc.metropolis(no_of_sampling_steps=10, temperature=600)
+    mc.metropolis(no_of_sampling_steps=10, temperature=600, serialize=True)
+    traj = MonteCarloTrajectory(read=True)
+    traj.get_lowest_energy_structure()
 
 
-def test_metropolis_multi(plat, model_multi):
+@pytest.mark.parametrize("model_", ["model", "model_multi"])
+def test_mclite(plat, model_, request):
     scell = SuperCell(plat, 4)
-    mc = MonteCarlo(model_multi, scell, nsubs={0: [4]})
-    mc.metropolis(no_of_sampling_steps=10, temperature=600)
+    model = request.getfixturevalue(model_)
+    mc = MonteCarloLite(model, scell, boltzmann_constant=3e-6)
+    mcrun = mc.metropolis(
+        n_mc_steps=10,
+        temperature=600,
+        mcrun_filepath="mc-run_test.pickle",
+        serialize=True,
+    )
+    assert mcrun.energies  # check existence
 
 
 def test_metropolis_clathrate_full_subs(

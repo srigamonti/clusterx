@@ -612,12 +612,8 @@ class MonteCarloTrajectory:
         return sx
 
     def get_lowest_energy_structure(self):
-        """Return structure in form of a Structure object with the lowest energy in trajectory."""
-        _energies = self.get_energies()
-        _emin = np.min(_energies)
-        _nid = np.where(_energies == _emin)[0][0]
-
-        return self.get_structure(_nid)
+        """Return Structure object with the lowest energy in trajectory."""
+        return self.get_structure(np.argmin(self.get_energies()))
 
     def get_sampling_step_nos(self):
         """Return sampling step numbers of all entries in trajectory as array."""
