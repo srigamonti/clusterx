@@ -454,6 +454,7 @@ class Model:
             print(f"|{'':<19}|{'Fit':^19}|{'CV':^19}|")
             print("+-----------------------------------------------------------+")
             print(f"|{'RMSE':^19}|{errfit['RMSE']:^19.5f}|{errcv['RMSE-CV']:^19.5f}|")
+            print(f"|{'R2':^19}|{errfit['R2']:^19.5f}|{errcv['R2-CV']:^19.5f}|")
             print(f"|{'MAE':^19}|{errfit['MAE']:^19.5f}|{errcv['MAE-CV']:^19.5f}|")
             print(f"|{'MaxAE':^19}|{errfit['MaxAE']:^19.5f}|{errcv['MaxAE-CV']:^19.5f}|")
             print("+-----------------------------------------------------------+\n")
@@ -468,12 +469,15 @@ class Model:
 
         abs_errors = np.abs(predictions - calc_vals)
         rmse = np.sqrt(np.mean(np.square(abs_errors)))
+        # coefficient of determination
+        r2 = 1 - np.sum(abs_errors**2)/np.sum((calc_vals - np.mean(calc_vals))**2)
         mae = np.mean(abs_errors)
         maxae = np.max(abs_errors)
         i_sample_max = np.argmax(abs_errors)
 
         return {
             "RMSE": rmse,
+            "R2": r2,
             "MAE": mae,
             "MaxAE": maxae,
             "sample_index_max": i_sample_max,
@@ -545,12 +549,14 @@ class Model:
         )
 
         absolute_errors = np.sqrt(-cvs)
+        r2 = 1 - np.sum(absolute_errors**2)/np.sum((y - np.mean(y))**2)
         cv = np.sqrt(-np.mean(cvs))
         maxae = np.amax(absolute_errors)
         mae = np.mean(absolute_errors)
 
         return {
             "RMSE-CV": cv,
+            "R2-CV": r2,
             "MAE-CV": mae,
             "MaxAE-CV": maxae,
             "Predictions-CV": pred_cv,
