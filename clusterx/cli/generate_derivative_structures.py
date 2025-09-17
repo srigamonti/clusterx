@@ -93,8 +93,8 @@ commands = ["generate_derivative_structures"]
         "rec",
         bool,
     ),
-    show_plot=("If True, show the plot in a new window.", "flag", "sp", bool),
-    save_plot=("If True, save the plot to file.", "flag", "svp", bool),
+    show_plot=("If True, show the plot in a new window.", "option", "sp", bool),
+    save_plot=("If True, save the plot to file.", "option", "svp", bool),
     plot_fname=("Filepath to save the plot at.", "option", "pf", str),
 )
 def generate_derivative_structures(
