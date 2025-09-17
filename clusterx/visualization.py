@@ -130,8 +130,9 @@ def plot_optimization_vs_number_of_clusters(
     yfactor=1.0,
     show_yzero_axis=True,
     show_plot=True,
+    save_plot=True,
     yaxis_label="Errors",
-    fig_fname=None,
+    fname="plot_optimization_vs_nclusters.png",
     data_fname=None,
 ):
     """Plot cluster optimization with matplotlib
@@ -162,6 +163,12 @@ def plot_optimization_vs_number_of_clusters(
     ``yaxis_label``: string (Default: "Errors")
         Label for the y-axis of the plot
 
+    ``show_plot``: boolean (Default: True)
+        If True, show the plot in a new window.
+    ``save_plot``: boolean (Default: True)
+        If True, save the plot to file.
+    ``fname``: string (Default: "plot_optimization_vs_nclusters.png")
+        Filepath to save the plot at.
     """
     from matplotlib.ticker import MaxNLocator
 
@@ -300,8 +307,8 @@ def plot_optimization_vs_number_of_clusters(
             rmse_cv_for_lowest_cv=opt_cv,
         )
 
-    if fig_fname is not None:
-        plt.savefig(fig_fname)
+    if fname is not None and save_plot:
+        plt.savefig(fname)
 
     if show_plot:
         plt.show()
@@ -315,8 +322,9 @@ def plot_optimization_vs_sparsity(
     ymax=None,
     xaxis_label="Sparsity",
     yaxis_label="Energy [arb. units]",
-    show_plot=True,
-    fname="plot_optimization_vs_sparsity",
+    show_plot: bool = True,
+    save_plot: bool = True,
+    fname="plot_optimization_vs_sparsity.png",
 ):
     """Plot cluster optimization with matplotlib
 
@@ -327,6 +335,12 @@ def plot_optimization_vs_sparsity(
 
     ``clsel``: ClustersSelector object
         The ClustersSelector oject which was used for the optimization to be plotted.
+    ``show_plot``: boolean (Default: True)
+        If True, show the plot in a new window.
+    ``save_plot``: boolean (Default: True)
+        If True, save the plot to file.
+    ``fname``: string (Default: "plot_optimization_vs_sparsity.png")
+        Filepath to save the plot at.
     """
     _set_rc_params()
 
@@ -394,7 +408,8 @@ def plot_optimization_vs_sparsity(
     plt.legend()
     ax.legend(loc="best")
 
-    plt.savefig(fname)
+    if save_plot:
+        plt.savefig(fname)
     if show_plot:
         plt.show()
 
@@ -406,9 +421,9 @@ def plot_predictions_vs_target(
     scale: float = 1.0,
     xaxis_label: str = "Calculated energy [arb. units]",
     yaxis_label: str = "Predicted energy [arb. units]",
-    save_plot: bool = True,
     show_plot: bool = True,
-    fname: str = "plot_predictions_vs_target",
+    save_plot: bool = True,
+    fname: str = "plot_predictions_vs_target.png",
 ):
     """Plot predictions versus target with matplotlib
 
@@ -421,6 +436,12 @@ def plot_predictions_vs_target(
     ``prop_name``: name of the property to be plotted.
         Must be present in ``sset``, and, if cemodel is for multiple properties,
         must match one of the properties in ``cemodel.property_name``
+    ``show_plot``: boolean (Default: True)
+        If True, show the plot in a new window.
+    ``save_plot``: boolean (Default: True)
+        If True, save the plot to file.
+    ``fname``: string (Default: "plot_predictions_vs_target.png")
+        Filepath to save the plot at.
     """
     import math
 
@@ -494,7 +515,7 @@ def plot_predictions_vs_target(
         t.set_fontsize(fs)
 
     if save_plot:
-        plt.savefig(f"{fname}_{prop_name}.png")
+        plt.savefig(fname)
     if show_plot:
         plt.show()
 
@@ -511,11 +532,12 @@ def plot_property_vs_concentration(
     concentrations_enum: Optional[np.ndarray] = None,
     sset_gss: Optional[StructuresSet] = None,
     show_plot: bool = True,
+    save_plot: bool = True,
     refs: Union[List[float], NDArray[np.float64]] = [0.0, 0.0],
     yaxis_label: Optional[str] = None,
     show_yzero_axis: bool = True,
     data_fname: Optional[str] = None,
-    fig_fname: Optional[str] = None,
+    fname: str = "property_vs_concentration.png",
 ) -> Dict[str, Union[np.ndarray, str]]:
     """Plot property values versus concentration and return dictionary with data
 
@@ -547,6 +569,12 @@ def plot_property_vs_concentration(
         If true, show predicted properties corresponding to leave-one-out CV.
         That is, the predictions for the left-out samples in the CV procedure are
         also plotted.
+    ``show_plot``: boolean (Default: True)
+        If True, show the plot in a new window.
+    ``save_plot``: boolean (Default: True)
+        If True, save the plot to file.
+    ``fname``: string (Default: "property_vs_concentration.png")
+        Filepath to save the plot at.
 
     **Returns:**
 
@@ -702,8 +730,8 @@ def plot_property_vs_concentration(
 
     plt.legend()
     save_plot_data(data, data_fname)
-    if fig_fname is not None:
-        plt.savefig(fig_fname)
+    if fname is not None and save_plot:
+        plt.savefig(fname)
     if show_plot:
         plt.show()
 
