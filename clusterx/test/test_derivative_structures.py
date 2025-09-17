@@ -77,21 +77,18 @@ def ds_generator_full(ds_generator_empty):
 
 
 @pytest.mark.parametrize("model_", ["model_single", "model_multi"])
-def test_cemodel_calc(ds_generator_empty, model_, request):
+def test_cemodel_calc(ds_generator_full, model_, request):
     # prime example of using multiple fixtures with parametrize
     model = request.getfixturevalue(model_)
-    dss = ds_generator_empty
+    dss = ds_generator_full
     prop = model.property_name
     if isinstance(prop, str):
-        dss.compute_properties(
-            property_name=prop,
-            cemodel=model
-        )
+        dss.compute_properties(property_name=prop, cemodel=model)
+        assert prop in dss.configurations.columns
     else:
-        dss.compute_properties(
-            property_names=prop,
-            cemodel=model
-        )
+        dss.compute_properties(property_names=prop, cemodel=model)
+        for prop_single in prop:
+            assert prop_single in dss.configurations.columns
 
 
 @pytest.mark.parametrize("recursive", [False, True])
@@ -113,7 +110,7 @@ def test_generate(
     sc_shapes,
     n_random,
     recursive,
-    ds_generator_empty
+    ds_generator_empty,
 ):
     ds_generator_empty.generate(
         supercell_sizes=supercell_sizes,
@@ -387,8 +384,15 @@ def test_get_unique_supercells():
                     Structure(scell, scell.get_atomic_numbers()), write_to_db=True
                 )
 
-            sset.serialize(filepath="test_get_unique_supercells-fcc.json", overwrite=True)
-            print("Found ", len(unique_scs), " unique HNFs for a FCC lattice of index ", index)
+            sset.serialize(
+                filepath="test_get_unique_supercells-fcc.json", overwrite=True
+            )
+            print(
+                "Found ",
+                len(unique_scs),
+                " unique HNFs for a FCC lattice of index ",
+                index,
+            )
             # print("SCS: ", unique_scs)
             # print("TRA: ", unique_trafos)
             isok1 = len(unique_scs) == 7 and unique_trafos[4][2][2] == 4
@@ -412,8 +416,15 @@ def test_get_unique_supercells():
                     Structure(scell, scell.get_atomic_numbers()), write_to_db=True
                 )
 
-            sset.serialize(filepath="test_get_unique_supercells-sc.json", overwrite=True)
-            print("Found ", len(unique_scs), " unique HNFs for a simple cubic lattice of index ", index)
+            sset.serialize(
+                filepath="test_get_unique_supercells-sc.json", overwrite=True
+            )
+            print(
+                "Found ",
+                len(unique_scs),
+                " unique HNFs for a simple cubic lattice of index ",
+                index,
+            )
             # print("SCS: ", unique_scs)
             # print("TRA: ", unique_trafos)
             isok2 = len(unique_scs) == 9 and unique_scs[4][2][2] == 12.4

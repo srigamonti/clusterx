@@ -687,7 +687,7 @@ class DSGenerator:
                 return 0
             else:
                 return partial_binom_sum(N, n - 1) + scipy.special.binom(N, n)
-                    
+
         if isinstance(nsubs, int):
             if nsubs > len(ssites):
                 logging.error("nsubs cannot exceed the number of substitutional sites.")

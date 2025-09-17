@@ -204,6 +204,7 @@ def generate_derivative_structures(
             _do_compute_properties(
                 cem=model,
                 property_name=property_name,
+                property_names=property_names,
                 dss_filepath=dss_filepath,
                 per_formula_unit=per_formula_unit,
                 linear_reference=linear_reference,
