@@ -602,7 +602,7 @@ class DSGenerator:
                     )
                 elif isinstance(shapes_nearest_orthogonal, list):
                     _, unique_sc_shapes = get_unique_supercells_nearest_orthogonal(
-                        n, plat, elements=shapes_nearest_orthogonal
+                        sc_size, self.plat, elements=shapes_nearest_orthogonal
                     )
                 else:
                     raise TypeError("Expected False, True, or a list of integers.")
@@ -682,6 +682,12 @@ class DSGenerator:
 
         symper_tuples = [tuple(per) for per in symper]
 
+        def partial_binom_sum(N, n):
+            if n < 0:
+                return 0
+            else:
+                return partial_binom_sum(N, n - 1) + scipy.special.binom(N, n)
+                    
         if isinstance(nsubs, int):
             if nsubs > len(ssites):
                 logging.error("nsubs cannot exceed the number of substitutional sites.")
@@ -691,11 +697,6 @@ class DSGenerator:
 
             if n_random is None:
                 if recursive:
-                    partial_binom_sum = lambda N, n: (
-                        0
-                        if n < 0
-                        else partial_binom_sum(N, n - 1) + scipy.special.binom(N, n)
-                    )
                     n_max = int(partial_binom_sum(len(ssites), nsubs) / scindex)
                     with tqdm(total=n_max, desc="Finding unique sigmas") as pbar:
                         num_conf = self._generate_all_configurations_recursive(
@@ -721,9 +722,6 @@ class DSGenerator:
         elif isinstance(nsubs, dict):
             site_type_by_index = scell.get_tags()
 
-            partial_binom_sum = lambda N, n: (
-                0 if n < 0 else partial_binom_sum(N, n - 1) + scipy.special.binom(N, n)
-            )
             estimated_nconf = 1
             for site_type, nsites in nsites_per_type.items():
                 nsubs_in_type = np.sum(nsubs.get(str(site_type), [0]))
