@@ -400,12 +400,15 @@ def plot_optimization_vs_sparsity(
 
 
 def plot_predictions_vs_target(
-    sset,
-    cemodel,
-    prop_name,
-    scale=1.0,
-    xaxis_label="Calculated energy [arb. units]",
-    yaxis_label="Predicted energy [arb. units]",
+    sset: StructuresSet,
+    cemodel: Model,
+    prop_name: str,
+    scale: float = 1.0,
+    xaxis_label: str = "Calculated energy [arb. units]",
+    yaxis_label: str = "Predicted energy [arb. units]",
+    save_plot: bool = True,
+    show_plot: bool = True,
+    fname: str = "plot_predictions_vs_target",
 ):
     """Plot predictions versus target with matplotlib
 
@@ -415,7 +418,9 @@ def plot_predictions_vs_target(
 
     ``sset``: StructuresSet object
     ``cemodel``: Model object
-    ``prop_name``: string
+    ``prop_name``: name of the property to be plotted.
+        Must be present in ``sset``, and, if cemodel is for multiple properties,
+        must match one of the properties in ``cemodel.property_name``
     """
     import math
 
@@ -423,6 +428,10 @@ def plot_predictions_vs_target(
 
     energies = sset.get_property_values(property_name=prop_name)
     predictions = sset.get_predictions(cemodel)
+    model_props = cemodel.property_name
+    if isinstance(model_props, list):
+        i = model_props.index(prop_name)
+        predictions = predictions[:, i]
 
     e_min = min([min(energies), min(predictions)])
     e_max = max([max(energies), max(predictions)])
@@ -484,8 +493,10 @@ def plot_predictions_vs_target(
     for t in leg.get_texts():
         t.set_fontsize(fs)
 
-    # plt.savefig("plot_optimization.png")
-    plt.show()
+    if save_plot:
+        plt.savefig(f"{fname}_{prop_name}.png")
+    if show_plot:
+        plt.show()
 
 
 def plot_property_vs_concentration(
@@ -724,7 +735,7 @@ def plot_property(
 
     if not save_plot and not show_plot:
         return data
-    
+
     width = 15.0 * scale
     fs = int(width * 1.8)
     ticksize = fs
@@ -775,6 +786,7 @@ def plot_property(
         plt.savefig(prop_name + "_plot.png")
 
     return data
+
 
 def plot_property_persistent(
     xvalues,
