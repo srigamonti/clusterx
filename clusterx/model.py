@@ -388,7 +388,7 @@ class Model:
         if not self.initialized_interactions:
             self._init_interaction_dict(structure.get_supercell())
 
-        correlations = cluster_correlations_flip(
+        correlations_diff = cluster_correlations_flip(
             structure=structure,
             ind=index,
             old_sigma=old_sigma,
@@ -403,11 +403,11 @@ class Model:
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
             return (
-                self.estimator.predict(correlations.reshape(1, -1))[0]
+                self.estimator.predict(correlations_diff.reshape(1, -1))[0]
                 - self.estimator.intercept_
             )
         else:
-            return np.dot(self.ecis, correlations)
+            return np.dot(self.ecis, correlations_diff)
 
     def predict_swap(
         self, structure, i, j, correlation=False, site_types=[0], reduce=False

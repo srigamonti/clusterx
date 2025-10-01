@@ -481,7 +481,7 @@ def cluster_correlations_flip(
     indices = site_clusters[ind]
     clusters = cluster_orbits_array[indices]
     cluster_indices = cluster_indices[indices]
-    corrs = np.zeros_like(multiplicities, dtype=float)
+    correlations_diff = np.zeros_like(multiplicities, dtype=float)
 
     for cluster, cluster_index in zip(clusters, cluster_indices):
         cluster_sites = cluster.get_idxs()
@@ -496,11 +496,11 @@ def cluster_correlations_flip(
             new_sigma,
             basis_set_values,
         )
-        corrs[cluster_index] += cf
+        correlations_diff[cluster_index] += cf
 
-    corrs /= multiplicities
-    corrs /= multiplicity_factor
-    return np.around(corrs, decimals=12)
+    correlations_diff /= multiplicities
+    correlations_diff /= multiplicity_factor
+    return np.around(correlations_diff, decimals=12)
 
 
 @jit
