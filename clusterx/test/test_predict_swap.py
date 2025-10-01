@@ -101,9 +101,15 @@ def test_flip(plat_cubic, model_cubic, reduce):
         pred_init = model_cubic.predict(structure)
         old_sigma = structure.sigmas[i]
         new_sigma = 1 - old_sigma
-        pred_flip = model_cubic.predict_flip(
-            structure, i, old_sigma, new_sigma, reduce=reduce
-        )
+        if reduce:
+            with pytest.warns(UserWarning):
+                pred_flip = model_cubic.predict_flip(
+                    structure, i, old_sigma, new_sigma, reduce=reduce
+                )
+        else:
+            pred_flip = model_cubic.predict_flip(
+                structure, i, old_sigma, new_sigma, reduce=reduce
+            )
         structure.sigmas[i] = new_sigma
         pred_final = model_cubic.predict(structure)
         preds_full.append(pred_final - pred_init)
@@ -120,9 +126,7 @@ def test_flip_scale_sc(plat_cubic, model_cubic):
         pred_init = model_cubic.predict(structure)
         old_sigma = structure.sigmas[0]
         new_sigma = 1 - old_sigma
-        pred_flip = model_cubic.predict_flip(
-            structure, 0, old_sigma, new_sigma
-        )
+        pred_flip = model_cubic.predict_flip(structure, 0, old_sigma, new_sigma)
         structure.sigmas[i] = new_sigma
         pred_final = model_cubic.predict(structure)
         np.testing.assert_allclose(pred_flip, pred_final - pred_init)

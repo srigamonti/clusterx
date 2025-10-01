@@ -287,8 +287,8 @@ class Model:
             structure object to calculate property to.
 
         ``flag``: dict or None
-            it flags whether the member corrc correlationsCalculator computed 
-            orbits from scratch. This can be useful to konw, in order to serialize the 
+            it flags whether the member corrc correlationsCalculator computed
+            orbits from scratch. This can be useful to konw, in order to serialize the
             model instance to accelerate next property predictions
             Example usage:
 
@@ -302,7 +302,7 @@ class Model:
         """
         # with _timed("Model.predict: Get cluster correlations"):
         corrs = self.corrc.get_cluster_correlations(structure, flag=flag)
-        
+
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1, -1))[0]
         else:
@@ -365,6 +365,10 @@ class Model:
             if True, use the reduced structure around the flipped sigma
         """
         if reduce:
+            warnings.warn(
+                "model.predict_flip using reduce=True is currently very slow.",
+                category=UserWarning,
+            )
             p = np.diag(structure.get_supercell().get_transformation()).tolist()
             if not is_diagonal(p):
                 raise ValueError(
