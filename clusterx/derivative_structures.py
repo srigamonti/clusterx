@@ -302,7 +302,7 @@ class DSGenerator:
             nsubs = sum(row["sigma"])
 
             # Create a unique key based on shape_id and nsubs
-            key = f'{row["shape_id"]}_{nsubs}'
+            key = f"{row['shape_id']}_{nsubs}"
 
             # Return cached value if available
             if key in frconc_dict:
@@ -617,7 +617,7 @@ class DSGenerator:
 
             for idx, t in enumerate(unique_sc_shapes):
                 print(
-                    f"Start enum of scell shape {idx+1} of {len(unique_sc_shapes)}. Size: {sc_size}, nsubs:{num_subs}"
+                    f"Start enum of scell shape {idx + 1} of {len(unique_sc_shapes)}. Size: {sc_size}, nsubs:{num_subs}"
                 )
 
                 for nsubs in num_subs:
@@ -806,7 +806,6 @@ class DSGenerator:
         nsubs,
         stypes,
     ):
-
         children = set()
         for site in ssites:
             for sigmai in range(1, ems[site]):
@@ -841,7 +840,6 @@ class DSGenerator:
         pbar=None,
         all_configs=None,
     ):
-
         if sigma0 is None:
             sigma0 = (0,) * natoms
 
@@ -1065,7 +1063,6 @@ class DSGenerator:
     def _generate_random_configurations(
         self, ssites, nsubs, natoms, shape_id, symper, n_random
     ):
-
         full_list: Set[Tuple[int, ...]] = set()
         attempts = 0
         attempts_total = 0
@@ -1122,7 +1119,6 @@ class DSGenerator:
     def _generate_random_configurations2(
         self, ssites, nsubs, natoms, shape_id, symper, n_random
     ):
-
         full_list: Set[Tuple[int, ...]] = set()
         attempts = 0
         attempts_total = 0
@@ -1411,7 +1407,6 @@ def get_HNFs(n, pbc=(1, 1, 1)):
 
 
 def _get_minimal_sc_shape(h, all_matrices=None, cell=None):
-
     def minimum_key(x):
         return max(_get_normalized_scalar_products(np.dot(x, cell)))
 

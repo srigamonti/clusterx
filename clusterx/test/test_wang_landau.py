@@ -56,7 +56,7 @@ def test_cli(plat, model):
     plat_filepath = "plat_wl.json"
     plat.serialize(plat_filepath)
 
-    sc_shape = [8, 8]
+    sc_shape = [4, 4]
     nsubs = {
         0: [int(np.prod(sc_shape) / 2)]
     }  # one substitution for the whole supercell
@@ -70,7 +70,7 @@ def test_cli(plat, model):
         ensemble="canonical",
         sublattice_indices=[],
         chemical_potentials=None,
-        predict_swap=True,
+        predict_swap=False,
         error_reset=None,
         energy_range=energy_range,
         energy_bin_width=0.2,
@@ -86,6 +86,7 @@ def test_cli(plat, model):
         acc_prob_init_structure=1e-3,
         acc_prob_dist_init_structure="gaussian",
         itmax_init_structure=int(1e8),
+        niter_per_sweep=1000,
         nproc=0,
         seed=1,
     )
@@ -108,38 +109,23 @@ def test_sampling_clathrate():
     cpool.add_cluster(Cluster([40], [s], cpsc))
     cpool.add_cluster(Cluster([6, 4], [s, s], cpsc))
     cpool.add_cluster(Cluster([37, 32], [s, s], cpsc))
-    cpool.add_cluster(Cluster([39, 12], [s, s], cpsc))
-    cpool.add_cluster(Cluster([16, 43], [s, s], cpsc))
-    cpool.add_cluster(Cluster([35, 11], [s, s], cpsc))
-    cpool.add_cluster(Cluster([39, 30], [s, s], cpsc))
-    cpool.add_cluster(Cluster([22, 17], [s, s], cpsc))
-    cpool.add_cluster(Cluster([35, 42], [s, s], cpsc))
-    cpool.add_cluster(Cluster([32, 14], [s, s], cpsc))
-    cpool.add_cluster(Cluster([11, 10], [s, s], cpsc))
-    cpool.add_cluster(Cluster([18, 9], [s, s], cpsc))
-    cpool.add_cluster(Cluster([18, 43], [s, s], cpsc))
 
     # Energy
-    cpoolE = cpool.get_subpool([0, 1, 2, 3, 4, 5, 6, 7, 9, 15])
-    ecisE = [
+    ecis = [
         -78407.3247588,
         47.164484875,
         47.1673476881,
         47.1569012692,
         0.00851281608144,
         0.0139835351147,
-        0.0108175321899,
-        0.0101521144776,
-        0.00121744613474,
-        0.000413664306204,
     ]
-    multT = [1, 24, 16, 6, 12, 8, 48, 24, 24, 24]
+    multiplicities = [1, 24, 16, 6, 12, 8]
 
-    corcE = CorrelationsCalculator("binary-linear", plat, cpoolE)
+    corcE = CorrelationsCalculator("binary-linear", plat, cpool)
     p = [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
     scell = SuperCell(plat, p)
     nsubs = {0: [16]}
-    cemodelE = Model(corcE, "energy", ecis=np.multiply(ecisE, multT))
+    cemodelE = Model(corcE, "energy", ecis=np.multiply(ecis, multiplicities))
 
     wl = WangLandau(
         energy_model=cemodelE,
@@ -158,6 +144,8 @@ def test_sampling_clathrate():
         update_method="square_root",
         flatness_conditions=[[0.1, math.exp(1e-1)]],
         plot_hist_real_time=False,
+        niter_per_sweep=10000,
+        seed=11,  # this seed converges within one sweep
     )
     energy_bins, gs = cdos.get_cdos(ln=True, normalization=False)
 

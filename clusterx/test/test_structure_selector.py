@@ -16,14 +16,12 @@ from clusterx.structure_selector import StructureSelector
 
 @pytest.fixture
 def plat():
-    cell = [[1, 0, 0],
-            [0, 1, 0],
-            [0, 0, 5]]
+    cell = [[1, 0, 0], [0, 1, 0], [0, 0, 5]]
     positions = [[0, 0, 0]]
     pbc = [True, True, False]
 
-    pri = Atoms(['H'], positions=positions, cell=cell, pbc=pbc)
-    su1 = Atoms(['C'], positions=positions, cell=cell, pbc=pbc)
+    pri = Atoms(["H"], positions=positions, cell=cell, pbc=pbc)
+    su1 = Atoms(["C"], positions=positions, cell=cell, pbc=pbc)
 
     return ParentLattice(pri, substitutions=[su1], pbc=pbc)
 
@@ -60,7 +58,8 @@ def test_covariance_setup(plat, cpool, training_set, structure_selector):
     np.testing.assert_allclose(
         np.identity(len(cpool)),
         np.dot(structure_selector._covariance_matrix, covariance_matrix_inv),
-        atol=1e-12)
+        atol=1e-12,
+    )
 
 
 def test_empty_set(structure_selector):
@@ -68,49 +67,62 @@ def test_empty_set(structure_selector):
         structure_selector.set_candidate_set(None)
 
 
-@pytest.mark.parametrize('method', ['global_abc', 'abc'])
+@pytest.mark.parametrize("method", ["global_abc", "abc"])
 def test_invalid_method_select(structure_selector, training_set, method):
     structure_selector.set_candidate_set(training_set)
     with pytest.raises(ValueError):
         structure_selector.select_structure(method=method)
 
 
-@pytest.mark.parametrize('method', ['global_abc', 'abc'])
-def test_invalid_method_domain_matrix(
-    structure_selector, training_set, method):
+@pytest.mark.parametrize("method", ["global_abc", "abc"])
+def test_invalid_method_domain_matrix(structure_selector, training_set, method):
     structure_selector.set_candidate_set(training_set)
     with pytest.raises(ValueError):
         structure_selector._calculate_domain_matrix(method=method)
 
 
 @pytest.mark.parametrize(
-    'method',
-    ['averagedConcentration', 'infiniteCrystalFiniteClusters',
-     'byConcentration', 'vdWalleAndCeder'])
+    "method",
+    [
+        "averagedConcentration",
+        "infiniteCrystalFiniteClusters",
+        "byConcentration",
+        "vdWalleAndCeder",
+    ],
+)
 def test_tau_bounds(structure_selector, method):
     tau = structure_selector.calculate_population_variance(
-        domain_calculation_method=method, concentration=0.2)
+        domain_calculation_method=method, concentration=0.2
+    )
     assert isinstance(tau, float), "tau is not a float"
     assert tau > 0, "tau is not positive"
 
 
-@pytest.mark.parametrize('seed', [42])
+@pytest.mark.parametrize("seed", [42])
 @pytest.mark.parametrize(
-    'method',
-    ['global_averagedConcentration', 'global_infiniteCrystalFiniteClusters',
-    'global_byConcentration', 'global_vdWalleAndCeder'])
-def test_tau_selection(seed, method, plat, scell, cpool, structure_selector, training_set):
+    "method",
+    [
+        "global_averagedConcentration",
+        "global_infiniteCrystalFiniteClusters",
+        "global_byConcentration",
+        "global_vdWalleAndCeder",
+    ],
+)
+def test_tau_selection(
+    seed, method, plat, scell, cpool, structure_selector, training_set
+):
     # TODO: test greedy method how?
-    calculate_tau_method = method.replace('global_', '')
+    calculate_tau_method = method.replace("global_", "")
 
     candidate_set = StructuresSet(plat)
     n_candidates = 6
     np.random.seed(seed)  # For reproducibility
     for idx in range(n_candidates):
-        candidate_set.add_structure(scell.gen_random_structure(nsubs={0:[5]}))
+        candidate_set.add_structure(scell.gen_random_structure(nsubs={0: [5]}))
     structure_selector.set_candidate_set(candidate_set)
     structure_idx = structure_selector.select_structure(
-        method=method, concentration=0.2)
+        method=method, concentration=0.2
+    )
 
     tau = np.zeros(n_candidates)
     for candidate_idx in range(n_candidates):
@@ -118,9 +130,11 @@ def test_tau_selection(seed, method, plat, scell, cpool, structure_selector, tra
         dummy_set = training_set[:]
         dummy_set.add_structure(candidate)
         dummy_structure_selector = StructureSelector(
-            cluster_pool=cpool, training_set=dummy_set)
+            cluster_pool=cpool, training_set=dummy_set
+        )
         tau[candidate_idx] = dummy_structure_selector.calculate_population_variance(
-            domain_calculation_method=calculate_tau_method, concentration=0.2)
+            domain_calculation_method=calculate_tau_method, concentration=0.2
+        )
 
     structure_chosen = np.argmin(tau)
     assert structure_chosen == structure_idx, f"""structure selection failed. 
@@ -129,8 +143,13 @@ def test_tau_selection(seed, method, plat, scell, cpool, structure_selector, tra
 
 
 @pytest.mark.parametrize(
-    'method',
-    ['averagedConcentration', 'byConcentration',
-    'infiniteCrystalFiniteClusters', 'vdWalleAndCeder'])
+    "method",
+    [
+        "averagedConcentration",
+        "byConcentration",
+        "infiniteCrystalFiniteClusters",
+        "vdWalleAndCeder",
+    ],
+)
 def test_calc_domain_matrix(method, structure_selector):
     structure_selector._calculate_domain_matrix(method, concentration=0.2)

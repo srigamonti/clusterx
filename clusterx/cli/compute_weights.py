@@ -16,10 +16,25 @@ commands = ["compute_weights"]
 
 @plac.annotations(
     sset_filepath=("Path to serialized StructuresSet object.", "option", None, str),
-    sset_gss_filepath=("Path to serialized StructuresSet object for GS structures.", "option", "gss", str),
-    weights_filepath=("Output path for weights (e.g., weights.npz).", "option", None, str),
+    sset_gss_filepath=(
+        "Path to serialized StructuresSet object for GS structures.",
+        "option",
+        "gss",
+        str,
+    ),
+    weights_filepath=(
+        "Output path for weights (e.g., weights.npz).",
+        "option",
+        None,
+        str,
+    ),
     property_name=("Name of the property to use for weights.", "option", None, str),
-    temperature=("Temperature value used for Boltzmann weighting.", "option", None, float),
+    temperature=(
+        "Temperature value used for Boltzmann weighting.",
+        "option",
+        None,
+        float,
+    ),
     kind=("Weighting method ID (e.g., 1 for Boltzmann).", "option", None, int),
 )
 def compute_weights(
@@ -57,7 +72,6 @@ def compute_weights(
                     break
 
     if kind == 2:
-
         for i, (c, p) in enumerate(zip(conc, prop)):
             if c < 0.025:
                 weights[i] = 0

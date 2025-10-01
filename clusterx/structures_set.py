@@ -53,8 +53,14 @@ class StructuresSet:
     **Methods:**
     """
 
-    def __init__(self, parent_lattice=None, filepath=None, calculator=None, quick_parse=False, **sset_opts):
-
+    def __init__(
+        self,
+        parent_lattice=None,
+        filepath=None,
+        calculator=None,
+        quick_parse=False,
+        **sset_opts,
+    ):
         self._iter = 0
         self._parent_lattice = parent_lattice
         self._nstructures = 0
@@ -88,14 +94,18 @@ class StructuresSet:
         if plat_dict is not None:
             self._parent_lattice = ParentLattice.plat_from_dict(plat_dict)
         else:
-            self._parent_lattice = ParentLattice.plat_from_dict_obsolete(self._db.metadata)
+            self._parent_lattice = ParentLattice.plat_from_dict_obsolete(
+                self._db.metadata
+            )
 
         for i, row in enumerate(self._db.select()):
             atoms = row.toatoms()
             atoms.wrap()
             tmat = row.get("data", {}).get("tmat")
             if tmat is None:
-                tmat = calculate_trafo_matrix(self._parent_lattice.get_cell(), atoms.get_cell())
+                tmat = calculate_trafo_matrix(
+                    self._parent_lattice.get_cell(), atoms.get_cell()
+                )
             scell = SuperCell(self._parent_lattice, tmat)
 
             props = {}
@@ -108,7 +118,9 @@ class StructuresSet:
             if quick_parse:
                 s = Structure(scell, decoration=atoms.get_atomic_numbers())
             else:
-                idxs = get_cl_idx_sc(scell.get_positions(), atoms.get_positions(), method=1)
+                idxs = get_cl_idx_sc(
+                    scell.get_positions(), atoms.get_positions(), method=1
+                )
                 s = Structure(scell, decoration=atoms.get_atomic_numbers()[idxs])
 
             self.add_structure(s, folder=_folders[i], **props)
@@ -139,7 +151,10 @@ class StructuresSet:
 
     def __getitem__(self, key):
         if isinstance(key, slice):
-            return self.get_subset(structure_indices=range(*key.indices(len(self))), transfer_properties=True)
+            return self.get_subset(
+                structure_indices=range(*key.indices(len(self))),
+                transfer_properties=True,
+            )
         else:
             return self._structures[key]
 
@@ -246,12 +261,15 @@ class StructuresSet:
                 atoms.wrap()
                 tmat = row.get("data", {}).get("tmat")
                 if tmat is None:
-                    tmat = calculate_trafo_matrix(self._parent_lattice.get_cell(), atoms.get_cell())
+                    tmat = calculate_trafo_matrix(
+                        self._parent_lattice.get_cell(), atoms.get_cell()
+                    )
                 scell = SuperCell(self._parent_lattice, tmat, sort_key=sort_key)
-                self.add_structure(Structure(scell, decoration=atoms.get_atomic_numbers()))
+                self.add_structure(
+                    Structure(scell, decoration=atoms.get_atomic_numbers())
+                )
 
         elif isinstance(structures, StructuresSet):
-
             for i, s in enumerate(structures):
                 props = {}
                 for k, v in structures._props.items():
@@ -394,11 +412,19 @@ class StructuresSet:
     # DEPRECATED, use compute_property_values instead
     def calculate_property(self, prop_name="energy", prop_func=None, rm_vac=True):
         self.compute_property_values(
-            property_name=prop_name, property_calc=prop_func, rm_vacancies=rm_vac, update_json_db=False
+            property_name=prop_name,
+            property_calc=prop_func,
+            rm_vacancies=rm_vac,
+            update_json_db=False,
         )
 
     def compute_property_values(
-        self, property_name="energy", property_calc=None, rm_vacancies=True, update_json_db=True, **kwargs
+        self,
+        property_name="energy",
+        property_calc=None,
+        rm_vacancies=True,
+        update_json_db=True,
+        **kwargs,
     ):
         """
         Return array of calculated property for all structures in the structures set.
@@ -451,7 +477,9 @@ class StructuresSet:
                     _ats = remove_vacancies(ats)
                 else:
                     _ats = ats.copy()
-                    _ats.set_calculator(ats.get_calculator())  # ASE's copy() forgets calculator
+                    _ats.set_calculator(
+                        ats.get_calculator()
+                    )  # ASE's copy() forgets calculator
                 props.append(_ats.get_potential_energy())
             else:
                 props.append(property_calc(i, st, **kwargs))
@@ -491,10 +519,28 @@ class StructuresSet:
             os.chdir(cwd)
 
     # Deprecated: Use write_input_files instead
-    def write_files(self, root=".", prefix="", suffix="", fnames=None, formats=[], overwrite=True, rm_vac=False):
+    def write_files(
+        self,
+        root=".",
+        prefix="",
+        suffix="",
+        fnames=None,
+        formats=[],
+        overwrite=True,
+        rm_vac=False,
+    ):
         self.write_input_files(root, prefix, suffix, fnames, formats, overwrite, rm_vac)
 
-    def write_input_files(self, root=".", prefix="", suffix="", fnames=None, formats=[], overwrite=True, rm_vac=False):
+    def write_input_files(
+        self,
+        root=".",
+        prefix="",
+        suffix="",
+        fnames=None,
+        formats=[],
+        overwrite=True,
+        rm_vac=False,
+    ):
         """Create folders containing structure input files for ab-initio calculations.
 
         Structure files are written to files with path::
@@ -584,14 +630,18 @@ class StructuresSet:
                 if overwrite or not os.path.isfile(path):
                     write(path, atoms, format)
 
-        db_path = os.path.join(root, prefix + "0" + "-" + str(self.get_nstr() - 1) + suffix + ".json")
+        db_path = os.path.join(
+            root, prefix + "0" + "-" + str(self.get_nstr() - 1) + suffix + ".json"
+        )
         self.serialize(filepath=db_path, overwrite=True)
 
     # Deprecated
     def write_to_db(self, filepath="sset.json", overwrite=False, rm_vac=False):
         self.serialize(filepath=path, overwrite=overwrite, rm_vac=rm_vac)
 
-    def serialize(self, filepath="sset.db", ase_db_type=None, overwrite=False, rm_vac=False):
+    def serialize(
+        self, filepath="sset.db", ase_db_type=None, overwrite=False, rm_vac=False
+    ):
         """Serialize StructuresSet object
 
         The serialization creates an ASE database object, with added metadata needed by CELL.
@@ -653,12 +703,15 @@ class StructuresSet:
 
         if not overwrite and os.path.isfile(filepath):
             warnings.warn(
-                f"File '{filepath}' already exists. " f"Set overwrite=True to overwrite it. Nothing was written."
+                f"File '{filepath}' already exists. "
+                f"Set overwrite=True to overwrite it. Nothing was written."
             )
             return  # Early exit if not overwriting
 
         if nstr == 0:
-            warnings.warn("The StructuresSet object does not contain any structure. Nothing was written.")
+            warnings.warn(
+                "The StructuresSet object does not contain any structure. Nothing was written."
+            )
             return  # Early exit if sset is empty
 
         with connect(filepath, type=ase_db_type, append=False) as db:
@@ -703,7 +756,9 @@ class StructuresSet:
         """
         return self._db_fname
 
-    def read_energy(i, folder, structure=None, **kwargs):  # DEPRECATED, use energy_parser instead
+    def read_energy(
+        i, folder, structure=None, **kwargs
+    ):  # DEPRECATED, use energy_parser instead
         self.energy_parser(i, folder, structure=structure, **kwargs)
 
     def energy_parser(i, folder, structure=None, **kwargs):
@@ -829,7 +884,9 @@ class StructuresSet:
             if root != "":
                 folder = os.path.join(root, os.path.relpath(folder))
             try:
-                pval = property_parser(i, folder, structure=self.get_structure(i), **kwargs)
+                pval = property_parser(
+                    i, folder, structure=self.get_structure(i), **kwargs
+                )
             except:
                 print("Could not parse propery ", property_name, "from folder ", folder)
                 pval = None
@@ -861,7 +918,9 @@ class StructuresSet:
 
             db.metadata = {**db.metadata, "properties": self._props}
 
-    def set_property_values(self, property_name="total_energy", property_vals=[], update_json_db=True):
+    def set_property_values(
+        self, property_name="total_energy", property_vals=[], update_json_db=True
+    ):
         """Set property values
 
         Set the property values.
@@ -884,7 +943,9 @@ class StructuresSet:
         if update_json_db:
             self._update_properties_in_json_db()
 
-    def set_property_values_from_files(self, property_name="property", property_file_name="property.dat", cwd="./"):
+    def set_property_values_from_files(
+        self, property_name="property", property_file_name="property.dat", cwd="./"
+    ):
         """Set property values read from files
 
         Consider a ``StructuresSet`` oject named ``sset``.

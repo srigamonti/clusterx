@@ -1,6 +1,7 @@
-""""
+""" "
 This module is designed to obtain the access token for a NOMAD OASIS database.
 """
+
 import os
 import requests
 from dotenv import load_dotenv
@@ -39,15 +40,15 @@ def get_nomad_oasis_access_token(path_to_dotenv=None, username=None, userpasswor
     """
     if path_to_dotenv is not None:
         load_dotenv(path_to_dotenv)
-        myname = os.getenv('OASIS_USER_NAME')
-        mypassword = os.getenv('OASIS_PASSWORD')
+        myname = os.getenv("OASIS_USER_NAME")
+        mypassword = os.getenv("OASIS_PASSWORD")
     else:
         myname = username
         mypassword = userpassword
-    
+
     response_to_authentification = requests.get(
-            'https://nomad-lab.eu/prod/v1/staging/api/v1/auth/token',
-            params={"username": myname, "password": mypassword}
-            )
-    token = response_to_authentification.json()['access_token']
+        "https://nomad-lab.eu/prod/v1/staging/api/v1/auth/token",
+        params={"username": myname, "password": mypassword},
+    )
+    token = response_to_authentification.json()["access_token"]
     return token

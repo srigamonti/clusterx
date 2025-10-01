@@ -37,8 +37,12 @@ commands = ["build_cpool"]
         For a precise definition look into the parameter p of the SuperCell class of CELL.
     """,
 )
-@plac.opt("method", abbrev="me", help="Method to use to find clusters.", choices=[1, 2, 3])
-@plac.opt("cpool_filepath", help="Filepath where to store the generated pool of clusters.")
+@plac.opt(
+    "method", abbrev="me", help="Method to use to find clusters.", choices=[1, 2, 3]
+)
+@plac.opt(
+    "cpool_filepath", help="Filepath where to store the generated pool of clusters."
+)
 @plac.opt(
     "vacancy_atomic_number",
     help="Look documentation for variable vacancy_atomic_number in ClustersPool class.",
@@ -49,7 +53,7 @@ def build_cpool(
     sset_filepath=None,  # Optional[str]
     plat_filepath=None,  # Optional[str]
     psc=1,  # Supercell definition
-    method=1,  # int
+    method=0,  # int
     cpool_filepath="cpool.json",  # str
     vacancy_atomic_number=0,  # int
 ):
@@ -62,7 +66,7 @@ def build_cpool(
         sset_filepath: Path to the structure set file (optional).
         plat_filepath: Path to the parent lattice file (optional).
         psc: Supercell definition (default: 1).
-        method: Method ID used to construct clusters (default: 1).
+        method: Method ID used to construct clusters (default: 0).
         cpool_filepath: Output filepath for the cluster pool (default: "cpool.json").
         vacancy_atomic_number: Atomic number for vacancy site (default: 0).
 
@@ -82,11 +86,14 @@ def build_cpool(
     if plat_filepath is not None:
         plat = ParentLattice(filepath=plat_filepath)
     if not (plat_filepath or sset_filepath):
-        raise ValueError(
-            "Either sset_filepath or plat_filepath must be provided.")
+        raise ValueError("Either sset_filepath or plat_filepath must be provided.")
 
     scell = SuperCell(plat, p=psc)
-    cpool = ClustersPool(plat, npoints=npoints, radii=radii, super_cell=scell, method=method)
+    cpool = ClustersPool(
+        plat, npoints=npoints, radii=radii, super_cell=scell, method=method
+    )
 
     cpool.print_info()
-    cpool.serialize(filepath=cpool_filepath, vacancy_atomic_number=vacancy_atomic_number)
+    cpool.serialize(
+        filepath=cpool_filepath, vacancy_atomic_number=vacancy_atomic_number
+    )

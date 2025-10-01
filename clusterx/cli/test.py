@@ -13,7 +13,10 @@ from clusterx.test.__init__ import tests as tlist
 commands = ["test"]
 
 
-@plac.annotations(testslist=("Print available tests", "flag", "l"), name=("Make one test", "option", "n"))
+@plac.annotations(
+    testslist=("Print available tests", "flag", "l"),
+    name=("Make one test", "option", "n"),
+)
 def test(testslist=False, name=""):
     "Test CELL"
     if testslist:

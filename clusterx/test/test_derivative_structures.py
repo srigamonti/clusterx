@@ -35,7 +35,12 @@ def ds_generator_empty(parent_lattice):
 @pytest.fixture
 def ds_generator_full(ds_generator_empty):
     ds_generator_empty.generate(
-        supercell_sizes=[1, 2], num_subs_list=[[1], [2]], sc_shape=None, sc_shapes=None, n_random=None, random_state=42
+        supercell_sizes=[1, 2],
+        num_subs_list=[[1], [2]],
+        sc_shape=None,
+        sc_shapes=None,
+        n_random=None,
+        random_state=42,
     )
     return ds_generator_empty
 
@@ -129,7 +134,9 @@ def solver_single_properties_rand():
         [[0.0, 1.0], [1.0, 2.0]],
     ],
 )
-def test_compute_properties_single(ds_generator_full, solver_single_properties_rand, lin_ref):
+def test_compute_properties_single(
+    ds_generator_full, solver_single_properties_rand, lin_ref
+):
     ds_generator_full.compute_properties(
         property_name="dummy",
         ase_calculator=None,
@@ -167,7 +174,9 @@ def solver_multi_properties_rand():
         [[0.0, 1.0], [1.0, 2.0]],
     ],
 )
-def test_compute_properties_multi(ds_generator_full, solver_multi_properties_rand, lin_ref):
+def test_compute_properties_multi(
+    ds_generator_full, solver_multi_properties_rand, lin_ref
+):
     ds_generator_full.compute_properties(
         property_names=["dummy1", "dummy2"],
         ase_calculator=None,
@@ -214,8 +223,12 @@ def test_serialize_load(ds_generator_full, tmp_path):
     ds_generator_full.serialize(filepath)
     ds_generator_loaded = DSGenerator.from_file(filepath)
     assert ds_generator_full.plat == ds_generator_loaded.plat
-    pd.testing.assert_frame_equal(ds_generator_full.scell_shapes, ds_generator_loaded.scell_shapes)
-    pd.testing.assert_frame_equal(ds_generator_full.configurations, ds_generator_loaded.configurations)
+    pd.testing.assert_frame_equal(
+        ds_generator_full.scell_shapes, ds_generator_loaded.scell_shapes
+    )
+    pd.testing.assert_frame_equal(
+        ds_generator_full.configurations, ds_generator_loaded.configurations
+    )
 
 
 def test_concentration(ds_generator_full):
@@ -273,7 +286,6 @@ def test_get_unique_supercells():
     [2] Phys. Rev. B 77, 224115 2008
     """
     for case in range(3):
-
         if case == 0:  # Square (2D, i.e. pbc = (1,1,0))
             a = 3.1
             index = 4
@@ -289,10 +301,20 @@ def test_get_unique_supercells():
             sset = StructuresSet(pl)
             for t in unique_trafos:
                 scell = SuperCell(pl, t)
-                sset.add_structure(Structure(scell, scell.get_atomic_numbers()), write_to_db=True)
+                sset.add_structure(
+                    Structure(scell, scell.get_atomic_numbers()), write_to_db=True
+                )
 
-            sset.serialize(filepath="test_get_unique_supercells-square_lattice.json", overwrite=True)
-            print("\nFound ", len(unique_scs), " unique HNFs for a 2D square lattice of index ", index)
+            sset.serialize(
+                filepath="test_get_unique_supercells-square_lattice.json",
+                overwrite=True,
+            )
+            print(
+                "\nFound ",
+                len(unique_scs),
+                " unique HNFs for a 2D square lattice of index ",
+                index,
+            )
             # print("SCS: ", unique_scs)
             # print("TRA: ", unique_trafos)
             isok0 = len(unique_scs) == 4 and unique_scs[1][1][1] == 12.4
@@ -312,7 +334,9 @@ def test_get_unique_supercells():
             sset = StructuresSet(pl)
             for t in unique_trafos:
                 scell = SuperCell(pl, t)
-                sset.add_structure(Structure(scell, scell.get_atomic_numbers()), write_to_db=True)
+                sset.add_structure(
+                    Structure(scell, scell.get_atomic_numbers()), write_to_db=True
+                )
 
             sset.serialize(filepath="test_get_unique_supercells-fcc.json", overwrite=True)
             print("Found ", len(unique_scs), " unique HNFs for a FCC lattice of index ", index)
@@ -335,7 +359,9 @@ def test_get_unique_supercells():
             sset = StructuresSet(pl)
             for t in unique_trafos:
                 scell = SuperCell(pl, t)
-                sset.add_structure(Structure(scell, scell.get_atomic_numbers()), write_to_db=True)
+                sset.add_structure(
+                    Structure(scell, scell.get_atomic_numbers()), write_to_db=True
+                )
 
             sset.serialize(filepath="test_get_unique_supercells-sc.json", overwrite=True)
             print("Found ", len(unique_scs), " unique HNFs for a simple cubic lattice of index ", index)

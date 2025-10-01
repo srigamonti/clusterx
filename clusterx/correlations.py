@@ -4,20 +4,18 @@
 
 import os
 import pickle
-from functools import lru_cache
+import warnings
 from subprocess import call
 from typing import Optional
-import warnings
 
-from numba import jit
 import numpy as np
-from ase.db.core import Database
 from ase.db import connect
+from ase.db.core import Database
 from ase.db.jsondb import JSONDatabase
+from numba import jit
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.clusters.cluster import Cluster
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
@@ -79,7 +77,7 @@ class CorrelationsCalculator:
 
     def __init__(
         self,
-        basis=None,
+        basis_name=None,
         parent_lattice=None,
         clusters_pool=None,
         db=None,
@@ -131,7 +129,9 @@ class CorrelationsCalculator:
         self._2pi = 2 * np.pi
         self.use_sym_table = use_sym_table
 
-        self.basis_set_values = self.compute_basis_set_values(self._plat, self.basis_name)
+        self.basis_set_values = self.compute_basis_set_values(
+            self._plat, self.basis_name
+        )
 
         self._mc = False
         self._num_mc_calls = 0
@@ -259,7 +259,9 @@ class CorrelationsCalculator:
             lengths[i] = len(orbit)
         return lengths
 
-    def get_cluster_orbits_for_scell(self, scell: SuperCell, verbose: bool = False):
+    def get_cluster_orbits_for_scell(
+        self, scell: SuperCell, verbose: bool = False, **kwargs
+    ):
         """Return array of cluster orbits for a given supercell
 
         **Parameters**
@@ -271,17 +273,25 @@ class CorrelationsCalculator:
             If ``True``, prints the progress of the calculation to the console.
         """
         cluster_orbits = None
+        flag = kwargs.get("flag")
 
         # Check if cluster_orbit is already computed
-        for i, _scell in enumerate(self._scells):
-            if cluster_orbits is None:
-                if len(scell.get_positions()) == len(_scell.get_positions()):
-                    if np.allclose(scell._p, _scell._p):
-                        cluster_orbits = self._cluster_orbits_set[i]
-                        break
+        for scell_ref, cluster_orbits_ref in zip(
+            self._scells, self._cluster_orbits_set
+        ):
+            if len(scell.get_positions()) == len(
+                scell_ref.get_positions()
+            ) and np.allclose(scell._p, scell_ref._p):
+                cluster_orbits = cluster_orbits_ref
+                break
+
+        if flag is not None:
+            flag["computed_orbits_from_scratch"] = False
 
         # Compute cluster_orbit from scratch if not available
         if cluster_orbits is None:
+            if flag is not None:
+                flag["computed_orbits_from_scratch"] = True
             if verbose:
                 print("Calculating cluster orbits from scratch for scell")
             # Add new super cell and calculate cluster orbits for it.
@@ -293,10 +303,18 @@ class CorrelationsCalculator:
                 pass
             elif isinstance(scell, ParentLattice):
                 scell = SuperCell(scell, [1, 1, 1])
-
+            # with _timed("INIT: Computing cluster orbits for all clusters"):
             cpool = ClustersPool(scell.get_parent_lattice(), super_cell=scell)
+            # with _timed("Computing cluster orbits for all clusters"):
+            from tqdm import tqdm
 
-            for icl, cluster in enumerate(self._cpool.get_cpool_list()):
+            for icl, cluster in enumerate(
+                tqdm(
+                    self._cpool.get_cpool_list(),
+                    desc="Computing cluster orbits in super cell",
+                    unit="cluster",
+                )
+            ):
                 _cluster_orbit = cpool.get_cluster_orbit(
                     scell,
                     cluster_positions=cluster.get_positions(),
@@ -360,7 +378,9 @@ class CorrelationsCalculator:
         self._num_mc_calls = 0
         self._cluster_orbits_mc = None
 
-    def get_cluster_correlations(self, structure: Structure, verbose: bool = False):
+    def get_cluster_correlations(
+        self, structure: Structure, verbose: bool = False, flag=None
+    ):
         """Get cluster correlations for a structure
         **Parameters:**
 
@@ -374,35 +394,17 @@ class CorrelationsCalculator:
         if self._mc and self._cluster_orbits_set != [] and self._num_mc_calls != 0:
             cluster_orbits = self._cluster_orbits_mc
         else:
+            # with _timed(
+            #     "CorrelationsCalculator.get_cluster_correlations: get cluster orbits in correlations"
+            # ):
             cluster_orbits = self.get_cluster_orbits_for_scell(
-                structure.get_supercell(), verbose=verbose
+                structure.get_supercell(), verbose=verbose, flag=flag
             )
             if self._mc is True:
                 self._num_mc_calls = 1
                 self._cluster_orbits_mc = cluster_orbits
 
-        cpool_list = self._cpool.get_cpool_list()
-
-        correlations = np.zeros(len(cpool_list))
-
-        for icl, _ in enumerate(cpool_list):
-            cluster_orbit = cluster_orbits[icl]
-            cluster_orbit_arr = cluster_orbit.as_array()
-            weights = cluster_orbit.get_weights()
-
-            for weight, cluster in zip(weights, cluster_orbit_arr):
-                cf = cluster_function(
-                    np.array(cluster.get_idxs()),
-                    cluster.alphas,
-                    structure.sigmas,
-                    structure.ems,
-                    self.basis_set_values,
-                )
-                correlations[icl] += weight * cf
-
-            correlations[icl] /= np.sum(weights)
-
-        return np.around(correlations, decimals=12)
+        return cluster_correlations(structure, cluster_orbits, self.basis_set_values)
 
     def get_correlation_matrix(
         self, structures_set: StructuresSet, outfile: str = None, verbose: bool = False
@@ -440,8 +442,69 @@ class CorrelationsCalculator:
         return corrs
 
 
+def cluster_correlations(structure, cluster_orbits, basis_set_values):
+    correlations = np.zeros(len(cluster_orbits))
+
+    for icl, cluster_orbit in enumerate(cluster_orbits):
+        cluster_orbit_arr = cluster_orbit.as_array()
+        weights = cluster_orbit.get_weights()
+
+        for weight, cluster in zip(weights, cluster_orbit_arr):
+            cf = cluster_function(
+                np.array(cluster.get_idxs()),
+                cluster.alphas,
+                structure.sigmas,
+                structure.ems,
+                basis_set_values,
+            )
+            correlations[icl] += weight * cf
+
+        correlations[icl] /= np.sum(weights)
+
+    return np.around(correlations, decimals=12)
+
+
+def cluster_correlations_flip(
+    structure: Structure,
+    ind: int,
+    old_sigma: int,
+    new_sigma: int,
+    site_clusters: list,
+    cluster_orbits_array: np.ndarray,
+    cluster_indices: np.ndarray,
+    basis_set_values: np.ndarray,
+    multiplicities: np.ndarray,
+    multiplicity_factor: float = 1.0,
+) -> np.ndarray:
+    """Calculate cluster correlations for a structure with a flipped site,
+    using cached cluster orbit array and multiplicities."""
+    indices = site_clusters[ind]
+    clusters = cluster_orbits_array[indices]
+    cluster_indices = cluster_indices[indices]
+    correlations_diff = np.zeros_like(multiplicities, dtype=float)
+
+    for cluster, cluster_index in zip(clusters, cluster_indices):
+        cluster_sites = cluster.get_idxs()
+        cluster_funcs = cluster.alphas
+        cf = cluster_function_flip(
+            cluster_sites,
+            cluster_funcs,
+            structure.sigmas.take(cluster_sites),
+            structure.ems.take(cluster_sites),
+            ind,
+            old_sigma,
+            new_sigma,
+            basis_set_values,
+        )
+        correlations_diff[cluster_index] += cf
+
+    correlations_diff /= multiplicities
+    correlations_diff /= multiplicity_factor
+    return np.around(correlations_diff, decimals=12)
+
+
 @jit
-def _trigo_basis_function(alpha: int, sigma: int, m: int):
+def _trigo_basis_function(alpha: int, sigma: int, m: int) -> float:
     # Axel van de Walle, CALPHAD 33, 266 (2009)
 
     if alpha == 0:
@@ -503,33 +566,36 @@ def site_basis_function(
 def cluster_function(
     cluster_idxs: np.ndarray,
     cluster_alphas: np.ndarray,
-    structure_sigmas: np.ndarray,
+    sigmas: np.ndarray,
     ems: np.ndarray,
     basis_set_values: np.ndarray,
 ):
     cf = 1.0
     for cl_alpha, cl_idx in zip(cluster_alphas, cluster_idxs):
-        cf *= basis_set_values[cl_alpha, structure_sigmas[cl_idx], ems[cl_idx]]
+        cf *= basis_set_values[cl_alpha, sigmas[cl_idx], ems[cl_idx]]
     return cf
 
 
 @jit
-def cluster_function_swap(
-    cluster_idxs: np.ndarray,
+def cluster_function_flip(
+    cluster_sites: list,
     cluster_alphas: np.ndarray,
     sigmas: np.ndarray,
     ems: np.ndarray,
-    ind: int,
-    old_sigma: int,
-    new_sigma: int,
+    i_flip: int,
+    sigma_old: int,
+    sigma_new: int,
     basis_set_values: np.ndarray,
-):
-    nbodies = len(cluster_idxs)
+) -> float:
     cf = 1.0
-    for i in range(nbodies):
-        if i == cluster_idxs.index(ind):
-            cf *= basis_set_values[cluster_alphas[i], new_sigma, ems[i]] \
-                - basis_set_values[cluster_alphas[i], old_sigma, ems[i]]
+    flipped = False  # only flip once, otherwise, could go wrong for wrapped sites
+    for site, alpha, sigma, em in zip(cluster_sites, cluster_alphas, sigmas, ems):
+        if i_flip == site and not flipped:
+            cf *= (
+                basis_set_values[alpha, sigma_new, em]
+                - basis_set_values[alpha, sigma_old, em]
+            )
+            flipped = True
         else:
-            cf *= basis_set_values[cluster_alphas[i], sigmas[i], ems[i]]
+            cf *= basis_set_values[alpha, sigma, em]
     return cf

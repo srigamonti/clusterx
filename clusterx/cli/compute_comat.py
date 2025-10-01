@@ -18,7 +18,12 @@ commands = ["compute_comat"]
 
 
 @plac.annotations(
-    ccalc_filepath=("Path to the pickle file of a serialized CorrelationsCalculator object.", "option", "ccf", str),
+    ccalc_filepath=(
+        "Path to the pickle file of a serialized CorrelationsCalculator object.",
+        "option",
+        "ccf",
+        str,
+    ),
     sset_filepath=(
         "Path to a serialized StructuresSet object. Correlations of all structures are computed and saved as a 2D array.",
         "option",
@@ -38,7 +43,12 @@ commands = ["compute_comat"]
         str,
     ),
     property_name=("Name of the property.", "option", "pn", str),
-    update_ccalc=("Overwrite ccalc file to keep supercell cluster orbits for future reuse.", "flag", "u", bool),
+    update_ccalc=(
+        "Overwrite ccalc file to keep supercell cluster orbits for future reuse.",
+        "flag",
+        "u",
+        bool,
+    ),
 )
 def compute_comat(
     ccalc_filepath: str = "ccalc.pickle",
@@ -52,7 +62,9 @@ def compute_comat(
     cmd_message("head")
 
     if sset_filepath is not None and dss_filepath is not None:
-        raise ValueError("Only one of sset_filepath or dss_filepath should be provided, not both.")
+        raise ValueError(
+            "Only one of sset_filepath or dss_filepath should be provided, not both."
+        )
 
     filepath = remove_trailing_extension(comat_filepath)
 
@@ -84,7 +96,9 @@ def compute_comat(
         if dss_filepath is not None:
             pvals = dss.configurations[property_name].to_list()
 
-        arrays_dict[f"property_{property_name}"] = pvals  # dynamically pass keyword to savez from string property_name
+        arrays_dict[f"property_{property_name}"] = (
+            pvals  # dynamically pass keyword to savez from string property_name
+        )
 
     if not filepath.endswith(".npz"):
         filepath += ".npz"

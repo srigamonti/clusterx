@@ -157,9 +157,9 @@ def dict_to_argv(params_without_defaults, params_with_defaults, defaults, param_
                 if val == "False":
                     pass
                 else:
-                    output.append(f'--{param.replace("_", "-")}')
+                    output.append(f"--{param.replace('_', '-')}")
             else:
-                output.append(f'--{param.replace("_", "-")}')
+                output.append(f"--{param.replace('_', '-')}")
                 output.append(val)
 
     return output

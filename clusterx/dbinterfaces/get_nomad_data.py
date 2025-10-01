@@ -1,4 +1,4 @@
-""""
+""" "
 This module is designed to extract data from NOMAD or
 a NOMAD OASIS database (such as total energy values, structures, etc.)
 and use this data to generate structure sets along with their
@@ -8,6 +8,7 @@ It is especially useful if one groups the data that should be used
 for one model into a NOMAD dataset and then uses this module to
 retrieve the properties using the dataset id.
 """
+
 import json
 import requests
 import numpy as np
@@ -16,11 +17,11 @@ from scipy.constants import electron_volt
 from clusterx.structure import Structure
 
 
-BASE_URL_NOMAD = 'http://nomad-lab.eu/prod/v1/api/v1/'
+BASE_URL_NOMAD = "http://nomad-lab.eu/prod/v1/api/v1/"
 
 
 class SingleEntry:
-    """"
+    """ "
     This class is applicable for single entries in NOMAD.
     Using its entry id the data of the entry can be accessed.
 
@@ -45,79 +46,78 @@ class SingleEntry:
         'http://nomad-lab.eu/prod/v1/api/v1/'
         You may use the base URL of your OASIS instead.
     """
+
     def __init__(self, entry_id, token=None, base_url=BASE_URL_NOMAD):
         self.entry_id = entry_id
         self.token = token
         self.base_url = base_url
-        self.headers = {'Authorization': f'Bearer {self.token}'} if self.token is not None else {}
+        self.headers = (
+            {"Authorization": f"Bearer {self.token}"} if self.token is not None else {}
+        )
 
     def get_archive(self):
-        """"
+        """ "
         Returns the archive of a single entry in OASIS.
         """
         # defines how the data should be queried
-        query_type = {
-            'required': '*'
-        }
+        query_type = {"required": "*"}
         # The entry archive of the entry with the corresponding entry id is
         # queried according to the query_type to get a repsonse.
         # The section archive of the data of the response is stored as json
         # in archive.
-        request_url = f'{self.base_url}entries/{self.entry_id}/archive/query'
+        request_url = f"{self.base_url}entries/{self.entry_id}/archive/query"
         try:
-            response = requests.post(
-                                request_url,
-                                headers=self.headers,
-                                json=query_type
-                                )
+            response = requests.post(request_url, headers=self.headers, json=query_type)
             # check for HTTPErrors
             # if the response is successfull, this will not raise anything
             response.raise_for_status()
             response_json = response.json()
-            archive = response_json['data']['archive']
+            archive = response_json["data"]["archive"]
             return archive
-   
+
         except requests.exceptions.RequestException as error:
-            print('The request was not successful.'
-                  'Check the NOMAD docs for information on the error code:')
+            print(
+                "The request was not successful."
+                "Check the NOMAD docs for information on the error code:"
+            )
             # check post /entries/{entry_id}/archive/query for explanation of error codes
-            print('https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#')
-            print(f'The following error occured: {error}')
+            print("https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#")
+            print(f"The following error occured: {error}")
 
     def get_total_energy(self):
-        """"
+        """ "
         Returns the total energy value in eV for a single entry in NOMAD
         """
         archive = self.get_archive()
         # To get the converged energy result access the last calculation
-        result = archive['run'][0]['calculation'][-1]
+        result = archive["run"][0]["calculation"][-1]
         # if the last calculation does not calculate the total energy
         # (it could be a DOS calculation instead)
         # access the result from the previous calculation
-        if 'total' not in result['energy']:
-            result = archive['run'][0]['calculation'][-2]
+        if "total" not in result["energy"]:
+            result = archive["run"][0]["calculation"][-2]
         # convert the total energy value to eV
-        total_energy_ev = result['energy']['total']['value']*1/electron_volt
+        total_energy_ev = result["energy"]["total"]["value"] * 1 / electron_volt
         return total_energy_ev
 
     def get_atoms_object(self):
-        """"
+        """ "
         Returns an ase Atoms object from the data stored in a NOMAD entry
         """
         archive = self.get_archive()
         # get the last entry for system to ensure to get the relaxed geometry
-        nomad_atoms = archive['run'][0]['system'][-1]['atoms']
-        positions_meter = nomad_atoms['positions']
-        cell_meter = nomad_atoms['lattice_vectors']
+        nomad_atoms = archive["run"][0]["system"][-1]["atoms"]
+        positions_meter = nomad_atoms["positions"]
+        cell_meter = nomad_atoms["lattice_vectors"]
         atoms = Atoms(
-            symbols=nomad_atoms['labels'],
-            positions=np.array(positions_meter)*10**10,  # convert to Angstrom
-            cell=np.array(cell_meter)*10**10,  # convert to Angstrom
-            pbc=nomad_atoms['periodic']
+            symbols=nomad_atoms["labels"],
+            positions=np.array(positions_meter) * 10**10,  # convert to Angstrom
+            cell=np.array(cell_meter) * 10**10,  # convert to Angstrom
+            pbc=nomad_atoms["periodic"],
         )
         return atoms
 
-    def get_structure_object(self, filename: str = 'structure.json'):
+    def get_structure_object(self, filename: str = "structure.json"):
         """
         Returns the CELL structure object of the entry.
         This requires that the structure object is saved as json file in the
@@ -128,10 +128,9 @@ class SingleEntry:
             Name of the structure object json file.
             Default: 'structure.json'
         """
-        request_url = f'{self.base_url}entries/{self.entry_id}/raw/{filename}'
+        request_url = f"{self.base_url}entries/{self.entry_id}/raw/{filename}"
         try:
-            response = requests.get(request_url,
-                                    headers=self.headers)
+            response = requests.get(request_url, headers=self.headers)
             # check for HTTPErrors
             response.raise_for_status()
             # load json file as json dictionary
@@ -140,14 +139,16 @@ class SingleEntry:
             structure_object = Structure.from_dict(structure_json_dict)
             return structure_object
         except requests.exceptions.RequestException as error:
-            print('The request was not successful.'
-                  'Check the NOMAD docs for information on the error code:')
-            print('https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#')
-            print(f'The following error occured: {error}')
+            print(
+                "The request was not successful."
+                "Check the NOMAD docs for information on the error code:"
+            )
+            print("https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#")
+            print(f"The following error occured: {error}")
 
 
 class Dataset:
-    """"
+    """ "
     This class is applicable for datasets in NOMAD.
     Using its dataset id the data of all entries inside the dataset
     can be accessed.
@@ -179,45 +180,52 @@ class Dataset:
         'http://nomad-lab.eu/prod/v1/api/v1/'
         You may use the base url of your OASIS instead.
     """
-    def __init__(self, dataset_id, pagination_page_size, token='',
-                 base_url=BASE_URL_NOMAD, dataset_data=None):
+
+    def __init__(
+        self,
+        dataset_id,
+        pagination_page_size,
+        token="",
+        base_url=BASE_URL_NOMAD,
+        dataset_data=None,
+    ):
         self.dataset_id = dataset_id
         self.token = token
         self.pagination_page_size = pagination_page_size
         self.base_url = base_url
         self.dataset_data = dataset_data
-        self.headers = {'Authorization': f'Bearer {self.token}'}
+        self.headers = {"Authorization": f"Bearer {self.token}"}
 
     def get_data(self):
-        """"
+        """ "
         Returns the data section of the dataset
         """
         query_type = {
             # solves visibility issues; enables you to see
             # published entries without embargo or unpublished entries
             # that belong to you or are shared with you
-            'owner': 'visible',
-            'query': {'datasets.dataset_id': self.dataset_id},
-            'pagination': {'page_size': self.pagination_page_size}
+            "owner": "visible",
+            "query": {"datasets.dataset_id": self.dataset_id},
+            "pagination": {"page_size": self.pagination_page_size},
         }
-        request_url = f'{self.base_url}entries/archive/query'
+        request_url = f"{self.base_url}entries/archive/query"
 
         try:
             # The OASIS entries are queried according to the query_type above
             # The response is then stored as json
             # The section data is returned
-            response = requests.post(request_url,
-                                     headers=self.headers,
-                                     json=query_type)
+            response = requests.post(request_url, headers=self.headers, json=query_type)
             response.raise_for_status()
             dataset = response.json()
-            return dataset['data']
+            return dataset["data"]
 
         except requests.exceptions.RequestException as error:
-            print('The request was not successful.'
-                  'Check the NOMAD docs for information on the error code:')
-            print('https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#')
-            print(f'The following error occured: {error}')
+            print(
+                "The request was not successful."
+                "Check the NOMAD docs for information on the error code:"
+            )
+            print("https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#")
+            print(f"The following error occured: {error}")
 
     def download_data(self):
         """
@@ -233,12 +241,11 @@ class Dataset:
         return self.dataset_data
 
     def get_entry_ids(self):
-        """"
+        """ "
         Get entry ids of the entries contained in the dataset
         """
         entry_ids = [
-            entry['archive']['metadata']['entry_id']
-            for entry in self.download_data()
+            entry["archive"]["metadata"]["entry_id"] for entry in self.download_data()
         ]
         return entry_ids
 
@@ -250,26 +257,26 @@ class Dataset:
         energy_values_ev = []
         for entry in self.download_data():
             # To get the converged energy result access the last calculation
-            result = entry['archive']['run'][0]['calculation'][-1]
-        # if the last calculation does not calculate the total energy
-        # (it could be a DOS calculation instead)
-        # access the result from the previous calculation
-            if 'energy' in result and 'total' in result['energy']:
-                total_energy = result['energy']['total']['value'] * 1/electron_volt
+            result = entry["archive"]["run"][0]["calculation"][-1]
+            # if the last calculation does not calculate the total energy
+            # (it could be a DOS calculation instead)
+            # access the result from the previous calculation
+            if "energy" in result and "total" in result["energy"]:
+                total_energy = result["energy"]["total"]["value"] * 1 / electron_volt
             else:
-                result = entry['archive']['run'][0]['calculation'][-2]
-                total_energy = result['energy']['total']['value'] * 1/electron_volt
+                result = entry["archive"]["run"][0]["calculation"][-2]
+                total_energy = result["energy"]["total"]["value"] * 1 / electron_volt
             energy_values_ev.append(total_energy)
         return energy_values_ev
 
-    def get_structure_objects(self, filename='structure.json'):
+    def get_structure_objects(self, filename="structure.json"):
         """
         Returns a list of structure objects for the entrys in the dataset.
         This requires that the structure objects are saved as json files in the
         same directory as the associated runs before uploading to NOMAD.
-        The structure objects can also have a different filename, but it has to be 
+        The structure objects can also have a different filename, but it has to be
         the same filename for every entry in the dataset. If it is not, please use
-        get_structure_object of the SingleEntry class and specify the filename for 
+        get_structure_object of the SingleEntry class and specify the filename for
         each entry separately.
 
         **Parameters:**
@@ -280,10 +287,9 @@ class Dataset:
         list_of_entry_ids = self.get_entry_ids()
         list_of_structures = []
         try:
-            for entry_id in (list_of_entry_ids):
-                request_url = f'{self.base_url}entries/{entry_id}/raw/{filename}'
-                response = requests.get(request_url,
-                                        headers=self.headers)
+            for entry_id in list_of_entry_ids:
+                request_url = f"{self.base_url}entries/{entry_id}/raw/{filename}"
+                response = requests.get(request_url, headers=self.headers)
                 # check for HTTPErrors
                 response.raise_for_status()
                 # load response content as json dictionary
@@ -294,35 +300,37 @@ class Dataset:
                 list_of_structures.append(structure_object)
             return list_of_structures
         except requests.exceptions.RequestException as error:
-            print('The request was not successful.'
-                  'Check the NOMAD docs for information on the error code:')
-            print('https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#')
-            print(f'The following error occured: {error}')
+            print(
+                "The request was not successful."
+                "Check the NOMAD docs for information on the error code:"
+            )
+            print("https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#")
+            print(f"The following error occured: {error}")
 
     def get_atoms_objects(self):
-        """"
+        """ "
         Returns a list of ase Atoms object for the dataset
         """
         list_of_atoms_objects = []
-        #list_of_entry_ids = self.get_entry_ids()
-        #for entry_id in (list_of_entry_ids):
+        # list_of_entry_ids = self.get_entry_ids()
+        # for entry_id in (list_of_entry_ids):
         #    entry = SingleEntry(entry_id=entry_id, token=self.token)
         for entry in self.download_data():
             # To get the converged energy result access the last calculation
-            nomad_atoms = entry['archive']['run'][0]['system'][-1]['atoms']
-            positions_meter = nomad_atoms['positions']
-            cell_meter = nomad_atoms['lattice_vectors']
+            nomad_atoms = entry["archive"]["run"][0]["system"][-1]["atoms"]
+            positions_meter = nomad_atoms["positions"]
+            cell_meter = nomad_atoms["lattice_vectors"]
             atoms = Atoms(
-                symbols=nomad_atoms['labels'],
-                positions=np.array(positions_meter)*10**10,  # convert to Angstrom
-                cell=np.array(cell_meter)*10**10,  # convert to Angstrom
-                pbc=nomad_atoms['periodic']
+                symbols=nomad_atoms["labels"],
+                positions=np.array(positions_meter) * 10**10,  # convert to Angstrom
+                cell=np.array(cell_meter) * 10**10,  # convert to Angstrom
+                pbc=nomad_atoms["periodic"],
             )
             list_of_atoms_objects.append(atoms)
         return list_of_atoms_objects
 
     def get_lattice_constants(self):
-        """"
+        """ "
         Returns three lists; one for each lattice constant for entries in the dataset
         """
         list_of_lattice_constant_a = []
@@ -335,17 +343,29 @@ class Dataset:
             list_of_indices.append(structure.index)
         for atoms_object in list_of_atoms_objects:
             cell = atoms_object.cell
-            lattice_constant_1 = np.sqrt(cell[0][0]**2+cell[0][1]**2+cell[0][2]**2)
-            lattice_constant_2 = np.sqrt(cell[1][0]**2+cell[1][1]**2+cell[1][2]**2)
-            lattice_constant_3 = np.sqrt(cell[2][0]**2+cell[2][1]**2+cell[2][2]**2)
-            a, b, c = np.sort([lattice_constant_1, lattice_constant_2, lattice_constant_3])
+            lattice_constant_1 = np.sqrt(
+                cell[0][0] ** 2 + cell[0][1] ** 2 + cell[0][2] ** 2
+            )
+            lattice_constant_2 = np.sqrt(
+                cell[1][0] ** 2 + cell[1][1] ** 2 + cell[1][2] ** 2
+            )
+            lattice_constant_3 = np.sqrt(
+                cell[2][0] ** 2 + cell[2][1] ** 2 + cell[2][2] ** 2
+            )
+            a, b, c = np.sort(
+                [lattice_constant_1, lattice_constant_2, lattice_constant_3]
+            )
             list_of_lattice_constant_a.append(a)
             list_of_lattice_constant_b.append(b)
             list_of_lattice_constant_c.append(c)
-        return list_of_lattice_constant_a, list_of_lattice_constant_b, list_of_lattice_constant_c
+        return (
+            list_of_lattice_constant_a,
+            list_of_lattice_constant_b,
+            list_of_lattice_constant_c,
+        )
 
     def get_normalized_lattice_constants(self):
-        """"
+        """ "
         Returns three lists; one for each lattice constant for entries in the dataset
         """
         list_of_lattice_constant_a = []
@@ -360,11 +380,29 @@ class Dataset:
             cell = atoms_object.cell
             transformation_matrix = structure.get_supercell().get_transformation()
             normalized_cell = np.dot(np.linalg.inv(transformation_matrix), cell)
-            lattice_constant_1 = np.sqrt(normalized_cell[0][0]**2+normalized_cell[0][1]**2+normalized_cell[0][2]**2)
-            lattice_constant_2 = np.sqrt(normalized_cell[1][0]**2+normalized_cell[1][1]**2+normalized_cell[1][2]**2)
-            lattice_constant_3 = np.sqrt(normalized_cell[2][0]**2+normalized_cell[2][1]**2+normalized_cell[2][2]**2)
-            a, b, c = np.sort([lattice_constant_1, lattice_constant_2, lattice_constant_3])
+            lattice_constant_1 = np.sqrt(
+                normalized_cell[0][0] ** 2
+                + normalized_cell[0][1] ** 2
+                + normalized_cell[0][2] ** 2
+            )
+            lattice_constant_2 = np.sqrt(
+                normalized_cell[1][0] ** 2
+                + normalized_cell[1][1] ** 2
+                + normalized_cell[1][2] ** 2
+            )
+            lattice_constant_3 = np.sqrt(
+                normalized_cell[2][0] ** 2
+                + normalized_cell[2][1] ** 2
+                + normalized_cell[2][2] ** 2
+            )
+            a, b, c = np.sort(
+                [lattice_constant_1, lattice_constant_2, lattice_constant_3]
+            )
             list_of_lattice_constant_a.append(a)
             list_of_lattice_constant_b.append(b)
             list_of_lattice_constant_c.append(c)
-        return list_of_lattice_constant_a, list_of_lattice_constant_b, list_of_lattice_constant_c
+        return (
+            list_of_lattice_constant_a,
+            list_of_lattice_constant_b,
+            list_of_lattice_constant_c,
+        )

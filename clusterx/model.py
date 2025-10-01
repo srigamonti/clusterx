@@ -2,14 +2,23 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from typing import List, Optional
-import pickle
 import os
-import time
 import warnings
+from pathlib import Path
+import pickle
+from typing import Optional, List
+
 import numpy as np
-from clusterx.correlations import CorrelationsCalculator, cluster_function_swap
+from sklearn.pipeline import Pipeline
+
+from clusterx.super_cell import SuperCell
+from clusterx.correlations import (
+    CorrelationsCalculator,
+    cluster_correlations_flip,
+)
+from clusterx.structure import Structure
 from clusterx.estimators.estimator_factory import EstimatorFactory
+from clusterx.utils import is_diagonal
 from clusterx.clusters_selector import ClustersSelector
 
 
@@ -68,8 +77,29 @@ class Model:
 
         self.corrc = corrc
         self.property_name = property_name
+
+        if ecis is not None and estimator is not None:
+            raise ValueError(
+                "Only one of 'ecis' or 'estimator' should be provided, not both."
+            )
+
         self.estimator = estimator
         self.ecis = ecis
+
+        # Extract coefficients from estimator if given
+        if isinstance(estimator, Pipeline):
+            final_estimator = estimator[-1]
+            self.ecis = final_estimator.coef_
+            self.intercept = final_estimator.intercept_
+        elif estimator is not None:
+            self.ecis = estimator.coef_
+            self.intercept = estimator.intercept_
+        elif ecis is not None:
+            self.ecis = ecis
+            self.intercept = 0
+        else:
+            raise ValueError("Either 'ecis' or 'estimator' must be provided.")
+
         self.standardize = standardize
         self._basis = None
         self._mc = False
@@ -78,6 +108,8 @@ class Model:
         self._mc_multiplicities: List[int] = []
         self._mc_start_time = 0
         self._mc_init_time = 0
+        self.scell_reduced = None
+        self.initialized_interactions = False
 
         if self.standardize:
             from sklearn.preprocessing import StandardScaler
@@ -91,8 +123,19 @@ class Model:
     def _load_from_pickle(filepath: str) -> "Model":
         """Load Model object from a pickle file."""
         try:
+            stem = Path(filepath).stem
+            dirname = os.path.dirname(filepath)
+            filepath_corrc = os.path.join(dirname, stem + "_CCALC.pickle")
+
+            with open(filepath_corrc, "rb") as fcorrc:
+                corrc = pickle.load(fcorrc)
+
             with open(filepath, "rb") as f:
-                return pickle.load(f)
+                model = pickle.load(f)
+
+            model.corrc = corrc
+            return model
+
         except (FileNotFoundError, pickle.UnpicklingError) as e:
             raise ValueError(f"Error loading model from pickle file: {e}") from e
 
@@ -124,6 +167,12 @@ class Model:
         self._mc_multiplicities = []
         self._mc_start_time = 0
         self._mc_init_time = 0
+        self.initialized_interactions = False
+
+    def init_reduced_model(self):
+        print("Info(Model): setting up reduced SuperCell.")
+        cpool = self.corrc.get_cpool()
+        self.scell_reduced = cpool.get_containing_supercell()
 
     def serialize(self, filepath=None, fmt=None, db_name=None):
         """Write cluster expansion model to Json database
@@ -140,8 +189,6 @@ class Model:
         ``db_name``: (DEPRECATED) string
             Name of the json file containing the database
         """
-        from pathlib import Path
-        import os
 
         if filepath is None and db_name is None:
             filepath = "cemodel.pickle"
@@ -169,8 +216,9 @@ class Model:
                 pickle.dump(self, f)
 
         if fmt == "json_db":
-            from ase.db.jsondb import JSONDatabase
             from subprocess import call
+
+            from ase.db.jsondb import JSONDatabase
 
             call(["rm", "-f", db_name])
             atoms_db = JSONDatabase(filename=db_name)
@@ -217,19 +265,20 @@ class Model:
 
     def get_ecis(self):
         """Return array of effective cluster interactions (ECIs) of the model"""
-        if self.ecis is not None:
-            return self.ecis
-        else:
-            if self.standardize:
-                return self.estimator[-1].coef_
-            else:
-                return self.estimator.coef_
+        return self.ecis
+        # if self.ecis is not None:
+        #     return self.ecis
+        # else:
+        #     if self.standardize:
+        #         return self.estimator[-1].coef_
+        #     else:
+        #         return self.estimator.coef_
 
     def get_correlations_calculator(self):
         """Return correlations calculator of the Model object"""
         return self.corrc
 
-    def predict(self, structure):
+    def predict(self, structure, flag=None):
         """Predict property with the optimal cluster expansion model.
 
         **Parameters:**
@@ -237,22 +286,132 @@ class Model:
         ``structure``: Structure object
             structure object to calculate property to.
 
+        ``flag``: dict or None
+            it flags whether the member corrc correlationsCalculator computed
+            orbits from scratch. This can be useful to konw, in order to serialize the
+            model instance to accelerate next property predictions
+            Example usage:
+
+                model = Model(filepath="myfilepath.pickle")
+                model.predict(structure,flag={})
+                if  flag["computed_orbits_from_scratch"]:
+                   print("INFO: correlations calculator computed orbits from scrach.")
+                   model.serialize(filepath="myfilepath.pickle")
+
+
         """
-        corrs = self.corrc.get_cluster_correlations(structure)
+        # with _timed("Model.predict: Get cluster correlations"):
+        corrs = self.corrc.get_cluster_correlations(structure, flag=flag)
 
         if self.estimator is not None:
             return self.estimator.predict(corrs.reshape(1, -1))[0]
         else:
             if self.standardize:
-                try:
-                    corrs = self.stdscaler.transform(corrs)
-                except:
-                    import sys
-
-                    sys.exit("StandardScaler of Model has not been fitted.")
+                corrs = self.stdscaler.transform(corrs)
             return np.dot(self.ecis, corrs)
 
-    def predict_swap(self, structure, ind1=None, ind2=None, correlation=False, site_types=[0]):
+    def _init_interaction_dict(self, super_cell: SuperCell):
+        """Alternative for interaction_dictionary, based on ase NeighborList."""
+        print("Info(Model): setting up dictionary of interactions.")
+        cluster_orbits = self.corrc.get_cluster_orbits_for_scell(super_cell)
+        cluster_indices = []  # to which primitive cluster each cluster belongs
+        cluster_orbits_array = []  # all clusters from all orbits
+        multiplicities = []  # relative to cluster_orbits_array
+        for cluster_index, cluster_orbit in enumerate(cluster_orbits):
+            multiplicities.append(len(cluster_orbit))
+            for cluster in cluster_orbit:
+                cluster_indices.append(cluster_index)
+                cluster_orbits_array.append(cluster)
+
+        # List of lists, where each sublist contains indices
+        # from cluster_orbits_array
+        site_clusters = [[] for _ in range(len(super_cell))]
+        for index, cluster in enumerate(cluster_orbits_array):
+            for site in cluster.get_idxs():
+                site_clusters[site].append(index)
+        n_interactions = sum([len(sc) for sc in site_clusters])
+        print(f"Info(Model): # saved interactions: {n_interactions}")
+
+        self._cluster_orbits_array = np.array(cluster_orbits_array, dtype=object)
+        self._cluster_indices = np.array(cluster_indices, dtype=int)
+        self._multiplicities = np.array(multiplicities, dtype=int)
+        self._site_clusters = site_clusters
+        self.initialized_interactions = True
+
+    def predict_flip(
+        self,
+        structure: Structure,
+        index: int,
+        old_sigma: int,
+        new_sigma: int,
+        site_types=[0],
+        reduce: bool = False,
+    ):
+        """Predict property change by flipping a species.
+
+        Structure object remains unchanged
+
+        **Parameters:**
+
+        ``structure``: Structure object
+            structure object to calculate property difference to.
+
+        ``atom_index``: int
+            index of the atom to be substituted
+
+        ``new_sigma``: int, default None
+
+        ``reduce``: bool, default False
+            if True, use the reduced structure around the flipped sigma
+        """
+        if reduce:
+            warnings.warn(
+                "model.predict_flip using reduce=True is currently very slow.",
+                category=UserWarning,
+            )
+            p = np.diag(structure.get_supercell().get_transformation()).tolist()
+            if not is_diagonal(p):
+                raise ValueError(
+                    "Reduced structure cannot be initialized "
+                    "with non-diagonal super cell transformation."
+                )
+
+            if self.scell_reduced is None:
+                self.init_reduced_model()
+            p_reduced = np.diag(self.scell_reduced.get_transformation())
+            multiplicity_factor = np.prod(p) / np.prod(p_reduced)
+
+            structure, index = structure.get_reduced_structure(p_reduced, index)
+        else:
+            multiplicity_factor = 1.0
+
+        if not self.initialized_interactions:
+            self._init_interaction_dict(structure.get_supercell())
+
+        correlations_diff = cluster_correlations_flip(
+            structure=structure,
+            ind=index,
+            old_sigma=old_sigma,
+            new_sigma=new_sigma,
+            site_clusters=self._site_clusters,
+            cluster_orbits_array=self._cluster_orbits_array,
+            cluster_indices=self._cluster_indices,
+            basis_set_values=self.corrc.basis_set_values,
+            multiplicities=self._multiplicities,
+            multiplicity_factor=multiplicity_factor,
+        )
+        if self.estimator is not None:
+            # Intercept must be subctracted from computation of energy change.
+            return (
+                self.estimator.predict(correlations_diff.reshape(1, -1))[0]
+                - self.estimator.intercept_
+            )
+        else:
+            return np.dot(self.ecis, correlations_diff)
+
+    def predict_swap(
+        self, structure, i, j, correlation=False, site_types=[0], reduce=False
+    ):
         """Predict property difference with the optimal cluster expansion model.
 
         **Parameters:**
@@ -260,163 +419,25 @@ class Model:
         ``structure``: Structure object
             structure object to calculate property difference to.
 
-        ``ind1``: int
+        ``i``: int
             index of first atom position has been swapped
 
-        ``ind2``: int
+        ``j``: int
             index of second atom position has been swapped
 
+        ``reduce``: bool, default False
+            if True, use the reduced structure around the swapped sigmas
+
         """
-        if self._num_mc_calls == 0:
-            self._mc_init_time = time.time()
-            print("Info(Model): setting up dictionary of interactions.")
 
-            try:
-                cluster_orbits = self.corrc._cluster_orbits_mc
-                self._mc_nclusters = len(cluster_orbits)
-                for i in range(self._mc_nclusters):
-                    self._mc_multiplicities.append(len(cluster_orbits[i]))
+        sigma_i = structure.sigmas[i]
+        sigma_j = structure.sigmas[j]
 
-            except AttributeError:
-                raise AttributeError("Cluster_orbits set has not been pre computed.")
-
-            if self.standardize:
-                raise RuntimeError("Predict swap does not support standardscaler")
-
-            # Determine atom indexes for which to make the interactions list
-            scell = structure.get_supercell()
-            self._atom_indexes = []
-            for st in site_types:
-                for aidx in scell.get_atom_indices_for_site_type(st)[0]:
-                    self._atom_indexes.append(aidx)
-
-            # Determine ems
-            self._ems = scell.get_ems()
-
-            # Make a list of clusters
-            self._clusters_list = []
-
-            icl = 0
-            for cluster_index, cluster_orbit in enumerate(cluster_orbits):
-                for cluster in cluster_orbit:
-                    self._clusters_list.append({})
-
-                    self._clusters_list[icl]["cluster_index"] = cluster_index
-                    self._clusters_list[icl]["cluster_sites"] = cluster.get_idxs()
-                    self._clusters_list[icl]["cluster_funcs"] = cluster.alphas
-                    self._clusters_list[icl]["cluster_ems"] = self._ems.take(cluster.get_idxs())
-
-                    icl += 1
-
-            # Determine which interactions (clusters) contain every site
-            self._interactions_dict = {}
-
-            for ind in self._atom_indexes:
-                self._interactions_dict[ind] = {}
-                self._interactions_dict[ind]["interactions_list"] = []
-                self._interactions_dict[ind]["cluster_sites_index_for_ind"] = []
-                for icl in range(len(self._clusters_list)):
-                    if ind in self._clusters_list[icl]["cluster_sites"]:
-                        self._interactions_dict[ind]["interactions_list"].append(icl)
-                        self._interactions_dict[ind]["cluster_sites_index_for_ind"].append(
-                            self._clusters_list[icl]["cluster_sites"].index(ind)
-                        )
-
-            if self._basis == "binary-linear" or self._basis == "indicator-binary":
-                self._delta_e_calc = self._compute_delta_e_binary_linear
-            else:
-                self._delta_e_calc = self._compute_delta_e
-
-            self._num_mc_calls = 1
-            self._mc_init_time -= time.time()
-            self._mc_init_time = -self._mc_init_time
-            self._mc_start_time = time.time()
-
-        new_sigma = structure.sigmas[ind1]
-        old_sigma = structure.sigmas[ind2]
-
-        de1 = self._delta_e_calc(structure, ind1, old_sigma, new_sigma)
-
-        sigma1 = structure.sigmas[ind1]
-        sigma2 = structure.sigmas[ind2]
-        structure.sigmas[ind1] = sigma2
-        structure.sigmas[ind2] = sigma1
-
-        de2 = self._delta_e_calc(structure, ind2, new_sigma, old_sigma)
-
-        structure.sigmas[ind1] = sigma1
-        structure.sigmas[ind2] = sigma2
-
+        de1 = self.predict_flip(structure, i, sigma_i, sigma_j, site_types, reduce)
+        structure.sigmas[i] = sigma_j
+        de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, reduce)
+        structure.sigmas[i] = sigma_i  # restore original structure
         return de1 + de2
-
-    def _compute_delta_e_binary_linear(self, structure, ind, old_sigma, new_sigma):
-        sgn = new_sigma - old_sigma
-        corrs = np.zeros(self._mc_nclusters)
-        for ifi, icl in zip(
-            self._interactions_dict[ind]["cluster_sites_index_for_ind"],
-            self._interactions_dict[ind]["interactions_list"],
-        ):
-            cluster_index = self._clusters_list[icl]["cluster_index"]
-            cluster_sites = self._clusters_list[icl]["cluster_sites"]
-            sigmas = structure.sigmas.take(cluster_sites).copy()
-            sigmas[ifi] = sgn
-            ss = set(sigmas)
-
-            if 0 not in ss:
-                corrs[cluster_index] += sgn
-
-        corrs /= self._mc_multiplicities
-        return np.dot(self.ecis, corrs)
-
-    def _compute_delta_e(self, structure, ind, old_sigma, new_sigma):
-        corrs = np.zeros(self._mc_nclusters)
-        for icl in self._interactions_dict[ind]["interactions_list"]:
-            cluster_index = self._clusters_list[icl]["cluster_index"]
-            cluster_sites = self._clusters_list[icl]["cluster_sites"]
-            cluster_funcs = self._clusters_list[icl]["cluster_funcs"]
-            cluster_ems = self._clusters_list[icl]["cluster_ems"]
-            sigmas = structure.sigmas.take(cluster_sites)
-
-            # loop implementation (baseline):
-            #nbodies = len(cluster_sites)
-            #cf = 1.0
-            #for i in range(nbodies):
-            #    if i == cluster_sites.index(ind):
-            #        cf *= self.corrc.basis_set_values[cluster_funcs[i], new_sigma, cluster_ems[i]] \
-            #            - self.corrc.basis_set_values[cluster_funcs[i], old_sigma, cluster_ems[i]]
-            #    else:
-            #       cf *= self.corrc.basis_set_values[cluster_funcs[i], sigmas[i], cluster_ems[i]]
-
-            # jit implementation (tiny bit faster):
-            cf = cluster_function_swap(
-                cluster_sites,
-                cluster_funcs,
-                sigmas,
-                cluster_ems,
-                ind,
-                old_sigma,
-                new_sigma,
-                self.corrc.basis_set_values,
-            )
-
-            # vectorized implementation (slow):
-            #cf_factors_const = self.corrc.basis_set_values[cluster_funcs, sigmas, cluster_ems]
-            #cf_factors_old_s = self.corrc.basis_set_values[cluster_funcs, np.repeat(old_sigma, nbodies), cluster_ems]
-            #cf_factors_new_s = self.corrc.basis_set_values[cluster_funcs, np.repeat(new_sigma, nbodies), cluster_ems]
-            #cf_factors_diff = cf_factors_new_s - cf_factors_old_s
-            #cf_factors = np.where(np.arange(nbodies)==cluster_sites.index(ind), cf_factors_diff, cf_factors_const)
-            #cf = np.prod(cf_factors)
-
-            corrs[cluster_index] += cf
-
-        corrs /= self._mc_multiplicities
-        corrs = np.around(corrs, decimals=12)
-
-        if self.estimator is not None:
-            # Intercept must be subctracted from computation of energy change.
-            return self.estimator.predict(corrs.reshape(1, -1))[0] - self.estimator.intercept_
-        else:
-            return np.dot(self.ecis, corrs)
 
     def report_errors(self, sset):
         """Report fit and CV scores
@@ -510,12 +531,14 @@ class Model:
         ``params``: dictionary
             Parameters to pass to the fit method of the estimator.
         """
-        from sklearn.model_selection import cross_val_score, cross_val_predict
-        from sklearn.model_selection import LeaveOneOut
+        from sklearn.model_selection import (
+            LeaveOneOut,
+            cross_val_predict,
+            cross_val_score,
+        )
 
         x_mat = self.corrc.get_correlation_matrix(sset)
         y = sset.get_property_values(self.property_name)
-
 
         # cross_val_score internally clones the estimator, so the optimal one in Model is not changed.
         cvs = cross_val_score(
@@ -526,7 +549,9 @@ class Model:
             cv=LeaveOneOut(),
             scoring="neg_mean_squared_error",
         )
-        pred_cv = cross_val_predict(self.estimator, x_mat, y, params=params, cv=LeaveOneOut())
+        pred_cv = cross_val_predict(
+            self.estimator, x_mat, y, params=params, cv=LeaveOneOut()
+        )
 
         absolute_errors = np.sqrt(-cvs)
         cv = np.sqrt(-np.mean(cvs))
@@ -582,7 +607,6 @@ class ModelBuilder:
     """
 
     def __new__(cls, *args, **kwargs):
-
         if len(args) == 0 and len(kwargs) == 0:
             inst = super(ModelBuilder, cls).__new__(cls, *args, **kwargs)
             return inst
@@ -625,7 +649,6 @@ class ModelBuilder:
         filepath=None,
         standardize=False,
     ):
-
         self.basis = basis
         self.selector_type = selector_type
         self.selector_opts = selector_opts
@@ -710,7 +733,7 @@ class ModelBuilder:
             corrc = CorrelationsCalculator(self.basis, self.plat, self.cpool)
         else:
             self.cpool = corrc._cpool
-            self.basis = corrc.basis
+            self.basis = corrc.basis_name
 
         if verbose:
             print("ModelBuilder: Build correlations matrix")
@@ -723,15 +746,21 @@ class ModelBuilder:
 
         # Select optimal clusters using the clusters_selector module
         if self.selector != "identity":
-            self.selector = ClustersSelector(basis=self.basis, method=self.selector_type, **self.selector_opts)
-            self.opt_cpool = self.selector.select_clusters(sset, cpool, prop, comat=self.ini_comat)
+            self.selector = ClustersSelector(
+                basis=self.basis, method=self.selector_type, **self.selector_opts
+            )
+            self.opt_cpool = self.selector.select_clusters(
+                sset, cpool, prop, comat=self.ini_comat
+            )
             self.opt_comat = self.selector.optimal_comat
 
         self.opt_corrc = CorrelationsCalculator(self.basis, self.plat, self.opt_cpool)
 
         # Find out the ECIs using an estimator
         if not self.standardize:
-            self.opt_estimator = EstimatorFactory.create(self.estimator_type, **self.estimator_opts)
+            self.opt_estimator = EstimatorFactory.create(
+                self.estimator_type, **self.estimator_opts
+            )
         else:
             from sklearn.preprocessing import StandardScaler
             from sklearn.pipeline import make_pipeline

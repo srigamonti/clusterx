@@ -8,7 +8,12 @@ commands = ["build_parent_lattice"]
 
 @plac.annotations(
     species=("Comma-separated list of species, e.g., Si,Ge", "option", "s", str),
-    filepath=("File path where to serialize the generated parent lattice", "option", "f", str),
+    filepath=(
+        "File path where to serialize the generated parent lattice",
+        "option",
+        "f",
+        str,
+    ),
 )
 def build_parent_lattice(species: str = "Si,Ge", filepath="plat.json"):
     """Build parent lattice

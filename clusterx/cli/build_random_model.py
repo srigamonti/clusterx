@@ -19,10 +19,25 @@ commands = ["build_random_model"]
 
 
 @plac.annotations(
-    plat_filepath=("Filepath of a serialized ParentLattice object.", "option", "pl", str),
-    property_name=("Property to be modelled. Must be present in the StructuresSet object.", "option", None, str),
+    plat_filepath=(
+        "Filepath of a serialized ParentLattice object.",
+        "option",
+        "pl",
+        str,
+    ),
+    property_name=(
+        "Property to be modelled. Must be present in the StructuresSet object.",
+        "option",
+        None,
+        str,
+    ),
     model_filepath=("Path to serialize the created Model object.", "option", None, str),
-    random_seed=("Seed to initialize the random generators for reproducibility.", "option", None, int),
+    random_seed=(
+        "Seed to initialize the random generators for reproducibility.",
+        "option",
+        None,
+        int,
+    ),
 )
 def build_random_model(
     plat_filepath: Optional[str] = None,
@@ -40,7 +55,9 @@ def build_random_model(
     plat = ParentLattice(filepath=plat_filepath)
     scell = SuperCell(plat, p=2)
     cpool = ClustersPool(plat, npoints=[1, 2, 3], radii=[0, -1, -1], super_cell=scell)
-    ccalc = CorrelationsCalculator(basis="indicator-binary", parent_lattice=plat, clusters_pool=cpool)
+    ccalc = CorrelationsCalculator(
+        basis="indicator-binary", parent_lattice=plat, clusters_pool=cpool
+    )
     estimator = LinearRegression()
     n_features = len(cpool)
 

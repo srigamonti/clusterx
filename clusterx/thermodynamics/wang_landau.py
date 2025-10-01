@@ -620,7 +620,7 @@ class WangLandau:
                 )
                 de = (
                     self._em.predict_swap(
-                        struc, ind1=ind1, ind2=ind2, site_types=self._sublattice_indices
+                        struc, i=ind1, j=ind2, site_types=self._sublattice_indices
                     )
                     * self._ef
                 )
@@ -747,7 +747,13 @@ class WangLandau:
         ones_arr = np.ones(len(ener_arr))
 
         ax.clear()
-        ax.bar(ener_arr, ones_arr, width=energy_bin_width * 0.92, color="silver", label="Flatness target")
+        ax.bar(
+            ener_arr,
+            ones_arr,
+            width=energy_bin_width * 0.92,
+            color="silver",
+            label="Flatness target",
+        )
         ax.bar(ener_arr, hist_arr, width=energy_bin_width * 0.82, label="Histogram")
         ax.bar(ener_arr, cdos_arr, width=energy_bin_width * 0.35, label="CDOS")
         ax.relim()
@@ -777,6 +783,7 @@ class WangLandau:
         acc_prob_init_structure=1e-3,
         acc_prob_dist_init_structure="gaussian",
         itmax_init_structure=int(1e8),
+        niter_per_sweep=100000,
         nproc=0,
         seed=None,
         **kwargs,
@@ -870,7 +877,7 @@ class WangLandau:
 
         ``nproc``: integer (default: 0)
             Number of processes to use for the initial structure search.
-        
+
         ``seed``: integer (default: None)
             Seed for the numpy random number generator. If None, sequences are non-deterministic, if set with integer,
             sequences are deterministic, i.e. pseudo-random. TODO: in future move to np.random.Generator
@@ -946,15 +953,15 @@ class WangLandau:
             f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
         )
         while f > f_range[1]:
-            #print("----------------------------------------")
-            #print("Info (Wang-Landau): Running WL sampling.")
-            #print(f"Info (Wang-Landau): Modification factor: {f}")
-            #print(f"Info (Wang-Landau): Histogram flatness: {histogram_flatness}")
+            # print("----------------------------------------")
+            # print("Info (Wang-Landau): Running WL sampling.")
+            # print(f"Info (Wang-Landau): Modification factor: {f}")
+            # print(f"Info (Wang-Landau): Histogram flatness: {histogram_flatness}")
             struc, e, g, ibin, cdos, hist_cond, niter = self.flat_histogram(
-                struc, e, g, ibin, f, cdos, histogram_flatness, energy_bin_width
+                struc, e, g, ibin, f, cdos, histogram_flatness, energy_bin_width, niter_per_sweep
             )
 
-            #print(f"Info (Wang-Landau): Number of MC steps: {niter}")
+            # print(f"Info (Wang-Landau): Number of MC steps: {niter}")
 
             self._n_mc_steps_total += niter
             cd.store_cdos(
@@ -1004,7 +1011,7 @@ class WangLandau:
         return hist_min, hist_avg, n_nonzero_bins
 
     def flat_histogram(
-        self, struc, e, g, inde, f, cdos, histogram_flatness, energy_bin_width
+        self, struc, e, g, inde, f, cdos, histogram_flatness, energy_bin_width, niter_per_sweep=100000,
     ):
         hist_min = 0
         hist_avg = 1
@@ -1014,13 +1021,12 @@ class WangLandau:
         cdos[:, 2] = 0  # Initialize histogram
 
         niter = 0
-        niter_per_sweep = 100000
         nonzero_bins_thresh = 5
 
-        #print("Building flat histogram.")
-        #print(
+        # print("Building flat histogram.")
+        # print(
         #    f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
-        #)
+        # )
         while (hist_min < histogram_flatness * hist_avg) or (
             n_nonzero_bins < nonzero_bins_thresh
         ):
@@ -1067,8 +1073,8 @@ class WangLandau:
                         de = (
                             self._em.predict_swap(
                                 struc,
-                                ind1=ind1,
-                                ind2=ind2,
+                                i=ind1,
+                                j=ind2,
                                 site_types=self._sublattice_indices,
                             )
                             * self._ef
@@ -1078,8 +1084,8 @@ class WangLandau:
                     de = (
                         self._em.predict_swap(
                             struc,
-                            ind1=ind1,
-                            ind2=ind2,
+                            i=ind1,
+                            j=ind2,
                             site_types=self._sublattice_indices,
                         )
                         * self._ef
@@ -1279,9 +1285,9 @@ class ConfigurationalDensityOfStates:
             If ``normalization`` is true, type of normalization applied. Possible values are:
 
                 * ``0``: :math:`g(E_{min}) = 1`
-                * ``1``: :math:`\sum_E g(E) = \sum_{subl.} Binom(N_{sites}, n_{subs})`,
+                * ``1``: :math:`\\sum_E g(E) = \\sum_{subl.} Binom(N_{sites}, n_{subs})`,
                     i.e. the total weight of the histogram equals the total number of configurations.
-                * ``2``: :math:`\sum_E g(E) = e^{F}`,
+                * ``2``: :math:`\\sum_E g(E) = e^{F}`,
                     where :math:`F` is a custom normalization factor
                     given by the argument ``set_normalization_ln``, see below.
 
