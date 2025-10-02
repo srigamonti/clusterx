@@ -29,8 +29,8 @@ def test_grid_mapping(grid_shape, i_grid, p_reduced):
     )
     assert np.all(np.array(p_reduced) - i_new[:-1] > 0)
     assert np.all(i_new[-1] >= 0)
-    val = grid[*i_grid]
-    val_reduced = grid_reduced[*i_new]
+    val = grid[(*i_grid,)]
+    val_reduced = grid_reduced[(*i_new,)]
     assert int(val) == int(val_reduced)
 
 
