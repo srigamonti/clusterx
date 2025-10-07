@@ -36,6 +36,12 @@ commands = ["plot_property"]
         "fn",
         str,
     ),
+    figdata_fname=(
+        "Filepath to save the data used to generate the figure. Possible extensions: .npz, .json, .txt, .dat.",
+        "option",
+        "fn",
+        str,
+    ),
     mark_min=(
         "Mark points with the lowest property value (e.g. ground states).",
         "flag",
@@ -55,7 +61,8 @@ def plot_property(
     sset_gss_filepath: Optional[str] = None,
     model_filepath: Optional[str] = None,
     output: int = 1,
-    fig_fname: Optional[str] = None,
+    fig_fname: Optional[str] = None,  # possible extensions: .npz, .json, .txt, .dat
+    figdata_fname: Optional[str] = None,
     mark_min: bool = False,
     show_loo_predictions: bool = False,
 ):
@@ -85,6 +92,7 @@ def plot_property(
         cemodel=model,
         show_plot=show_plot,
         fig_fname=fig_fname,
+        data_fname=figdata_fname,
         show_loo_predictions=show_loo_predictions,
         sset_gss=sset_gss,
     )
