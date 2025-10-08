@@ -39,7 +39,7 @@ commands = ["plot_property"]
     figdata_fname=(
         "Filepath to save the data used to generate the figure. Possible extensions: .npz, .json, .txt, .dat.",
         "option",
-        "fn",
+        "fdn",
         str,
     ),
     mark_min=(
