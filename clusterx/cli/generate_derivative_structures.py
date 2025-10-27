@@ -119,46 +119,175 @@ def generate_derivative_structures(
     sizes=None,
     non_recursive=False,
 ):
-    """Generate derivative structures
+    """
+    Generate derivative structures and (optionally) compute/plot properties.
 
-    Examples:
+    This command wraps several workflows around :class:`clusterx.derivative_structures.DSGenerator`,
+    :class:`clusterx.parent_lattice.ParentLattice`, and :class:`clusterx.model.Model`.
+    The behavior is controlled by ``task`` (see **Tasks** below).
 
-    The following input toml file creates a set of unique random structures and
-    stores it into the file dss_filepath
+    By default, results are serialized to ``dss.pickle`` (a pickled ``DSGenerator`` with
+    its generated configurations and masks). Some tasks may also produce plots or update
+    properties inside the serialized object.
 
-    [generate_derivative_structures]
-    task = "random"
-    plat_filepath = "plat.json"
-    sc_shape = 2
-    nsubs_list = [0,2,4,6,8]
-    n_random = 5
-    random_state = 1
-    dss_filepath = "random_structures.pickle"
+    **Typical flow**
 
-    The following input computes a property for every derivative structure in dss_filepath
+    1. Enumerate or randomly sample derivative structures from a parent lattice.
+    2. Compute a property for every configuration (via CE model, calculator, or a custom solver).
+    3. Post-process (e.g., mark lowest values per concentration) and/or visualize.
 
-    [generate_derivative_structures]
-    task = "compute_property_with_custom_solver"
-    plat_filepath = "plat.json"
-    property_solver = {filename = "path/to/my_custom_solver_module.py", classname = "MySolver", kwargs = {"arg1"= 5.724589, "arg2"= 6.016160}}
-    #dss_filepath = "dss_scsize1-3.pickle"
-    dss_filepath = "dss_scsize1-2_new.pickle"
-    #property_name = "total_energy_mace_cell_relaxed"
-    property_name = "total_energy_mace_vegards"
-    per_formula_unit = true
-    linear_reference = [{x=0.0, y=-13.08516},{x=1.0, y=-11.302472}]
+    Parameters
+    ----------
+    sc_sizes : list[int], optional
+        Supercell sizes to consider during enumeration/random generation.
+    shapes_nearest_orthogonal : bool or list[int], default ``False``
+        If ``True`` (or a list of shape IDs), prefer supercell shapes with angles closest to orthogonal.
+    nsubs_list : int or list[int] or list[list[int]], optional
+        Number(s) of substitutions per supercell (can be a single int, a list, or a list per shape).
+    sset_filepath : str, optional
+        Path to a serialized :class:`clusterx.structures_set.StructuresSet` (needed by some plotting tasks).
+    model_filepath : str, optional
+        Path to a serialized :class:`clusterx.model.Model` used for CE predictions.
+    plat_filepath : str, optional
+        Path to a serialized :class:`clusterx.parent_lattice.ParentLattice` (required by enumeration/random tasks).
+    dss_filepath : str, default ``"dss.pickle"``
+        Output/input pickle filepath for the :class:`clusterx.derivative_structures.DSGenerator`.
+    property_name : str, optional
+        Single property name to compute/plot. Mutually exclusive with ``property_names``.
+    property_names : list[str], optional
+        Multiple property names to compute/plot. Mutually exclusive with ``property_name``.
+    property_solver : dict, optional
+        Parameters for a custom property solver. Expected keys:
+        ``filename`` (module path), ``classname`` (class with ``compute_property``),
+        and optional ``kwargs`` forwarded to the solver.
+    sc_shape : int or list[int] or list[list[int]], optional
+        Supercell shape specification. May be a scalar multiplier or an explicit 3×3 integer matrix.
+    per_formula_unit : bool, default ``False``
+        If ``True``, compute/scale properties per formula unit.
+    linear_reference : list[list[float]] or list[dict] or str, optional
+        Linear reference to correct the property. Accepts ``[[x, y], ...]`` or
+        ``[{'x': x, 'y': y}, ...]``; strings are passed through unchanged.
+    mask_name : str, optional
+        Name of a mask to write/read within the serialized DSS object for downstream filtering.
+    n_lowest : int, default ``1``
+        Count of lowest-value configurations per concentration to mark (used by
+        ``"mark_lowest_property_per_concentration"`` / ``"mark_lowest_and_random_properties_per_concentration"``).
+    n_random : int, default ``0``
+        Number of random configurations per concentration to also mark (used by the combined marking task).
+    random_state : int, optional
+        Seed for random selection/generation.
+    task : str, default ``"do_full_enumeration"``
+        Selects the workflow to run. See **Tasks** below.
+    plotdata_filepath : str, optional
+        When plotting multiple series, save the plotted ``.npz`` data to this path.
+    colors, markers, sizes : list, optional
+        Styling for multi-series scatter plots (length should match the number of series).
+    non_recursive : bool, default ``False``
+        If ``True``, use the slower non-recursive enumeration method.
 
-    The class MySolver in file "path/to/my_custom_solver_module.py" __must__ define
-    a method named compute_property, which takes a CELL structure object, a shape specification,
-    the concentration of substituents, and any number of keyword arguments
+    CLI flags (plac)
+    ----------------
+    Many parameters are exposed via short options when used as a CLI command:
 
-    class MySolver:
-        def __init__(self):
-            pass
+    - ``--scsi`` → ``sc_sizes``
+    - ``--sno`` → ``shapes_nearest_orthogonal`` (flag)
+    - ``--nsl`` → ``nsubs_list``
+    - ``--ssfp`` → ``sset_filepath``
+    - ``--mfp`` → ``model_filepath``
+    - ``--plfp`` → ``plat_filepath``
+    - ``--dssfp`` → ``dss_filepath``
+    - ``--plab`` → ``property_name``
+    - ``--plabs`` → ``property_names``
+    - ``--psol`` → ``property_solver``
+    - ``--scsh`` → ``sc_shape``
+    - ``--pfu`` → ``per_formula_unit`` (flag)
+    - ``--lref`` → ``linear_reference``
+    - ``--mn`` → ``mask_name``
+    - ``--task`` → ``task``
+    - ``--rec`` → sets ``non_recursive=True`` (use non-recursive enumeration)
 
-        def compute_property(self, struc, shape, conc, arg1=None, arg2=None, ...):
-            return 0
+    Tasks
+    -----
+    ``"random"``
+        Randomly generate unique configurations under the given size/shape/substitution constraints.
+        Writes the resulting DSS to ``dss_filepath``.
+    ``"do_full_enumeration"`` or ``"find_derivative_structures"``
+        Exhaustively enumerate derivative structures for the given lattice/sizes/shapes.
+        Writes the resulting DSS to ``dss_filepath``. Honor ``non_recursive``.
+    ``"compute_property_with_ce_model"`` or ``"compute_property_ce"``
+        Compute ``property_name`` (or ``property_names``) for all configurations in ``dss_filepath``
+        using the CE model from ``model_filepath``. Supports ``per_formula_unit`` and ``linear_reference``.
+    ``"compute_property_with_custom_solver"``
+        Load the solver class from ``property_solver['filename']`` and call its
+        ``compute_property(structure, shape, concentration, **kwargs)`` on every configuration.
+    ``"plot_property_vs_concentration"`` / ``"plot_property"``
+        Scatter plot property vs fractional concentration. If ``sset_filepath`` and
+        ``model_filepath`` are given, overlays CE predictions.
+    ``"plot_predictions_vs_target"``
+        Quick diagnostic scatter: target values vs CE predictions for ``property_name`` using
+        ``sset_filepath`` and ``model_filepath``.
+    ``"plot_property_vs_concentration2"`` / ``"plot_property_vs_concentration3"``
+        Alternative interactive visualizations (Bokeh / Plotly).
+    ``"mark_lowest_property_per_concentration"``
+        Create a mask with the configuration of minimal ``property_name`` for each concentration bin.
+    ``"mark_lowest_and_random_properties_per_concentration"``
+        Create a mask with the ``n_lowest`` best plus ``n_random`` random configurations per concentration.
+    ``"to_sset"`` / ``"convert_to_sset"``
+        Convert the stored configurations (optionally filtered by ``mask_name``) into a
+        :class:`clusterx.structures_set.StructuresSet` written to ``sset_filepath``.
 
+    Returns
+    -------
+    None
+        Results are persisted to ``dss_filepath`` and/or ``sset_filepath``; some tasks display plots.
+
+    Notes
+    -----
+    - Exactly one of ``property_name`` or ``property_names`` should be provided when computing/plotting properties.
+    - The serialized DSS object contains: configurations (DataFrame), masks (dict of config_id arrays),
+    and supercell shape metadata used by conversion/plotting tasks.
+
+    Examples
+    --------
+    **1) Create a set of random structures and serialize them**
+
+    .. code-block:: toml
+
+        [generate_derivative_structures]
+        task = "random"
+        plat_filepath = "plat.json"
+        sc_shape = 2
+        nsubs_list = [0, 2, 4, 6, 8]
+        n_random = 5
+        random_state = 1
+        dss_filepath = "random_structures.pickle"
+
+    **2) Compute a property with a custom solver and store values inside the DSS**
+
+    .. code-block:: toml
+
+        [generate_derivative_structures]
+        task = "compute_property_with_custom_solver"
+        plat_filepath = "plat.json"
+        property_solver = { filename = "path/to/my_custom_solver_module.py",
+                            classname = "MySolver",
+                            kwargs = { arg1 = 5.724589, arg2 = 6.016160 } }
+        dss_filepath = "dss_scsize1-2_new.pickle"
+        property_name = "total_energy_mace_vegards"
+        per_formula_unit = true
+        linear_reference = [{x=0.0, y=-13.08516}, {x=1.0, y=-11.302472}]
+
+    **Custom solver interface**
+
+    .. code-block:: python
+
+        class MySolver:
+            def __init__(self):
+                pass
+
+            def compute_property(self, struc, shape, conc, **kwargs) -> float:
+                # return a scalar property value
+                return 0.0
     """
 
     match task:

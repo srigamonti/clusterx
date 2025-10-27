@@ -90,7 +90,87 @@ def build_nonlinear_model(
     weights_filepath: Optional[str] = None,
     standardize: bool = False,
 ):
-    """Compute nonlinear CE model"""
+    """
+    Build and serialize a nonlinear cluster expansion (CE) model.
+
+    This function constructs a nonlinear model for a given property based on a
+    precomputed correlation matrix and correlation calculator. It combines
+    optional nonlinear transformations, feature selection, and regression
+    estimators to fit and evaluate a CE model. The final model is serialized
+    to disk.
+
+    The function is designed to be invoked both from the command line and programmatically.
+
+    Parameters
+    ----------
+    property_name : str
+        Name of the property to be modeled. Must exist in the ``StructuresSet``
+        object used in correlation computations.
+    ccalc_filepath : str, optional
+        Path to the pickle file of a serialized
+        :class:`~clusterx.calculators.CorrelationsCalculator` object.
+        Default is ``"ccalc.pickle"``.
+    xp_filepath : str, optional
+        Path to the ``.npz`` file containing the serialized correlation matrix
+        (as produced by ``compute_comat``). Default is ``"xp.npz"``.
+    model_filepath : str, optional
+        Path to serialize the resulting
+        :class:`~clusterx.model.Model` object. Default is ``"model.pickle"``.
+    regression_model : dict, optional
+        Dictionary specifying the regression estimator configuration, with
+        keys ``"module"``, ``"class"``, and ``"args"``.  
+        Defaults to ``{"module": "sklearn.linear_model",
+        "class": "LinearRegression", "args": {}}``.
+    selection_model : dict, optional
+        Dictionary specifying a feature selection model, typically a LASSO
+        variant. Defaults to
+        ``{"module": "sklearn.linear_model", "class": "LassoCV",
+        "args": {"alphas": 10, "cv": 10}}``.
+    selection_threshold : float, optional
+        Threshold applied to the selected interactions for filtering.
+    selection_must_include : list of int, optional
+        List of feature indices that must always be included in the model.
+    nonlinear_transformation : dict, optional
+        Dictionary specifying the nonlinear transformation settings.
+        Defaults to
+        ``{"module": "sklearn.preprocessing",
+        "class": "PolynomialFeatures",
+        "args": {"degree": 1, "include_bias": False}}``.
+    weights_filepath : str, optional
+        Path to an ``.npz`` file containing sample weights for fitting and
+        evaluating the weighted mean squared error (MSE).
+    standardize : bool, optional
+        Whether to standardize the input data prior to fitting.
+        Default is ``False``.
+
+    Returns
+    -------
+    None
+        The trained model is serialized to the specified ``model_filepath``.
+
+    Notes
+    -----
+    - The function prints progress and diagnostic information to stdout.
+    - If ``weights_filepath`` is provided, weighted regression is performed.
+    - Model summaries are printed for both the selector and regressor stages.
+
+    Examples
+    --------
+    Run from command line::
+
+        $ clusterx build-nonlinear-model energy --ccalc ccalc.pickle \
+              --xp xp.npz --model model.pickle --standardize
+
+    Or use programmatically::
+
+        build_nonlinear_model(
+            property_name="energy",
+            ccalc_filepath="ccalc.pickle",
+            xp_filepath="xp.npz",
+            regression_model={"class": "Ridge", "args": {"alpha": 1.0}},
+            standardize=True
+        )
+    """
     cmd_message("head")
 
     print(f"Info({get_command_name()}): Initialization")
