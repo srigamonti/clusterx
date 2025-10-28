@@ -469,7 +469,7 @@ class DSGenerator:
         int: The shape_id of the newly added or existing cell shape.
         """
 
-        sc_size = int(round(np.linalg.det(shape)))
+        sc_size = int(abs(round(np.linalg.det(shape))))
 
         match = self.scell_shapes[
             self.scell_shapes["shape"].apply(lambda x: np.array_equal(x, shape))
@@ -522,7 +522,7 @@ class DSGenerator:
         """
         result = self.scell_shapes[self.scell_shapes["shape_id"] == shape_id]
         if not result.empty:
-            return result.iloc[0]["size"]
+            return int(result.iloc[0]["size"])
         raise KeyError(f"Shape ID {shape_id} not found.")
 
     def add_configuration(self, sigma, shape_id):
@@ -608,11 +608,11 @@ class DSGenerator:
                     raise TypeError("Expected False, True, or a list of integers.")
 
             elif sc_shapes is None:
-                sc_size = int(round(np.linalg.det(sc_shape)))
+                sc_size = int(abs(round(np.linalg.det(sc_shape))))
                 unique_sc_shapes = [sc_shape]
 
             else:
-                sc_size = int(round(np.linalg.det(sc_shapes[i])))
+                sc_size = int(abs(round(np.linalg.det(sc_shapes[i]))))
                 unique_sc_shapes = [sc_shapes[i]]
 
             for idx, t in enumerate(unique_sc_shapes):
@@ -621,6 +621,7 @@ class DSGenerator:
                 )
 
                 for nsubs in num_subs:
+                    print("\n")
                     self.generate_for_shape_nsubs(
                         sc_shape=t, nsubs=nsubs, n_random=n_random, recursive=recursive
                     )
@@ -634,7 +635,7 @@ class DSGenerator:
                 #         self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs, n_random=n_random, recursive=recursive)
 
         print(
-            f"Enumeration complete. Found {len(self.configurations)} unique configurations.\n"
+            f"\nEnumeration complete. Found {len(self.configurations)} unique configurations.\n"
         )
 
     def generate_for_shape_nsubs(
@@ -677,7 +678,7 @@ class DSGenerator:
         ems = scell.get_ems()
         ssites = scell.get_substitutional_sites()
         stypes = scell.get_tags()
-        scindex = np.abs(scell.get_index())
+        scindex = int(abs(scell.get_index()))
         stypes_plat = self.plat.get_sublattice_types()
 
         symper_tuples = [tuple(per) for per in symper]
@@ -1479,7 +1480,7 @@ def get_unique_supercells_nearest_orthogonal(n, parent_lattice: object, elements
 
     all_matrices = list(
         filter(
-            lambda x: abs(np.linalg.det(np.reshape(x, (3, 3)))) == 1,
+            lambda x: int(abs(np.linalg.det(np.reshape(x, (3, 3))))) == 1,
             product(elements, repeat=9),
         )
     )
