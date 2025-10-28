@@ -4,6 +4,7 @@
 
 import os
 import sys
+from pprint import pformat
 
 import plac
 
@@ -133,15 +134,12 @@ def main():
         ]
 
         commands = config_dict.get("do", commands_)
-        print(f"commands in {toml_file_path} file are", commands)
         available_commands = cmds.commands  # List of available command names
-        print("available commands are", available_commands)
 
         for command in commands:
             if command in available_commands:
                 func = getattr(cmds, command)
                 arg_dict_from_toml = config_dict[str(command)]
-                print("Argument dict from TOML file: ", arg_dict_from_toml)
 
                 # Check if arg_dict_from_toml is a list of dictionaries
                 if isinstance(arg_dict_from_toml, list) and all(
@@ -161,7 +159,9 @@ def main():
                         print(f"Skipping {command} because 'ignore' is True")
                     else:
                         # Execute func with the single dictionary of parameters
-                        print(f"Executing {command} with params: {arg_dict_from_toml}")
+                        print(
+                            f"\nExecuting {command} with params:\n {pformat(arg_dict_from_toml)}\n"
+                        )
                         func(**arg_dict_from_toml)
                 else:
                     print(
