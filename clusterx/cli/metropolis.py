@@ -5,9 +5,9 @@ import json
 import random
 from typing import List, Optional, Union
 
+import matplotlib.pyplot as plt
 import numpy as np
 import plac
-import matplotlib.pyplot as plt
 
 from clusterx.cli.config_utils import cmd_message, get_command_name
 from clusterx.model import Model
@@ -176,7 +176,7 @@ def metropolis(
 ):
     """Perform Metropolis sampling
     Deprecated:
-        scale_factor: Deprecated. Use energy_scale_factor instead."""
+    scale_factor: Deprecated. Use energy_scale_factor instead."""
     cmd_message("head")
 
     energy_scale_factor = _process_deprecated(
@@ -219,7 +219,9 @@ def metropolis(
             )
             mc.metropolis(
                 no_of_sampling_steps=n_mc_steps,
-                scale_factor=[1 / energy_scale_factor] if energy_scale_factor is not None else None,
+                scale_factor=[1 / energy_scale_factor]
+                if energy_scale_factor is not None
+                else None,
                 temperature=temperature,
                 boltzmann_constant=boltzmann_constant,
                 initial_decoration=initial_decoration,
