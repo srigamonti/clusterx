@@ -58,7 +58,7 @@ def build_cpool(
     post_manual_select=None,  # Optional[List[int]]
     sset_filepath=None,  # Optional[str]
     plat_filepath=None,  # Optional[str]
-    psc=1,  # Supercell definition
+    psc=None,  # Supercell definition
     method=0,  # int
     cpool_filepath="cpool.json",  # str
     vacancy_atomic_number=0,  # int
@@ -95,10 +95,13 @@ def build_cpool(
     if not (plat_filepath or sset_filepath):
         raise ValueError("Either sset_filepath or plat_filepath must be provided.")
 
-    scell = SuperCell(plat, p=psc)
-    cpool = ClustersPool(
-        plat, npoints=npoints, radii=radii, super_cell=scell, method=method
-    )
+    if psc is not None:
+        scell = SuperCell(plat, p=psc)
+        cpool = ClustersPool(
+            plat, npoints=npoints, radii=radii, super_cell=scell, method=method
+        )
+    else:
+        cpool = ClustersPool(plat, npoints=npoints, radii=radii, method=method)
 
     if post_manual_select is not None:
         cpool = cpool.get_subpool(cluster_indexes=post_manual_select)
