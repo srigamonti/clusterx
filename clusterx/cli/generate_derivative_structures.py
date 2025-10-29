@@ -583,10 +583,13 @@ def _do_full_enumeration(
 
 
 def process_linear_reference(
-    linear_reference: Optional[Union[List[List[float]], List[dict]]] = None,
+    linear_reference: Optional[Union[List[List[float]], List[dict], str]] = None,
 ) -> Optional[List[List[float]]]:
     if linear_reference is None:
         return None
+
+    if isinstance(linear_reference, str):
+        return linear_reference
 
     # If it's a list of dicts, convert to list of [x, y]
     if isinstance(linear_reference, list) and all(
@@ -610,7 +613,7 @@ def _do_compute_properties(
     property_names: str = None,
     dss_filepath: str = "dss.pickle",
     per_formula_unit: bool = False,
-    linear_reference: Optional[Union[List[List[float]], List[dict]]] = None,
+    linear_reference: Optional[Union[List[List[float]], List[dict], str]] = None,
 ) -> None:
     linear_reference = process_linear_reference(linear_reference)
 
