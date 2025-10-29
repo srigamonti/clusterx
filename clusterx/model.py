@@ -3,23 +3,23 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import os
+import pickle
 import warnings
 from pathlib import Path
-import pickle
-from typing import Optional, List
+from typing import List, Optional
 
 import numpy as np
 from sklearn.pipeline import Pipeline
 
-from clusterx.super_cell import SuperCell
+from clusterx.clusters_selector import ClustersSelector
 from clusterx.correlations import (
     CorrelationsCalculator,
     cluster_correlations_flip,
 )
-from clusterx.structure import Structure
 from clusterx.estimators.estimator_factory import EstimatorFactory
+from clusterx.structure import Structure
+from clusterx.super_cell import SuperCell
 from clusterx.utils import is_diagonal
-from clusterx.clusters_selector import ClustersSelector
 
 
 class Model:
@@ -402,10 +402,17 @@ class Model:
         )
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
-            return (
-                self.estimator.predict(correlations_diff.reshape(1, -1))[0]
-                - self.estimator.intercept_
-            )
+            try:
+                return (
+                    self.estimator.predict(correlations_diff.reshape(1, -1))[0]
+                    - self.estimator.intercept_
+                )
+            except:
+                return (
+                    self.estimator.predict(correlations_diff.reshape(1, -1))[0]
+                    - self.estimator[-1].intercept_
+                )
+
         else:
             return np.dot(self.ecis, correlations_diff)
 
@@ -762,8 +769,8 @@ class ModelBuilder:
                 self.estimator_type, **self.estimator_opts
             )
         else:
-            from sklearn.preprocessing import StandardScaler
             from sklearn.pipeline import make_pipeline
+            from sklearn.preprocessing import StandardScaler
 
             self.opt_estimator = make_pipeline(
                 StandardScaler(),
