@@ -3,25 +3,25 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import os
+import pickle
 import warnings
 from pathlib import Path
-import pickle
 from typing import List
 
 import numpy as np
 from sklearn.pipeline import Pipeline
 
 from clusterx.clusters.clusters_pool import ClustersPool
-from clusterx.super_cell import SuperCell
+from clusterx.structures_set import StructuresSet
+from clusterx.clusters_selector import ClustersSelector
 from clusterx.correlations import (
     CorrelationsCalculator,
     cluster_correlations_flip,
 )
-from clusterx.structure import Structure
-from clusterx.structures_set import StructuresSet
 from clusterx.estimators.estimator_factory import EstimatorFactory
+from clusterx.structure import Structure
+from clusterx.super_cell import SuperCell
 from clusterx.utils import is_diagonal
-from clusterx.clusters_selector import ClustersSelector
 
 
 class Model:
@@ -402,10 +402,17 @@ class Model:
         )
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
-            return (
-                self.estimator.predict(correlations_diff.reshape(1, -1))[0]
-                - self.estimator.intercept_
-            )
+            try:
+                return (
+                    self.estimator.predict(correlations_diff.reshape(1, -1))[0]
+                    - self.estimator.intercept_
+                )
+            except AttributeError:
+                return (
+                    self.estimator.predict(correlations_diff.reshape(1, -1))[0]
+                    - self.estimator[-1].intercept_
+                )
+
         else:
             return np.dot(self.ecis, correlations_diff)
 
@@ -447,7 +454,11 @@ class Model:
         ``sset``: StructuresSet object
             the scores are computed for the give structures set
         """
-        properties = self.property_name if isinstance(self.property_name, list) else [self.property_name]
+        properties = (
+            self.property_name
+            if isinstance(self.property_name, list)
+            else [self.property_name]
+        )
         for prop in properties:
             errfit = self.get_errors(sset, prop)
             errcv = self.get_cv_score(sset, prop)
@@ -460,7 +471,9 @@ class Model:
             print(f"|{'RMSE':^19}|{errfit['RMSE']:^19.5f}|{errcv['RMSE-CV']:^19.5f}|")
             print(f"|{'R2':^19}|{errfit['R2']:^19.5f}|{errcv['R2-CV']:^19.5f}|")
             print(f"|{'MAE':^19}|{errfit['MAE']:^19.5f}|{errcv['MAE-CV']:^19.5f}|")
-            print(f"|{'MaxAE':^19}|{errfit['MaxAE']:^19.5f}|{errcv['MaxAE-CV']:^19.5f}|")
+            print(
+                f"|{'MaxAE':^19}|{errfit['MaxAE']:^19.5f}|{errcv['MaxAE-CV']:^19.5f}|"
+            )
             print("+-----------------------------------------------------------+\n")
 
     def get_errors(self, sset, property_name_single):
@@ -474,7 +487,7 @@ class Model:
         abs_errors = np.abs(predictions - calc_vals)
         rmse = np.sqrt(np.mean(np.square(abs_errors)))
         # coefficient of determination
-        r2 = 1 - np.sum(abs_errors**2)/np.sum((calc_vals - np.mean(calc_vals))**2)
+        r2 = 1 - np.sum(abs_errors**2) / np.sum((calc_vals - np.mean(calc_vals)) ** 2)
         mae = np.mean(abs_errors)
         maxae = np.max(abs_errors)
         i_sample_max = np.argmax(abs_errors)
@@ -553,7 +566,7 @@ class Model:
         )
 
         absolute_errors = np.sqrt(-cvs)
-        r2 = 1 - np.sum(absolute_errors**2)/np.sum((y - np.mean(y))**2)
+        r2 = 1 - np.sum(absolute_errors**2) / np.sum((y - np.mean(y)) ** 2)
         cv = np.sqrt(-np.mean(cvs))
         maxae = np.amax(absolute_errors)
         mae = np.mean(absolute_errors)
@@ -776,8 +789,8 @@ class ModelBuilder:
                 self.estimator_type, **self.estimator_opts
             )
         else:
-            from sklearn.preprocessing import StandardScaler
             from sklearn.pipeline import make_pipeline
+            from sklearn.preprocessing import StandardScaler
 
             self.opt_estimator = make_pipeline(
                 StandardScaler(),

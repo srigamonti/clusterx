@@ -4,6 +4,7 @@
 
 import os
 import sys
+from pprint import pformat
 
 import plac
 
@@ -17,11 +18,11 @@ def main():
     CELL Command Line Interface
 
     Usage:
-        Parameters can be passed as command-line flags, for example:
+        Parameters can be passed as command-line flags, for example::
 
             cell command -opt1=val1 -opt2=val2 --flag1
 
-        Alternatively, you can use an input file in TOML format:
+        Alternatively, you can use an input file in TOML format::
 
             cell --input_file cellinput.toml
 
@@ -32,7 +33,7 @@ def main():
         Using a TOML file has the advantage of supporting multiple commands in a single run,
         which is more powerful and flexible than the command-line interface alone.
 
-        Example of a TOML file with multiple commands:
+        Example of a TOML file with multiple commands::
 
             [command1]
             opt1 = "val1"
@@ -45,7 +46,7 @@ def main():
             flag1 = true
 
         You can also run the same command repeatedly with different parameters
-        using TOML arrays of tables:
+        using TOML arrays of tables::
 
             [[command1]]
             opt1 = "val1A"
@@ -57,7 +58,7 @@ def main():
 
         You can avoid execution of a command by adding the key `ignore` with the
         value `false`, e.g., below commmandA and the second call to commandB will
-        be ignored:
+        be ignored::
 
             [commandA]
             ignore = true
@@ -76,7 +77,7 @@ def main():
 
     Custom Commands:
         You can extend CELL by placing a file named `custom_cell_commands.toml` in your
-        working directory. This file should contain the following attributes:
+        working directory. This file should contain the following attributes::
 
             custom_dir = "path/to/my/custom/commands/folder/"      # Directory containing custom commands
             custom_modules = ["custom_command1.py", "custom_command2.py"]  # Python modules to load from that directory
@@ -133,15 +134,12 @@ def main():
         ]
 
         commands = config_dict.get("do", commands_)
-        print(f"commands in {toml_file_path} file are", commands)
         available_commands = cmds.commands  # List of available command names
-        print("available commands are", available_commands)
 
         for command in commands:
             if command in available_commands:
                 func = getattr(cmds, command)
                 arg_dict_from_toml = config_dict[str(command)]
-                print("Argument dict from TOML file: ", arg_dict_from_toml)
 
                 # Check if arg_dict_from_toml is a list of dictionaries
                 if isinstance(arg_dict_from_toml, list) and all(
@@ -161,7 +159,9 @@ def main():
                         print(f"Skipping {command} because 'ignore' is True")
                     else:
                         # Execute func with the single dictionary of parameters
-                        print(f"Executing {command} with params: {arg_dict_from_toml}")
+                        print(
+                            f"\nExecuting {command} with params:\n {pformat(arg_dict_from_toml)}\n"
+                        )
                         func(**arg_dict_from_toml)
                 else:
                     print(

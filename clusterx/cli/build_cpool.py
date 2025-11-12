@@ -20,6 +20,11 @@ commands = ["build_cpool"]
 @plac.pos("npoints", help="The number of points in the clusters being built.")
 @plac.pos("radii", help="Corresponding cluster radii.")
 @plac.opt(
+    "post_manual_select",
+    abbrev="pms",
+    help="List of cluster indices to manually select clusters out of the generated pool.",
+)
+@plac.opt(
     "sset_filepath",
     abbrev="ssf",
     help="Path to a serialized StructuresSet object to get the parent lattice from it.",
@@ -50,9 +55,10 @@ commands = ["build_cpool"]
 def build_cpool(
     npoints,  # List[int] or str
     radii,  # List[float] or str
+    post_manual_select=None,  # Optional[List[int]]
     sset_filepath=None,  # Optional[str]
     plat_filepath=None,  # Optional[str]
-    psc=1,  # Supercell definition
+    psc=None,  # Supercell definition
     method=0,  # int
     cpool_filepath="cpool.json",  # str
     vacancy_atomic_number=0,  # int
@@ -63,6 +69,7 @@ def build_cpool(
     Parameters:
         npoints: A list of integers or a string representation of the list.
         radii: A list of floats or a string representation of the list.
+        post_manual_select: List of cluster indices to manually select clusters out of the generated pool.
         sset_filepath: Path to the structure set file (optional).
         plat_filepath: Path to the parent lattice file (optional).
         psc: Supercell definition (default: 1).
@@ -88,10 +95,16 @@ def build_cpool(
     if not (plat_filepath or sset_filepath):
         raise ValueError("Either sset_filepath or plat_filepath must be provided.")
 
-    scell = SuperCell(plat, p=psc)
-    cpool = ClustersPool(
-        plat, npoints=npoints, radii=radii, super_cell=scell, method=method
-    )
+    if psc is not None:
+        scell = SuperCell(plat, p=psc)
+        cpool = ClustersPool(
+            plat, npoints=npoints, radii=radii, super_cell=scell, method=method
+        )
+    else:
+        cpool = ClustersPool(plat, npoints=npoints, radii=radii, method=method)
+
+    if post_manual_select is not None:
+        cpool = cpool.get_subpool(cluster_indexes=post_manual_select)
 
     cpool.print_info()
     cpool.serialize(

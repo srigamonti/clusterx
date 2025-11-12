@@ -1,5 +1,7 @@
-import numpy as np
+import json
+import os
 
+import numpy as np
 
 marker_styles = {
     "Calculated": {
@@ -73,16 +75,54 @@ def scatter_plot(
 
 
 def save_plot_data(data, filename):
-    """Helper function to save plot data to a file."""
-    if filename:
-        np.savez(
-            filename,
-            concentrations_property=data["concentration"],
-            concentrations_enum=data["concentration-enum"],
-            property=data["property"],
-            predictions=data["predicted-property"],
-            predictions_cv=data["predicted-property-cv"],
-            predictions_enum=data["predicted-property-enumeration"],
+    """Helper function to save plot data to a file, depending on extension."""
+    if not filename:
+        return
+
+    # Extract extension
+    ext = os.path.splitext(filename)[1].lower()
+
+    # Define mapping for consistency
+    fields = {
+        "concentrations_property": data["concentration"],
+        "concentrations_enum": data["concentration-enum"],
+        "property": data["property"],
+        "predictions": data["predicted-property"],
+        "predictions_cv": data["predicted-property-cv"],
+        "predictions_enum": data["predicted-property-enumeration"],
+    }
+
+    if ext == ".npz":
+        np.savez(filename, **fields)
+
+    elif ext == ".json":
+        # Convert numpy arrays to lists for JSON serialization
+        json_ready = {k: np.asarray(v).tolist() for k, v in fields.items()}
+        with open(filename, "w") as f:
+            json.dump(json_ready, f, indent=2)
+
+    elif ext in (".dat", ".txt"):
+        # Flatten arrays and discard empty ones
+        flattened = {k: np.ravel(v) for k, v in fields.items() if len(np.ravel(v)) > 1}
+
+        if not flattened:
+            raise ValueError("No non-empty data arrays to save.")
+
+        # Check that remaining arrays have consistent lengths
+        lengths = [len(v) for v in flattened.values()]
+        if len(set(lengths)) != 1:
+            raise ValueError(
+                "All non-empty data arrays must have the same length to save as text."
+            )
+
+        # Stack and save with headers
+        arr = np.column_stack(list(flattened.values()))
+        header = " ".join(flattened.keys())
+        np.savetxt(filename, arr, header=header, fmt="%.6g")
+
+    else:
+        raise ValueError(
+            f"Unsupported file extension '{ext}'. Expected .npz, .json, .dat, or .txt."
         )
 
 

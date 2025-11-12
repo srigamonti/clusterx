@@ -14,11 +14,11 @@ from ase.db.core import Database
 from ase.db.jsondb import JSONDatabase
 from numba import jit
 
-from clusterx.parent_lattice import ParentLattice
-from clusterx.super_cell import SuperCell
 from clusterx.clusters.clusters_pool import ClustersPool
+from clusterx.parent_lattice import ParentLattice
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
+from clusterx.super_cell import SuperCell
 from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions
 from clusterx.utils import PolynomialBasis, get_cl_idx_sc
 
@@ -589,6 +589,8 @@ def cluster_function_flip(
 ) -> float:
     cf = 1.0
     flipped = False  # only flip once, otherwise, could go wrong for wrapped sites
+    # SR: I think this is not necesary, since wrapping reflects the periodicity
+    # of the supercell, so one flip may imply serveral cluster sites to be flipped.
     for site, alpha, sigma, em in zip(cluster_sites, cluster_alphas, sigmas, ems):
         if i_flip == site and not flipped:
             cf *= (
