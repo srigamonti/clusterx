@@ -38,7 +38,8 @@ class Cluster:
     def __init__(self, atom_indexes, atom_numbers, super_cell=None):
         if len(atom_indexes) != len(atom_numbers):
             raise ValueError(
-                "Initialization error, number of sites in cluster different from number of species."
+                "Initialization error, number of sites in cluster different from number of species: "
+                f"len(atom_indexes) = {len(atom_indexes)}, len(atom_numbers) = {len(atom_numbers)}. "
             )
 
         if len(atom_indexes) != 0:

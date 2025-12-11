@@ -1325,13 +1325,13 @@ def report_sset_equivalence_check(
             # print(map(folders.__getitem__, np.array(id_str_list[k]).tolist()))
 
 
-def normalize_shape_input(sc_shape):
+def normalize_shape_input(p):
     """
     Normalize the supercell shape input into a 3x3 matrix.
 
     Parameters:
     -----------
-    sc_shape: None, int, list[int], or list[list[int]]
+    p: None, int, list[int], list[list[int]], or np.ndarray
         The supercell shape specification.
 
     Returns:
@@ -1339,26 +1339,25 @@ def normalize_shape_input(sc_shape):
     np.ndarray or None
         A 3x3 numpy array if sc_shape is specified, otherwise None.
     """
-    if sc_shape is None:
+    if p is None:
         return None
-    elif isinstance(sc_shape, int):
-        return np.diag([sc_shape] * 3)
-    elif (
-        isinstance(sc_shape, (list, tuple))
-        and len(sc_shape) == 3
-        and all(isinstance(x, int) for x in sc_shape)
-    ):
-        return np.diag(sc_shape)
-    elif (
-        isinstance(sc_shape, (list, tuple))
-        and len(sc_shape) == 3
-        and all(isinstance(row, (list, tuple)) and len(row) == 3 for row in sc_shape)
-    ):
-        return np.array(sc_shape)
+    p = np.array(p)
+    if p.ndim == 0:
+        return np.diag([p, p, p])
+    elif p.shape == (1,):
+        return np.diag([p[0], 1, 1])
+    elif p.shape == (2,):
+        return np.diag([p[0], p[1], 1])
+    elif p.shape == (3,):
+        return np.diag(p)
+    elif p.shape == (2, 2):
+        sc_shape = np.eye(3, dtype=int)
+        sc_shape[0:2, 0:2] = p
+        return sc_shape
+    elif p.shape == (3, 3):
+        return p
     else:
-        raise ValueError(
-            "Invalid sc_shape format: must be None, int, 3-vector of ints, or 3x3 matrix of ints."
-        )
+        raise ValueError("Invalid supercell shape, must be (), (3,), or (3,3).")
 
 
 def normalize_nsubs_list(
