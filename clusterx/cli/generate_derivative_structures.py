@@ -319,9 +319,6 @@ def generate_derivative_structures(
             sc_shape = normalize_shape_input(sc_shape)
             nsubs_list = normalize_nsubs_list(nsubs_list)
 
-            sc_shape = normalize_shape_input(sc_shape)
-            nsubs_list = normalize_nsubs_list(nsubs_list)
-
             _do_full_enumeration(
                 plat,
                 nsubs_list=nsubs_list,
