@@ -50,13 +50,33 @@ def structures_set_prop(structures_set):
         at.calc = EMT()
         return at.get_potential_energy() * 0.1 - 10
 
-    sset.compute_property_values(
-        property_name="a_prop0", property_calc=a_prop
-    )
-    sset.compute_property_values(
-        property_name="a_prop1", property_calc=a_prop
-    )
+    sset.compute_property_values(property_name="a_prop0", property_calc=a_prop)
+    sset.compute_property_values(property_name="a_prop1", property_calc=a_prop)
     return sset
+
+
+def test_from_db(parent_lattice, super_cell, tmp_path):
+    np.random.seed(10)
+    nstr1 = 5
+    sset1 = StructuresSet(parent_lattice)
+    for i in range(nstr1):
+        sset1.add_structure(super_cell.gen_random_structure())
+    sset1.set_calculator(EMT())
+    sset1.compute_property_values(property_name="tote")
+
+    # serialize to db
+    db_path = tmp_path / "sset.db"
+    sset1.serialize(
+        filepath=db_path.name, ase_db_type="db", overwrite=True, rm_vac=False
+    )
+
+    # load from db
+    sset2 = StructuresSet(db_fname=db_path.name)
+
+    assert len(sset1) == len(sset2)
+    np.testing.assert_array_equal(
+        sset1.get_property_values("tote"), sset2.get_property_values("tote")
+    )
 
 
 def test_write_input_files_defaults(structures_set):

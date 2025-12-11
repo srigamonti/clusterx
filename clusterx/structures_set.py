@@ -2,6 +2,7 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+import os
 import warnings
 from typing import List
 
@@ -113,7 +114,7 @@ class StructuresSet:
             for k, v in _props.items():
                 try:
                     props[k] = v[i]
-                except:
+                except (IndexError, KeyError):
                     props[k] = None
 
             if quick_parse:
@@ -466,7 +467,6 @@ class StructuresSet:
 
             where ``arg1`` to  ``argN`` are the keyword arguments passed to the
             ``my_func(i, structure, **kwargs)`` function.
-
         """
         props = []
         if rm_vacancies:
@@ -503,8 +503,6 @@ class StructuresSet:
         ``calulator``. The ``Atoms.get_potential_energy()`` method is called
         and the resulting total energy is stored in the file ``cwd/energy.dat``.
         """
-        import os
-
         from ase.io import read
 
         cwd = os.getcwd()
@@ -595,8 +593,6 @@ class StructuresSet:
             to vacancies. If you want them absent in the files, set ``remove_vacancies``
             to ``True``.
         """
-        import os
-
         from ase.io import write
 
         if overwrite:
@@ -638,7 +634,7 @@ class StructuresSet:
 
     # Deprecated
     def write_to_db(self, filepath="sset.json", overwrite=False, rm_vac=False):
-        self.serialize(filepath=path, overwrite=overwrite, rm_vac=rm_vac)
+        self.serialize(filepath=filepath, overwrite=overwrite, rm_vac=rm_vac)
 
     def serialize(
         self, filepath="sset.db", ase_db_type=None, overwrite=False, rm_vac=False
@@ -693,8 +689,6 @@ class StructuresSet:
                 future.
 
         """
-        import os
-
         if ase_db_type is None:
             ase_db_type = "extract_from_name"
 
@@ -758,7 +752,7 @@ class StructuresSet:
         return self._db_fname
 
     def read_energy(
-        i, folder, structure=None, **kwargs
+        self, i, folder, structure=None, **kwargs
     ):  # DEPRECATED, use energy_parser instead
         self.energy_parser(i, folder, structure=structure, **kwargs)
 
@@ -785,8 +779,6 @@ class StructuresSet:
             Extra arguments needed for the property reading. See documentation of
             ``StructureSet.read_property_values()``.
         """
-        import os
-
         with open(os.path.join(folder, "energy.dat"), "r") as f:
             erg = float(f.readlines()[0])
         return erg
@@ -804,9 +796,9 @@ class StructuresSet:
         self.parse_property_values(
             property_name=property_name,
             write_to_file=write_to_file,
-            property_parser=read_energy,
+            property_parser=self.read_energy,
             root=root,
-            update_json_db=update_json,
+            update_json_db=update_json_db,
             **kwargs,
         )
 
@@ -875,11 +867,6 @@ class StructuresSet:
             to the ``read_property(folder_path,**kwargs)`` function.
 
         """
-        import glob
-        import os
-
-        from clusterx.utils import list_integer_named_folders
-
         self._props[property_name] = []
         for i, folder in enumerate(self._folders):
             if root != "":
@@ -888,7 +875,7 @@ class StructuresSet:
                 pval = property_parser(
                     i, folder, structure=self.get_structure(i), **kwargs
                 )
-            except:
+            except Exception:
                 print("Could not parse propery ", property_name, "from folder ", folder)
                 pval = None
 
@@ -969,13 +956,11 @@ class StructuresSet:
             In every folder of the list ``sset.get_folders()`` there must be a file named
             ``property_file_name`` containing a real number with the value of the property
         """
-        import os
-
-        fl = self.get_folders()
+        folders = self.get_folders()
 
         props = []
 
-        for folder in fl:
+        for folder in folders:
             fpath = os.path.join(cwd, str(folder), property_file_name)
             with open(fpath) as f:
                 props.append(float(f.readline().strip()))
@@ -1034,7 +1019,6 @@ class StructuresSet:
 
     def get_concentrations(self, site_type=0, sigma=1):
         """Get concentration values for a given site type"""
-
         concentrations = []
 
         for s in self:
