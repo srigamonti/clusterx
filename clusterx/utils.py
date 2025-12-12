@@ -477,9 +477,10 @@ def atat_to_cell(
             nrs.append(atomic_numbers[sp])
         species.append(nrs)
 
-    x = np.matrix(x)
-    b = np.matrix(parent)
-    a = np.matrix(scell)
+    # np.matrix was converted to np.array, TODO: add test for this function
+    x = np.array(x)
+    b = np.array(parent)
+    a = np.array(scell)
 
     ####################
     # Calculate real cartesian coordinates
