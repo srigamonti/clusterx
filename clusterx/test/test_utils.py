@@ -2,7 +2,9 @@
 
 import pytest
 import numpy as np
+from ase.build import bulk
 
+from clusterx.parent_lattice import ParentLattice
 from clusterx.utils import (
     Exponential,
     PolynomialFunction,
@@ -10,7 +12,23 @@ from clusterx.utils import (
     lattice_wrap_index,
     grid_mapping,
     normalize_shape_input,
+    parent_lattice_to_atat,
+    atat_to_cell,
 )
+
+
+@pytest.fixture
+def parent_lattice():
+    pri = bulk("H", crystalstructure="sc", a=1.0)
+    sub = bulk("He", crystalstructure="sc", a=1.0)
+    return ParentLattice(atoms=pri, substitutions=[sub], pbc=(1, 1, 1))
+
+
+@pytest.mark.xfail(raises=ValueError, reason="Perhaps wrong usage of atat")
+def test_atat(parent_lattice, tmp_path):
+    parent_lattice_to_atat(parent_lattice, out_fname=tmp_path / "lat.in")
+    parent_lattice_loaded = atat_to_cell(tmp_path / "lat.in")
+    assert parent_lattice == parent_lattice_loaded
 
 
 @pytest.mark.parametrize(
