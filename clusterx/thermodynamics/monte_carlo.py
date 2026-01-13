@@ -95,6 +95,14 @@ class MonteCarlo:
     ``error_reset``: integer (default: None)
        If not **None*  and ``predict_swap`` equal to **True**, the correlations are calculated as usual (no differences) every n-th step.
 
+    ``energy_key``: string (default: ``energy``)
+        For a multi-linear model, one of the predictions needs to be the energy prediction,
+        energy_key needs to match one of the strings in energy_model.property_names, so that the energy
+        prediction can be indexed from prediction vector.
+
+    ``filename``: string (default: ``trajectory.json``)
+        Path at which to store the MonteCarloTrajectory.
+
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
 
@@ -112,7 +120,8 @@ class MonteCarlo:
         no_of_swaps=1,
         predict_swap=False,
         error_reset=None,
-        filename="trajectory.json",
+        energy_key: str = "energy",
+        filename: str = "trajectory.json",
     ):
         self._em = energy_model
         self._scell = scell
@@ -146,6 +155,13 @@ class MonteCarlo:
             raise AttributeError(
                 "Sublattice for the sampling is not correctly assigned, look at the documatation."
             )
+
+        prop = energy_model.property_name
+        if prop is None or len(prop) == 0 or isinstance(prop, str):
+            # Note: indexing with None only works for numpy arrays, not lists
+            self._energy_prediction_index = None
+        else:
+            self._energy_prediction_index = prop.index(energy_key)
 
         self._models = []
         if models:
@@ -242,9 +258,7 @@ class MonteCarlo:
         from clusterx.utils import poppush
 
         scale_factor = (
-            scale_factor
-            if scale_factor is not None
-            else [self._scell.get_index()]
+            scale_factor if scale_factor is not None else [self._scell.get_index()]
         )
 
         scale_factor_product = boltzmann_constant * temperature
@@ -283,7 +297,7 @@ class MonteCarlo:
                 struc = self._scell.gen_random_structure(mc=True)
 
         self._em.reset_mc(mc=True)
-        e_last = self._em.predict(struc)
+        e_last = self._em.predict(struc)[self._energy_prediction_index]
 
         if filename is not None:
             self._filename = filename
@@ -341,7 +355,10 @@ class MonteCarlo:
                     if x > error_steps:
                         x = 1
                         struc.swap(ind1, ind2, site_type, rindices)
-                        de = self._em.predict(struc) - e_last
+                        de = (
+                            self._em.predict(struc)[self._energy_prediction_index]
+                            - e_last
+                        )
                         struc.swap(ind1, ind2, site_type, rindices)
                     else:
                         x += 1
@@ -350,21 +367,21 @@ class MonteCarlo:
                             ind1,
                             ind2,
                             site_types=self._sublattice_indices,
-                        )
+                        )[self._energy_prediction_index]
                 else:
                     de = self._em.predict_swap(
                         struc, ind1, ind2, site_types=self._sublattice_indices
-                    )
+                    )[self._energy_prediction_index]
             else:
                 struc.swap(ind1, ind2, site_type, rindices)
-                de = self._em.predict(struc) - e_last
+                de = self._em.predict(struc)[self._energy_prediction_index] - e_last
                 struc.swap(ind1, ind2, site_type, rindices)
 
             if de <= 0:
                 accept_swap = True
                 boltzmann_factor = 0
             else:
-                boltzmann_factor = math.exp(-de / (scale_factor_product))
+                boltzmann_factor = np.exp(-de / scale_factor_product)
 
                 if np.random.uniform(0, 1) <= boltzmann_factor:
                     accept_swap = True
@@ -595,12 +612,8 @@ class MonteCarloTrajectory:
         return sx
 
     def get_lowest_energy_structure(self):
-        """Return structure in form of a Structure object with the lowest energy in trajectory."""
-        _energies = self.get_energies()
-        _emin = np.min(_energies)
-        _nid = np.where(_energies == _emin)[0][0]
-
-        return self.get_structure(_nid)
+        """Return Structure object with the lowest energy in trajectory."""
+        return self.get_structure(np.argmin(self.get_energies()))
 
     def get_sampling_step_nos(self):
         """Return sampling step numbers of all entries in trajectory as array."""
@@ -620,7 +633,7 @@ class MonteCarloTrajectory:
         nid = 0
         try:
             nid = np.where(steps == nstep)[0][0]
-        except:
+        except IndexError:
             if nstep > steps[-1]:
                 nid = len(steps) - 1
             else:
@@ -653,17 +666,14 @@ class MonteCarloTrajectory:
         if prop == "energy":
             return self.get_energies()
         else:
-            try:
-                props = []
-                for tr in self._trajectory:
-                    props.append(tr["key_value_pairs"][prop])
-                return np.asarray(props)
-
-            except:
-                if prop not in [mo.property_name for mo in self._models]:
-                    print("Model of property is not given, look at the documentation.")
-                else:
-                    print("Property is not calculated, look at the documentation.")
+            if prop not in [mo.property_name for mo in self._models]:
+                raise KeyError(
+                    f"Model for property '{prop}' is not defined. Found keys: {[mo.property_name for mo in self._models]}"
+                )
+            props = []
+            for tr in self._trajectory:
+                props.append(tr["key_value_pairs"][prop])
+            return np.asarray(props)
 
     def get_property(self, nid, prop):
         """Return property of entry at index ``nid`` in trajectory."""

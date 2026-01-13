@@ -53,6 +53,11 @@ class MonteCarloLite:
         Boltzmann constant kb. kb times the temperature must have the same units
         as the units of energy that energy model yields.
 
+    ``energy_key``: string (default: ``energy``)
+        For a multi-linear model, one of the predictions needs to be the energy prediction,
+        energy_key needs to match one of the strings in energy_model.property_names, so that the energy
+        prediction can be indexed from prediction vector.
+
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
 
@@ -64,7 +69,14 @@ class MonteCarloLite:
         scell,
         energy_scale_factor=None,
         boltzmann_constant=1.0,
+        energy_key: str = "energy",
     ):
+        prop = energy_model.property_name
+        if prop is None or len(prop) == 0 or isinstance(prop, str):
+            # Note: indexing with None only works for numpy arrays, not lists
+            self._energy_prediction_index = None
+        else:
+            self._energy_prediction_index = prop.index(energy_key)
         self._emodel = energy_model
         self._emodel.reset_mc(True)
 
@@ -92,7 +104,9 @@ class MonteCarloLite:
             self.structure = self._scell.get_pristine_structure()
 
         with _timed("MonteCarloLite.init(): Computing energy of pristine structure"):
-            self.e_pristine = self._emodel.predict(self.structure)
+            self.e_pristine = self._emodel.predict(self.structure)[
+                self._energy_prediction_index
+            ]
 
         with _timed("MonteCarloLite.init(): Initialize interaction dictionaries"):
             self._emodel._init_interaction_dict(self._scell)
@@ -211,6 +225,7 @@ class MonteCarloLite:
 
             # Warn if stored temperature differs from requested one
             if not np.isclose(mcrun.temperature, temperature, rtol=1e-8, atol=0.0):
+                print(mcrun.temperature, temperature)
                 warnings.warn(
                     f"Temperature in saved MC run ({mcrun.temperature}) "
                     f"differs from requested temperature ({temperature}).",
@@ -219,7 +234,7 @@ class MonteCarloLite:
 
             if mcrun.keep_sigmas != keep_sigmas:
                 warnings.warn(
-                    f"keep_sitmas in saved MC run ({mcrun.keep_sigmas}) "
+                    f"keep_sigmas in saved MC run ({mcrun.keep_sigmas}) "
                     f"differs from requested keep_sigmas ({keep_sigmas})."
                     f"Setting keep_sigmas to ({keep_sigmas}).",
                     UserWarning,
@@ -230,12 +245,12 @@ class MonteCarloLite:
             return mcrun
 
         if not is_simulated_annelaing:
-            warnings.warn(
+            warnings.warn(  # @SR: Why is this a warning, should be just print or log?
                 f"MC run file not found at: {path}. Starting a new run instance.",
                 UserWarning,
             )
         else:
-            warnings.warn(
+            warnings.warn(  # @SR: Why is this a warning, should be just print or log?
                 f"Simulated annealing. Starting a new run instance and ignoring state at {path}.",
                 UserWarning,
             )
@@ -264,7 +279,7 @@ class MonteCarloLite:
         random_seed: Optional[int] = None,
         is_simulated_annelaing=False,
         **kwargs,
-    ):
+    ) -> MCRun:
         r"""Perform Monte-Carlo Metropolis simulation
 
         **Description**:
@@ -368,7 +383,7 @@ class MonteCarloLite:
         scaledbeta = self._energy_scale_factor / self._kb / temperature
 
         with _timed("MonteCarloLite.metropolis: Compute energy of initial structure"):
-            e = self._emodel.predict(self.structure)
+            e = self._emodel.predict(self.structure)[self._energy_prediction_index]
 
         mcrun.add_step(0, sigmas, e)
 
@@ -422,14 +437,16 @@ class MonteCarloLite:
                 if use_arrays_backup_for_rejected_moves:
                     self.structure.backup_arrays()
                 de = 0.0
-                for atom_index, new_sigma, old_sigma in zip(atom_indices, new_sigmas, old_sigmas):
+                for atom_index, new_sigma, old_sigma in zip(
+                    atom_indices, new_sigmas, old_sigmas
+                ):
                     de += self._emodel.predict_flip(
                         self.structure,
                         index=atom_index,
                         old_sigma=old_sigma,
                         new_sigma=new_sigma,
                         site_types=[self._substitutional_sublattice],
-                    )
+                    )[self._energy_prediction_index]
                     self.structure.update_arrays(
                         atom_indices=[atom_index], new_sigmas=[new_sigma]
                     )
@@ -467,7 +484,9 @@ class MonteCarloLite:
                     and i % n_error_reset == 0
                 ):
                     e0 = e
-                    e = self._emodel.predict(self.structure)
+                    e = self._emodel.predict(self.structure)[
+                        self._energy_prediction_index
+                    ]
                     mcrun.energies[-1] = e
                     e_error = e - e0
                     i_reset = i
@@ -575,7 +594,7 @@ class MCRun:
         """Append a Monte Carlo step to the run history."""
         global_index = self._step_offset + int(step_index)
         self.accepted_steps.append(global_index)
-        self.energies.append(float(energy))
+        self.energies.append(energy)
         if self._keep_sigmas > 0:
             self.sigmas.append(np.array(sigmas, dtype=np.uint8))
 

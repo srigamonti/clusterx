@@ -18,7 +18,7 @@ from clusterx.symmetry import (
 )
 
 # from ase.build import make_supercell
-from clusterx.utils import _timed, get_cl_idx_sc, make_supercell
+from clusterx.utils import _timed, get_cl_idx_sc, make_supercell, normalize_shape_input
 
 
 class SuperCell(ParentLattice):
@@ -111,25 +111,7 @@ class SuperCell(ParentLattice):
             self._sort_key = sort_key
 
         pbc = self._plat.get_pbc()
-
-        if not isinstance(p, int):
-            p = np.array(p)
-            if p.shape == (1,):
-                self._p = np.diag([p[0], 1, 1])
-            elif p.shape == (2,):
-                self._p = np.diag([p[0], p[1], 1])
-            elif p.shape == (3,):
-                self._p = np.diag(p)
-            elif p.shape == (2, 2):
-                self._p = np.array(
-                    [[p[0, 0], p[0, 1], 0], [p[1, 0], p[1, 1], 0], [0, 0, 1]]
-                )
-                self._p = np.array(
-                    [[p[0, 0], p[0, 1], 0], [p[1, 0], p[1, 1], 0], [0, 0, 1]]
-                )
-            elif p.shape == (3, 3):
-                self._p = p
-
+        self._p = normalize_shape_input(p)
         if isinstance(p, int):
             if pbc[0] == 1 and pbc[1] == 0 and pbc[2] == 0:
                 self._p = np.diag([p, 1, 1])
@@ -138,8 +120,13 @@ class SuperCell(ParentLattice):
             elif pbc[0] == 1 and pbc[1] == 1 and pbc[2] == 1:
                 self._p = np.diag([p, p, p])
             else:
-                sys.exit("SuperCell(Error)")
-
+                raise ValueError(f"Cannot build supercell with p={p} and pbc={pbc}.")
+        """
+        # set p to 1 along non-periodic directions
+        for dim, val in enumerate(pbc):
+            if not val:
+                self._p[dim, dim] = 1
+        """
         self.index = int(round(np.linalg.det(self._p)))
         prist = make_supercell(self._plat.get_pristine(), self._p)
         subs = [

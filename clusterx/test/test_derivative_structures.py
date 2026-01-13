@@ -12,11 +12,14 @@ from clusterx.parent_lattice import ParentLattice
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
+from clusterx.model import Model
+from clusterx.clusters.clusters_pool import ClustersPool
+from clusterx.correlations import CorrelationsCalculator
 
 
 @pytest.fixture
 def parent_lattice():
-    a = 3.62 / np.sqrt(2.0)
+    a = 1.0
     positions = [(0, 0, 0), (a / 2, a / 2, a / 2)]
     cell = [(a, 0, 0), (0, a, 0), (0, 0, a)]
     pbc = (True, True, True)
@@ -25,6 +28,34 @@ def parent_lattice():
 
     plat = ParentLattice(pri, substitutions=[sub], pbc=pbc)
     return plat
+
+
+@pytest.fixture
+def cpool(parent_lattice):
+    # one-point clusters and nearest neighbor two-point clusters
+    return ClustersPool(parent_lattice, npoints=[1, 2], radii=[0, 0.9])
+
+
+@pytest.fixture
+def corrc(parent_lattice, cpool):
+    return CorrelationsCalculator("trigonometric", parent_lattice, cpool)
+
+
+@pytest.fixture
+def model_single(parent_lattice, cpool, corrc):
+    # Ising-like model
+    ecisE = [0.0, -1.0]
+    multT = cpool.get_multiplicities()
+    cemodel = Model(corrc, "energy", ecis=np.multiply(ecisE, multT))
+    return cemodel
+
+
+@pytest.fixture
+def model_multi(parent_lattice, cpool, corrc):
+    # Model for two properties in parallel
+    ecis = np.array([[-1.0, -2.0], [-2.0, -4.0]])
+    cemodel = Model(corrc, ["energy", "energy_double"], ecis=ecis)
+    return cemodel
 
 
 @pytest.fixture
@@ -43,6 +74,21 @@ def ds_generator_full(ds_generator_empty):
         random_state=42,
     )
     return ds_generator_empty
+
+
+@pytest.mark.parametrize("model_", ["model_single", "model_multi"])
+def test_cemodel_calc(ds_generator_full, model_, request):
+    # prime example of using multiple fixtures with parametrize
+    model = request.getfixturevalue(model_)
+    dss = ds_generator_full
+    prop = model.property_name
+    if isinstance(prop, str):
+        dss.compute_properties(property_name=prop, cemodel=model)
+        assert prop in dss.configurations.columns
+    else:
+        dss.compute_properties(property_names=prop, cemodel=model)
+        for prop_single in prop:
+            assert prop_single in dss.configurations.columns
 
 
 @pytest.mark.parametrize("recursive", [False, True])
@@ -64,7 +110,7 @@ def test_generate(
     sc_shapes,
     n_random,
     recursive,
-    ds_generator_empty
+    ds_generator_empty,
 ):
     ds_generator_empty.generate(
         supercell_sizes=supercell_sizes,
@@ -338,8 +384,15 @@ def test_get_unique_supercells():
                     Structure(scell, scell.get_atomic_numbers()), write_to_db=True
                 )
 
-            sset.serialize(filepath="test_get_unique_supercells-fcc.json", overwrite=True)
-            print("Found ", len(unique_scs), " unique HNFs for a FCC lattice of index ", index)
+            sset.serialize(
+                filepath="test_get_unique_supercells-fcc.json", overwrite=True
+            )
+            print(
+                "Found ",
+                len(unique_scs),
+                " unique HNFs for a FCC lattice of index ",
+                index,
+            )
             # print("SCS: ", unique_scs)
             # print("TRA: ", unique_trafos)
             isok1 = len(unique_scs) == 7 and unique_trafos[4][2][2] == 4
@@ -363,8 +416,15 @@ def test_get_unique_supercells():
                     Structure(scell, scell.get_atomic_numbers()), write_to_db=True
                 )
 
-            sset.serialize(filepath="test_get_unique_supercells-sc.json", overwrite=True)
-            print("Found ", len(unique_scs), " unique HNFs for a simple cubic lattice of index ", index)
+            sset.serialize(
+                filepath="test_get_unique_supercells-sc.json", overwrite=True
+            )
+            print(
+                "Found ",
+                len(unique_scs),
+                " unique HNFs for a simple cubic lattice of index ",
+                index,
+            )
             # print("SCS: ", unique_scs)
             # print("TRA: ", unique_trafos)
             isok2 = len(unique_scs) == 9 and unique_scs[4][2][2] == 12.4

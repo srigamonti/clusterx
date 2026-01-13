@@ -287,7 +287,7 @@ class ClustersSelector:
             opt = self._select_clusters_skl_omp(x, p)
 
         self.optimal_cluster_indices = opt
-        self.optimal_comat = self.ini_comat[np.ix_(np.arange(len(p)), opt)]
+        self.optimal_comat = self.ini_comat[:, opt]
 
         self.optimal_clusters = self.cpool.get_subpool(opt)
 
@@ -520,12 +520,12 @@ class ClustersSelector:
 
             if opt_cv <= 0:
                 opt_cv = mean_cv
-                opt_clset = [i for i, e in enumerate(ecimult) if e != 0]
+                opt_clset = [i for i, e in enumerate(ecimult) if np.count_nonzero(e) > 0]
                 self.opt_sparsity = sparsity
             else:
                 if opt_cv > mean_cv:
                     opt_cv = mean_cv
-                    opt_clset = [i for i, e in enumerate(ecimult) if e != 0]
+                    opt_clset = [i for i, e in enumerate(ecimult) if np.count_nonzero(e) > 0]
                     self.opt_sparsity = sparsity
 
             if self.sparsity_step == 0.0:
@@ -548,15 +548,19 @@ class ClustersSelector:
         return opt_clset
 
     def _select_clusters_skl_lasso_cv(self, x, p):
-        from sklearn.linear_model import LassoCV
+        if p.ndim > 1:
+            from sklearn.linear_model import MultiTaskLassoCV as LassoCV
+        else:
+            from sklearn.linear_model import LassoCV
 
         opt_clset = []
+        alphas = np.geomspace(self.sparsity_min, self.sparsity_max, num=100)
 
         if not self.standardize:
             est = LassoCV(
-                eps=1e-5,
-                n_alphas=50,
+                alphas=alphas,
                 fit_intercept=self.fit_intercept,
+                max_iter=self.max_iter,
                 n_jobs=-1,
                 verbose=True,
             )
@@ -567,20 +571,17 @@ class ClustersSelector:
             est = make_pipeline(
                 StandardScaler(),
                 LassoCV(
-                    eps=1e-5,
-                    n_alphas=50,
+                    alphas=alphas,
                     fit_intercept=self.fit_intercept,
+                    max_iter=self.max_iter,
                     n_jobs=-1,
                     verbose=True,
                 ),
             )
 
-        x_ = x[:, 1:]
-        mod = est.fit(x_, p)
-
+        mod = est.fit(x, p)
         ecimult = []
         if not self.standardize:
-            ecimult.append(mod.intercept_)
             for coef in mod.coef_:
                 ecimult.append(coef)
             self.cvs = np.mean(est.mse_path_)
@@ -590,7 +591,6 @@ class ClustersSelector:
             self.lasso_sparsities = est.alphas_
 
         else:
-            ecimult.append(est[-1].intercept_)
             for coef in est[-1].coef_:
                 ecimult.append(coef)
             self.cvs = np.mean(est[-1].mse_path_)
@@ -599,7 +599,7 @@ class ClustersSelector:
             self.set_sizes = np.ones(len(est[-1].alphas_))
             self.lasso_sparsities = est[-1].alphas_
 
-        opt_clset = [i for i, e in enumerate(ecimult) if e != 0]
+        opt_clset = [i for i, e in enumerate(ecimult) if np.count_nonzero(e) > 0]
         if not self.standardize:
             self.opt_sparsity = est.alpha_
         else:

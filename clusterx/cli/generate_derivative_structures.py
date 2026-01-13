@@ -93,6 +93,9 @@ commands = ["generate_derivative_structures"]
         "rec",
         bool,
     ),
+    show_plot=("If True, show the plot in a new window.", "option", "sp", bool),
+    save_plot=("If True, save the plot to file.", "option", "svp", bool),
+    plot_fname=("Filepath to save the plot at.", "option", "pf", str),
 )
 def generate_derivative_structures(
     sc_sizes: Optional[List[int]] = None,
@@ -113,7 +116,9 @@ def generate_derivative_structures(
     n_random: Optional[int] = 0,
     random_state: Optional[int] = None,
     task: str = "do_full_enumeration",
-    plotdata_filepath=None,
+    show_plot: bool = True,
+    save_plot: bool = True,
+    plot_fname: str = "property_vs_concentration.png",
     colors=None,
     markers=None,
     sizes=None,
@@ -311,7 +316,6 @@ def generate_derivative_structures(
         # Find derivative structures
         case "do_full_enumeration" | "find_derivative_structures":
             plat = ParentLattice(filepath=plat_filepath)
-
             sc_shape = normalize_shape_input(sc_shape)
             nsubs_list = normalize_nsubs_list(nsubs_list)
 
@@ -333,6 +337,7 @@ def generate_derivative_structures(
             _do_compute_properties(
                 cem=model,
                 property_name=property_name,
+                property_names=property_names,
                 dss_filepath=dss_filepath,
                 per_formula_unit=per_formula_unit,
                 linear_reference=linear_reference,
@@ -372,7 +377,13 @@ def generate_derivative_structures(
                     else None
                 )
                 _do_plot_properties(
-                    dss_filepath, property_name=property_name, sset=sset, cem=model
+                    dss_filepath,
+                    property_name=property_name,
+                    sset=sset,
+                    cem=model,
+                    show_plot=show_plot,
+                    save_plot=save_plot,
+                    fname=plot_fname,
                 )
             else:
                 # _do_plot_properties(dss_filepath, property_name=property_name, mask_name=mask_name)
@@ -395,7 +406,7 @@ def generate_derivative_structures(
                     ys.append(dsgen.configurations[property_name].to_numpy())
 
                 _plot_multiple_scatter(
-                    x, ys, colors, markers, sizes, save_filepath=plotdata_filepath
+                    x, ys, colors, markers, sizes, save_filepath=plot_fname
                 )
 
         case "plot_predictions_vs_target":
@@ -417,6 +428,9 @@ def generate_derivative_structures(
                 scale=1.0,
                 xaxis_label=f"Calculated {property_name} [arb. units]",
                 yaxis_label=f"Predicted {property_name} [arb. units]",
+                show_plot=show_plot,
+                save_plot=save_plot,
+                fname=plot_fname,
             )
         case "plot_property_vs_concentration2":
             _do_plot_properties2(
@@ -700,7 +714,14 @@ def _plot_multiple_scatter(
 
 
 def _do_plot_properties(
-    dss_filepath, property_name: str = "property", sset=None, cem=None, mask_name=None
+    dss_filepath,
+    property_name: str = "property",
+    sset=None,
+    cem=None,
+    mask_name=None,
+    show_plot=True,
+    save_plot=True,
+    fname=None,
 ):
     with open(dss_filepath, "rb") as f:
         dsgen = pickle.load(f)
@@ -713,6 +734,9 @@ def _do_plot_properties(
         concentrations_enum=dsgen.configurations["frconc_binary"].to_numpy(),
         property_name=property_name,
         cemodel=cem,
+        show_plot=show_plot,
+        save_plot=show_plot,
+        fname=fname,
     )
 
 
