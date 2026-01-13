@@ -64,7 +64,6 @@ def build_ising_model(
     )
 
     estimator = LinearRegression()
-    n_features = len(cpool)
 
     estimator.coef_ = np.array([-h0, -j1])
     estimator.intercept_ = e0

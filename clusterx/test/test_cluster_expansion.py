@@ -47,7 +47,6 @@ def test_cluster_expansion():
     scell = SuperCell(plat, np.array([(1, 0, 0), (0, 3, 0), (0, 0, 1)]))
     # strset = StructuresSet(plat, filename="test_cluster_expansion_structures_set.json")
     strset = StructuresSet(plat)
-    nstr = 20
     # for i in range(nstr):
     #    strset.add_structure(scell.gen_random(nsubs={}))
     strset.add_structure(

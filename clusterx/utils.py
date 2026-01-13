@@ -138,12 +138,10 @@ def isclose(r1, r2, rtol=1e-4):
     Boolean: if the euclidean distance between ``r1`` and ``r2`` is smaller than
     ``rtol``, ``True`` is returned, otherwise ``False`` is returned.
     """
-    try:
-        if len(r1) != len(r2):
-            return False
-        return np.linalg.norm(np.subtract(r1, r2)) < rtol
-    except:
-        return np.linalg.norm(np.subtract(r1, r2)) < rtol
+
+    if len(r1) != len(r2):
+        return False
+    return np.linalg.norm(r1 - r2) < rtol
 
 
 def dict_compare(d1, d2, tol=None):
@@ -204,7 +202,7 @@ def dict_compare(d1, d2, tol=None):
                 if _is_integrable(d1[k]):
                     if not isclose(d1[k], d2[k], tol):
                         return False
-            except:
+            except Exception:  # TODO: specify error type
                 if type(d1[k]) is dict:
                     for subkeys in d1[k].keys():
                         if not isclose(d1[k][subkeys], d2[k][subkeys], tol):
@@ -487,13 +485,13 @@ def atat_to_cell(
     if wrap:
         from clusterx.symmetry import wrap_scaled_positions
 
-        if pbc == None:
+        if pbc is None:
             pbc = (1, 1, 1)
         x = wrap_scaled_positions(x, pbc)
     r = x * b
 
     cell = a * b
-    if interpret_as == None:
+    if interpret_as is None:
         return cell, r, species
     if interpret_as == "parent_lattice":
         from clusterx.parent_lattice import ParentLattice
@@ -540,9 +538,9 @@ def atat_to_cell(
 def _is_integer_matrix(m, rnd=5):
     mi = np.around(m, rnd)
     for k in range(3):
-        for l in range(3):
+        for el in range(3):
             # if not round(m[k,l],rnd).is_integer():
-            if not mi[k, l].is_integer():
+            if not mi[k, el].is_integer():
                 return False
     return True
 
@@ -640,9 +638,9 @@ def calculate_trafo_matrix(pcell, scell, rnd=5):
 
 def _str_grep(input_str, search_str, prepend=""):
     out_str = ""
-    for l in input_str.split("\n"):
-        if search_str in l:
-            out_str = out_str + prepend + l.strip() + "\n"
+    for el in input_str.split("\n"):
+        if search_str in el:
+            out_str = out_str + prepend + el.strip() + "\n"
 
     return out_str.rstrip()
 

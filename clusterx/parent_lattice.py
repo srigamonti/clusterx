@@ -205,7 +205,7 @@ class ParentLattice(Atoms):
             if sites is not None:
                 try:
                     unique_sites = np.unique(sites, axis=0)
-                except:
+                except ValueError:  # from inhomogeneous shape of sites
                     try:
                         unique_sites = np.unique(np.array(sites, dtype=object))
                     except AttributeError:
@@ -282,7 +282,7 @@ class ParentLattice(Atoms):
         """Get space symmetry of a ParentLattice object."""
         try:
             return self.sc_sg, self.sc_sym
-        except:
+        except AttributeError:
             self.sc_sg, self.sc_sym = self._compute_sym()
             return self.sc_sg, self.sc_sym
 
@@ -716,7 +716,6 @@ class ParentLattice(Atoms):
 
         db = connect(filepath, type="json", append=False)
 
-        images = []
         db.write(self.get_pristine())
         for sub in self.get_substitutions():
             db.write(sub)
