@@ -58,6 +58,11 @@ class MonteCarloLite:
         energy_key needs to match one of the strings in energy_model.property_names, so that the energy
         prediction can be indexed from prediction vector.
 
+    ``reduce_structure``: bool (default: False)
+        If true, cluster orbits/correlations are computed and evaluated on
+        subset of sigmas, in a box around central site in the structure.
+        Incompatible with non-diagonal supercell shapes.
+
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
 
@@ -70,6 +75,7 @@ class MonteCarloLite:
         energy_scale_factor=None,
         boltzmann_constant=1.0,
         energy_key: str = "energy",
+        reduce_structure: bool = False,
     ):
         prop = energy_model.property_name
         if prop is None or len(prop) == 0 or isinstance(prop, str):
@@ -103,13 +109,20 @@ class MonteCarloLite:
         with _timed("MonteCarloLite.init(): Generating pristine structure"):
             self.structure = self._scell.get_pristine_structure()
 
-        with _timed("MonteCarloLite.init(): Computing energy of pristine structure"):
-            self.e_pristine = self._emodel.predict(self.structure)[
-                self._energy_prediction_index
-            ]
-
-        with _timed("MonteCarloLite.init(): Initialize interaction dictionaries"):
-            self._emodel._init_interaction_dict(self._scell)
+        if reduce_structure:
+            self.e_pristine = None  # undefined, we only care about energy differences
+            self._emodel.init_reduced_model()
+            self._emodel._init_interaction_dict(self._emodel.scell_reduced)
+        else:
+            with _timed(
+                "MonteCarloLite.init(): Computing energy of pristine structure"
+            ):
+                self.e_pristine = self._emodel.predict(self.structure)[
+                    self._energy_prediction_index
+                ]
+            with _timed("MonteCarloLite.init(): Initialize interaction dictionaries"):
+                self._emodel._init_interaction_dict(self._scell)
+        self._reduce_structure = reduce_structure
 
         print("\n" + "=" * 70)
         print("MonteCarloLite Initialized")
@@ -382,8 +395,15 @@ class MonteCarloLite:
 
         scaledbeta = self._energy_scale_factor / self._kb / temperature
 
-        with _timed("MonteCarloLite.metropolis: Compute energy of initial structure"):
-            e = self._emodel.predict(self.structure)[self._energy_prediction_index]
+        if self._reduce_structure:
+            e = 0.0  # undefined, we only care about energy differences
+            sigma_grid = self.structure.get_reduced_structure()
+            sigma = sigma_grid.flatten()  # this returns a copy
+        else:
+            with _timed("MonteCarloLite.metropolis: Compute initial energy"):
+                e = self._emodel.predict(self.structure)[self._energy_prediction_index]
+            sigma_grid = None
+            sigma = self.structure.get_sigmas()
 
         mcrun.add_step(0, sigmas, e)
 

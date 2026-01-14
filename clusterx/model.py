@@ -110,7 +110,7 @@ class Model:
         self._mc_multiplicities: List[int] = []
         self._mc_start_time = 0
         self._mc_init_time = 0
-        self.scell_reduced = None
+        self.scell_reduced = None  # if needed, initialize with self.init_reduced_model
         self.initialized_interactions = False
 
         if self.standardize:
@@ -345,7 +345,7 @@ class Model:
         old_sigma: int,
         new_sigma: int,
         site_types=[0],
-        reduce: bool = False,
+        scell_factor: float = 1.0,
     ):
         """Predict property change by flipping a species.
 
@@ -361,30 +361,13 @@ class Model:
 
         ``new_sigma``: int, default None
 
-        ``reduce``: bool, default False
-            if True, use the reduced structure around the flipped sigma
+        ``scell_factor``: float, default: 1.0
+            Needs to be passed, when structure is a sub-tile of the full structure.
+            In that case, compute it with:
+                p = np.diag(structure.get_supercell().get_transformation()).tolist()
+                p_reduced = np.diag(scell_reduced.get_transformation())
+                scell_factor = np.prod(p) / np.prod(p_reduced)
         """
-        if reduce:
-            warnings.warn(
-                "model.predict_flip using reduce=True is currently very slow.",
-                category=UserWarning,
-            )
-            p = np.diag(structure.get_supercell().get_transformation()).tolist()
-            if not is_diagonal(p):
-                raise ValueError(
-                    "Reduced structure cannot be initialized "
-                    "with non-diagonal super cell transformation."
-                )
-
-            if self.scell_reduced is None:
-                self.init_reduced_model()
-            p_reduced = np.diag(self.scell_reduced.get_transformation())
-            multiplicity_factor = np.prod(p) / np.prod(p_reduced)
-
-            structure, index = structure.get_reduced_structure(p_reduced, index)
-        else:
-            multiplicity_factor = 1.0
-
         if not self.initialized_interactions:
             self._init_interaction_dict(structure.get_supercell())
 
@@ -398,7 +381,7 @@ class Model:
             cluster_indices=self._cluster_indices,
             basis_set_values=self.corrc.basis_set_values,
             multiplicities=self._multiplicities,
-            multiplicity_factor=multiplicity_factor,
+            multiplicity_factor=scell_factor,
         )
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
