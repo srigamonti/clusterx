@@ -311,7 +311,9 @@ class Model:
             return np.dot(self.ecis, corrs)
 
     def _init_interaction_dict(self, super_cell: SuperCell):
-        """Construct list of which sites are contained in which orbit."""
+        """Construct list of which sites are contained in which orbit.
+        NOTE: This method needs to be re-called, when super_cell transformation
+        (p) changes."""
         print("Info(Model): setting up dictionary of interactions.")
         cluster_orbits = self.corrc.get_cluster_orbits_for_scell(super_cell)
         cluster_indices = []  # to which primitive cluster each cluster belongs
@@ -400,7 +402,13 @@ class Model:
             return np.dot(self.ecis, correlations_diff)
 
     def predict_swap(
-        self, structure, i, j, correlation=False, site_types=[0], reduce=False
+        self,
+        structure,
+        i,
+        j,
+        correlation=False,
+        site_types=[0],
+        scell_factor: float = 1.0,
     ):
         """Predict property difference with the optimal cluster expansion model.
 
@@ -415,17 +423,25 @@ class Model:
         ``j``: int
             index of second atom position has been swapped
 
-        ``reduce``: bool, default False
-            if True, use the reduced structure around the swapped sigmas
+        ``scell_factor``: float, default: 1.0
+            Needs to be passed, when structure is a sub-tile of the full structure.
+            In that case, compute it with:
+                p = np.diag(structure.get_supercell().get_transformation()).tolist()
+                p_reduced = np.diag(scell_reduced.get_transformation())
+                scell_factor = np.prod(p) / np.prod(p_reduced)
 
         """
 
         sigma_i = structure.sigmas[i]
         sigma_j = structure.sigmas[j]
 
-        de1 = self.predict_flip(structure, i, sigma_i, sigma_j, site_types, reduce)
+        de1 = self.predict_flip(
+            structure, i, sigma_i, sigma_j, site_types, scell_factor
+        )
         structure.sigmas[i] = sigma_j
-        de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, reduce)
+        de2 = self.predict_flip(
+            structure, j, sigma_j, sigma_i, site_types, scell_factor
+        )
         structure.sigmas[i] = sigma_i  # restore original structure
         return de1 + de2
 

@@ -10,11 +10,12 @@ from clusterx.utils import (
     PolynomialFunction,
     PolynomialBasis,
     lattice_wrap_index,
-    grid_mapping,
     normalize_shape_input,
     parent_lattice_to_atat,
     atat_to_cell,
+    transformation_containing_sphere_diag,
 )
+from clusterx.utils import take_tile as grid_mapping
 
 
 @pytest.fixture
@@ -29,6 +30,20 @@ def test_atat(parent_lattice, tmp_path):
     parent_lattice_to_atat(parent_lattice, out_fname=tmp_path / "lat.in")
     parent_lattice_loaded = atat_to_cell(tmp_path / "lat.in")
     assert parent_lattice == parent_lattice_loaded
+
+
+@pytest.mark.parametrize(
+    "r,cell,p",
+    [
+        (1.0, np.eye(3), [1, 1, 1]),
+        (2.0, np.eye(3), [2, 2, 2]),
+        (2.0, np.diag([2, 1, 1]), [1, 2, 2]),
+        (2.0, np.array([[1, 1, 0], [-1, 1, 0], [0, 0, 2]]), [2, 2, 1]),
+    ],
+)
+def test_containing_supercell(r, cell, p):
+    p_result = transformation_containing_sphere_diag(r, cell)
+    np.testing.assert_array_equal(p_result, np.diag(p))
 
 
 @pytest.mark.parametrize(

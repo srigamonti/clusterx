@@ -10,12 +10,45 @@ from contextlib import contextmanager
 from typing import List, Optional, Union
 
 import numpy as np
+from ase.cell import Cell
 from ase import Atoms
 from ase.build.supercells import (  # needed by make_supercell
     clean_matrix,
     lattice_points_in_supercell,
 )
 from ase.data import chemical_symbols as cs
+
+
+def transformation_containing_sphere_diag(
+    r: float, cell: np.ndarray | Cell, round_up: bool = False
+) -> np.ndarray:
+    """Return diagonal transformation p of cell that describe a supercell, such
+    that a sphere with radius r is enclosed in this supercell. Only for dim=3."""
+    c = np.zeros((3, 3))
+    h = np.zeros(3)
+    # Get distances h between parallel planes of the unit cell
+    for i in range(3):
+        c[i] = np.cross(cell[(i + 1) % 3], cell[(i + 2) % 3])
+        h[i] = np.dot(cell[i], c[i] / np.linalg.norm(c[i]))
+    # number of repetitions of unit cell along each lattice vector to contain largest cluster
+    factor = 2 if round_up else 1  # default is 1
+    return np.diag([int(p) for p in np.ceil(factor * r / h)])
+
+
+def take_tile(grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple):
+    """Map values from grid to reduced grid around grid index i_grid.
+
+    **parameters**
+    ``grid``: ndarray, shape (pX, pY, pZ, ..., pd n)
+    ``i_grid``: ndarray, shape (d + 1,)
+    ``p_reduced``: tuple of int, shape (d,)
+    """
+    for axis, (d, p) in enumerate(zip(i_grid[:-1], p_reduced)):
+        grid = np.take(
+            grid, np.arange(d - p // 2, d + p // 2 + 1), axis=axis, mode="wrap"
+        )
+    i_grid_new = np.array((np.array(p_reduced) // 2).tolist() + [i_grid[-1]])
+    return grid, i_grid_new
 
 
 def grid_mapping(grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple):
