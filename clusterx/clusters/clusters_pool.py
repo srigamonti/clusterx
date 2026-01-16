@@ -18,7 +18,7 @@ from clusterx.clusters.cluster import Cluster
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions
-from clusterx.utils import _timed, get_cl_idx_sc
+from clusterx.utils import _timed
 
 
 class ClustersPool:
@@ -822,9 +822,6 @@ class ClustersPool:
             orbit_idxs.append(cluster.get_idxs())
 
         atnums = super_cell.get_atomic_numbers()
-        sites = super_cell.get_sites()
-        idx_subs = super_cell.get_idx_subs()
-        tags = super_cell.get_tags()
 
         self._cpool_atoms = []
         for icl, cl in enumerate(orbit):
@@ -877,8 +874,8 @@ class ClustersPool:
         return strs
 
     def get_equiv_clusters(self, cluster):
-        ids = cluster.get_idxs()
-        nrs = cluster.get_nrs()
+        cluster.get_idxs()
+        cluster.get_nrs()
 
     def get_cluster_orbit(
         self,
@@ -1040,9 +1037,7 @@ class ClustersPool:
 
         from clusterx.utils import isclose
 
-        rtol = 1e-3
         cld = self.get_cpool_dict()
-        prim_cell = self._plat.get_cell()
         scell = self._cpool_scell
 
         call(["rm", "-f", fname])
@@ -1286,8 +1281,6 @@ class ClusterOrbit(ClustersPool):
         from clusterx.utils import isclose
 
         round_decimals = 8
-
-        natoms = super_cell.get_natoms()
         sites = super_cell.get_sites()
 
         # empty cluster

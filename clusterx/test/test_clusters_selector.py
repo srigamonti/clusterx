@@ -3,7 +3,6 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import pytest
-import clusterx as c
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
@@ -15,7 +14,6 @@ from clusterx.correlations import CorrelationsCalculator
 from ase import Atoms
 import numpy as np
 from clusterx.calculators.emt import EMT2
-from clusterx.utils import isclose
 from clusterx.clusters_selector import ClustersSelector
 
 # from clusterx.visualization import plot_optimization_vs_number_of_clusters
@@ -23,8 +21,7 @@ from clusterx.clusters_selector import ClustersSelector
 
 
 @pytest.mark.parametrize(
-    "method",
-    ["identity", "lasso_cv", "skl_lasso_cv", "linreg", "omp"]
+    "method", ["identity", "lasso_cv", "skl_lasso_cv", "linreg", "omp"]
 )
 def test_clusters_selector_execute(method):
     cell = [[3, 0, 0], [0, 1, 0], [0, 0, 5]]
@@ -203,9 +200,9 @@ def test_clusters_selector_compare_ref():
         filepath="test_cluster_selector_structures_set.json", overwrite=True
     )
     # Get the DATA(comat) + TARGET(energies)
-    comat = corrcal.get_correlation_matrix(strset)
+    _ = corrcal.get_correlation_matrix(strset)
     strset.set_calculator(EMT2())
-    energies = strset.calculate_property()
+    _ = strset.calculate_property()
 
     # fitter_model = Fitter(method = "skl_LinearRegression")
 

@@ -772,7 +772,7 @@ def plot_property(
 
     rc("axes", linewidth=3 * scale)
 
-    fig = plt.figure(figsize=(width, height))
+    _ = plt.figure(figsize=(width, height))
     plt.xticks(fontsize=ticksize)
     plt.yticks(fontsize=ticksize)
     ax = plt.gca()

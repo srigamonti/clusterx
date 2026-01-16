@@ -2,10 +2,8 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
 import numpy as np
-import sys
 
 
 class ClustersSelector:
@@ -240,17 +238,14 @@ class ClustersSelector:
                     clset0.append(icl)
 
             from sklearn import linear_model
-            from sklearn.metrics import mean_squared_error
 
             lre = linear_model.LinearRegression(
                 fit_intercept=self.fit_intercept, n_jobs=-1
             )
             rows = np.arange(len(p))
-            cols = np.arange(len(cpool))
             comat0 = x[np.ix_(rows, clset0)]
             lre.fit(comat0, p)
             pred0 = lre.predict(comat0)
-            rmse0 = np.sqrt(mean_squared_error(pred0, p))
 
             pres = p - pred0
             clset1 = self._select_clusters_lasso_on_residual_cv(x, pres, clset0)
@@ -429,13 +424,11 @@ class ClustersSelector:
 
         if self.sparsity_step == 0.0:
             step = float(sparsity / (1.0 * 10))
-            idpot = 1
         else:
             step = self.sparsity_step
 
         opt_cv = -1
         opt_clset = []
-        rows = np.arange(len(p))
 
         idx = 1
         # while sparsity.__ge__(self.sparsity_min):
@@ -520,12 +513,16 @@ class ClustersSelector:
 
             if opt_cv <= 0:
                 opt_cv = mean_cv
-                opt_clset = [i for i, e in enumerate(ecimult) if np.count_nonzero(e) > 0]
+                opt_clset = [
+                    i for i, e in enumerate(ecimult) if np.count_nonzero(e) > 0
+                ]
                 self.opt_sparsity = sparsity
             else:
                 if opt_cv > mean_cv:
                     opt_cv = mean_cv
-                    opt_clset = [i for i, e in enumerate(ecimult) if np.count_nonzero(e) > 0]
+                    opt_clset = [
+                        i for i, e in enumerate(ecimult) if np.count_nonzero(e) > 0
+                    ]
                     self.opt_sparsity = sparsity
 
             if self.sparsity_step == 0.0:
@@ -634,13 +631,12 @@ class ClustersSelector:
         from sklearn.model_selection import LeaveOneOut
         from sklearn.model_selection import cross_val_score
         from sklearn import linear_model
-        from sklearn.metrics import make_scorer, r2_score, mean_squared_error
+        from sklearn.metrics import mean_squared_error
 
         sparsity = self.sparsity_max
 
         if self.sparsity_step == 0.0:
             step = float(sparsity / (1.0 * 10))
-            idpot = 1
         else:
             step = self.sparsity_step
 

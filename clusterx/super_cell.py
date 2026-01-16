@@ -2,7 +2,6 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-import sys
 import warnings
 
 import numpy as np
@@ -18,7 +17,7 @@ from clusterx.symmetry import (
 )
 
 # from ase.build import make_supercell
-from clusterx.utils import _timed, get_cl_idx_sc, make_supercell, normalize_shape_input
+from clusterx.utils import get_cl_idx_sc, make_supercell, normalize_shape_input
 
 
 class SuperCell(ParentLattice):
@@ -149,7 +148,7 @@ class SuperCell(ParentLattice):
         self._natoms = len(self)
         self.set_pbc(self._plat.get_pbc())
 
-        if sym_table == True:
+        if sym_table:
             self._sym_table = self.get_symmetry_table()
         else:
             self._sym_table = []
@@ -167,7 +166,7 @@ class SuperCell(ParentLattice):
             self.sym_perm_platt = []
 
         tol = 1e-3 / np.cbrt(self.get_natoms())
-        internal_trans = self.get_internal_translations()  # Scaled to super_cell
+        _ = self.get_internal_translations()  # Scaled to super_cell
         spos1 = get_scaled_positions(
             self.get_positions(wrap=True),
             self.get_cell(),
@@ -238,7 +237,7 @@ class SuperCell(ParentLattice):
         """Get space symmetry of the super cell."""
         try:
             return self.sc_sg, self.sc_sym
-        except:
+        except AttributeError:
             self.sc_sg, self.sc_sym = self._compute_sym()
             return self.sc_sg, self.sc_sym
 
@@ -246,7 +245,7 @@ class SuperCell(ParentLattice):
         """Get space symmetry of the parent lattice."""
         try:
             return self.sc_sg_pl, self.sc_sym_pl
-        except:
+        except AttributeError:
             self.sc_sg_pl, self.sc_sym_pl = self.get_parent_lattice()._compute_sym()
             return self.sc_sg_pl, self.sc_sym_pl
 

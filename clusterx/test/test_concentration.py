@@ -2,7 +2,6 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-import clusterx as c
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
@@ -28,7 +27,6 @@ def test_concentration():
 
     scell = SuperCell(plat, np.array([(1, 0, 0), (0, 3, 0), (0, 0, 1)]))
     strset = StructuresSet(plat)
-    nstr = 20
     # for i in range(nstr):
     #    strset.add_structure(scell.gen_random(nsubs={}))
     strset.add_structure(
