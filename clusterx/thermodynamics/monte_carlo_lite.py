@@ -13,7 +13,7 @@ from typing import Dict, Iterable, List, Optional, Tuple, Any
 
 import numpy as np
 
-from clusterx.utils import _timed
+from clusterx.utils import _timed, take_tile
 
 
 class MonteCarloLite:
@@ -100,10 +100,10 @@ class MonteCarloLite:
                 "MonteCarloLite.init(): MonteCarloLite works only for binary materials."
             )
 
-        self._substitutional_sublattice = None
-        for k, v in scell.get_sublattice_types().items():
-            if len(v) == 2:
-                self._substitutional_sublattice = int(k)
+        self._sublattice_index: int
+        for sublattice_index, atomic_numbers in scell.get_sublattice_types().items():
+            if len(atomic_numbers) == 2:
+                self._sublattice_index = int(sublattice_index)
                 break
 
         with _timed("MonteCarloLite.init(): Generating pristine structure"):
@@ -127,7 +127,7 @@ class MonteCarloLite:
         print("\n" + "=" * 70)
         print("MonteCarloLite Initialized")
         print("=" * 70)
-        print(f"Sublattice index:          {self._substitutional_sublattice}")
+        print(f"Sublattice index:          {self._sublattice_index}")
         print(f"Energy scale factor:       {self._energy_scale_factor}")
         print(f"Boltzmann constant (kB):   {self._kb}")
         print(f"Supercell size:            {self._scell.get_index()} parent lattices")
@@ -381,7 +381,7 @@ class MonteCarloLite:
             self.structure.set_arrays(sigmas=sigmas)
         elif n_substitutions is not None:
             _, sigmas = self._scell.gen_random_decoration(
-                nsubs={self._substitutional_sublattice: [n_substitutions]}
+                nsubs={self._sublattice_index: [n_substitutions]}
             )
             self.structure.set_arrays(sigmas=sigmas)
         elif initial_structure is not None:
@@ -389,21 +389,19 @@ class MonteCarloLite:
             self.structure.set_arrays(sigmas=sigmas)
         elif initial_sigmas is not None:
             self.structure.set_arrays(sigmas=initial_sigmas)
-
         else:
             sigmas = self.structure.get_sigmas()
-
         scaledbeta = self._energy_scale_factor / self._kb / temperature
 
         if self._reduce_structure:
             e = 0.0  # undefined, we only care about energy differences
-            sigma_grid = self.structure.get_reduced_structure()
-            sigma = sigma_grid.flatten()  # this returns a copy
+            p_reduced = np.diagonal(self._emodel.scell_reduced.get_transformation())
+            self._structure_reduced, _ = self.structure.get_reduced_structure(
+                p_reduced, index=0
+            )
         else:
             with _timed("MonteCarloLite.metropolis: Compute initial energy"):
                 e = self._emodel.predict(self.structure)[self._energy_prediction_index]
-            sigma_grid = None
-            sigma = self.structure.get_sigmas()
 
         mcrun.add_step(0, sigmas, e)
 
@@ -417,24 +415,28 @@ class MonteCarloLite:
         e_error = 0
         with _timed("Metropolis: MC steps"):
             for i in progress:
+                if self._reduce_structure:
+                    # this step might be optimized significantly depending on
+                    # reshaping of sigma, whether view or copy is returned
+                    sigma_grid = self.structure.get_sigma_grid()
                 atom_indices = []
                 new_sigmas = []
                 old_sigmas = []
                 for j in range(n_clics):
                     if ensemble == "grandcanonical":
                         atom_index, sigma_initial, sigma_final = (
-                            self.structure.flip_random(self._substitutional_sublattice)
+                            self.structure.flip_random(self._sublattice_index)
                         )
                         atom_indices.append(atom_index)
                         old_sigmas.append(sigma_initial)
                         new_sigmas.append(sigma_final)
                     elif ensemble == "canonical":
                         atom_index1, sigma_initial1, sigma_final1 = (
-                            self.structure.flip_random(self._substitutional_sublattice)
+                            self.structure.flip_random(self._sublattice_index)
                         )
                         atom_index2, sigma_initial2, sigma_final2 = (
                             self.structure.flip_random(
-                                self._substitutional_sublattice,
+                                self._sublattice_index,
                                 sigma_initial=sigma_final1,
                                 sigma_final=sigma_initial1,
                             )
@@ -460,12 +462,25 @@ class MonteCarloLite:
                 for atom_index, new_sigma, old_sigma in zip(
                     atom_indices, new_sigmas, old_sigmas
                 ):
+                    if self._reduce_structure:
+                        index_grid = np.unravel_index(atom_index, sigma_grid.shape)
+                        sigma_grid_r, index_grid_r = take_tile(
+                            sigma_grid, index_grid, p_reduced
+                        )
+                        self._structure_reduced.sigmas = sigma_grid_r.flatten()
+                        structure = self._structure_reduced
+                        index = np.ravel_multi_index(index_grid, sigma_grid_r.shape)
+                        sigma_grid[index_grid] = new_sigma
+                    else:
+                        structure = self.structure
+                        index = atom_index
+
                     de += self._emodel.predict_flip(
-                        self.structure,
-                        index=atom_index,
+                        structure,
+                        index=index,
                         old_sigma=old_sigma,
                         new_sigma=new_sigma,
-                        site_types=[self._substitutional_sublattice],
+                        site_types=[self._sublattice_index],
                     )[self._energy_prediction_index]
                     self.structure.update_arrays(
                         atom_indices=[atom_index], new_sigmas=[new_sigma]

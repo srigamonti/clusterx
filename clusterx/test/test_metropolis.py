@@ -36,6 +36,19 @@ def plat():
 
 
 @pytest.fixture
+def plat_bulk():
+    # parent lattice with single site and one substitution
+    cell = [1, 1, 1]
+    positions = [[0, 0, 0]]
+    pbc = [True, True, True]
+
+    pri = Atoms(["Cu"], positions=positions, cell=cell, pbc=pbc)
+    sub = Atoms(["Au"], positions=positions, cell=cell, pbc=pbc)
+    plat = ParentLattice(pri, substitutions=[sub], pbc=pbc)
+    return plat
+
+
+@pytest.fixture
 def cpool(plat):
     # one-point clusters and nearest neighbor two-point clusters
     return ClustersPool(plat, npoints=[1, 2], radii=[0, 1.1])
@@ -48,6 +61,17 @@ def corrc(plat, cpool):
 
 @pytest.fixture
 def model(plat, cpool, corrc):
+    # Ising-like model
+    ecisE = [0.0, -1.0]
+    multT = cpool.get_multiplicities()
+    cemodel = Model(corrc, "energy", ecis=np.multiply(ecisE, multT))
+    return cemodel
+
+
+@pytest.fixture
+def model_bulk(plat_bulk):
+    cpool = ClustersPool(plat_bulk, npoints=[1, 2], radii=[0, 1.1])
+    corrc = CorrelationsCalculator("trigonometric", plat_bulk, cpool)
     # Ising-like model
     ecisE = [0.0, -1.0]
     multT = cpool.get_multiplicities()
@@ -264,6 +288,23 @@ def test_mclite(plat, model_, request):
         mcrun_filepath="mc-run_test.pickle",
         serialize=True,
     )
+    assert mcrun.energies  # check existence
+
+
+def test_mclite_reduce(plat_bulk, model_bulk, tmp_path):
+    scell = SuperCell(plat_bulk, 10)
+    mc = MonteCarloLite(
+        model_bulk, scell, boltzmann_constant=3e-6, reduce_structure=True
+    )
+    mcrun = mc.metropolis(
+        n_mc_steps=10000,
+        temperature=600,
+        mcrun_filepath=tmp_path / "mc-run_test.pickle",
+        n_substitutions=1000 // 2,
+        serialize=True,
+    )
+    energies = mcrun.energies
+    print(np.mean(energies), np.std(energies))
     assert mcrun.energies  # check existence
 
 

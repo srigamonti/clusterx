@@ -21,7 +21,7 @@ from clusterx.correlations import (
 from clusterx.estimators.estimator_factory import EstimatorFactory
 from clusterx.structure import Structure
 from clusterx.super_cell import SuperCell
-from clusterx.utils import is_diagonal
+from clusterx.utils import transformation_containing_sphere_diag
 
 
 class Model:
@@ -174,7 +174,13 @@ class Model:
     def init_reduced_model(self):
         print("Info(Model): setting up reduced SuperCell.")
         cpool = self.corrc.get_cpool()
-        self.scell_reduced = cpool.get_containing_supercell()
+        plat = cpool.get_plat()
+        r_max = self.corrc.get_cpool().get_max_radii().max()
+        cell = plat.get_cell()
+        p_scell = transformation_containing_sphere_diag(r_max, cell, full_sphere=True)
+        # round up to odd, to get a central cell
+        p_scell = p_scell + (p_scell % 2 == 0)
+        self.scell_reduced = SuperCell(plat, p_scell)
 
     def serialize(self, filepath=None, fmt=None, db_name=None):
         """Write cluster expansion model to Json database
