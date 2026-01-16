@@ -15,7 +15,7 @@ from clusterx.utils import (
     atat_to_cell,
     transformation_containing_sphere_diag,
 )
-from clusterx.utils import take_tile as grid_mapping
+from clusterx.utils import take_tile
 
 
 @pytest.fixture
@@ -33,16 +33,17 @@ def test_atat(parent_lattice, tmp_path):
 
 
 @pytest.mark.parametrize(
-    "r,cell,p",
+    "r,cell,full_sphere,p",
     [
-        (1.0, np.eye(3), [1, 1, 1]),
-        (2.0, np.eye(3), [2, 2, 2]),
-        (2.0, np.diag([2, 1, 1]), [1, 2, 2]),
-        (2.0, np.array([[1, 1, 0], [-1, 1, 0], [0, 0, 2]]), [2, 2, 1]),
+        (1.0, np.eye(3), False, [1, 1, 1]),
+        (2.0, np.eye(3), False, [2, 2, 2]),
+        (2.0, np.diag([2, 1, 1]), False, [1, 2, 2]),
+        (2.0, np.array([[1, 1, 0], [-1, 1, 0], [0, 0, 2]]), False, [2, 2, 1]),
+        (1.0, np.eye(3), True, [3, 3, 3]),
     ],
 )
-def test_containing_supercell(r, cell, p):
-    p_result = transformation_containing_sphere_diag(r, cell)
+def test_containing_supercell(r, cell, full_sphere, p):
+    p_result = transformation_containing_sphere_diag(r, cell, full_sphere)
     np.testing.assert_array_equal(p_result, np.diag(p))
 
 
@@ -50,14 +51,18 @@ def test_containing_supercell(r, cell, p):
     "grid_shape,i_grid,p_reduced",
     [
         ((10, 10, 10, 2), np.array([0, 0, 0, 0]), (3, 3, 3)),
-        ((10, 10, 10, 2), np.array([3, 3, 3, 0]), (4, 4, 4)),
+        (
+            (10, 10, 10, 2),
+            np.array([3, 3, 3, 0]),
+            (4, 4, 4),
+        ),  # TODO: figure out what the result should be for even p
         ((10, 10, 10, 3), np.array([9, 9, 9, 2]), (3, 3, 3)),
         ((10, 10, 1), np.array([9, 9, 0]), (3, 3)),
     ],
 )
-def test_grid_mapping(grid_shape, i_grid, p_reduced):
+def test_take_tile(grid_shape, i_grid, p_reduced):
     grid = np.arange(np.prod(grid_shape)).reshape(grid_shape)
-    grid_reduced, i_new = grid_mapping(grid, i_grid, p_reduced)
+    grid_reduced, i_new = take_tile(grid, i_grid, p_reduced)
     np.testing.assert_array_equal(
         grid_reduced.shape, list(p_reduced) + [grid_shape[-1]]
     )

@@ -20,10 +20,15 @@ from ase.data import chemical_symbols as cs
 
 
 def transformation_containing_sphere_diag(
-    r: float, cell: np.ndarray | Cell, round_up: bool = False
+    r: float, cell: np.ndarray | Cell, full_sphere: bool = False
 ) -> np.ndarray:
-    """Return diagonal transformation p of cell that describe a supercell, such
-    that a sphere with radius r is enclosed in this supercell. Only for dim=3."""
+    """Return diagonal transformation p of `cell` that describe a supercell,
+    such that a all pairs of points with distance `r` are contained in the
+    supercell. Only valid for dim=3 (len(cell.shape)==3).
+
+    If `full_sphere`, returned transformation is large enough,
+    such that a sphere with radius `r` can be fully contained in corresponding
+    supercell, with the center at any point in the original cell."""
     c = np.zeros((3, 3))
     h = np.zeros(3)
     # Get distances h between parallel planes of the unit cell
@@ -31,8 +36,10 @@ def transformation_containing_sphere_diag(
         c[i] = np.cross(cell[(i + 1) % 3], cell[(i + 2) % 3])
         h[i] = np.dot(cell[i], c[i] / np.linalg.norm(c[i]))
     # number of repetitions of unit cell along each lattice vector to contain largest cluster
-    factor = 2 if round_up else 1  # default is 1
-    return np.diag([int(p) for p in np.ceil(factor * r / h)])
+    if full_sphere:
+        return np.diag([int(p) for p in np.ceil(2 * r / h + 1)])
+    else:
+        return np.diag([int(p) for p in np.ceil(r / h)])
 
 
 def take_tile(grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple):
@@ -49,26 +56,6 @@ def take_tile(grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple):
         )
     i_grid_new = np.array((np.array(p_reduced) // 2).tolist() + [i_grid[-1]])
     return grid, i_grid_new
-
-
-def grid_mapping(grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple):
-    """Map values from grid to reduced grid around grid index i_grid.
-
-    **parameters**
-    ``grid``: ndarray, shape (pX, pY, pZ, ..., pd n)
-    ``i_grid``: ndarray, shape (d + 1,)
-    ``p_reduced``: tuple of int, shape (d,)
-    """
-    d = len(grid.shape) - 1
-    plat_index = i_grid[-1]
-    indices = np.indices(p_reduced)
-    offset = i_grid[:-1] - np.array(p_reduced) // 2
-    offset = offset.reshape([-1] + [1] * d)
-    indices += offset
-    indices %= np.array(grid.shape[:-1]).reshape([-1] + [1] * d)
-    i_grid_new = np.array((np.array(p_reduced) // 2).tolist() + [plat_index])
-    # return grid[*indices, :], i_grid_new  # threw an error in CI, see next line
-    return grid[tuple(indices) + (slice(None),)], i_grid_new
 
 
 def is_diagonal(x: np.ndarray):

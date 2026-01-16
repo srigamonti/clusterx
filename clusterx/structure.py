@@ -18,7 +18,7 @@ from ase.io import write
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.utils import is_diagonal, grid_mapping
+from clusterx.utils import is_diagonal, take_tile
 
 
 class Structure(SuperCell):
@@ -417,7 +417,7 @@ class Structure(SuperCell):
         Given transformation p, around site index."""
         sigma_grid = self.get_sigma_grid()
         index_grid = list(np.unravel_index(index, sigma_grid.shape))
-        sigma_grid_reduced, index_grid_reduced = grid_mapping(sigma_grid, index_grid, p)
+        sigma_grid_reduced, index_grid_reduced = take_tile(sigma_grid, index_grid, p)
         scell_reduced = SuperCell(self.scell.get_parent_lattice(), p)
         structure_reduced = Structure.from_sigma_grid(scell_reduced, sigma_grid_reduced)
         index_reduced = int(
