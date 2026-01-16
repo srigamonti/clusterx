@@ -632,10 +632,6 @@ class StructuresSet:
         )
         self.serialize(filepath=db_path, overwrite=True)
 
-    # Deprecated
-    def write_to_db(self, filepath="sset.json", overwrite=False, rm_vac=False):
-        self.serialize(filepath=filepath, overwrite=overwrite, rm_vac=rm_vac)
-
     def serialize(
         self, filepath="sset.db", ase_db_type=None, overwrite=False, rm_vac=False
     ):
@@ -643,12 +639,12 @@ class StructuresSet:
 
         The serialization creates an ASE database object, with added metadata needed by CELL.
 
-        The format of the database is guessed form the filepath ().
+        The format of the database is guessed from the filepath.
 
         This file can be used to reconstruct a StructuresSet object, by initializing
         with::
 
-            StructuresSet(filename="sset.db")
+            StructuresSet(filepath="sset.db")
 
         where "sset.db" is the file written in ``filepath``.
 
@@ -751,11 +747,6 @@ class StructuresSet:
         """
         return self._db_fname
 
-    def read_energy(
-        self, i, folder, structure=None, **kwargs
-    ):  # DEPRECATED, use energy_parser instead
-        self.energy_parser(i, folder, structure=structure, **kwargs)
-
     def energy_parser(i, folder, structure=None, **kwargs):
         """Read value stored in ``energy.dat`` file.
 
@@ -782,25 +773,6 @@ class StructuresSet:
         with open(os.path.join(folder, "energy.dat"), "r") as f:
             erg = float(f.readlines()[0])
         return erg
-
-    # DEPRECATED, use parse_property_values instead
-    def read_property_values(
-        self,
-        property_name="total_energy",
-        write_to_file=True,
-        read_property=energy_parser,
-        root="",
-        update_json_db=True,
-        **kwargs,
-    ):
-        self.parse_property_values(
-            property_name=property_name,
-            write_to_file=write_to_file,
-            property_parser=self.read_energy,
-            root=root,
-            update_json_db=update_json_db,
-            **kwargs,
-        )
 
     def parse_property_values(
         self,
