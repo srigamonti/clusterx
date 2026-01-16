@@ -1,6 +1,7 @@
 # Copyright (c) 2015-2019, CELL Developers.
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
+from __future__ import annotations
 
 import copy
 import os
@@ -1022,17 +1023,84 @@ def make_supercell(prim, P, wrap=True, tol=1e-5):
     return superatoms
 
 
-def decorate_supercell(scell, atoms):
-    """Create a Structure instance by decorating a SuperCell with an Atoms object from ASE."""
+def decorate_supercell(
+    scell: SuperCell,
+    atoms: Atoms,
+    tol: float = 1e-5,
+    wrap: bool = False,
+) -> Structure:
+    """
+    Create a clusterx.Structure by decorating a SuperCell with species taken
+    from an ASE Atoms object.
+
+    For each site in `scell`, this function finds a matching atom in `atoms`
+    whose Cartesian position is within `tol` (Euclidean distance).
+    The corresponding atomic number is then used as the decoration.
+
+    Parameters
+    ----------
+    scell : SuperCell
+        The supercell object (from clusterx) providing the lattice and sites.
+    atoms : Atoms
+        ASE Atoms instance containing the atomic positions and species.
+    tol : float, optional
+        Distance tolerance for matching positions. Default is 1e-5.
+    wrap : bool, optional
+        Whether to wrap ASE atomic positions into the unit cell before matching.
+        Passed directly to `atoms.get_positions(wrap=wrap)`.
+
+    Returns
+    -------
+    Structure
+        A clusterx.Structure object decorated with atomic numbers from `atoms`.
+
+    Raises
+    ------
+    ValueError
+        If the number of matched sites does not equal the number of sites
+        in `scell`.
+    """
     from clusterx.structure import Structure
 
-    ans = []
-    for i1, p1 in enumerate(scell.get_positions()):
-        for i2, p2 in enumerate(atoms.get_positions()):
-            if np.linalg.norm(p1 - p2) < 1e-5:
-                ans.append(atoms.get_atomic_numbers()[i2])
+    # Pre-fetch positions and atomic numbers for efficiency
+    sc_positions = np.asarray(scell.get_positions())
+    at_positions = np.asarray(atoms.get_positions(wrap=wrap))
+    at_numbers = np.asarray(atoms.get_atomic_numbers())
 
-    return Structure(scell, ans)
+    decorations = []
+
+    for i_p_sc, p_sc in enumerate(sc_positions):
+        # Compute distances from this supercell site to all atoms
+        deltas = at_positions - p_sc
+        dists = np.linalg.norm(deltas, axis=1)
+
+        # Find atoms within tolerance
+        candidates = np.where(dists < tol)[0]
+
+        if len(candidates) == 0:
+            mind = min(dists)
+            i_mind = np.where(dists == min(dists))[0][0]
+            raise ValueError(
+                f"No matching atom found within tolerance {tol} "
+                f"for:\n"
+                f"supercell position {i_p_sc}: {p_sc}.\n"
+                f"atoms position {i_mind}:     {at_positions[i_mind]}\n"
+                f" Smallest distance "
+                f"to this position is {mind}."
+            )
+
+        # If multiple atoms match, just take the first one
+        i_match = candidates[0]
+        decorations.append(int(at_numbers[i_match]))
+
+    if len(decorations) != len(scell):
+        raise ValueError(
+            f"Number of decorations ({len(decorations)}) does not match "
+            f"number of sites in supercell ({len(scell)}). You may need "
+            f"to increase tol (currently {tol})."
+        )
+
+    return Structure(scell, decorations)
 
 
 def super_structure(struc0, d):
