@@ -291,20 +291,22 @@ def test_mclite(plat, model_, request):
     assert mcrun.energies  # check existence
 
 
-def test_mclite_reduce(plat_bulk, model_bulk, tmp_path):
+@pytest.mark.parametrize("reduce", [False, True])
+def test_mclite_reduce(plat_bulk, model_bulk, tmp_path, reduce):
     scell = SuperCell(plat_bulk, 10)
     mc = MonteCarloLite(
-        model_bulk, scell, boltzmann_constant=3e-6, reduce_structure=True
+        model_bulk, scell, boltzmann_constant=3e-6, reduce_structure=reduce
     )
     mcrun = mc.metropolis(
-        n_mc_steps=10000,
+        n_mc_steps=100_000,
         temperature=600,
         mcrun_filepath=tmp_path / "mc-run_test.pickle",
         n_substitutions=1000 // 2,
         serialize=True,
+        random_seed=42,
     )
-    energies = mcrun.energies
-    print(np.mean(energies), np.std(energies))
+    e = mcrun.energies
+    print(f"Energies last: {e[-1]}, mean: {np.mean(e)}, std: {np.std(e)}")
     assert mcrun.energies  # check existence
 
 

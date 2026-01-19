@@ -106,22 +106,17 @@ class MonteCarloLite:
                 self._sublattice_index = int(sublattice_index)
                 break
 
-        with _timed("MonteCarloLite.init(): Generating pristine structure"):
-            self.structure = self._scell.get_pristine_structure()
+        self.structure = self._scell.get_pristine_structure()
 
         if reduce_structure:
             self.e_pristine = None  # undefined, we only care about energy differences
             self._emodel.init_reduced_model()
             self._emodel._init_interaction_dict(self._emodel.scell_reduced)
         else:
-            with _timed(
-                "MonteCarloLite.init(): Computing energy of pristine structure"
-            ):
-                self.e_pristine = self._emodel.predict(self.structure)[
-                    self._energy_prediction_index
-                ]
-            with _timed("MonteCarloLite.init(): Initialize interaction dictionaries"):
-                self._emodel._init_interaction_dict(self._scell)
+            self.e_pristine = self._emodel.predict(self.structure)[
+                self._energy_prediction_index
+            ]
+            self._emodel._init_interaction_dict(self._scell)
         self._reduce_structure = reduce_structure
 
         print("\n" + "=" * 70)
@@ -281,7 +276,7 @@ class MonteCarloLite:
         temperature=None,
         n_mc_steps=None,
         n_clics=1,
-        ensemble=None,
+        ensemble: str = "canonical",
         n_substitutions=None,
         initial_structure=None,
         initial_sigmas=None,
@@ -364,6 +359,7 @@ class MonteCarloLite:
 
         from tqdm import tqdm
 
+        rng = np.random.default_rng(random_seed)
         if random_seed is not None:
             random.seed(random_seed)
             np.random.seed(random_seed)
@@ -392,150 +388,168 @@ class MonteCarloLite:
         else:
             sigmas = self.structure.get_sigmas()
         scaledbeta = self._energy_scale_factor / self._kb / temperature
+        structure = self.structure
 
         if self._reduce_structure:
-            e = 0.0  # undefined, we only care about energy differences
+            e = np.array([0.0])  # undefined, we only care about energy differences
+            p = np.diagonal(structure.get_transformation())
             p_reduced = np.diagonal(self._emodel.scell_reduced.get_transformation())
-            self._structure_reduced, _ = self.structure.get_reduced_structure(
-                p_reduced, index=0
-            )
+            grid_shape = p.tolist() + [1]
+            structure_reduced, _ = structure.get_reduced_structure(p_reduced, index=0)
+            scell_factor = np.prod(p) / np.prod(p_reduced)
         else:
-            with _timed("MonteCarloLite.metropolis: Compute initial energy"):
-                e = self._emodel.predict(self.structure)[self._energy_prediction_index]
+            e = self._emodel.predict(structure)[self._energy_prediction_index]
+            scell_factor = 1.0
+
+        # save which sites are occupied by which species
+        occupation_indices = [[], []]
+        if self._reduce_structure:
+            sigma_grid = sigmas.reshape(grid_shape)
+            for ix in range(grid_shape[0]):
+                for iy in range(grid_shape[1]):
+                    for iz in range(grid_shape[2]):
+                        for ib in range(grid_shape[3]):
+                            sigma = sigma_grid[ix, iy, iz, ib]
+                            occupation_indices[sigma].append([ix, iy, iz, ib])
+        else:
+            for i, sigma in enumerate(sigmas):
+                occupation_indices[sigma].append(i)
 
         mcrun.add_step(0, sigmas, e)
 
         progress = tqdm(range(1, n_mc_steps + 1), total=n_mc_steps, desc="MMC sim.")
 
-        use_arrays_backup_for_rejected_moves = (
-            False  # Very slow, use only for benchmarking
-        )
-
         i_reset = 0
         e_error = 0
-        with _timed("Metropolis: MC steps"):
-            for i in progress:
+        for i in progress:
+            atom_indices = []
+            new_sigmas = []
+            old_sigmas = []
+            for j in range(n_clics):
+                if ensemble == "grandcanonical":
+                    if self._reduce_structure:
+                        atom_index = rng.integers(grid_shape)  # random multi-index
+                        sigma_initial = sigma_grid[*atom_index]
+                        sigma_final = 1 - sigma_grid[*atom_index]
+                    else:
+                        atom_index = rng.integers(low=0, high=len(sigmas))
+                        sigma_initial = sigmas[atom_index]
+                        sigma_final = 1 - sigmas[atom_index]
+                    atom_indices.append(atom_index)
+                    old_sigmas.append(sigma_initial)
+                    new_sigmas.append(sigma_final)
+                elif ensemble == "canonical":
+                    if self._reduce_structure:
+                        atom_index = rng.integers(grid_shape)  # random multi-index
+                        sigma_initial = sigma_grid[*atom_index]
+                        sigma_final = 1 - sigma_grid[*atom_index]
+                        atom_index_other = rng.choice(
+                            occupation_indices[int(sigma_final)]
+                        )
+                        sigma_initial_other = sigma_grid[*atom_index_other]
+                        sigma_final_other = 1 - sigma_grid[*atom_index_other]
+                    else:
+                        atom_index = rng.integers(low=0, high=len(sigmas))
+                        sigma_initial = sigmas[atom_index]
+                        sigma_final = 1 - sigmas[atom_index]
+                        atom_index_other = rng.choice(occupation_indices[sigma_final])
+                        sigma_initial_other = sigmas[atom_index_other]
+                        sigma_final_other = 1 - sigmas[atom_index_other]
+                    # NOTE: this can include the same index multiple times
+                    atom_indices.append(atom_index)
+                    atom_indices.append(atom_index_other)
+                    old_sigmas.append(sigma_initial)
+                    old_sigmas.append(sigma_initial_other)
+                    new_sigmas.append(sigma_final)
+                    new_sigmas.append(sigma_final_other)
+
+            de = 0.0
+            for atom_index, new_sigma, old_sigma in zip(
+                atom_indices, new_sigmas, old_sigmas
+            ):
+                # assign structure and calculate where flip is taking place
                 if self._reduce_structure:
-                    # this step might be optimized significantly depending on
-                    # reshaping of sigma, whether view or copy is returned
-                    sigma_grid = self.structure.get_sigma_grid()
-                atom_indices = []
-                new_sigmas = []
-                old_sigmas = []
-                for j in range(n_clics):
-                    if ensemble == "grandcanonical":
-                        atom_index, sigma_initial, sigma_final = (
-                            self.structure.flip_random(self._sublattice_index)
-                        )
-                        atom_indices.append(atom_index)
-                        old_sigmas.append(sigma_initial)
-                        new_sigmas.append(sigma_final)
-                    elif ensemble == "canonical":
-                        atom_index1, sigma_initial1, sigma_final1 = (
-                            self.structure.flip_random(self._sublattice_index)
-                        )
-                        atom_index2, sigma_initial2, sigma_final2 = (
-                            self.structure.flip_random(
-                                self._sublattice_index,
-                                sigma_initial=sigma_final1,
-                                sigma_final=sigma_initial1,
-                            )
-                        )
+                    sigma_grid_r, atom_index_r = take_tile(
+                        sigma_grid, atom_index, p_reduced
+                    )
+                    structure_reduced.sigmas = sigma_grid_r.flatten()
+                    structure_pred = structure_reduced
+                    index = np.ravel_multi_index(atom_index_r, sigma_grid_r.shape)
+                else:
+                    structure_pred = structure
+                    index = atom_index
 
-                        if (
-                            atom_index1 not in atom_indices
-                            and atom_index2 not in atom_indices
-                        ):
-                            atom_indices.append(atom_index1)
-                            old_sigmas.append(sigma_initial1)
-                            new_sigmas.append(sigma_final1)
+                # calculate flip energy
+                de += self._emodel.predict_flip(
+                    structure_pred,
+                    index=index,
+                    old_sigma=old_sigma,
+                    new_sigma=new_sigma,
+                    site_types=[self._sublattice_index],
+                    scell_factor=scell_factor,
+                )[self._energy_prediction_index]
 
-                            atom_indices.append(atom_index2)
-                            old_sigmas.append(sigma_initial2)
-                            new_sigmas.append(sigma_final2)
+                # perform flip
+                if self._reduce_structure:
+                    sigma_grid[*atom_index] = int(new_sigma)
+                    occupation_indices[old_sigma].remove(atom_index.tolist())
+                    occupation_indices[new_sigma].append(atom_index.tolist())
+                else:
+                    sigmas[atom_index] = int(new_sigma)
+                    occupation_indices[old_sigma].remove(atom_index)
+                    occupation_indices[new_sigma].append(atom_index)
 
-                # compute new energy
+            e1 = e + de
 
-                if use_arrays_backup_for_rejected_moves:
-                    self.structure.backup_arrays()
-                de = 0.0
+            if de <= 0:
+                accept_clic = True
+            else:
+                boltzmann_factor = math.exp(-de * scaledbeta)
+                accept_clic = rng.uniform(0, 1) <= boltzmann_factor
+
+            if accept_clic:
+                e = e1
+                sigmas = self.structure.get_sigmas()
+                mcrun.add_step(i, sigmas, e)
+
+            else:
+                # reset sigmas in reverse order
                 for atom_index, new_sigma, old_sigma in zip(
-                    atom_indices, new_sigmas, old_sigmas
+                    atom_indices[::-1], new_sigmas[::-1], old_sigmas[::-1]
                 ):
                     if self._reduce_structure:
-                        index_grid = np.unravel_index(atom_index, sigma_grid.shape)
-                        sigma_grid_r, index_grid_r = take_tile(
-                            sigma_grid, index_grid, p_reduced
-                        )
-                        self._structure_reduced.sigmas = sigma_grid_r.flatten()
-                        structure = self._structure_reduced
-                        index = np.ravel_multi_index(index_grid, sigma_grid_r.shape)
-                        sigma_grid[index_grid] = new_sigma
+                        sigma_grid[*atom_index] = old_sigma
+                        occupation_indices[new_sigma].remove(atom_index.tolist())
+                        occupation_indices[old_sigma].append(atom_index.tolist())
                     else:
-                        structure = self.structure
-                        index = atom_index
+                        sigmas[atom_index] = old_sigma
+                        structure.sigmas = sigmas
+                        occupation_indices[new_sigma].remove(atom_index)
+                        occupation_indices[old_sigma].append(atom_index)
+                        # self.structure.update_arrays(
+                        #    atom_indices=atom_indices[::-1], new_sigmas=old_sigmas[::-1]
+                        # )
 
-                    de += self._emodel.predict_flip(
-                        structure,
-                        index=index,
-                        old_sigma=old_sigma,
-                        new_sigma=new_sigma,
-                        site_types=[self._sublattice_index],
-                    )[self._energy_prediction_index]
-                    self.structure.update_arrays(
-                        atom_indices=[atom_index], new_sigmas=[new_sigma]
-                    )
+            if (
+                n_error_reset is not None
+                and n_error_reset > 0
+                and i % n_error_reset == 0
+            ):
+                e0 = e
+                e = self._emodel.predict(self.structure)[self._energy_prediction_index]
+                mcrun.energies[-1] = e
+                e_error = e - e0
+                i_reset = i
 
-                e1 = e + de
-
-                if de <= 0:
-                    accept_clic = True
-                    boltzmann_factor = 0
-                else:
-                    boltzmann_factor = math.exp(-de * scaledbeta)
-
-                    if np.random.uniform(0, 1) <= boltzmann_factor:
-                        accept_clic = True
-                    else:
-                        accept_clic = False
-
-                if accept_clic:
-                    e = e1
-
-                    sigmas = self.structure.get_sigmas()
-                    mcrun.add_step(i, sigmas, e)
-
-                else:
-                    if use_arrays_backup_for_rejected_moves:
-                        self.structure.restore_arrays()
-                    else:
-                        self.structure.update_arrays(
-                            atom_indices=atom_indices[::-1], new_sigmas=old_sigmas[::-1]
-                        )
-
-                if (
-                    n_error_reset is not None
-                    and n_error_reset > 0
-                    and i % n_error_reset == 0
-                ):
-                    e0 = e
-                    e = self._emodel.predict(self.structure)[
-                        self._energy_prediction_index
-                    ]
-                    mcrun.energies[-1] = e
-                    e_error = e - e0
-                    i_reset = i
-
-                ratio = mcrun.acceptance_ratio_last(1000)
-                progress.set_description(
-                    f"MMC sim. | Acc. ratio: {ratio:.4f} | E-reset@{i_reset}: {e_error:.3e}"
-                )
+            ratio = mcrun.acceptance_ratio_last(1000)
+            progress.set_description(
+                f"MMC sim. | Acc. ratio: {ratio:.4f} | E-reset@{i_reset}: {e_error:.3e}"
+            )
 
         mcrun.add_step(i, sigmas, e)  # record last step
 
-        with _timed("Metropolis: serialization"):
-            if mcrun_filepath is not None:
-                mcrun.serialize(filepath=mcrun_filepath)
+        if mcrun_filepath is not None:
+            mcrun.serialize(filepath=mcrun_filepath)
 
         return mcrun
 
