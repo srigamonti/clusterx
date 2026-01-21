@@ -14,6 +14,7 @@ from clusterx.utils import (
     parent_lattice_to_atat,
     atat_to_cell,
     transformation_containing_sphere_diag,
+    ListDict,
 )
 from clusterx.utils import take_tile
 
@@ -30,6 +31,19 @@ def test_atat(parent_lattice, tmp_path):
     parent_lattice_to_atat(parent_lattice, out_fname=tmp_path / "lat.in")
     parent_lattice_loaded = atat_to_cell(tmp_path / "lat.in")
     assert parent_lattice == parent_lattice_loaded
+
+
+def test_ListDict():
+    list_dict = ListDict()
+    n = 1000
+    for i in range(n):
+        list_dict.add(i)
+    assert [i for i in list_dict]  # __iter__
+    assert len(list_dict) == n  # __len__
+    assert list_dict.choice() >= 0
+    for i in range(n):
+        assert i in list_dict  # __contains__
+        list_dict.remove(i)
 
 
 @pytest.mark.parametrize(

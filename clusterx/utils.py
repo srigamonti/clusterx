@@ -8,6 +8,7 @@ import time
 import warnings
 from contextlib import contextmanager
 from typing import List, Optional, Union
+import random
 
 import numpy as np
 from ase.cell import Cell
@@ -17,6 +18,45 @@ from ase.build.supercells import (  # needed by make_supercell
     lattice_points_in_supercell,
 )
 from ase.data import chemical_symbols as cs
+
+
+class ListDict(object):
+    """
+    Datastructure that allows efficient (O(1)) insert, remove and random sampling.
+    Adapted from https://stackoverflow.com/questions/15993447/python-data-structure-for-efficient-add-remove-and-random-choice.
+    """
+
+    def __init__(self):
+        self.item_to_position = {}
+        self.items = []
+
+    def __contains__(self, item):
+        return item in self.item_to_position
+
+    def __iter__(self):
+        return iter(self.items)
+
+    def __len__(self):
+        return len(self.items)
+
+    def add(self, item):
+        if item in self.item_to_position:
+            return
+        self.items.append(item)
+        self.item_to_position[item] = len(self.items) - 1
+
+    def remove(self, item):
+        position = self.item_to_position.pop(item)
+        last_item = self.items.pop()
+        if position != len(self.items):
+            self.items[position] = last_item
+            self.item_to_position[last_item] = position
+
+    def choice(self, rng: random.Random | None = None):
+        if rng is None:
+            return random.choice(self.items)
+        else:
+            return rng.choice(self.items)  # not tested
 
 
 def transformation_containing_sphere_diag(

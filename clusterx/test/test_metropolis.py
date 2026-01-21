@@ -302,6 +302,21 @@ def test_mclite_reduce(plat_bulk, model_bulk, tmp_path, reduce):
         model_bulk, scell, boltzmann_constant=1, reduce_structure=reduce
     )
     mcrun = mc.metropolis(
+        n_mc_steps=10,
+        temperature=10,
+        mcrun_filepath=tmp_path / "mc-run_test.pickle",
+        n_substitutions=n_atoms // 2,
+        serialize=True,
+        random_seed=42,
+    )
+    assert mcrun.energies  # check existence
+
+
+def test_mclite_reduce_large(plat_bulk, model_bulk, tmp_path):
+    scell = SuperCell(plat_bulk, 40)
+    n_atoms = len(scell)
+    mc = MonteCarloLite(model_bulk, scell, boltzmann_constant=1, reduce_structure=True)
+    mcrun = mc.metropolis(
         n_mc_steps=1000,
         temperature=10,
         mcrun_filepath=tmp_path / "mc-run_test.pickle",

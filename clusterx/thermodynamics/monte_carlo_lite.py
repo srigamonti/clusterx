@@ -14,7 +14,7 @@ from typing import Dict, Iterable, List, Optional, Tuple, Any
 import numpy as np
 from tqdm import tqdm
 
-from clusterx.utils import take_tile
+from clusterx.utils import take_tile, ListDict
 
 
 class MonteCarloLite:
@@ -399,7 +399,10 @@ class MonteCarloLite:
             scell_factor = 1.0
 
         # save which sites are occupied by which species
-        occupation_indices = [[], []]
+        occupation_indices = [
+            ListDict(),
+            ListDict(),
+        ]  # use ListDict for fast insertion and removal
         if self._reduce_structure:
             sigma_grid = sigmas.reshape(grid_shape)
             for ix in range(grid_shape[0]):
@@ -407,14 +410,12 @@ class MonteCarloLite:
                     for iz in range(grid_shape[2]):
                         for ib in range(grid_shape[3]):
                             sigma = sigma_grid[ix, iy, iz, ib]
-                            occupation_indices[sigma].append([ix, iy, iz, ib])
+                            occupation_indices[sigma].add((ix, iy, iz, ib))
             # make sure that sigma_grid can be accessed quickly
             sigma_grid = np.ascontiguousarray(sigma_grid)
         else:
             for i, sigma in enumerate(sigmas):
-                occupation_indices[sigma].append(i)
-        print(sigmas)
-        print(occupation_indices)
+                occupation_indices[sigma].add(i)
 
         mcrun.add_step(0, sigmas, e)
 
@@ -429,7 +430,9 @@ class MonteCarloLite:
             for j in range(n_clics):
                 if ensemble == "grandcanonical":
                     if self._reduce_structure:
-                        atom_index = rng.integers(grid_shape)  # random multi-index
+                        atom_index = rng.integers(
+                            grid_shape, dtype=int
+                        )  # random multi-index
                         sigma_initial = sigma_grid[*atom_index]
                         sigma_final = 1 - sigma_grid[*atom_index]
                     else:
@@ -441,19 +444,20 @@ class MonteCarloLite:
                     new_sigmas.append(sigma_final)
                 elif ensemble == "canonical":
                     if self._reduce_structure:
-                        atom_index = rng.integers(grid_shape)  # random multi-index
+                        atom_index = tuple(
+                            rng.integers(grid_shape, dtype=int).tolist()
+                        )  # random multi-index, tolist is need for correct type
                         sigma_initial = sigma_grid[*atom_index]
                         sigma_final = 1 - sigma_grid[*atom_index]
-                        atom_index_other = rng.choice(
-                            occupation_indices[int(sigma_final)]
-                        )
+                        atom_index_other = occupation_indices[int(sigma_final)].choice()
+
                         sigma_initial_other = sigma_grid[*atom_index_other]
                         sigma_final_other = 1 - sigma_grid[*atom_index_other]
                     else:
                         atom_index = rng.integers(low=0, high=len(sigmas))
                         sigma_initial = sigmas[atom_index]
                         sigma_final = 1 - sigmas[atom_index]
-                        atom_index_other = rng.choice(occupation_indices[sigma_final])
+                        atom_index_other = occupation_indices[sigma_final].choice()
                         sigma_initial_other = sigmas[atom_index_other]
                         sigma_final_other = 1 - sigmas[atom_index_other]
                     # NOTE: this can include the same index multiple times
@@ -493,12 +497,12 @@ class MonteCarloLite:
                 # perform flip
                 if self._reduce_structure:
                     sigma_grid[*atom_index] = int(new_sigma)
-                    occupation_indices[old_sigma].remove(atom_index.tolist())
-                    occupation_indices[new_sigma].append(atom_index.tolist())
+                    occupation_indices[old_sigma].remove(atom_index)
+                    occupation_indices[new_sigma].add(atom_index)
                 else:
                     sigmas[atom_index] = int(new_sigma)
                     occupation_indices[old_sigma].remove(atom_index)
-                    occupation_indices[new_sigma].append(atom_index)
+                    occupation_indices[new_sigma].add(atom_index)
 
             e1 = e + de
 
@@ -518,13 +522,13 @@ class MonteCarloLite:
                 ):
                     if self._reduce_structure:
                         sigma_grid[*atom_index] = old_sigma
-                        occupation_indices[new_sigma].remove(atom_index.tolist())
-                        occupation_indices[old_sigma].append(atom_index.tolist())
+                        occupation_indices[new_sigma].remove(atom_index)
+                        occupation_indices[old_sigma].add(atom_index)
                     else:
                         sigmas[atom_index] = old_sigma
                         structure.sigmas = sigmas
                         occupation_indices[new_sigma].remove(atom_index)
-                        occupation_indices[old_sigma].append(atom_index)
+                        occupation_indices[old_sigma].add(atom_index)
                         # self.structure.update_arrays(
                         #    atom_indices=atom_indices[::-1], new_sigmas=old_sigmas[::-1]
                         # )
