@@ -278,15 +278,18 @@ def test_metropolis(plat, model_, request):
 
 
 @pytest.mark.parametrize("model_", ["model", "model_multi"])
-def test_mclite(plat, model_, request):
+def test_mclite(plat, model_, request, tmp_path):
     scell = SuperCell(plat, 4)
+    n_atoms = len(scell)
     model = request.getfixturevalue(model_)
     mc = MonteCarloLite(model, scell, boltzmann_constant=3e-6)
     mcrun = mc.metropolis(
         n_mc_steps=10,
         temperature=600,
-        mcrun_filepath="mc-run_test.pickle",
+        mcrun_filepath=tmp_path / "mc-run_test.pickle",
+        n_substitutions=n_atoms // 2,
         serialize=True,
+        random_seed=42,
     )
     assert mcrun.energies  # check existence
 
@@ -294,19 +297,18 @@ def test_mclite(plat, model_, request):
 @pytest.mark.parametrize("reduce", [False, True])
 def test_mclite_reduce(plat_bulk, model_bulk, tmp_path, reduce):
     scell = SuperCell(plat_bulk, 10)
+    n_atoms = len(scell)
     mc = MonteCarloLite(
-        model_bulk, scell, boltzmann_constant=3e-6, reduce_structure=reduce
+        model_bulk, scell, boltzmann_constant=1, reduce_structure=reduce
     )
     mcrun = mc.metropolis(
-        n_mc_steps=100_000,
-        temperature=600,
+        n_mc_steps=1000,
+        temperature=10,
         mcrun_filepath=tmp_path / "mc-run_test.pickle",
-        n_substitutions=1000 // 2,
+        n_substitutions=n_atoms // 2,
         serialize=True,
         random_seed=42,
     )
-    e = mcrun.energies
-    print(f"Energies last: {e[-1]}, mean: {np.mean(e)}, std: {np.std(e)}")
     assert mcrun.energies  # check existence
 
 

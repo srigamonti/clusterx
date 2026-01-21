@@ -12,8 +12,9 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple, Any
 
 import numpy as np
+from tqdm import tqdm
 
-from clusterx.utils import _timed, take_tile
+from clusterx.utils import take_tile
 
 
 class MonteCarloLite:
@@ -355,10 +356,6 @@ class MonteCarloLite:
         may be provided. If none are given, the pristine structure or the one from a
         previous Metropolis run will be used.
         """
-        import math
-
-        from tqdm import tqdm
-
         rng = np.random.default_rng(random_seed)
         if random_seed is not None:
             random.seed(random_seed)
@@ -411,9 +408,13 @@ class MonteCarloLite:
                         for ib in range(grid_shape[3]):
                             sigma = sigma_grid[ix, iy, iz, ib]
                             occupation_indices[sigma].append([ix, iy, iz, ib])
+            # make sure that sigma_grid can be accessed quickly
+            sigma_grid = np.ascontiguousarray(sigma_grid)
         else:
             for i, sigma in enumerate(sigmas):
                 occupation_indices[sigma].append(i)
+        print(sigmas)
+        print(occupation_indices)
 
         mcrun.add_step(0, sigmas, e)
 
@@ -504,14 +505,12 @@ class MonteCarloLite:
             if de <= 0:
                 accept_clic = True
             else:
-                boltzmann_factor = math.exp(-de * scaledbeta)
-                accept_clic = rng.uniform(0, 1) <= boltzmann_factor
+                accept_clic = rng.uniform(0, 1) <= np.exp(-de * scaledbeta)
 
             if accept_clic:
                 e = e1
                 sigmas = self.structure.get_sigmas()
                 mcrun.add_step(i, sigmas, e)
-
             else:
                 # reset sigmas in reverse order
                 for atom_index, new_sigma, old_sigma in zip(

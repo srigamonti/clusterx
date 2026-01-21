@@ -16,6 +16,7 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.thermodynamics.monte_carlo import MonteCarlo
 from clusterx.test.defaults import get_clathrate_supercell, get_clathrate_model
+from clusterx.utils import take_tile
 
 
 @pytest.fixture
@@ -96,7 +97,6 @@ def test_flip(plat_cubic, model_cubic, reduce):
     p = [5, 5, 5]
     p_reduced = [3, 3, 3]
     scell_factor = np.prod(p) / np.prod(p_reduced)
-    offset = np.array(p_reduced + [1]) // 2
     scell = SuperCell(plat_cubic, p)
     scell_reduced = SuperCell(plat_cubic, p_reduced)
     structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
@@ -110,26 +110,9 @@ def test_flip(plat_cubic, model_cubic, reduce):
             sigma_grid = structure.get_sigma_grid()
             grid_shape = sigma_grid.shape
             k = np.unravel_index(i, grid_shape)
-            sigma_grid_sub = np.take(
-                sigma_grid,
-                np.arange(k[0] - 1, k[0] + 2),
-                axis=0,
-                mode="wrap",
-            )
-            sigma_grid_sub = np.take(
-                sigma_grid_sub,
-                np.arange(k[1] - 1, k[1] + 2),
-                axis=1,
-                mode="wrap",
-            )
-            sigma_grid_sub = np.take(
-                sigma_grid_sub,
-                np.arange(k[2] - 1, k[2] + 2),
-                axis=2,
-                mode="wrap",
-            )
+            sigma_grid_sub, i_grid = take_tile(sigma_grid, k, p_reduced)
             structure_reduced = Structure.from_sigma_grid(scell_reduced, sigma_grid_sub)
-            i_reduced = np.ravel_multi_index(offset, p_reduced + [1])
+            i_reduced = np.ravel_multi_index(i_grid, p_reduced + [1])
 
             pred_flip = model_cubic.predict_flip(
                 structure_reduced,
