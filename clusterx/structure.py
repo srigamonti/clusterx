@@ -8,6 +8,7 @@ import copy
 import os
 import pickle
 import warnings
+import random
 
 import numpy as np
 from ase import Atoms
@@ -18,7 +19,7 @@ from ase.io import write
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.utils import is_diagonal, take_tile
+from clusterx.utils import is_diagonal, take_tile, ListDict
 
 
 class Structure(SuperCell):
@@ -55,15 +56,6 @@ class Structure(SuperCell):
         is ``{0: [10,11], 1: [25], 2: [12,25]}`` (*), then equivalent structures are obtained with
         ``decoration = [10,25,25]`` or ``decoration_symbols = ["Ne","Mn","Mn"]`` or ``sigmas = [0,0,1]``.
         If not ``None``, ``sigmas`` overrides ``decoration`` and ``decoration_symbols``.
-    ``mc``: Boolean (default: ``False``)
-        whether the initialization of the ``Structure`` object is in the context of a Monte Carlo (MC) run.
-        Setting it to ``True``
-        affects the behavior of the method :py:meth:`Structure.swap_random_binary()
-        <clusterx.structure.Structure.swap_random_binary>`
-
-        (*) This means, crystal site ``0`` can host any of the species ``10`` (Neon) or ``11`` (Sodium), etc.
-        See, e.g., :py:meth:`ParentLattice.get_sites() <clusterx.parent_lattice.ParentLattice.get_sites()>`.
-
     .. todo::
         * check input. If a structure is initialized with a non-allowed substitutional species, and error
         should be raised.
@@ -83,8 +75,6 @@ class Structure(SuperCell):
         # self.scell = super_cell
         self.sites = super_cell.get_sites()
         self._pbc = super_cell.get_pbc()
-        self._idxs = None
-        self._comps = None
 
         if sigmas is None:
             if decoration_symbols is None:
@@ -124,18 +114,7 @@ class Structure(SuperCell):
             cell=super_cell.get_cell(),
             pbc=super_cell.get_pbc(),
         )
-
-        # with _timed("Structure.init(): recreating supercell Super"):
-        #     super(Structure, self).__init__(
-        #         super_cell.get_parent_lattice(), super_cell.get_transformation()
-        #     )
-
-        self._mc = mc
-
-        # if self._mc:
-        # populate _idxs and _comps
         self._build_index_maps()
-
         self.precision_positions = 5
 
     def __getattr__(self, name):
@@ -170,39 +149,26 @@ class Structure(SuperCell):
 
     def _build_index_maps(self):
         """
-        Build mappings of indices and counts of atomic species per sublattice.
-        Populates self._idxs and self._comps with:
-            - _idxs[key]: list of lists of indices for each species in sublattice 'key'
-            - _comps[key]: list of counts (lengths) of each species list in _idxs[key]
+        Build mappings of which atomic indices are in which sublattice with which sigma.
+        self._index_maps[i][j]: ListDict of atomic indices on sublattice i with sigma j.
         """
-        self._idxs = {}
-        self._comps = {}
-
-        tags = self.get_tags()  # e.g. [0,0,0,1,1,2]
-        sublattices = (
-            self.get_sublattice_types()
-        )  # e.g. {0:[14,13], 1:[54,0,32], 2:[11]}
-        sigmas = (
-            self.get_sigmas()
-        )  # e.g. sigmas = [0,1,0,2,1,0] for  decor = [14,13,14,32,0,11]
+        index_maps = {}
+        sublattices = self.get_sublattice_types()
+        # e.g. {0:[14,13], 1:[54,0,32], 2:[11]}
 
         for sublat_key, species_list in sublattices.items():
-            idxs_per_species = []
-            counts_per_species = []
+            index_maps[sublat_key] = []
+            for species in range(len(species_list)):
+                index_maps[sublat_key].append(ListDict())
 
-            for species_index in range(len(species_list)):
-                matching_indices = [
-                    i
-                    for i, (sigma, tag) in enumerate(zip(sigmas, tags))
-                    if sigma == species_index and tag == sublat_key
-                ]
-                idxs_per_species.append(matching_indices)
-                counts_per_species.append(len(matching_indices))
+        sigmas = self.get_sigmas()  # occupation for each site
+        tags = self.get_tags()  # which sublattice for each type
 
-            self._idxs[sublat_key] = idxs_per_species
-            self._comps[sublat_key] = counts_per_species
-        # e.g. self._idxs = {0:[[0,2],[1]], 1:[[],[4],[3]], 2:[[5]]}
-        # e.g. self._comps = {0:[2,1], 1:[0,1,1], 2:[1]}
+        for atom_index, (sigma, tag) in enumerate(zip(sigmas, tags)):
+            index_maps[tag][sigma].add(atom_index)
+
+        self._index_maps = index_maps
+        # e.g. self._index_maps = {0:[[0,2],[1]], 1:[[],[4],[3]], 2:[[5]]}
 
     @classmethod
     def from_file(cls, filepath: str) -> Structure:
@@ -493,7 +459,13 @@ class Structure(SuperCell):
 
         self._fname = filepath
 
-    def flip_random(self, site_type, sigma_initial=None, sigma_final=None):
+    def flip_random(
+        self,
+        site_type: int | None = None,
+        sigma_initial: int | None = None,
+        sigma_final: int | None = None,
+        rng=random.Random,
+    ):
         r"""Flips a randomly selected atom in given sub-lattice.
 
         **Parameters:**
@@ -520,28 +492,9 @@ class Structure(SuperCell):
             - Ternary system (n = 3, sigma ∈ {0, 1, 2}):
                 `sigma_intial = 1` flips to either 0 or 2, chosen randomly.
 
+        ``rng``: random number generator with .choice method.
         """
-
-        # number of species in the current sublattice
-        n_species = len(self.get_sublattice_types()[site_type])
-
-        # choose random initial species if not provided
-        if sigma_initial is None:
-            sigma_initial = np.random.choice(range(n_species))
-            if self._comps[site_type][sigma_initial] == 0:
-                sigma_initial = 1 - sigma_initial
-
-        # choose final species if not provided
-        if sigma_final is None:
-            if n_species == 2:
-                sigma_final = 1 - sigma_initial  # flip between 0 and 1
-            else:
-                remaining_species = [s for s in range(n_species) if s != sigma_initial]
-                sigma_final = np.random.choice(remaining_species)
-
-        # choose random position to flip
-        aux_index = np.random.choice(range(self._comps[site_type][sigma_initial]))
-        atom_index = self._idxs[site_type][sigma_initial][aux_index]
+        n_species_per_sublattice = [len(sublat) for sublat in self._index_maps.values()]
 
         return atom_index, sigma_initial, sigma_final
 
@@ -580,43 +533,6 @@ class Structure(SuperCell):
             "_comps": copy.deepcopy(self._comps),
         }
 
-    def update_arrays(self, atom_indices=[], new_sigmas=[], update_idx_comps=True):
-        r"""Update arrays.
-
-        **Parameters:**
-
-        ``site_type``: list of integer (required)
-            list of atom indices.
-
-        ``sigma_initial``: list of int
-            `sigma` values
-
-        """
-        old_sigmas = []
-        for aidx in atom_indices:
-            old_sigmas.append(self.sigmas[aidx])
-
-        site_types = self.get_tags()
-
-        for i, (aidx, new_sigma) in enumerate(zip(atom_indices, new_sigmas)):
-            old_sigma = old_sigmas[i]
-            site_type = site_types[aidx]
-
-            # Update sigmas and decorations
-            self.sigmas[aidx] = new_sigma
-            self.decor[aidx] = self.sites[aidx][new_sigma]
-
-            if update_idx_comps:
-                # Update index tracking
-                self._idxs[site_type][old_sigma].remove(aidx)
-                self._idxs[site_type][new_sigma].append(aidx)
-
-                # Update composition counts
-                self._comps[site_type][old_sigma] -= 1
-                self._comps[site_type][new_sigma] += 1
-
-        self.atoms.set_atomic_numbers(self.decor)
-
     def restore_arrays(self):
         """Restore arrays from backup."""
         if not hasattr(self, "_arrays_backup"):
@@ -644,31 +560,23 @@ class Structure(SuperCell):
             the exchanged ones, e.g. ``[1,0]``).
 
         **Return:**
+        indices of swap sites.
         """
-        if self._mc is True:
-            rind1 = np.random.choice(range(self._comps[site_type][sigma_swap[0]]))
-            rind2 = np.random.choice(range(self._comps[site_type][sigma_swap[1]]))
-            ridx1 = self._idxs[site_type][sigma_swap[0]][rind1]
-            ridx2 = self._idxs[site_type][sigma_swap[1]][rind2]
-            rindices = [sigma_swap, [rind1, rind2]]
+        tags = self.get_tags()
+        idx1 = [
+            index
+            for index in range(len(self.decor))
+            if self.sigmas[index] == sigma_swap[0] and tags[index] == site_type
+        ]
+        idx2 = [
+            index
+            for index in range(len(self.decor))
+            if self.sigmas[index] == sigma_swap[1] and tags[index] == site_type
+        ]
+        ridx1 = np.random.choice(idx1)
+        ridx2 = np.random.choice(idx2)
 
-            return ridx1, ridx2, site_type, rindices
-        else:
-            tags = self.get_tags()
-            idx1 = [
-                index
-                for index in range(len(self.decor))
-                if self.sigmas[index] == sigma_swap[0] and tags[index] == site_type
-            ]
-            idx2 = [
-                index
-                for index in range(len(self.decor))
-                if self.sigmas[index] == sigma_swap[1] and tags[index] == site_type
-            ]
-            ridx1 = np.random.choice(idx1)
-            ridx2 = np.random.choice(idx2)
-
-            return ridx1, ridx2
+        return ridx1, ridx2
 
     def swap_random_binary(self, site_type, sigma_swap=[0, 1]):
         """Swap two randomly selected atoms in a binary sub-lattice.

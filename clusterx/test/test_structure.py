@@ -33,6 +33,13 @@ def structure(super_cell):
     return Structure(super_cell, decoration=[1] * len(super_cell))
 
 
+@pytest.mark.parametrize("p", [200])
+def test_large(parent_lattice, p):
+    super_cell = SuperCell(parent_lattice, [p, p, 1])
+    structure = Structure(super_cell, decoration=[1] * len(super_cell))
+    assert len(structure._index_maps) == 3
+
+
 def test_reduced_structure(parent_lattice):
     p = [10, 10, 10]
     p_reduced = [3, 3, 3]
