@@ -92,17 +92,20 @@ class MonteCarloLite:
         self._energy_scale_factor = (
             energy_scale_factor
             if energy_scale_factor is not None
-            else scell.get_index()
+            else self._scell.get_index()
         )
         self._kb = boltzmann_constant
 
-        if not scell.is_nary(2):
+        if not self._scell.is_nary(2):
             raise ValueError(
                 "MonteCarloLite.init(): MonteCarloLite works only for binary materials."
             )
 
         self._sublattice_index: int
-        for sublattice_index, atomic_numbers in scell.get_sublattice_types().items():
+        for (
+            sublattice_index,
+            atomic_numbers,
+        ) in self._scell.get_sublattice_types().items():
             if len(atomic_numbers) == 2:
                 self._sublattice_index = int(sublattice_index)
                 break

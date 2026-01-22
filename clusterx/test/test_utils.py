@@ -22,7 +22,6 @@ from clusterx.utils import take_tile
 def test_ase_make_supercell_error():
     from ase.build import make_supercell
     from ase.atoms import Atoms
-    from ase.visualize import view
 
     prim = Atoms(
         symbols="Cu",
@@ -33,7 +32,6 @@ def test_ase_make_supercell_error():
     sc = make_supercell(
         prim, P=[[2, 2, -2], [2, -2, 2], [-2, 2, 2]], wrap=True, tol=1e-05
     )
-    view(sc)
 
 
 @pytest.fixture
