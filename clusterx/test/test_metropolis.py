@@ -327,6 +327,13 @@ def test_mclite_reduce_large(plat_bulk, model_bulk, tmp_path):
     assert mcrun.energies  # check existence
 
 
+def test_reduce_nondiag_raise(plat_bulk, model_bulk):
+    p = [[1, 1, 0], [-1, 1, 0], [0, 0, 2]]
+    scell = SuperCell(plat_bulk, p)
+    with pytest.raises(ValueError):
+        MonteCarloLite(model_bulk, scell, reduce_structure=True)
+
+
 def test_metropolis_clathrate_full_subs(
     plat_full_sub,
     cemodel_full_sub,

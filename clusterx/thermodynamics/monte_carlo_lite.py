@@ -14,7 +14,9 @@ from typing import Dict, Iterable, List, Optional, Tuple, Any
 import numpy as np
 from tqdm import tqdm
 
-from clusterx.utils import take_tile, ListDict
+from clusterx.model import Model
+from clusterx.super_cell import SuperCell
+from clusterx.utils import take_tile, ListDict, is_diagonal
 
 
 class MonteCarloLite:
@@ -71,10 +73,10 @@ class MonteCarloLite:
 
     def __init__(
         self,
-        energy_model,
-        scell,
-        energy_scale_factor=None,
-        boltzmann_constant=1.0,
+        energy_model: Model,
+        scell: SuperCell,
+        energy_scale_factor: float | None = None,
+        boltzmann_constant: float = 1.0,
         energy_key: str = "energy",
         reduce_structure: bool = False,
     ):
@@ -113,6 +115,10 @@ class MonteCarloLite:
         self.structure = self._scell.get_pristine_structure()
 
         if reduce_structure:
+            if not is_diagonal(p := self._scell.get_transformation()):
+                raise ValueError(
+                    f"Cannot reduce structure with non-diagonal SuperCell shape {p}"
+                )
             self.e_pristine = None  # undefined, we only care about energy differences
             self._emodel.init_reduced_model()
             self._emodel._init_interaction_dict(self._emodel.scell_reduced)
@@ -257,14 +263,10 @@ class MonteCarloLite:
             return mcrun
 
         if not is_simulated_annelaing:
-            warnings.warn(  # @SR: Why is this a warning, should be just print or log?
-                f"MC run file not found at: {path}. Starting a new run instance.",
-                UserWarning,
-            )
+            print(f"MC run file not found at: {path}. Starting a new run instance.")
         else:
-            warnings.warn(  # @SR: Why is this a warning, should be just print or log?
+            print(
                 f"Simulated annealing. Starting a new run instance and ignoring state at {path}.",
-                UserWarning,
             )
 
         return MCRun(
