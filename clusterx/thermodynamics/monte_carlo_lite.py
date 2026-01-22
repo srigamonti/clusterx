@@ -202,7 +202,7 @@ class MonteCarloLite:
         mcrun_filepath: Optional[str],
         temperature: float,
         ensemble: str,
-        is_simulated_annelaing: bool,
+        is_simulated_annealing: bool,
         keep_sigmas=1,
     ):
         """
@@ -238,7 +238,7 @@ class MonteCarloLite:
                 keep_sigmas=keep_sigmas,
             )
 
-        if path.exists() and not is_simulated_annelaing:
+        if path.exists() and not is_simulated_annealing:
             mcrun = MCRun.from_file(path)
 
             # Warn if stored temperature differs from requested one
@@ -262,7 +262,7 @@ class MonteCarloLite:
             mcrun.set_keep_sigmas(keep_sigmas)
             return mcrun
 
-        if not is_simulated_annelaing:
+        if not is_simulated_annealing:
             print(f"MC run file not found at: {path}. Starting a new run instance.")
         else:
             print(
@@ -291,7 +291,7 @@ class MonteCarloLite:
         keep_sigmas=1,
         n_error_reset=None,
         random_seed: Optional[int] = None,
-        is_simulated_annelaing=False,
+        is_simulated_annealing=False,
         **kwargs,
     ) -> MCRun:
         r"""Perform Monte-Carlo Metropolis simulation
@@ -367,7 +367,7 @@ class MonteCarloLite:
             np.random.seed(random_seed)
 
         mcrun = self._load_or_create_mcrun(
-            mcrun_filepath, temperature, ensemble, is_simulated_annelaing, keep_sigmas
+            mcrun_filepath, temperature, ensemble, is_simulated_annealing, keep_sigmas
         )
 
         self._validate_initialization_args_metropolis(

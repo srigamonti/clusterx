@@ -320,7 +320,7 @@ def metropolis(
                         mcrun_filepath=mcrun_filepath,
                         random_seed=random_seed,
                         n_clics=n_clics,
-                        is_simulated_annelaing=True,
+                        is_simulated_annealing=True,
                         keep_sigmas=keep_sigmas,
                     )
                 else:
@@ -330,7 +330,7 @@ def metropolis(
                         ensemble="canonical",
                         mcrun_filepath=mcrun_filepath,
                         n_clics=n_clics,
-                        is_simulated_annelaing=True,
+                        is_simulated_annealing=True,
                         keep_sigmas=keep_sigmas,
                     )
 
