@@ -44,6 +44,17 @@ def super_cell_cubic(parent_lattice_cubic):
     return SuperCell(parent_lattice_cubic, [2, 2, 2])
 
 
+def test_large(parent_lattice_cubic):
+    p = 100
+    sc = SuperCell(parent_lattice_cubic, p)  # 1 million atoms
+    n = p**3
+    assert len(sc) == n
+    # check ase-generated arrays exist
+    assert sc.arrays["numbers"].shape == (n,)
+    assert sc.arrays["positions"].shape == (n, 3)
+    assert sc.arrays["tags"].shape == (n,)
+
+
 def test_symmetries(parent_lattice_cubic, super_cell_cubic):
     sc_sym = super_cell_cubic.get_symmetry_table()
     assert len(sc_sym) == 3072

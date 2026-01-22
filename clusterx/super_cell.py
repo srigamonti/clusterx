@@ -7,6 +7,7 @@ import warnings
 import numpy as np
 from ase.db import connect
 from ase.visualize import view
+from ase.build import make_supercell
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.symmetry import (
@@ -17,7 +18,7 @@ from clusterx.symmetry import (
 )
 
 # from ase.build import make_supercell
-from clusterx.utils import get_cl_idx_sc, make_supercell, normalize_shape_input
+from clusterx.utils import get_cl_idx_sc, normalize_shape_input
 
 
 class SuperCell(ParentLattice):
@@ -153,7 +154,6 @@ class SuperCell(ParentLattice):
         else:
             self._sym_table = []
 
-        self.sc_sg, self.sc_sym = self.get_sym()
         self.sc_sg_pl, self.sc_sym_pl = self.get_sym_platt()
         self.internal_trans = None  # Scaled to super_cell
         self.sym_perm = None

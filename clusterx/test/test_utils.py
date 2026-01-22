@@ -29,7 +29,7 @@ def test_ase_make_supercell_error():
         cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]],
     )
 
-    sc = make_supercell(
+    _ = make_supercell(
         prim, P=[[2, 2, -2], [2, -2, 2], [-2, 2, 2]], wrap=True, tol=1e-05
     )
 
