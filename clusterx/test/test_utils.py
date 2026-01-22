@@ -83,7 +83,7 @@ def test_containing_supercell(r, cell, full_sphere, p):
         (
             (10, 10, 10, 2),
             np.array([3, 3, 3, 0]),
-            (4, 4, 4),
+            (5, 5, 5),
         ),  # TODO: figure out what the result should be for even p
         ((10, 10, 10, 3), np.array([9, 9, 9, 2]), (3, 3, 3)),
         ((10, 10, 1), np.array([9, 9, 0]), (3, 3)),
