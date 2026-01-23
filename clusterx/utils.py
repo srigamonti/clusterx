@@ -52,11 +52,8 @@ class ListDict(object):
             self.items[position] = last_item
             self.item_to_position[last_item] = position
 
-    def choice(self, rng: random.Random | None = None):
-        if rng is None:
-            return random.choice(self.items)
-        else:
-            return rng.choice(self.items)  # not tested
+    def choice(self, rng: random.Random = random):
+        return rng.choice(self.items)
 
 
 def transformation_containing_sphere_diag(

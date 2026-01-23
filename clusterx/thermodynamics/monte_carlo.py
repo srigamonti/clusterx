@@ -266,7 +266,7 @@ class MonteCarlo:
             scale_factor_product *= el
 
         if initial_decoration is not None:
-            struc = Structure(self._scell, initial_decoration, mc=True)
+            struc = Structure(self._scell, initial_decoration, track_indices=True)
             conc = struc.get_fractional_concentrations()
             nsites = struc.get_nsites_per_type()
             check_dict = {}
@@ -513,7 +513,9 @@ class MonteCarloTrajectory:
         print("predict swap ?", predict_swap)
 
         sx = Structure(
-            self._scell, decoration=self._trajectory[0]["decoration"], mc=True
+            self._scell,
+            decoration=self._trajectory[0]["decoration"],
+            track_indices=True,
         )
         for m, mo in enumerate(models):
             mo.corrc.reset_mc(mc=True)

@@ -316,7 +316,7 @@ class SuperCell(ParentLattice):
         """Return Structure object corresponding to pristine structure."""
         return self.gen_structure(sigmas=np.zeros(len(self.get_tags()), dtype=np.int8))
 
-    def gen_structure(self, sigmas=None, mc=False):
+    def gen_structure(self, sigmas=None, track_indices=False):
         """
         Generate a Structure with given configuration.
 
@@ -339,35 +339,22 @@ class SuperCell(ParentLattice):
                 [14,13,56,38,13]
 
         """
-        import clusterx.structure
-        # return clusterx.structure.Structure(
-        #     SuperCell(
-        #         self._plat, self._p, self._sort_key, sym_table=bool(self._sym_table)
-        #     ),
-        #     sigmas=sigmas,
-        #     mc=mc,
-        # )
+        from clusterx.structure import Structure  # to avoid circular import
 
-        return clusterx.structure.Structure(
+        return Structure(
             self,
             sigmas=sigmas,
-            mc=mc,
+            track_indices=track_indices,
         )
 
-    def gen_random(self, nsubs=None, mc=False):
-        warnings.warn(
-            "'gen_random' is deprecated and will be removed in a future version. "
-            "Use 'gen_random_structure' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.gen_random_structure(nsubs=nsubs, mc=mc)
-
-    def gen_random_structure(self, nsubs=None, mc=False):
+    def gen_random_structure(
+        self, rng: np.random.Generator = np.random.default_rng(), nsubs=None, mc=False
+    ):
         """
         Generate a random Structure with given number of substitutions.
 
         **Parameters:**
+        ``rng``: numpy random number generator with the function `integers`
 
         ``nsubs``: None, int or dictionary (default: None)
             If dictionary, the ``nsubs`` argument must have the format ``{site_type0:[nsub01,nsub02,...], site_type1: ...}``
@@ -387,39 +374,34 @@ class SuperCell(ParentLattice):
         This function can be also called with the method ``gen_random``, with the same signature.
         Use ``gen_random_structure``, since ``gen_random`` is deprecated.
         """
-        import clusterx.structure
+        from clusterx.structure import Structure  # to avoid circular import
 
         if nsubs is None:
-            import numpy as np
-
-            slts = (
-                self.get_sublattice_types()
-            )  # e.g.  {0: [14,13], 1: [56,0,38], 2:[11]}
-            tags = self.get_tags()  # tags[atom_index] = site_type
-            _nsubs = {}
-            for k, v in slts.items():
-                if len(v) != 1:
-                    _nsubs[k] = [np.random.randint(0, len(np.where(tags == k)[0]) + 1)]
+            sublattice_types = self.get_sublattice_types()
+            tags = np.array(self.get_tags())  # tags[atom_index] = site_type
+            n_species_per_sublattice = np.array(
+                [len(site) for site in sublattice_types.values()]
+            )
+            max_n_per_site = n_species_per_sublattice[tags]
+            sigmas = rng.integers(max_n_per_site)
 
         elif isinstance(nsubs, int):
-            if self.is_nary(2):
-                slts = self.get_sublattice_types()
-                _nsubs = {}
-                for k, v in slts.items():
-                    if len(v) != 1:
-                        _nsubs[k] = [nsubs]
-
-            else:
-                return None
+            if not self.is_nary(2):
+                raise ValueError(
+                    f"Cannot initialize non-binary Structure with integer nsubs={nsubs}"
+                )
+            sigmas = rng.integers(2, size=len(self))
+        elif isinstance(nsubs, dict):
+            _, sigmas = self.gen_random_decoration(nsubs)
         else:
-            _nsubs = nsubs
+            raise TypeError(
+                f"Unknown type for nsubs: {type(nsubs)}, has to be either None, int, or dict"
+            )
 
-        _, sigmas = self.gen_random_decoration(_nsubs)
-
-        return clusterx.structure.Structure(
+        return Structure(
             self,
             sigmas=sigmas,
-            mc=mc,
+            track_indices=mc,
         )
 
     def gen_random_decoration(self, nsubs):
@@ -445,10 +427,13 @@ class SuperCell(ParentLattice):
             total number of different species which may substitute an atom
             in this position.
         """
+        print("nsubs", nsubs)
         idx_subs = self.get_idx_subs()
+        print("idx_subs", idx_subs)
         tags = self.get_tags()  # tags[atom_index] = site_type
-
+        print("tags", tags)
         decoration = self.get_atomic_numbers()
+        print("decoration", decoration)
         sigmas = np.zeros(len(tags), dtype=np.uint8)
         for tag, nsub in nsubs.items():
             # list all atom indices with the given tag or site_type

@@ -593,10 +593,10 @@ class WangLandau:
             scale = emax - emin
 
         if initial_decoration is not None:
-            struc = Structure(self._scell, initial_decoration, mc=True)
+            struc = Structure(self._scell, initial_decoration, track_indices=True)
         else:
             if self._nsubs is not None:
-                struc = self._scell.gen_random_structure(self._nsubs, mc=True)
+                struc = self._scell.gen_random_structure(nsubs=self._nsubs, mc=True)
             else:
                 struc = self._scell.gen_random_structure(mc=True)
 
@@ -958,7 +958,15 @@ class WangLandau:
             # print(f"Info (Wang-Landau): Modification factor: {f}")
             # print(f"Info (Wang-Landau): Histogram flatness: {histogram_flatness}")
             struc, e, g, ibin, cdos, hist_cond, niter = self.flat_histogram(
-                struc, e, g, ibin, f, cdos, histogram_flatness, energy_bin_width, niter_per_sweep
+                struc,
+                e,
+                g,
+                ibin,
+                f,
+                cdos,
+                histogram_flatness,
+                energy_bin_width,
+                niter_per_sweep,
             )
 
             # print(f"Info (Wang-Landau): Number of MC steps: {niter}")
@@ -1011,7 +1019,16 @@ class WangLandau:
         return hist_min, hist_avg, n_nonzero_bins
 
     def flat_histogram(
-        self, struc, e, g, inde, f, cdos, histogram_flatness, energy_bin_width, niter_per_sweep=100000,
+        self,
+        struc,
+        e,
+        g,
+        inde,
+        f,
+        cdos,
+        histogram_flatness,
+        energy_bin_width,
+        niter_per_sweep=100000,
     ):
         hist_min = 0
         hist_avg = 1

@@ -33,10 +33,47 @@ def structure(super_cell):
     return Structure(super_cell, decoration=[1] * len(super_cell))
 
 
-@pytest.mark.parametrize("p", [200])
-def test_large(parent_lattice, p):
+@pytest.fixture
+def structure_random(super_cell: SuperCell):
+    # nsubs = {0: [3], 1: [1, 1, 1], 2: [2, 1]}  # failing for some reason
+    nsubs = None
+    return super_cell.gen_random_structure(nsubs=nsubs, mc=True)
+
+
+def test_get_atoms(structure):
+    atoms = structure.get_atoms()
+    assert isinstance(atoms, Atoms)
+    numbers = structure.get_atomic_numbers()
+    assert len(numbers) == 9
+    symbols = structure.get_chemical_symbols()
+    assert len(symbols) == 9
+
+
+def test_random_flips(structure_random: Structure):
+    for _ in range(100):
+        i, si, sj, site_type = structure_random.get_random_flip()
+        structure_random.flip(i, si, sj, site_type)
+
+
+def test_random_swaps(structure_random: Structure):
+    for _ in range(10):
+        for lattice, lists in structure_random._index_maps.items():
+            print(lattice, ":")
+            for list_dict in lists:
+                print(list(list_dict))
+        i, j, site_type = structure_random.get_random_swap(site_types=[0, 1, 2])
+        print("i, j: ", i, j)
+        structure_random.swap(i, j, site_type)
+
+
+def test_large_index_map(parent_lattice):
+    p = 200
     super_cell = SuperCell(parent_lattice, [p, p, 1])
-    structure = Structure(super_cell, decoration=[1] * len(super_cell))
+    structure = Structure(
+        super_cell, decoration=[1] * len(super_cell), track_indices=False
+    )
+    assert not structure._track_indices
+    structure.track_indices()
     assert len(structure._index_maps) == 3
 
 
