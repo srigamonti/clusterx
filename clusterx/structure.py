@@ -115,6 +115,7 @@ class Structure(SuperCell):
         else:
             self._index_maps = None
             self._rng_site_type_weights = None
+            self._canonical_site_type_weights = None
         self.precision_positions = 5
 
     def __getattr__(self, name):
@@ -176,16 +177,24 @@ class Structure(SuperCell):
         self._index_maps = index_maps
         # e.g. self._index_maps = {0:[[0,2],[1]], 1:[[],[4],[3]], 2:[[5]]}
 
-        self._rng_site_type_weights = []
+        self._rng_site_type_weights = []  # used for flip
+        self._canonical_site_type_weights = []  # used for swap
         for sublattice, index_lists in self._index_maps.items():
             if len(index_lists) == 1:
-                self._rng_site_type_weights.append(
-                    0
-                )  # do not sample for observer sites
+                # do not sample for observer sites
+                self._rng_site_type_weights.append(0)
+                self._canonical_site_type_weights.append(0)
                 continue
             index_list_lens = [len(list_dict) for list_dict in index_lists]
             self._rng_site_type_weights.append(sum(index_list_lens))
             # NOTE: an alternative weighting could be by product instead of sum
+
+            # do not sample site types for swaps, where only one of the sigmas
+            # is present, as then, no swap is possible
+            if np.count_nonzero(index_list_lens) > 1:
+                self._canonical_site_type_weights.append(sum(index_list_lens))
+            else:
+                self._canonical_site_type_weights.append(0)
 
     def track_indices(self) -> None:
         """Start tracking indices.
@@ -660,23 +669,25 @@ class Structure(SuperCell):
             Indicate indices of sub-lattices to be considered in the random sub-lattice selection.
         """
         if site_types is None:
-            site_type = None
-        elif len(site_types) == 1:
-            site_type = site_types[0]
+            # select a random sublattice, weighted by number of sites in sublattice
+            # without selecting from observers sites
+            if sum(self._canonical_site_type_weights) == 0:
+                raise RuntimeError("Cannot provide random swap with this substitution.")
+            site_type = rng.choices(
+                list(self._index_maps), weights=self._canonical_site_type_weights
+            )[0]
         else:
-            # assume that valid site_types are chosen, where swaps are possible
-            site_type = np.random.choice(site_types)
+            # this assumes that site_types with possible swaps are given
+            site_type = rng.choice(site_types)
 
-        len_subs = len(self.idx_subs[site_type])
-        if len_subs > 2:
-            sigma_swap = np.sort(
-                np.random.choice(np.arange(len_subs), 2, replace=False)
-            )
-        else:
-            sigma_swap = np.arange(len_subs)
+        sigmas_possible = []
+        for i, list_dict in enumerate(self._index_maps[site_type]):
+            if len(list_dict) > 0:
+                sigmas_possible.append(i)
+        sigmas_swap = rng.sample(sigmas_possible, k=2)
 
         return self.get_random_swap_binary(
-            site_type, sigma_initial=sigma_swap[0], sigma_final=sigma_swap[1], rng=rng
+            site_type, sigma_initial=sigmas_swap[0], sigma_final=sigmas_swap[1], rng=rng
         )
 
     def swap(self, i: int, j: int, site_type: int | None = None) -> None:
