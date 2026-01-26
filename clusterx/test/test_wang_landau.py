@@ -4,6 +4,7 @@
 
 import os
 import math
+import random
 
 import pytest
 import numpy as np
@@ -97,6 +98,7 @@ def test_sampling_clathrate():
     np.random.seed(
         10
     )  # setting a seed for the random package for comparible random structures
+    random.seed(45)
 
     plat = get_clathrate_plat()
 

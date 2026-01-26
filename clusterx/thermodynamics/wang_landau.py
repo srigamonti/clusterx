@@ -1074,9 +1074,8 @@ class WangLandau:
         energies = cdos[:, 0]
         accept_swap = False
         for n in range(niter):
-            ind1, ind2, site_type, rindices = struc.swap_random(
-                self._sublattice_indices
-            )
+            ind1, ind2, site_type = struc.get_random_swap(self._sublattice_indices)
+            struc.swap(ind1, ind2, site_type)
 
             # Compute new energy
             e1 = None
@@ -1133,7 +1132,7 @@ class WangLandau:
                 e = e1
                 inde = ibin
             else:
-                struc.swap(ind2, ind1, site_type=site_type, rindices=rindices)
+                struc.swap(ind2, ind1, site_type=site_type)
 
             cdos[inde][1] += lnf
             cdos[inde][2] += 1
