@@ -655,7 +655,7 @@ class Structure(SuperCell):
 
     def get_random_swap(
         self, site_types: list[int] | None, rng: random.Random = random
-    ) -> tuple[int, int, int, int]:
+    ) -> tuple[int, int, int]:
         """Get indices of two randomly selected atoms in randomly selected sub-lattice.
 
         First, a sublattice from the site_types array is picked at random. Second,

@@ -292,7 +292,7 @@ class MonteCarlo:
 
         else:
             if self._nsubs is not None:
-                struc = self._scell.gen_random_structure(self._nsubs, mc=True)
+                struc = self._scell.gen_random_structure(nsubs=self._nsubs, mc=True)
             else:
                 struc = self._scell.gen_random_structure(mc=True)
 
@@ -345,21 +345,19 @@ class MonteCarlo:
             indices_list = []
 
             for j in range(self._no_of_swaps):
-                ind1, ind2, site_type, rindices = struc.get_swap_random(
-                    self._sublattice_indices
-                )
-                indices_list.append([ind1, ind2, [site_type, rindices]])
+                ind1, ind2, site_type = struc.get_random_swap(self._sublattice_indices)
+                indices_list.append([ind1, ind2, [site_type]])
 
             if self._control_flag:
                 if self._error_reset:
                     if x > error_steps:
                         x = 1
-                        struc.swap(ind1, ind2, site_type, rindices)
+                        struc.swap(ind1, ind2, site_type)
                         de = (
                             self._em.predict(struc)[self._energy_prediction_index]
                             - e_last
                         )
-                        struc.swap(ind1, ind2, site_type, rindices)
+                        struc.swap(ind1, ind2, site_type)
                     else:
                         x += 1
                         de = self._em.predict_swap(
@@ -373,9 +371,9 @@ class MonteCarlo:
                         struc, ind1, ind2, site_types=self._sublattice_indices
                     )[self._energy_prediction_index]
             else:
-                struc.swap(ind1, ind2, site_type, rindices)
+                struc.swap(ind1, ind2, site_type)
                 de = self._em.predict(struc)[self._energy_prediction_index] - e_last
-                struc.swap(ind1, ind2, site_type, rindices)
+                struc.swap(ind1, ind2, site_type)
 
             if de <= 0:
                 accept_swap = True
@@ -389,7 +387,7 @@ class MonteCarlo:
                     accept_swap = False
 
             if accept_swap:
-                struc.swap(ind1, ind2, site_type, rindices)
+                struc.swap(ind1, ind2, site_type)
                 e_last += de
 
                 if self._models:
