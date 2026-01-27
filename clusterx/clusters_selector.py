@@ -464,7 +464,7 @@ class ClustersSelector:
                 ecimult = estimator_cv[-1].coef_
             # reshape to 2d array, if not already
             if len(ecimult.shape) == 1:
-                ecimult = np.expand_dims(ecimult, axis=1)
+                ecimult = np.expand_dims(ecimult, axis=0)
 
             _cvs = None
             if self.cv_type == "loo":
