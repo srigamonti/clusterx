@@ -5,6 +5,7 @@
 import random
 
 import pytest
+from ase import Atoms
 from ase.build import bulk
 import numpy as np
 
@@ -88,6 +89,52 @@ def test_swap(plat_cubic, model_cubic):
             preds_full.append(pred_final - pred_init)
             preds_swap.append(pred_swap)
     np.testing.assert_allclose(preds_swap, preds_full, atol=1e-10)
+
+
+@pytest.mark.parametrize("reduce", [False, True])
+def test_flip_2D(reduce):
+    seed_rngs(42)
+    pri = Atoms("Cu", positions=[[0, 0, 0]], cell=[1, 1, 1], pbc=[1, 1, 0])
+    sub = Atoms("Au", positions=[[0, 0, 0]], cell=[1, 1, 1], pbc=[1, 1, 0])
+    plat = ParentLattice(atoms=pri, substitutions=[sub])
+    p = [10, 10, 1]
+    p_reduced = [3, 3, 1]
+    scell_factor = np.prod(p) / np.prod(p_reduced)
+    scell = SuperCell(plat, p)
+    scell_reduced = SuperCell(plat, p_reduced)
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
+    cpool = ClustersPool(plat, npoints=[2], radii=[1.5])
+    corrc = CorrelationsCalculator("trigonometric", plat, cpool)
+    model = Model(corrc, "energy", ecis=[1, 1])
+
+    preds_full = []
+    preds_flip = []
+    for i in range(len(structure)):
+        pred_init = model.predict(structure)
+        old_sigma = structure.sigmas[i]
+        new_sigma = 1 - old_sigma
+        if reduce:
+            sigma_grid = structure.get_sigma_grid()
+            grid_shape = sigma_grid.shape
+            k = np.unravel_index(i, grid_shape)
+            sigma_grid_sub, i_grid = take_tile(sigma_grid, k, p_reduced)
+            structure_reduced = Structure.from_sigma_grid(scell_reduced, sigma_grid_sub)
+            i_reduced = np.ravel_multi_index(i_grid, p_reduced + [1])
+
+            pred_flip = model.predict_flip(
+                structure_reduced,
+                i_reduced,
+                old_sigma,
+                new_sigma,
+                scell_factor=scell_factor,
+            )
+        else:
+            pred_flip = model.predict_flip(structure, i, old_sigma, new_sigma)
+        structure.sigmas[i] = new_sigma
+        pred_final = model.predict(structure)
+        preds_full.append(pred_final - pred_init)
+        preds_flip.append(pred_flip)
+    np.testing.assert_allclose(preds_flip, preds_full, atol=1e-12)
 
 
 @pytest.mark.parametrize("reduce", [False, True])
