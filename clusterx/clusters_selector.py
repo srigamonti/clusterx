@@ -282,6 +282,8 @@ class ClustersSelector:
             opt = self._select_clusters_skl_omp(x, p)
 
         self.optimal_cluster_indices = opt
+        print("opt cluster index: ", opt)
+        print("ini_comat: ", self.ini_comat)
         self.optimal_comat = self.ini_comat[:, opt]
 
         self.optimal_clusters = self.cpool.get_subpool(opt)
@@ -456,15 +458,13 @@ class ClustersSelector:
 
             estimator_cv.fit(x, p)
 
-            ecimult = []
-
             if not self.standardize:
-                coefs = estimator_cv.coef_
+                ecimult = estimator_cv.coef_
             else:
-                coefs = estimator_cv[-1].coef_
-
-            for coef in coefs:
-                ecimult.append(coef)
+                ecimult = estimator_cv[-1].coef_
+            # reshape to 2d array, if not already
+            if len(ecimult.shape) == 1:
+                ecimult = np.expand_dims(ecimult, axis=1)
 
             _cvs = None
             if self.cv_type == "loo":
@@ -513,16 +513,12 @@ class ClustersSelector:
 
             if opt_cv <= 0:
                 opt_cv = mean_cv
-                opt_clset = [
-                    i for i, e in enumerate(ecimult) if np.count_nonzero(e) > 0
-                ]
+                opt_clset = np.flatnonzero(np.any(ecimult > 0, axis=0))
                 self.opt_sparsity = sparsity
             else:
                 if opt_cv > mean_cv:
                     opt_cv = mean_cv
-                    opt_clset = [
-                        i for i, e in enumerate(ecimult) if np.count_nonzero(e) > 0
-                    ]
+                    opt_clset = np.flatnonzero(np.any(ecimult > 0, axis=0))
                     self.opt_sparsity = sparsity
 
             if self.sparsity_step == 0.0:

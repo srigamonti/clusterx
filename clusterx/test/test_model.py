@@ -46,7 +46,8 @@ def scell(plat):
 
 @pytest.fixture
 def structure(plat, scell):
-    return scell.gen_random_structure(nsubs=int(np.prod(scell.get_index()) / 2))
+    rng = np.random.default_rng(42)
+    return scell.gen_random_structure(rng, nsubs=int(np.prod(scell.get_index()) / 2))
 
 
 @pytest.fixture
@@ -77,10 +78,10 @@ def dummy_ce_12(cpool, corrc):
 @pytest.fixture
 def structures_set(structures_set_empty, scell, dummy_ce_11, dummy_ce_12):
     sset = structures_set_empty
-    np.random.seed(10)
+    rng = np.random.default_rng(42)  # failed seeds: 42, success: 43
     n_structures = 10
     for i in range(n_structures):
-        sset.add_structure(scell.gen_random_structure())
+        sset.add_structure(scell.gen_random_structure(rng))
     sset.set_calculator(EMT2())
     sset.compute_property_values(property_name="energy_emt2")
 
@@ -131,13 +132,11 @@ def test_ecis_estimator_init(model, model_estimator, structure):
 @pytest.mark.parametrize("mode", ["single", "multi"])
 @pytest.mark.parametrize(
     "selector_type,selector_opts",
-    [
-        ("identity", {}),
-        ("lasso_cv", {}),
-        ("skl_lasso_cv", {})
-    ]
+    [("identity", {}), ("lasso_cv", {}), ("skl_lasso_cv", {})],
 )
-def test_model_builder(structures_set, cpool, corrc, mode, selector_type, selector_opts):
+def test_model_builder(
+    structures_set, cpool, corrc, mode, selector_type, selector_opts
+):
     mb = ModelBuilder(
         basis="trigonometric",
         selector_type=selector_type,
@@ -155,7 +154,11 @@ def test_model_builder(structures_set, cpool, corrc, mode, selector_type, select
         prop_list = property_names
         shape = (2,)
     model = mb.build(
-        sset=structures_set, cpool=cpool, prop=property_names, corrc=corrc, verbose=False
+        sset=structures_set,
+        cpool=cpool,
+        prop=property_names,
+        corrc=corrc,
+        verbose=False,
     )
     structure = structures_set[0]
     prediction = model.predict(structure)
@@ -228,7 +231,7 @@ def test_cli_lasso(structures_set, cpool, corrc, props):
         "sparsity_step": 0.0,
         "max_iter": 1_000_000,
         "cv_type": "10-fold",
-        "cv_shuffle": True
+        "cv_shuffle": True,
     }
 
     build_model(
