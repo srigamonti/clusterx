@@ -5,15 +5,17 @@
 ## packages needed for MonteCarloTrajectory
 import json
 from copy import deepcopy
+import math
 
+from tqdm import tqdm
 import numpy as np
-
-# needed for NumpyEncoder class at the end of this module
 from ase.cell import Cell
 
-## packages needed for MonteCarlo
-# from clusterx.structures_set import StructuresSet
+from clusterx.parent_lattice import ParentLattice
+from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
+from clusterx.model import Model
+from clusterx.utils import poppush, dict_compare
 
 
 class MonteCarlo:
@@ -92,6 +94,11 @@ class MonteCarlo:
        If set to **True**, this parameter makes the sampling faster by calculating the correlation difference of the
        proposed structure with respect to the previous structure.
 
+    ``reduce_structure``: bool (default: False)
+        If true, cluster orbits/correlations are computed and evaluated on
+        subset of sigmas, in a box around central site in the structure.
+        Incompatible with non-diagonal supercell shapes.
+
     ``error_reset``: integer (default: None)
        If not **None*  and ``predict_swap`` equal to **True**, the correlations are calculated as usual (no differences) every n-th step.
 
@@ -110,20 +117,21 @@ class MonteCarlo:
 
     def __init__(
         self,
-        energy_model,
-        scell,
-        nsubs=None,
-        ensemble="canonical",
-        sublattice_indices=[],
-        chemical_potentials=None,
-        models=[],
-        no_of_swaps=1,
-        predict_swap=False,
-        error_reset=None,
+        energy_model: Model,
+        scell: SuperCell,
+        nsubs: dict | None = None,
+        ensemble: str = "canonical",
+        sublattice_indices: list = [],
+        chemical_potentials: list | None = None,
+        models: list = [],
+        no_of_swaps: int = 1,
+        predict_swap: bool = False,
+        reduce_structure: bool = False,
+        error_reset: int | None = None,
         energy_key: str = "energy",
         filename: str = "trajectory.json",
     ):
-        self._em = energy_model
+        self._emodel = energy_model
         self._scell = scell
         self._nsubs = nsubs
         self._filename = filename
@@ -181,14 +189,14 @@ class MonteCarlo:
 
     def metropolis(
         self,
-        no_of_sampling_steps=100,
-        scale_factor=[1.0],
-        temperature=1.0,
-        boltzmann_constant=1.0,
-        initial_decoration=None,
-        acceptance_ratio=None,
-        serialize=False,
-        filename=None,
+        no_of_sampling_steps: int = 100,
+        scale_factor: list[float] = [1.0],
+        temperature: float = 1.0,
+        boltzmann_constant: float = 1.0,
+        initial_decoration: list[int] | None = None,
+        acceptance_ratio: float | None = None,
+        serialize: bool = False,
+        filename: bool | None = None,
         **kwargs,
     ):
         r"""Perform Monte-Carlo Metropolis simulation
@@ -240,10 +248,6 @@ class MonteCarlo:
         ``filename``: string (default: ``trajectory.json``)
             Name of a Json file in which the trajectory is serialized after the sampling if ``serialize`` is **True**.
 
-        ``reduce_super_cell``: boolean (default: False)
-            If **True**, the super cell is reduced to the smallest possible size
-            that contains all clusters.
-
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the MonteCarloTrajectory object that is initialized in this method.
 
@@ -251,12 +255,6 @@ class MonteCarlo:
             Trajectory containing the complete information of the sampling trajectory.
 
         """
-        import math
-
-        from tqdm import tqdm
-
-        from clusterx.utils import poppush
-
         scale_factor = (
             scale_factor if scale_factor is not None else [self._scell.get_index()]
         )
@@ -266,9 +264,9 @@ class MonteCarlo:
             scale_factor_product *= el
 
         if initial_decoration is not None:
-            struc = Structure(self._scell, initial_decoration, track_indices=True)
-            conc = struc.get_fractional_concentrations()
-            nsites = struc.get_nsites_per_type()
+            structure = Structure(self._scell, initial_decoration, track_indices=True)
+            conc = structure.get_fractional_concentrations()
+            nsites = structure.get_nsites_per_type()
             check_dict = {}
             for key in conc.keys():
                 ns = nsites[key]
@@ -280,24 +278,20 @@ class MonteCarlo:
                         nl.append(int(round(cel * ns, 0)))
                 check_dict.update({key: nl})
 
-            from clusterx.utils import dict_compare
-
             bol = dict_compare(check_dict, self._nsubs)
             if not bol:
-                import sys
-
-                sys.exit(
+                raise ValueError(
                     "Number of substitutents does not coincides with them from the inital decoration."
                 )
 
         else:
             if self._nsubs is not None:
-                struc = self._scell.gen_random_structure(nsubs=self._nsubs, mc=True)
+                structure = self._scell.gen_random_structure(nsubs=self._nsubs, mc=True)
             else:
-                struc = self._scell.gen_random_structure(mc=True)
+                structure = self._scell.gen_random_structure(mc=True)
 
-        self._em.reset_mc(mc=True)
-        e_last = self._em.predict(struc)[self._energy_prediction_index]
+        self._emodel.reset_mc(mc=True)
+        e_last = self._emodel.predict(structure)[self._energy_prediction_index]
 
         if filename is not None:
             self._filename = filename
@@ -321,12 +315,16 @@ class MonteCarlo:
         if self._models:
             key_value_pairs = {}
             for m, mo in enumerate(self._models):
-                key_value_pairs.update({mo.property_name: mo.predict(struc)})
+                key_value_pairs.update({mo.property_name: mo.predict(structure)})
             traj.add_decoration(
-                0, e_last, [], decoration=struc.decor, key_value_pairs=key_value_pairs
+                0,
+                e_last,
+                [],
+                decoration=structure.decor,
+                key_value_pairs=key_value_pairs,
             )
         else:
-            traj.add_decoration(0, e_last, [], decoration=struc.decor)
+            traj.add_decoration(0, e_last, [], decoration=structure.decor)
 
         if acceptance_ratio:
             nar = 100
@@ -345,35 +343,42 @@ class MonteCarlo:
             indices_list = []
 
             for j in range(self._no_of_swaps):
-                ind1, ind2, site_type = struc.get_random_swap(self._sublattice_indices)
+                ind1, ind2, site_type = structure.get_random_swap(
+                    self._sublattice_indices
+                )
                 indices_list.append([ind1, ind2, [site_type]])
 
             if self._control_flag:
                 if self._error_reset:
                     if x > error_steps:
                         x = 1
-                        struc.swap(ind1, ind2, site_type)
+                        structure.swap(ind1, ind2, site_type)
                         de = (
-                            self._em.predict(struc)[self._energy_prediction_index]
+                            self._emodel.predict(structure)[
+                                self._energy_prediction_index
+                            ]
                             - e_last
                         )
-                        struc.swap(ind1, ind2, site_type)
+                        structure.swap(ind1, ind2, site_type)
                     else:
                         x += 1
-                        de = self._em.predict_swap(
-                            struc,
+                        de = self._emodel.predict_swap(
+                            structure,
                             ind1,
                             ind2,
                             site_types=self._sublattice_indices,
                         )[self._energy_prediction_index]
                 else:
-                    de = self._em.predict_swap(
-                        struc, ind1, ind2, site_types=self._sublattice_indices
+                    de = self._emodel.predict_swap(
+                        structure, ind1, ind2, site_types=self._sublattice_indices
                     )[self._energy_prediction_index]
             else:
-                struc.swap(ind1, ind2, site_type)
-                de = self._em.predict(struc)[self._energy_prediction_index] - e_last
-                struc.swap(ind1, ind2, site_type)
+                structure.swap(ind1, ind2, site_type)
+                de = (
+                    self._emodel.predict(structure)[self._energy_prediction_index]
+                    - e_last
+                )
+                structure.swap(ind1, ind2, site_type)
 
             if de <= 0:
                 accept_swap = True
@@ -387,13 +392,15 @@ class MonteCarlo:
                     accept_swap = False
 
             if accept_swap:
-                struc.swap(ind1, ind2, site_type)
+                structure.swap(ind1, ind2, site_type)
                 e_last += de
 
                 if self._models:
                     key_value_pairs = {}
                     for m, mo in enumerate(self._models):
-                        key_value_pairs.update({mo.property_name: mo.predict(struc)})
+                        key_value_pairs.update(
+                            {mo.property_name: mo.predict(structure)}
+                        )
                     traj.add_decoration(
                         i,
                         e_last,
@@ -483,7 +490,7 @@ class MonteCarloTrajectory:
             self._scale_factor = kwargs.pop("scale_factor", None)
             self._acceptance_ratio = kwargs.pop("acceptance_ratio", None)
             self._keyword_arguments = kwargs
-            self._reduce_supercell = kwargs.pop("reduce_super_cell", False)
+            self._reduce_structure = kwargs.pop("reduce_structure", False)
 
     def calculate_properties(self, models=[], prop_func=None, prop_name=None, **kwargs):
         """Calculate the property for all decorations in the trajectory. The property can be
@@ -508,9 +515,8 @@ class MonteCarloTrajectory:
                 self._models.append(mo)
 
         predict_swap = kwargs.pop("predict_swap", False)
-        print("predict swap ?", predict_swap)
 
-        sx = Structure(
+        structure = Structure(
             self._scell,
             decoration=self._trajectory[0]["decoration"],
             track_indices=True,
@@ -521,20 +527,20 @@ class MonteCarloTrajectory:
         for t, tr in enumerate(self._trajectory):
             indices_list = tr["swapped_positions"]
             for j in range(len(indices_list)):
-                sx.swap(indices_list[j][0], indices_list[j][1])
+                structure.swap(indices_list[j][0], indices_list[j][1])
 
             sdict = {}
             if predict_swap:
                 if t == 0:
                     movalue = np.zeros(len(models))
                     for m, mo in enumerate(models):
-                        movalue[m] = mo.predict(sx)
+                        movalue[m] = mo.predict(structure)
                         sdict.update({mo.property_name: movalue[m]})
                 else:
                     for m, mo in enumerate(models):
                         # only works for single swaps
                         dmo = mo.predict_swap(
-                            sx,
+                            structure,
                             indices_list[0][0],
                             indices_list[0][1],
                             site_types=self._sublattice_indices,
@@ -544,10 +550,10 @@ class MonteCarloTrajectory:
 
             else:
                 for m, mo in enumerate(models):
-                    sdict.update({mo.property_name: mo.predict(sx)})
+                    sdict.update({mo.property_name: mo.predict(structure)})
 
             if prop_func is not None:
-                sdict.update({prop_name: prop_func(sx, tr, **kwargs)})
+                sdict.update({prop_name: prop_func(structure, tr, **kwargs)})
 
             self._trajectory[t]["key_value_pairs"].update(sdict)
 
@@ -608,8 +614,8 @@ class MonteCarloTrajectory:
                 idx2 = indices_list[j][1]
                 decoration[idx1], decoration[idx2] = decoration[idx2], decoration[idx1]
 
-        sx = Structure(self._scell, decoration=decoration)
-        return sx
+        structure = Structure(self._scell, decoration=decoration)
+        return structure
 
     def get_lowest_energy_structure(self):
         """Return Structure object with the lowest energy in trajectory."""
@@ -886,9 +892,6 @@ class MonteCarloTrajectory:
 
         if self._scell is None:
             from ase.atoms import Atoms
-
-            from clusterx.parent_lattice import ParentLattice
-            from clusterx.super_cell import SuperCell
 
             _trajz = self._trajectory[0]
 
