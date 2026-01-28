@@ -49,6 +49,27 @@ def plat_bulk():
 
 
 @pytest.fixture
+def plat_perov():
+    """Perovskite mult-sublattice parent lattice"""
+    cell = [6, 6, 6]
+    positions = [
+        [0, 0, 0],
+        [3, 3, 3],
+        [0, 3, 3],
+        [3, 0, 3],
+        [3, 3, 0],
+    ]
+    pbc = [True, True, True]
+    pri = Atoms(["Cs", "Pb", "I", "I", "I"], positions=positions, cell=cell, pbc=pbc)
+    sub_Sn = Atoms(["Cs", "Sn", "I", "I", "I"], positions=positions, cell=cell, pbc=pbc)
+    sub_Br = Atoms(
+        ["Cs", "Pb", "Br", "Br", "Br"], positions=positions, cell=cell, pbc=pbc
+    )
+    plat = ParentLattice(pri, substitutions=[sub_Sn, sub_Br], pbc=pbc)
+    return plat
+
+
+@pytest.fixture
 def cpool(plat):
     # one-point clusters and nearest neighbor two-point clusters
     return ClustersPool(plat, npoints=[1, 2], radii=[0, 1.1])
@@ -221,7 +242,7 @@ def cli_kwargs():
     args["sc_shape"]: Optional[Union[int, List[int], List[List[int]]]] = 2
     args["n_substitutions"]: Optional[Union[int, dict]] = 1
     args["ensemble"]: str = "canonical"
-    args["sublattice_indices"]: List[int] = []
+    args["sublattice_indices"]: List[int] | None = None
     args["chemical_potential"]: float = 0.0
     args["chemical_potentials"]: Optional[dict] = None
     args["models_aux_filepaths"]: List[str] = []
@@ -278,7 +299,6 @@ def test_metropolis(plat, model_, request):
 
 @pytest.mark.parametrize("reduce", [False, True])
 def test_metropolis_reduce(plat_bulk, model_bulk, reduce):
-    # prime example of using multiple fixtures with parametrize
     scell = SuperCell(plat_bulk, 10)
     n_atoms = len(scell)
     mc = MonteCarlo(
@@ -291,6 +311,25 @@ def test_metropolis_reduce(plat_bulk, model_bulk, reduce):
     mc.metropolis(no_of_sampling_steps=1000, temperature=600, serialize=True)
     traj = MonteCarloTrajectory(read=True)
     traj.get_lowest_energy_structure()
+
+
+def test_metropolis_perov(plat_perov):
+    cpool = ClustersPool(plat_perov, npoints=[1, 2], radii=[0, 5])
+    cpool.serialize("cpool_perov.json")
+    corrc = CorrelationsCalculator("trigonometric", plat_perov, cpool)
+    np.random.seed(42)
+    ecis = np.random.normal(size=len(cpool))
+    cemodel = Model(corrc, "energy", ecis=ecis)
+
+    scell = SuperCell(plat_perov, 10)
+    mc = MonteCarlo(
+        cemodel,
+        scell,
+        nsubs=None,
+        predict_swap=True,
+        reduce_structure=True,
+    )
+    mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, serialize=True)
 
 
 @pytest.mark.parametrize("model_", ["model", "model_multi"])

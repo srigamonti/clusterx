@@ -118,7 +118,7 @@ class MonteCarlo:
         scell: SuperCell,
         nsubs: dict | None = None,
         ensemble: str = "canonical",
-        sublattice_indices: list = [],
+        sublattice_indices: list | None = None,
         chemical_potentials: list | None = None,
         models: list = [],
         no_of_swaps: int = 1,
@@ -132,34 +132,7 @@ class MonteCarlo:
         self._scell = scell
         self._nsubs = nsubs
         self._filename = filename
-
-        if not sublattice_indices:
-            try:
-                self._sublattice_indices = [k for k in self._nsubs.keys()]
-
-                if ensemble == "canonical":
-                    for key in self._nsubs.keys():
-                        if all([subs == 0 for subs in self._nsubs[key]]):
-                            self._sublattice_indices.remove(key)
-
-            except AttributeError:
-                raise AttributeError(
-                    "Sublattice for the sampling is not properly assigned, look at the documentation."
-                )
-        else:
-            self._sublattice_indices = sublattice_indices
-
-            if ensemble == "canonical":
-                for subind in self._sublattice_indices:
-                    if subind not in self._nsubs.keys():
-                        raise AttributeError(
-                            "Sublattice for the sampling is not properly assigned, look at the documentation."
-                        )
-
-        if not self._sublattice_indices:
-            raise AttributeError(
-                "Sublattice for the sampling is not correctly assigned, look at the documatation."
-            )
+        self._sublattice_indices = sublattice_indices
 
         prop = energy_model.property_name
         if prop is None or len(prop) == 0 or isinstance(prop, str):
@@ -295,7 +268,7 @@ class MonteCarlo:
             e_last = np.array([0.0])  # undefined, we only care about energy differences
             p = np.diagonal(structure.get_transformation())
             p_reduced = np.diagonal(self._emodel.scell_reduced.get_transformation())
-            grid_shape = p.tolist() + [1]
+            grid_shape = p.tolist() + [len(structure.get_parent_lattice())]
             structure_reduced, _ = structure.get_reduced_structure(p_reduced, index=0)
             scell_factor = np.prod(p) / np.prod(p_reduced)
             sigma_grid = sigmas.reshape(grid_shape)
