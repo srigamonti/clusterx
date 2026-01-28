@@ -15,7 +15,7 @@ from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
 from clusterx.model import Model
-from clusterx.utils import poppush, dict_compare
+from clusterx.utils import poppush, dict_compare, is_diagonal, take_tile
 
 
 class MonteCarlo:
@@ -99,9 +99,6 @@ class MonteCarlo:
         subset of sigmas, in a box around central site in the structure.
         Incompatible with non-diagonal supercell shapes.
 
-    ``error_reset``: integer (default: None)
-       If not **None*  and ``predict_swap`` equal to **True**, the correlations are calculated as usual (no differences) every n-th step.
-
     ``energy_key``: string (default: ``energy``)
         For a multi-linear model, one of the predictions needs to be the energy prediction,
         energy_key needs to match one of the strings in energy_model.property_names, so that the energy
@@ -127,11 +124,11 @@ class MonteCarlo:
         no_of_swaps: int = 1,
         predict_swap: bool = False,
         reduce_structure: bool = False,
-        error_reset: int | None = None,
         energy_key: str = "energy",
         filename: str = "trajectory.json",
     ):
         self._emodel = energy_model
+        self._emodel.reset_mc(mc=True)
         self._scell = scell
         self._nsubs = nsubs
         self._filename = filename
@@ -177,15 +174,18 @@ class MonteCarlo:
 
         self._ensemble = ensemble
         self._no_of_swaps = no_of_swaps
+        self._predict_swap = predict_swap
 
-        if self._no_of_swaps > 1:
-            self._control_flag = False
-        elif predict_swap:
-            self._control_flag = True
+        if reduce_structure:
+            if not is_diagonal(p := self._scell.get_transformation()):
+                raise ValueError(
+                    f"Cannot reduce structure with non-diagonal SuperCell shape {p}"
+                )
+            self._emodel.init_reduced_model()
+            self._emodel._init_interaction_dict(self._emodel.scell_reduced)
         else:
-            self._control_flag = False
-
-        self._error_reset = error_reset
+            self._emodel._init_interaction_dict(self._scell)
+        self._reduce_structure = reduce_structure
 
     def metropolis(
         self,
@@ -289,9 +289,21 @@ class MonteCarlo:
                 structure = self._scell.gen_random_structure(nsubs=self._nsubs, mc=True)
             else:
                 structure = self._scell.gen_random_structure(mc=True)
+        sigmas = structure.get_sigmas()
 
-        self._emodel.reset_mc(mc=True)
-        e_last = self._emodel.predict(structure)[self._energy_prediction_index]
+        if self._reduce_structure:
+            e_last = np.array([0.0])  # undefined, we only care about energy differences
+            p = np.diagonal(structure.get_transformation())
+            p_reduced = np.diagonal(self._emodel.scell_reduced.get_transformation())
+            grid_shape = p.tolist() + [1]
+            structure_reduced, _ = structure.get_reduced_structure(p_reduced, index=0)
+            scell_factor = np.prod(p) / np.prod(p_reduced)
+            sigma_grid = sigmas.reshape(grid_shape)
+            # make sure that sigma_grid can be accessed quickly
+            sigma_grid = np.ascontiguousarray(sigma_grid)
+        else:
+            e_last = self._emodel.predict(structure)[self._energy_prediction_index]
+            scell_factor = 1.0
 
         if filename is not None:
             self._filename = filename
@@ -331,10 +343,6 @@ class MonteCarlo:
             ar = acceptance_ratio
             hist = np.zeros(nar, dtype=int)
 
-        if self._error_reset is not None:
-            error_steps = int(self._error_reset)
-            x = 1
-
         for i in tqdm(
             range(1, no_of_sampling_steps + 1),
             total=no_of_sampling_steps,
@@ -342,57 +350,56 @@ class MonteCarlo:
         ):
             indices_list = []
 
-            for j in range(self._no_of_swaps):
-                ind1, ind2, site_type = structure.get_random_swap(
-                    self._sublattice_indices
-                )
-                indices_list.append([ind1, ind2, [site_type]])
+            for _ in range(self._no_of_swaps):
+                i, j, site_type = structure.get_random_swap(self._sublattice_indices)
+                old_sigma = sigmas[i]
+                new_sigma = sigmas[j]
+                indices_list.append([i, j, [site_type]])
 
-            if self._control_flag:
-                if self._error_reset:
-                    if x > error_steps:
-                        x = 1
-                        structure.swap(ind1, ind2, site_type)
-                        de = (
-                            self._emodel.predict(structure)[
-                                self._energy_prediction_index
-                            ]
-                            - e_last
+            if self._predict_swap:
+                if self._reduce_structure:
+                    de = 0.0
+                    for atom_index in [i, j]:
+                        i_grid = np.unravel_index(atom_index, grid_shape)
+                        sigma_grid_r, atom_index_r = take_tile(
+                            sigma_grid, i_grid, p_reduced
                         )
-                        structure.swap(ind1, ind2, site_type)
-                    else:
-                        x += 1
-                        de = self._emodel.predict_swap(
-                            structure,
-                            ind1,
-                            ind2,
-                            site_types=self._sublattice_indices,
+                        structure_reduced.sigmas = sigma_grid_r.flatten()
+                        index = np.ravel_multi_index(atom_index_r, sigma_grid_r.shape)
+                        # calculate flip energy
+                        de += self._emodel.predict_flip(
+                            structure_reduced,
+                            index=index,
+                            old_sigma=old_sigma,
+                            new_sigma=new_sigma,
+                            site_types=[site_type],
+                            scell_factor=scell_factor,
                         )[self._energy_prediction_index]
                 else:
                     de = self._emodel.predict_swap(
-                        structure, ind1, ind2, site_types=self._sublattice_indices
+                        structure,
+                        i,
+                        j,
+                        site_types=self._sublattice_indices,
                     )[self._energy_prediction_index]
             else:
-                structure.swap(ind1, ind2, site_type)
+                structure.swap(i, j, site_type)
                 de = (
                     self._emodel.predict(structure)[self._energy_prediction_index]
                     - e_last
                 )
-                structure.swap(ind1, ind2, site_type)
+                structure.swap(i, j, site_type)
 
             if de <= 0:
                 accept_swap = True
-                boltzmann_factor = 0
             else:
-                boltzmann_factor = np.exp(-de / scale_factor_product)
-
-                if np.random.uniform(0, 1) <= boltzmann_factor:
+                if np.random.uniform(0, 1) <= np.exp(-de / scale_factor_product):
                     accept_swap = True
                 else:
                     accept_swap = False
 
             if accept_swap:
-                structure.swap(ind1, ind2, site_type)
+                structure.swap(i, j, site_type)
                 e_last += de
 
                 if self._models:

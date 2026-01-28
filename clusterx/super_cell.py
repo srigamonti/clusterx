@@ -427,13 +427,9 @@ class SuperCell(ParentLattice):
             total number of different species which may substitute an atom
             in this position.
         """
-        print("nsubs", nsubs)
         idx_subs = self.get_idx_subs()
-        print("idx_subs", idx_subs)
         tags = self.get_tags()  # tags[atom_index] = site_type
-        print("tags", tags)
         decoration = self.get_atomic_numbers()
-        print("decoration", decoration)
         sigmas = np.zeros(len(tags), dtype=np.uint8)
         for tag, nsub in nsubs.items():
             # list all atom indices with the given tag or site_type

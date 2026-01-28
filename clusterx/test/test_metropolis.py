@@ -277,6 +277,23 @@ def test_metropolis(plat, model_, request):
     traj.get_lowest_energy_structure()
 
 
+@pytest.mark.parametrize("reduce", [False, True])
+def test_metropolis_reduce(plat_bulk, model_bulk, reduce):
+    # prime example of using multiple fixtures with parametrize
+    scell = SuperCell(plat_bulk, 10)
+    n_atoms = len(scell)
+    mc = MonteCarlo(
+        model_bulk,
+        scell,
+        nsubs={0: [n_atoms // 2]},
+        predict_swap=True,
+        reduce_structure=reduce,
+    )
+    mc.metropolis(no_of_sampling_steps=1000, temperature=600, serialize=True)
+    traj = MonteCarloTrajectory(read=True)
+    traj.get_lowest_energy_structure()
+
+
 @pytest.mark.parametrize("model_", ["model", "model_multi"])
 def test_mclite(plat, model_, request, tmp_path):
     scell = SuperCell(plat, 4)
