@@ -372,7 +372,6 @@ class MonteCarlo:
                             index=index,
                             old_sigma=old_sigma,
                             new_sigma=new_sigma,
-                            site_types=[site_type],
                             scell_factor=scell_factor,
                         )[self._energy_prediction_index]
                 else:
@@ -380,7 +379,6 @@ class MonteCarlo:
                         structure,
                         i,
                         j,
-                        site_types=self._sublattice_indices,
                     )[self._energy_prediction_index]
             else:
                 structure.swap(i, j, site_type)
@@ -550,7 +548,6 @@ class MonteCarloTrajectory:
                             structure,
                             indices_list[0][0],
                             indices_list[0][1],
-                            site_types=self._sublattice_indices,
                         )
                         movalue[m] = movalue[m] + dmo
                         sdict.update({mo.property_name: movalue[m]})

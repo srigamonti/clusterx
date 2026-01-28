@@ -618,12 +618,7 @@ class WangLandau:
                 ind1, ind2, site_type, rindices = struc.swap_random(
                     self._sublattice_indices
                 )
-                de = (
-                    self._em.predict_swap(
-                        struc, i=ind1, j=ind2, site_types=self._sublattice_indices
-                    )
-                    * self._ef
-                )
+                de = self._em.predict_swap(struc, i=ind1, j=ind2) * self._ef
                 e1 = e + de
                 if e1 >= emin and e1 <= emax:
                     countsampling = True
@@ -1091,7 +1086,6 @@ class WangLandau:
                                 struc,
                                 i=ind1,
                                 j=ind2,
-                                site_types=self._sublattice_indices,
                             )
                             * self._ef
                         )
@@ -1102,7 +1096,6 @@ class WangLandau:
                             struc,
                             i=ind1,
                             j=ind2,
-                            site_types=self._sublattice_indices,
                         )
                         * self._ef
                     )

@@ -352,7 +352,6 @@ class Model:
         index: int,
         old_sigma: int,
         new_sigma: int,
-        site_types=[0],
         scell_factor: float = 1.0,
     ):
         """Predict property change by flipping a species.
@@ -413,7 +412,6 @@ class Model:
         i,
         j,
         correlation=False,
-        site_types=[0],
         scell_factor: float = 1.0,
     ):
         """Predict property difference with the optimal cluster expansion model.
@@ -441,13 +439,9 @@ class Model:
         sigma_i = structure.sigmas[i]
         sigma_j = structure.sigmas[j]
 
-        de1 = self.predict_flip(
-            structure, i, sigma_i, sigma_j, site_types, scell_factor
-        )
+        de1 = self.predict_flip(structure, i, sigma_i, sigma_j, scell_factor)
         structure.sigmas[i] = sigma_j
-        de2 = self.predict_flip(
-            structure, j, sigma_j, sigma_i, site_types, scell_factor
-        )
+        de2 = self.predict_flip(structure, j, sigma_j, sigma_i, scell_factor)
         structure.sigmas[i] = sigma_i  # restore original structure
         return de1 + de2
 

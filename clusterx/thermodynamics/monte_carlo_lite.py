@@ -495,7 +495,6 @@ class MonteCarloLite:
                     index=index,
                     old_sigma=old_sigma,
                     new_sigma=new_sigma,
-                    site_types=[self._sublattice_index],
                     scell_factor=scell_factor,
                 )[self._energy_prediction_index]
 
