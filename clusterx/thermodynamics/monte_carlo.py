@@ -354,9 +354,11 @@ class MonteCarlo:
                 if step % 10 == 0 and step >= 1000:
                     scale_factor_product *= math.exp((target_rate - rate) / 10.0)
 
-            progress.set_description(
-                f"MMC sim. | Acc. rate: {rate:.4f} | delta_E: {de[0]:.1e}"
-            )  # TODO: figure out if this slows the step down significantly
+            if step % 1000 == 0 or no_of_sampling_steps < 1000:
+                # if updated too often, progress display might delay steps
+                progress.set_description(
+                    f"MMC sim. | Acc. rate: {rate:.4f} | delta_E: {de[0]:.1e}"
+                )
 
         if serialize:
             traj.serialize()
