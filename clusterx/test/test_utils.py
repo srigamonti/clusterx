@@ -15,8 +15,19 @@ from clusterx.utils import (
     atat_to_cell,
     transformation_containing_sphere_diag,
     ListDict,
+    RunningAverage,
 )
 from clusterx.utils import take_tile
+
+
+def test_RunningAverage():
+    rave = RunningAverage(n=10)
+    rave.update(2)
+    np.testing.assert_approx_equal(rave.get_average(), 2)
+    np.testing.assert_approx_equal(rave.update_and_get_average(1), 1.5)
+    for _ in range(10):
+        rave.update(7)
+    np.testing.assert_approx_equal(rave.get_average(), 7)
 
 
 def test_ase_make_supercell_error():

@@ -20,6 +20,32 @@ from ase.build.supercells import (  # needed by make_supercell
 from ase.data import chemical_symbols as cs
 
 
+class RunningAverage:
+    def __init__(self, n: int):
+        self.n = n
+        self.average: float
+        self.values = []
+
+    def update(self, value) -> None:
+        """Update the window of values by appending `value`, and compute new average."""
+        self.values.append(value)
+        if len(self.values) > self.n:
+            value_0 = self.values.pop(0)
+            self.average += (value - value_0) / self.n
+        elif len(self.values) == 1:
+            self.average = value
+        else:
+            diff = (value - self.average) / len(self.values)
+            self.average += diff
+
+    def get_average(self) -> float:
+        return self.average
+
+    def update_and_get_average(self, value) -> float:
+        self.update(value)
+        return self.average
+
+
 class ListDict(object):
     """
     Datastructure that allows efficient (O(1)) insert, remove and random sampling.

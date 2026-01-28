@@ -15,7 +15,7 @@ from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
 from clusterx.model import Model
-from clusterx.utils import poppush, dict_compare, is_diagonal, take_tile
+from clusterx.utils import poppush, dict_compare, is_diagonal, take_tile, RunningAverage
 
 
 class MonteCarlo:
@@ -343,11 +343,14 @@ class MonteCarlo:
             ar = acceptance_ratio
             hist = np.zeros(nar, dtype=int)
 
-        for i in tqdm(
+        progress = tqdm(
             range(1, no_of_sampling_steps + 1),
             total=no_of_sampling_steps,
-            desc="MMC simulation",
-        ):
+            desc="MMC sim.",
+        )
+        rave = RunningAverage(1000)  # keep track of acceptance ratio
+
+        for i in progress:
             indices_list = []
 
             for _ in range(self._no_of_swaps):
@@ -430,6 +433,10 @@ class MonteCarlo:
                     scale_factor_product *= math.exp(
                         (acceptance_ratio / 100.0 - ar) / 10.0
                     )
+            rate = rave.update_and_get_average(1.0 * accept_swap)
+            progress.set_description(
+                f"MMC sim. | Acc. rate: {rate:.4f} | delta_E: {de[0]:.1e}"
+            )  # TODO: figure out if this slows the step down significantly
 
         if serialize:
             traj.serialize()
