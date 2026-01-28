@@ -74,12 +74,6 @@ commands = ["metropolis"]
         "pred_swap",
         bool,
     ),
-    n_error_reset=(
-        "Reset error after this many steps for numerical accuracy",
-        "option",
-        "err_reset",
-        int,
-    ),
     n_mc_steps=(
         "Number of metropolis steps to perform",
         "option",
@@ -156,7 +150,6 @@ def metropolis(
     models_aux_filepaths: List[str] = [],
     no_of_swaps: int = 1,
     predict_swap: bool = True,
-    n_error_reset: Optional[int] = None,
     # metropolis sampling arguments
     n_mc_steps: int = 100,
     n_mc_eq: int = 1,
@@ -214,7 +207,6 @@ def metropolis(
                 models=models_aux,
                 no_of_swaps=no_of_swaps,
                 predict_swap=predict_swap,
-                error_reset=n_error_reset,
                 filename=traj_filepath,
             )
             mc.metropolis(

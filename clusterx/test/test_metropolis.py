@@ -227,7 +227,6 @@ def cli_kwargs():
     args["models_aux_filepaths"]: List[str] = []
     args["no_of_swaps"]: int = 1
     args["predict_swap"]: bool = True
-    args["n_error_reset"]: Optional[int] = None
     # metropolis sampling arguments
     args["n_mc_steps"]: int = 100
     args["n_mc_eq"]: int = 1
