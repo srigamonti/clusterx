@@ -258,7 +258,7 @@ def cli_kwargs():
     args["temperatures"]: Optional[List[float]] = None
     args["boltzmann_constant"]: float = 1.0
     args["initial_decoration"]: Optional[List[int]] = None
-    args["acceptance_ratio"]: Optional[float] = None
+    args["target_rate"]: Optional[float] = None
     args["random_seed"]: Optional[int] = None
     return args
 
@@ -314,7 +314,7 @@ def test_metropolis_reduce(plat_bulk, model_bulk, reduce):
 
 
 def test_metropolis_perov(plat_perov):
-    cpool = ClustersPool(plat_perov, npoints=[1, 2], radii=[0, 5])
+    cpool = ClustersPool(plat_perov, npoints=[1, 2], radii=[0, 6.1])
     cpool.serialize("cpool_perov.json")
     corrc = CorrelationsCalculator("trigonometric", plat_perov, cpool)
     np.random.seed(42)
@@ -329,7 +329,7 @@ def test_metropolis_perov(plat_perov):
         predict_swap=True,
         reduce_structure=True,
     )
-    mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, serialize=True)
+    mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, serialize=False)
 
 
 @pytest.mark.parametrize("model_", ["model", "model_multi"])

@@ -133,6 +133,11 @@ class MonteCarlo:
         self._nsubs = nsubs
         self._filename = filename
         self._sublattice_indices = sublattice_indices
+        self._models = models
+        self._ensemble = ensemble
+        self._no_of_swaps = no_of_swaps
+        self._predict_swap = predict_swap
+        self._reduce_structure = reduce_structure
 
         prop = energy_model.property_name
         if prop is None or len(prop) == 0 or isinstance(prop, str):
@@ -140,14 +145,6 @@ class MonteCarlo:
             self._energy_prediction_index = None
         else:
             self._energy_prediction_index = prop.index(energy_key)
-
-        self._models = []
-        if models:
-            self._models = models
-
-        self._ensemble = ensemble
-        self._no_of_swaps = no_of_swaps
-        self._predict_swap = predict_swap
 
         if reduce_structure:
             if not is_diagonal(p := self._scell.get_transformation()):
@@ -158,7 +155,6 @@ class MonteCarlo:
             self._emodel._init_interaction_dict(self._emodel.scell_reduced)
         else:
             self._emodel._init_interaction_dict(self._scell)
-        self._reduce_structure = reduce_structure
 
     def metropolis(
         self,
@@ -167,9 +163,9 @@ class MonteCarlo:
         temperature: float = 1.0,
         boltzmann_constant: float = 1.0,
         initial_decoration: list[int] | None = None,
-        acceptance_ratio: float | None = None,
+        target_rate: float | None = None,
         serialize: bool = False,
-        filename: bool | None = None,
+        filename: str | None = None,
         **kwargs,
     ):
         r"""Perform Monte-Carlo Metropolis simulation
@@ -209,11 +205,11 @@ class MonteCarlo:
             Atomic numbers of the initial structure, from which the sampling starts.
             If ``None``, sampling starts with a structure randomly generated.
 
-        ``acceptance_ratio``: float (default: None)
-            Real number between 0 and 100. Represents the percentage of accepted moves.
+        ``target_rate``: float (default: None)
+            Real number between 0 and 1. Represents the targeted acceptance rate.
             If not ``None``, the initial temperature will be adjusted to match the given
-            acceptance ratio. The acceptance ratio during the simulation is computed using
-            the last 100 moves.
+            acceptance rate. The acceptance ratio during the simulation is computed using
+            the last 1000 moves.
 
         ``serialize``: boolean (default: False)
             Serialize the MonteCarloTrajectory object into a Json file after the sampling.
@@ -236,32 +232,8 @@ class MonteCarlo:
         for el in scale_factor:
             scale_factor_product *= el
 
-        if initial_decoration is not None:
-            structure = Structure(self._scell, initial_decoration, track_indices=True)
-            conc = structure.get_fractional_concentrations()
-            nsites = structure.get_nsites_per_type()
-            check_dict = {}
-            for key in conc.keys():
-                ns = nsites[key]
-                nl = []
-                for i, cel in enumerate(conc[key]):
-                    if i == 0:
-                        continue
-                    else:
-                        nl.append(int(round(cel * ns, 0)))
-                check_dict.update({key: nl})
-
-            bol = dict_compare(check_dict, self._nsubs)
-            if not bol:
-                raise ValueError(
-                    "Number of substitutents does not coincides with them from the inital decoration."
-                )
-
-        else:
-            if self._nsubs is not None:
-                structure = self._scell.gen_random_structure(nsubs=self._nsubs, mc=True)
-            else:
-                structure = self._scell.gen_random_structure(mc=True)
+        self.initialize_structure(initial_decoration, self._nsubs)
+        structure = self.structure
         sigmas = structure.get_sigmas()
 
         if self._reduce_structure:
@@ -291,39 +263,31 @@ class MonteCarlo:
             temperature=temperature,
             boltzmann_constant=boltzmann_constant,
             scale_factor=scale_factor,
-            acceptance_ratio=acceptance_ratio,
+            target_rate=target_rate,
             **kwargs,
         )
         if self._no_of_swaps > 1:
             raise NotImplementedError("No. of swaps > 1 functionality not implemented")
 
-        if self._models:
-            key_value_pairs = {}
-            for m, mo in enumerate(self._models):
-                key_value_pairs.update({mo.property_name: mo.predict(structure)})
-            traj.add_decoration(
-                0,
-                e_last,
-                [],
-                decoration=structure.decor,
-                key_value_pairs=key_value_pairs,
-            )
-        else:
-            traj.add_decoration(0, e_last, [], decoration=structure.decor)
-
-        if acceptance_ratio:
-            nar = 100
-            ar = acceptance_ratio
-            hist = np.zeros(nar, dtype=int)
+        key_value_pairs = {}
+        for m, mo in enumerate(self._models):
+            key_value_pairs.update({mo.property_name: mo.predict(structure)})
+        traj.add_decoration(
+            0,
+            e_last,
+            [],
+            decoration=structure.decor,
+            key_value_pairs=key_value_pairs,
+        )
 
         progress = tqdm(
             range(1, no_of_sampling_steps + 1),
             total=no_of_sampling_steps,
             desc="MMC sim.",
         )
-        rave = RunningAverage(1000)  # keep track of acceptance ratio
+        rave = RunningAverage(1000)  # keep track of acceptance rate
 
-        for i in progress:
+        for step in progress:
             indices_list = []
 
             for _ in range(self._no_of_swaps):
@@ -342,7 +306,6 @@ class MonteCarlo:
                         )
                         structure_reduced.sigmas = sigma_grid_r.flatten()
                         index = np.ravel_multi_index(atom_index_r, sigma_grid_r.shape)
-                        # calculate flip energy
                         de += self._emodel.predict_flip(
                             structure_reduced,
                             index=index,
@@ -366,22 +329,19 @@ class MonteCarlo:
 
             if de <= 0:
                 accept_swap = True
+            elif np.random.uniform(0, 1) <= np.exp(-de / scale_factor_product):
+                accept_swap = True
             else:
-                if np.random.uniform(0, 1) <= np.exp(-de / scale_factor_product):
-                    accept_swap = True
-                else:
-                    accept_swap = False
+                accept_swap = False
 
             if accept_swap:
                 structure.swap(i, j, site_type)
                 e_last += de
 
-                if self._models:
-                    key_value_pairs = {}
-                    for m, mo in enumerate(self._models):
-                        key_value_pairs.update(
-                            {mo.property_name: mo.predict(structure)}
-                        )
+                key_value_pairs = {}
+                for m, mo in enumerate(self._models):
+                    key_value_pairs.update({mo.property_name: mo.predict(structure)})
+                if serialize:
                     traj.add_decoration(
                         i,
                         e_last,
@@ -389,24 +349,11 @@ class MonteCarlo:
                         key_value_pairs=key_value_pairs,
                     )
 
-                else:
-                    traj.add_decoration(
-                        i, e_last, [[li[0], li[1]] for li in indices_list]
-                    )
-
-                if acceptance_ratio:
-                    ar = poppush(hist, 1)
-
-            else:
-                if acceptance_ratio:
-                    ar = poppush(hist, 0)
-
-            if acceptance_ratio:
-                if i % 10 == 0 and i >= nar:
-                    scale_factor_product *= math.exp(
-                        (acceptance_ratio / 100.0 - ar) / 10.0
-                    )
             rate = rave.update_and_get_average(1.0 * accept_swap)
+            if target_rate is not None:
+                if step % 10 == 0 and step >= 1000:
+                    scale_factor_product *= math.exp((target_rate - rate) / 10.0)
+
             progress.set_description(
                 f"MMC sim. | Acc. rate: {rate:.4f} | delta_E: {de[0]:.1e}"
             )  # TODO: figure out if this slows the step down significantly
@@ -415,6 +362,36 @@ class MonteCarlo:
             traj.serialize()
 
         return traj
+
+    def initialize_structure(
+        self, initial_decoration: list[int] | None = None, nsubs: dict | None = None
+    ):
+        if initial_decoration is not None:
+            self.structure = Structure(
+                self._scell, initial_decoration, track_indices=True
+            )
+            conc = self.structure.get_fractional_concentrations()
+            nsites = self.structure.get_nsites_per_type()
+            check_dict = {}
+            for key in conc.keys():
+                ns = nsites[key]
+                nl = []
+                for i, cel in enumerate(conc[key]):
+                    if i == 0:
+                        continue
+                    else:
+                        nl.append(int(round(cel * ns, 0)))
+                check_dict.update({key: nl})
+
+            bol = dict_compare(check_dict, self._nsubs)
+            if not bol:
+                raise ValueError(
+                    "Number of substitutents does not coincides with them from the inital decoration."
+                )
+        else:
+            self.structure = self._scell.gen_random_structure(
+                nsubs=self._nsubs, mc=True
+            )
 
 
 class MonteCarloTrajectory:
@@ -473,7 +450,7 @@ class MonteCarloTrajectory:
             self._temperature = kwargs.pop("temperature", None)
             self._boltzmann_constant = kwargs.pop("boltzmann_constant", kB)
             self._scale_factor = kwargs.pop("scale_factor", None)
-            self._acceptance_ratio = kwargs.pop("acceptance_ratio", None)
+            self._target_rate = kwargs.pop("target_rate", None)
             self._keyword_arguments = kwargs
             self._reduce_structure = kwargs.pop("reduce_structure", False)
 
@@ -818,8 +795,8 @@ class MonteCarloTrajectory:
         traj_info.update({"boltzmann_constant": self._boltzmann_constant})
         if self._scale_factor is not None:
             traj_info.update({"scale_factor": self._scale_factor})
-        if self._acceptance_ratio is not None:
-            traj_info.update({"acceptance_ratio", self._acceptance_ratio})
+        if self._target_rate is not None:
+            traj_info.update({"target_rate", self._target_rate})
 
         for key in self._keyword_arguments.keys():
             traj_info.update({key: self._keyword_arguments[key]})
@@ -858,7 +835,7 @@ class MonteCarloTrajectory:
             self._temperature = traj_info.pop("temperature", None)
             self._boltzmann_constant = traj_info.pop("boltzmann_constant", None)
             self._scale_factor = traj_info.pop("scale_factor", None)
-            self._acceptance_ratio = traj_info.pop("acceptance_ratio", None)
+            self._target_rate = traj_info.pop("target_rate", None)
             self._keyword_arguments = traj_info
 
         data_keys = sorted([int(el) for el in set(data.keys())])

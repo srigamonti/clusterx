@@ -105,11 +105,11 @@ commands = ["metropolis"]
         "init_dec",
         list,
     ),
-    acceptance_ratio=(
-        """Real number between 0 and 100. Represents the percentage of accepted moves.
+    target_rate=(
+        """Real number between 0 and 1. Represents the rate of accepted moves.
         If not ``None``, the initial temperature will be adjusted to match the given
         acceptance ratio. The acceptance ratio during the simulation is computed using
-        the last 100 moves.""",
+        the last 1000 moves.""",
         "option",
         "acc_ratio",
         float,
@@ -160,7 +160,7 @@ def metropolis(
     temperatures: Optional[List[float]] = None,
     boltzmann_constant: float = 1.0,
     initial_decoration: Optional[List[int]] = None,
-    acceptance_ratio: Optional[float] = None,
+    target_rate: Optional[float] = None,
     random_seed: Optional[int] = None,
     # deprecated
     scale_factor: Optional[List[float]] = None,  # use energy_scale_factor instead
@@ -217,7 +217,7 @@ def metropolis(
                 temperature=temperature,
                 boltzmann_constant=boltzmann_constant,
                 initial_decoration=initial_decoration,
-                acceptance_ratio=acceptance_ratio,
+                target_rate=target_rate,
                 serialize=True,
                 filename=traj_filepath,
                 **sampling_kwargs,
