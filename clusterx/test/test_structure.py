@@ -47,6 +47,8 @@ def test_get_atoms(structure):
     assert len(numbers) == 9
     symbols = structure.get_chemical_symbols()
     assert len(symbols) == 9
+    atoms = structure.get_atoms(ignore_observer_atoms=True)
+    assert len(atoms) == 6
 
 
 def test_random_flips(structure_random: Structure):

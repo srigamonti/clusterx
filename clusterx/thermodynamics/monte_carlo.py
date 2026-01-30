@@ -10,6 +10,7 @@ import math
 from tqdm import tqdm
 import numpy as np
 from ase.cell import Cell
+from ase.io import Trajectory
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
@@ -125,6 +126,8 @@ class MonteCarlo:
         predict_swap: bool = False,
         reduce_structure: bool = False,
         energy_key: str = "energy",
+        save_atoms_every: int = 0,
+        atoms_filename: str = "metropolis.traj",
         filename: str = "trajectory.json",
     ):
         self._emodel = energy_model
@@ -138,6 +141,8 @@ class MonteCarlo:
         self._no_of_swaps = no_of_swaps
         self._predict_swap = predict_swap
         self._reduce_structure = reduce_structure
+        self._save_atoms_every = save_atoms_every
+        self._atoms_filename = atoms_filename
 
         prop = energy_model.property_name
         if prop is None or len(prop) == 0 or isinstance(prop, str):
@@ -270,6 +275,10 @@ class MonteCarlo:
         else:
             filename = self._filename
 
+        if self._save_atoms_every > 0:
+            atoms_traj = Trajectory(self._atoms_filename, mode="w")
+            atoms_traj.write(structure.get_atoms(ignore_observer_atoms=True))
+
         traj = MonteCarloTrajectory(
             self._scell,
             filename=filename,
@@ -364,6 +373,12 @@ class MonteCarlo:
             if target_rate is not None:
                 if step % 10 == 0 and step >= 1000:
                     scale_factor_product *= math.exp((target_rate - rate) / 10.0)
+
+            if self._save_atoms_every > 0 and step % self._save_atoms_every == 0:
+                structure.set_arrays(sigmas)
+                atoms_traj.write(
+                    structure.get_atoms(ignore_observer_atoms=True), energy=de
+                )
 
             if step % 1000 == 0 or no_of_sampling_steps < 1000:
                 # if updated too often, progress display might delay steps

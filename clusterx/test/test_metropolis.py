@@ -9,6 +9,7 @@ import pytest
 from ase.spacegroup import crystal
 from ase.data import atomic_numbers as cn
 from ase import Atoms
+from ase.io import Trajectory
 import numpy as np
 
 from clusterx.parent_lattice import ParentLattice
@@ -328,8 +329,12 @@ def test_metropolis_perov(plat_perov):
         nsubs=None,
         predict_swap=True,
         reduce_structure=True,
+        save_atoms_every=100,
+        atoms_filename="perov_mc.traj",
     )
     mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, serialize=False)
+    traj = Trajectory("perov_mc.traj")
+    assert len(traj) == 11
 
 
 @pytest.mark.parametrize("model_", ["model", "model_multi"])

@@ -429,12 +429,20 @@ class Structure(SuperCell):
         """Return SuperCell member of the Structure"""
         return self.scell
 
-    def get_atoms(self) -> Atoms:
+    def get_atoms(self, ignore_observer_atoms: bool = False) -> Atoms:
         """Get Atoms object corresponding to the Structure object"""
+        if ignore_observer_atoms:
+            types = self.get_sublattice_types()
+            sublattice_lengths = [len(val) for val in types.values()]
+            tags = self.scell.get_tags()
+            site_lens = np.array(sublattice_lengths, dtype=int)[tags]
+        else:
+            tags = self.scell.get_tags()
+            site_lens = 2 * np.ones_like(tags, dtype=int)
         return Atoms(
-            numbers=self.decor,
-            positions=self.scell.get_positions(),
-            tags=self.scell.get_tags(),
+            numbers=np.array(self.decor)[site_lens > 1],
+            positions=self.scell.get_positions()[site_lens > 1],
+            tags=tags[site_lens > 1],
             cell=self.scell.get_cell(),
             pbc=self.scell.get_pbc(),
         )
