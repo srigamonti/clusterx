@@ -237,7 +237,7 @@ class MonteCarlo:
         sigmas = structure.get_sigmas()
 
         if self._reduce_structure:
-            e_last = np.array([0.0])  # undefined, we only care about energy differences
+            e_last = np.float64(0.0)  # undefined, we only care about energy differences
             p = np.diagonal(structure.get_transformation())
             p_reduced = np.diagonal(self._emodel.scell_reduced.get_transformation())
             grid_shape = p.tolist() + [len(structure.get_parent_lattice())]
@@ -247,7 +247,12 @@ class MonteCarlo:
             # make sure that sigma_grid can be accessed quickly
             sigma_grid = np.ascontiguousarray(sigma_grid)
         else:
-            e_last = self._emodel.predict(structure)[self._energy_prediction_index]
+            e_last = self._emodel.predict(structure)
+            e_last = (
+                e_last
+                if len(e_last.shape) == 0
+                else e_last[self._energy_prediction_index]
+            )
             scell_factor = 1.0
 
         if filename is not None:
@@ -312,20 +317,16 @@ class MonteCarlo:
                             old_sigma=old_sigma,
                             new_sigma=new_sigma,
                             scell_factor=scell_factor,
-                        )[self._energy_prediction_index]
+                        )
                 else:
-                    de = self._emodel.predict_swap(
-                        structure,
-                        i,
-                        j,
-                    )[self._energy_prediction_index]
+                    de = self._emodel.predict_swap(structure, i, j)
             else:
                 structure.swap(i, j, site_type)
-                de = (
-                    self._emodel.predict(structure)[self._energy_prediction_index]
-                    - e_last
-                )
+                de = self._emodel.predict(structure) - e_last
                 structure.swap(i, j, site_type)
+
+            # handle multi-linear model, make sure that `de` is np.float64
+            de = de if len(de.shape) == 0 else de[self._energy_prediction_index]
 
             if de <= 0:
                 accept_swap = True
@@ -357,7 +358,7 @@ class MonteCarlo:
             if step % 1000 == 0 or no_of_sampling_steps < 1000:
                 # if updated too often, progress display might delay steps
                 progress.set_description(
-                    f"MMC sim. | Acc. rate: {rate:.4f} | delta_E: {de[0]:.1e}"
+                    f"MMC sim. | Acc. rate: {rate:.4f} | delta_E: {de:.1e}"
                 )
 
         if serialize:

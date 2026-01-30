@@ -129,13 +129,16 @@ def test_ecis_estimator_init(model, model_estimator, structure):
     np.testing.assert_allclose(prediction_estimator, prediction)
 
 
-@pytest.mark.parametrize("mode", ["single", "multi"])
+@pytest.mark.parametrize(
+    "prop,shape",
+    [("dummy_ce_11", ()), (["dummy_ce_11", "dummy_ce_12"], (2,))]
+)
 @pytest.mark.parametrize(
     "selector_type,selector_opts",
     [("identity", {}), ("lasso_cv", {}), ("skl_lasso_cv", {})],
 )
 def test_model_builder(
-    structures_set, cpool, corrc, mode, selector_type, selector_opts
+    structures_set, cpool, corrc, prop, shape, selector_type, selector_opts
 ):
     mb = ModelBuilder(
         basis="trigonometric",
@@ -145,14 +148,8 @@ def test_model_builder(
         estimator_opts={},
         standardize=False,
     )
-    property_names = ["dummy_ce_11", "dummy_ce_12"]
-    if mode == "single":
-        property_names = property_names[0]
-        prop_list = [property_names]
-        shape = ()
-    elif mode == "multi":
-        prop_list = property_names
-        shape = (2,)
+    property_names = prop
+    prop_list = [prop] if isinstance(prop, str) else prop
     model = mb.build(
         sset=structures_set,
         cpool=cpool,
