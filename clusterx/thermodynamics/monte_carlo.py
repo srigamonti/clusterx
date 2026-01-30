@@ -15,7 +15,7 @@ from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
 from clusterx.model import Model
-from clusterx.utils import poppush, dict_compare, is_diagonal, take_tile, RunningAverage
+from clusterx.utils import dict_compare, is_diagonal, take_tile, RunningAverage
 
 
 class MonteCarlo:
@@ -246,6 +246,16 @@ class MonteCarlo:
             sigma_grid = sigmas.reshape(grid_shape)
             # make sure that sigma_grid can be accessed quickly
             sigma_grid = np.ascontiguousarray(sigma_grid)
+            if not (
+                np.shares_memory(sigmas, sigma_grid) and (sigma_grid.base is sigmas)
+            ):
+                raise RuntimeError(
+                    "Sigma arrays do not point to same memory, "
+                    "this error cannot be handled outside the source code, "
+                    "please contact the developers."
+                )
+            # if the previous fails at some point, an explicit sigmas.view
+            # should be created, to make sure arrays access same data
         else:
             e_last = self._emodel.predict(structure)
             e_last = (
@@ -336,7 +346,7 @@ class MonteCarlo:
                 accept_swap = False
 
             if accept_swap:
-                structure.swap(i, j, site_type)
+                structure.swap(i, j, site_type)  # this also swaps in sigma_grid
                 e_last += de
 
                 key_value_pairs = {}
