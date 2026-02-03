@@ -74,6 +74,12 @@ commands = ["metropolis"]
         "pred_swap",
         bool,
     ),
+    reduce_structure=(
+        "Use reduced structure, when supercell shape is diagonal",
+        "option",
+        "reduce",
+        bool,
+    ),
     n_mc_steps=(
         "Number of metropolis steps to perform",
         "option",
@@ -150,6 +156,7 @@ def metropolis(
     models_aux_filepaths: List[str] = [],
     no_of_swaps: int = 1,
     predict_swap: bool = True,
+    reduce_structure: bool = False,
     # metropolis sampling arguments
     n_mc_steps: int = 100,
     n_mc_eq: int = 1,
@@ -207,6 +214,7 @@ def metropolis(
                 models=models_aux,
                 no_of_swaps=no_of_swaps,
                 predict_swap=predict_swap,
+                reduce_structure=reduce_structure,
                 filename=traj_filepath,
             )
             mc.metropolis(
