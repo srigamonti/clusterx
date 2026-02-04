@@ -247,7 +247,6 @@ def cli_kwargs():
     args["chemical_potential"]: float = 0.0
     args["chemical_potentials"]: Optional[dict] = None
     args["models_aux_filepaths"]: List[str] = []
-    args["no_of_swaps"]: int = 1
     args["predict_swap"]: bool = True
     # metropolis sampling arguments
     args["n_mc_steps"]: int = 100
@@ -294,7 +293,7 @@ def test_metropolis(plat, model_, request):
     model = request.getfixturevalue(model_)
     mc = MonteCarlo(model, scell, nsubs={0: [4]})
     mc.metropolis(no_of_sampling_steps=10, temperature=600, serialize=True)
-    traj = MonteCarloTrajectory(read=True)
+    traj = MonteCarloTrajectory(scell=scell, read=True)
     traj.get_lowest_energy_structure()
 
 
@@ -310,7 +309,7 @@ def test_metropolis_reduce(plat_bulk, model_bulk, reduce):
         reduce_structure=reduce,
     )
     mc.metropolis(no_of_sampling_steps=1000, temperature=600, serialize=True)
-    traj = MonteCarloTrajectory(read=True)
+    traj = MonteCarloTrajectory(scell=scell, read=True)
     traj.get_lowest_energy_structure()
 
 

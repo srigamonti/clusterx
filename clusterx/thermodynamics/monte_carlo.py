@@ -88,9 +88,6 @@ class MonteCarlo:
 
         Properties from Model obejects can also be calculated after the sampling by using the MonteCarloTrajectory class.
 
-    ``no_of_swaps``: integer (default: 1)
-        Number of atom swaps/replacements per sampling step.
-
     ``predict_swap``: boolean (default: False)
        If set to **True**, this parameter makes the sampling faster by calculating the correlation difference of the
        proposed structure with respect to the previous structure.
@@ -122,7 +119,6 @@ class MonteCarlo:
         sublattice_indices: list | None = None,
         chemical_potentials: list | None = None,
         models: list = [],
-        no_of_swaps: int = 1,
         predict_swap: bool = False,
         reduce_structure: bool = False,
         energy_key: str = "energy",
@@ -138,7 +134,6 @@ class MonteCarlo:
         self._sublattice_indices = sublattice_indices
         self._models = models
         self._ensemble = ensemble
-        self._no_of_swaps = no_of_swaps
         self._predict_swap = predict_swap
         self._reduce_structure = reduce_structure
         self._save_atoms_every = save_atoms_every
@@ -169,6 +164,7 @@ class MonteCarlo:
         boltzmann_constant: float = 1.0,
         initial_decoration: list[int] | None = None,
         target_rate: float | None = None,
+        n_clics: int = 1,
         serialize: bool = False,
         filename: str | None = None,
         **kwargs,
@@ -215,6 +211,10 @@ class MonteCarlo:
             If not ``None``, the initial temperature will be adjusted to match the given
             acceptance rate. The acceptance ratio during the simulation is computed using
             the last 1000 moves.
+
+        ``n_clics``: integer
+            Number of species flips (grandcanonical) or species swaps (canonical) per sampling step.
+            Defaults to 1.
 
         ``serialize``: boolean (default: False)
             Serialize the MonteCarloTrajectory object into a Json file after the sampling.
@@ -290,17 +290,15 @@ class MonteCarlo:
             target_rate=target_rate,
             **kwargs,
         )
-        if self._no_of_swaps > 1:
-            raise NotImplementedError("No. of swaps > 1 functionality not implemented")
-
         key_value_pairs = {}
         for m, mo in enumerate(self._models):
             key_value_pairs.update({mo.property_name: mo.predict(structure)})
-        traj.add_decoration(
-            0,
-            e_last,
-            [],
-            decoration=structure.decor,
+        traj.add_step(
+            step=0,
+            energy=e_last,
+            indices_list=[],
+            new_sigmas=[],
+            sigmas=sigmas,
             key_value_pairs=key_value_pairs,
         )
 
@@ -312,33 +310,34 @@ class MonteCarlo:
         rave = RunningAverage(1000)  # keep track of acceptance rate
 
         for step in progress:
-            indices_list = []
+            flip_tuples = []  # store tuples with (index, new_sigma, old_sigma, site_type)
 
-            for _ in range(self._no_of_swaps):
+            for _ in range(n_clics):
                 i, j, site_type = structure.get_random_swap(self._sublattice_indices)
-                old_sigma = sigmas[i]
-                new_sigma = sigmas[j]
-                indices_list.append([i, j, [site_type]])
+                flip_tuples.append((i, sigmas[j], sigmas[i], site_type))
+                flip_tuples.append((j, sigmas[i], sigmas[j], site_type))
 
             if self._predict_swap:
-                if self._reduce_structure:
-                    de = 0.0
-                    for atom_index in [i, j]:
-                        i_grid = np.unravel_index(atom_index, grid_shape)
+                de = 0.0
+                for i, new_sigma, old_sigma, site_type in flip_tuples:
+                    if self._reduce_structure:
+                        i_grid = np.unravel_index(i, grid_shape)
                         sigma_grid_r, atom_index_r = take_tile(
                             sigma_grid, i_grid, p_reduced
                         )
                         structure_reduced.sigmas = sigma_grid_r.flatten()
-                        index = np.ravel_multi_index(atom_index_r, sigma_grid_r.shape)
-                        de += self._emodel.predict_flip(
-                            structure_reduced,
-                            index=index,
-                            old_sigma=old_sigma,
-                            new_sigma=new_sigma,
-                            scell_factor=scell_factor,
-                        )
-                else:
-                    de = self._emodel.predict_swap(structure, i, j)
+                        _structure = structure_reduced
+                        _i = np.ravel_multi_index(atom_index_r, sigma_grid_r.shape)
+                    else:
+                        _i = i
+                        _structure = structure
+                    de += self._emodel.predict_flip(
+                        _structure,
+                        index=_i,
+                        old_sigma=old_sigma,
+                        new_sigma=new_sigma,
+                        scell_factor=scell_factor,
+                    )
             else:
                 structure.swap(i, j, site_type)
                 de = self._emodel.predict(structure) - e_last
@@ -362,10 +361,11 @@ class MonteCarlo:
                 for m, mo in enumerate(self._models):
                     key_value_pairs.update({mo.property_name: mo.predict(structure)})
                 if serialize:
-                    traj.add_decoration(
-                        i,
-                        e_last,
-                        [[li[0], li[1]] for li in indices_list],
+                    traj.add_step(
+                        step=step,
+                        energy=e_last,
+                        indices_list=[i for i, _, _, _ in flip_tuples],
+                        new_sigmas=[new_sigma for _, new_sigma, _, _ in flip_tuples],
                         key_value_pairs=key_value_pairs,
                     )
 
@@ -435,7 +435,7 @@ class MonteCarloTrajectory:
 
     **Parameters**:
 
-    ``scell``: SuperCell object (default: None)
+    ``scell``: SuperCell object
         Super cell in which the sampling is performed.
 
     ``filename``: string (default: trajectory.json)
@@ -454,7 +454,7 @@ class MonteCarloTrajectory:
 
     """
 
-    def __init__(self, scell=None, filename="trajectory.json", read=False, **kwargs):
+    def __init__(self, scell, filename="trajectory.json", read=False, **kwargs):
         # Load Boltzmann constant in eV / K from ASE
         from ase.units import kB
 
@@ -546,34 +546,25 @@ class MonteCarloTrajectory:
 
             self._trajectory[t]["key_value_pairs"].update(sdict)
 
-    def add_decoration(
-        self, step, energy, indices_list, decoration=None, key_value_pairs={}
+    def add_step(
+        self,
+        step: int,
+        energy: float,
+        indices_list: list[int],
+        new_sigmas: list[int],
+        sigmas: list[int] | None = None,
+        key_value_pairs: dict = {},
     ):
         """Add entry of the structure visited in the sampling to the trajectory."""
-        if indices_list:
-            self._trajectory.append(
-                dict(
-                    [
-                        ("sampling_step_no", int(step)),
-                        ("energy", energy),
-                        ("swapped_positions", indices_list),
-                        ("key_value_pairs", key_value_pairs),
-                    ]
-                )
-            )
-        else:
-            self._trajectory.append(
-                dict(
-                    [
-                        ("sampling_step_no", int(step)),
-                        ("energy", energy),
-                        ("swapped_positions", [[0, 0]]),
-                        ("decoration", deepcopy(decoration)),
-                        ("super_cell_definition", self._scell.as_dict()),
-                        ("key_value_pairs", key_value_pairs),
-                    ]
-                )
-            )
+        step_dict = {
+            "sampling_step_no": int(step),
+            "energy": energy,
+            "indices": indices_list,
+            "new_sigmas": new_sigmas,
+            "sigmas": sigmas,
+            "key_value_pairs": key_value_pairs,
+        }
+        self._trajectory.append(step_dict)
 
     def get_sampling_step_entry_at_step(self, nstep):
         """Return the entry, e.g. the dictionary stored for the n-th samplig step (``nstep``) in trajectory."""
@@ -589,21 +580,17 @@ class MonteCarloTrajectory:
 
     def get_structure(self, nid):
         """Return structure in form of a Structure object, at index ``nid`` in trajectory."""
-
+        traj = self._trajectory
         if nid < 0:
-            _trajlength = len(self._trajectory)
+            _trajlength = len(traj)
             nid = int(_trajlength + nid)
 
-        decoration = deepcopy(self._trajectory[0]["decoration"])
+        sigmas = deepcopy(traj[0]["sigmas"])
+        for step_dict in traj:
+            for i, new_sigma in zip(step_dict["indices"], step_dict["new_sigmas"]):
+                sigmas[i] = new_sigma
 
-        for t, tr in enumerate(self._trajectory[0 : nid + 1]):
-            indices_list = tr["swapped_positions"]
-            for j in range(len(indices_list)):
-                idx1 = indices_list[j][0]
-                idx2 = indices_list[j][1]
-                decoration[idx1], decoration[idx2] = decoration[idx2], decoration[idx1]
-
-        structure = Structure(self._scell, decoration=decoration)
+        structure = Structure(self._scell, sigmas=sigmas)
         return structure
 
     def get_lowest_energy_structure(self):
@@ -878,45 +865,6 @@ class MonteCarloTrajectory:
             if exchange:
                 tr["energy"] = tr.pop("model_total_energy")
             self._trajectory.append(tr)
-
-        if self._scell is None:
-            from ase.atoms import Atoms
-
-            _trajz = self._trajectory[0]
-
-            nsp = sorted(
-                [
-                    int(el)
-                    for el in set(
-                        _trajz["super_cell_definition"]["parent_lattice"]["numbers"]
-                    )
-                ]
-            )
-            species = []
-            for n in nsp:
-                species.append(
-                    _trajz["super_cell_definition"]["parent_lattice"]["numbers"][str(n)]
-                )
-
-            _plat = ParentLattice(
-                atoms=Atoms(
-                    positions=_trajz["super_cell_definition"]["parent_lattice"][
-                        "positions"
-                    ],
-                    cell=_trajz["super_cell_definition"]["parent_lattice"]["unit_cell"],
-                    numbers=np.zeros(len(species)),
-                    pbc=np.asarray(
-                        _trajz["super_cell_definition"]["parent_lattice"]["pbc"]
-                    ),
-                ),
-                sites=np.asarray(species),
-                pbc=np.asarray(
-                    _trajz["super_cell_definition"]["parent_lattice"]["pbc"]
-                ),
-            )
-            self._scell = SuperCell(
-                _plat, np.asarray(_trajz["super_cell_definition"]["tmat"])
-            )
 
 
 class NumpyEncoder(json.JSONEncoder):

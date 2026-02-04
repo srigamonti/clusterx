@@ -62,10 +62,10 @@ commands = ["metropolis"]
         "aux_models",
         list,
     ),
-    no_of_swaps=(
-        "Number of swaps in metropolis sampling",
+    n_clics=(
+        "Number of clics (swaps in canonical, flips in grand-canoncial)",
         "option",
-        "n_swaps",
+        "n_clics",
         int,
     ),
     predict_swap=(
@@ -154,7 +154,6 @@ def metropolis(
     chemical_potential: float = 0.0,
     chemical_potentials: Optional[dict] = None,
     models_aux_filepaths: List[str] = [],
-    no_of_swaps: int = 1,
     predict_swap: bool = True,
     reduce_structure: bool = False,
     # metropolis sampling arguments
@@ -212,7 +211,6 @@ def metropolis(
                 sublattice_indices=sublattice_indices,
                 chemical_potentials=chemical_potentials,
                 models=models_aux,
-                no_of_swaps=no_of_swaps,
                 predict_swap=predict_swap,
                 reduce_structure=reduce_structure,
                 filename=traj_filepath,
@@ -226,6 +224,7 @@ def metropolis(
                 boltzmann_constant=boltzmann_constant,
                 initial_decoration=initial_decoration,
                 target_rate=target_rate,
+                n_clics=n_clics,
                 serialize=True,
                 filename=traj_filepath,
                 **sampling_kwargs,
