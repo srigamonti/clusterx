@@ -4,6 +4,7 @@
 
 import os
 from typing import Optional, Union, List
+import random
 
 import pytest
 from ase.spacegroup import crystal
@@ -297,6 +298,36 @@ def test_metropolis(plat, model_, request):
     traj.get_lowest_energy_structure()
 
 
+def test_sgcmc_raises(plat_bulk, model_bulk):
+    # with semigrand-canonical monte-carlo, chemical potentials have to be given
+    with pytest.raises(ValueError):
+        scell = SuperCell(plat_bulk, 10)
+        n_atoms = len(scell)
+        MonteCarlo(
+            model_bulk,
+            scell,
+            nsubs={0: [n_atoms // 2]},
+            ensemble="semigrand-canonical",
+            chemical_potentials=None,
+        )
+
+
+def test_sgcmc(plat_bulk, model_bulk):
+    np.random.seed(42)
+    random.seed(42)
+    scell = SuperCell(plat_bulk, 2)
+    n_atoms = len(scell)
+    mc = MonteCarlo(
+        model_bulk,
+        scell,
+        nsubs={0: [n_atoms // 2]},
+        predict_swap=True,
+        ensemble="semigrand-canonical",
+        chemical_potentials={0: [0.0, 10.0]},
+    )
+    mc.metropolis(no_of_sampling_steps=10, temperature=600, serialize=True)
+
+
 @pytest.mark.parametrize("reduce", [False, True])
 def test_metropolis_reduce(plat_bulk, model_bulk, reduce):
     scell = SuperCell(plat_bulk, 10)
@@ -311,6 +342,20 @@ def test_metropolis_reduce(plat_bulk, model_bulk, reduce):
     mc.metropolis(no_of_sampling_steps=1000, temperature=600, serialize=True)
     traj = MonteCarloTrajectory(scell=scell, read=True)
     traj.get_lowest_energy_structure()
+
+
+def test_target_rate(plat_bulk, model_bulk):
+    np.random.seed(42)
+    random.seed(42)
+    scell = SuperCell(plat_bulk, 4)
+    n_atoms = len(scell)
+    mc = MonteCarlo(
+        model_bulk,
+        scell,
+        nsubs={0: [n_atoms // 2]},
+        predict_swap=True,
+    )
+    mc.metropolis(no_of_sampling_steps=10000, temperature=1e4, target_rate=0.5)
 
 
 def test_metropolis_perov(plat_perov):

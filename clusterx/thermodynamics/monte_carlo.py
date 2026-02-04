@@ -50,8 +50,8 @@ class MonteCarlo:
     ``ensemble``: string (default: ``canonical``)
         ``canonical`` allows for swaps of atoms that conserve the concentration defined with ``nsubs``.
 
-        ``grandcanonical`` allows for replacing atoms in the sub-lattices defined with ``sublattice_indices``.
-        (So far, ``grandcanonical`` is not yet implemented.)
+        ``semigrand-canonical`` allows replacing atoms in sub-lattices defined with ``sublattice_indices``
+        with other atoms in said sub-lattice.
 
     ``nsubs``: dictionary (default = None)
         Defines the number of substituted atoms in each sub-lattice of the
@@ -117,7 +117,7 @@ class MonteCarlo:
         nsubs: dict | None = None,
         ensemble: str = "canonical",
         sublattice_indices: list | None = None,
-        chemical_potentials: list | None = None,
+        chemical_potentials: dict | None = None,
         models: list = [],
         predict_swap: bool = False,
         reduce_structure: bool = False,
@@ -132,6 +132,7 @@ class MonteCarlo:
         self._nsubs = nsubs
         self._filename = filename
         self._sublattice_indices = sublattice_indices
+        self._chemical_potentials = chemical_potentials
         self._models = models
         self._ensemble = ensemble
         self._predict_swap = predict_swap
@@ -155,6 +156,11 @@ class MonteCarlo:
             self._emodel._init_interaction_dict(self._emodel.scell_reduced)
         else:
             self._emodel._init_interaction_dict(self._scell)
+
+        if (ensemble == "semigrand-canonical") and (chemical_potentials is None):
+            raise ValueError(
+                "`chemical_potentials` have to be given when ensemble is 'semigrand-canonical"
+            )
 
     def metropolis(
         self,
@@ -233,9 +239,8 @@ class MonteCarlo:
             scale_factor if scale_factor is not None else [self._scell.get_index()]
         )
 
-        scale_factor_product = boltzmann_constant * temperature
-        for el in scale_factor:
-            scale_factor_product *= el
+        beta = 1 / boltzmann_constant * temperature
+        scale_factor_product = np.prod(scale_factor)
 
         self.initialize_structure(initial_decoration, self._nsubs)
         structure = self.structure
@@ -312,13 +317,25 @@ class MonteCarlo:
         for step in progress:
             flip_tuples = []  # store tuples with (index, new_sigma, old_sigma, site_type)
 
-            for _ in range(n_clics):
-                i, j, site_type = structure.get_random_swap(self._sublattice_indices)
-                flip_tuples.append((i, sigmas[j], sigmas[i], site_type))
-                flip_tuples.append((j, sigmas[i], sigmas[j], site_type))
+            if self._ensemble == "canonical":
+                for _ in range(n_clics):
+                    i, j, site_type = structure.get_random_swap(
+                        self._sublattice_indices
+                    )
+                    flip_tuples.append((i, sigmas[j], sigmas[i], site_type))
+                    flip_tuples.append((j, sigmas[i], sigmas[j], site_type))
+            elif self._ensemble == "semigrand-canonical":
+                for _ in range(n_clics):
+                    i, sigma_initial, sigma_final, site_type = (
+                        structure.get_random_flip(self._sublattice_indices)
+                    )
+                    flip_tuples.append((i, sigma_final, sigma_initial, site_type))
+            else:
+                raise NotImplementedError(f"Unknown ensemble: {self._ensemble}")
 
+            de = 0.0
+            dmu = 0.0
             if self._predict_swap:
-                de = 0.0
                 for i, new_sigma, old_sigma, site_type in flip_tuples:
                     if self._reduce_structure:
                         i_grid = np.unravel_index(i, grid_shape)
@@ -338,23 +355,39 @@ class MonteCarlo:
                         new_sigma=new_sigma,
                         scell_factor=scell_factor,
                     )
+                    if self._ensemble == "semigrand-canonical":
+                        dmu += (
+                            self._chemical_potentials[site_type][new_sigma]
+                            - self._chemical_potentials[site_type][old_sigma]
+                        )
             else:
-                structure.swap(i, j, site_type)
+                for i, new_sigma, old_sigma, site_type in flip_tuples:
+                    structure.flip(i, old_sigma, new_sigma, site_type)
+                    if self._ensemble == "semigrand-canonical":
+                        dmu += (
+                            self._chemical_potentials[site_type][new_sigma]
+                            - self._chemical_potentials[site_type][old_sigma]
+                        )
                 de = self._emodel.predict(structure) - e_last
-                structure.swap(i, j, site_type)
+                # revert flips
+                for i, new_sigma, old_sigma, site_type in flip_tuples[::-1]:
+                    structure.flip(i, new_sigma, old_sigma, site_type)
 
             # handle multi-linear model, make sure that `de` is np.float64
             de = de if len(de.shape) == 0 else de[self._energy_prediction_index]
 
-            if de <= 0:
-                accept_swap = True
-            elif np.random.uniform(0, 1) <= np.exp(-de / scale_factor_product):
-                accept_swap = True
+            if de + dmu <= 0:
+                accept_step = True
+            elif np.random.uniform(0, 1) <= np.exp(
+                -beta * (de / scale_factor_product + dmu)
+            ):
+                accept_step = True
             else:
-                accept_swap = False
+                accept_step = False
 
-            if accept_swap:
-                structure.swap(i, j, site_type)  # this also swaps in sigma_grid
+            if accept_step:
+                for i, new_sigma, old_sigma, site_type in flip_tuples:
+                    structure.flip(i, old_sigma, new_sigma, site_type)
                 e_last += de
 
                 key_value_pairs = {}
@@ -369,10 +402,10 @@ class MonteCarlo:
                         key_value_pairs=key_value_pairs,
                     )
 
-            rate = rave.update_and_get_average(1.0 * accept_swap)
+            rate = rave.update_and_get_average(1.0 * accept_step)
             if target_rate is not None:
                 if step % 10 == 0 and step >= 1000:
-                    scale_factor_product *= math.exp((target_rate - rate) / 10.0)
+                    beta /= math.exp((target_rate - rate) / 10.0)
 
             if self._save_atoms_every > 0 and step % self._save_atoms_every == 0:
                 structure.set_arrays(sigmas)
