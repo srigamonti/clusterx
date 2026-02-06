@@ -31,8 +31,8 @@ def plat():
     positions = [[0, 0, 0]]
     pbc = [True, True, False]
 
-    pri = Atoms(["Cu"], positions=positions, cell=cell, pbc=pbc)
-    sub = Atoms(["Au"], positions=positions, cell=cell, pbc=pbc)
+    pri = Atoms(["H"], positions=positions, cell=cell, pbc=pbc)
+    sub = Atoms(["N"], positions=positions, cell=cell, pbc=pbc)
     plat = ParentLattice(pri, substitutions=[sub], pbc=pbc)
     return plat
 
@@ -44,8 +44,8 @@ def plat_bulk():
     positions = [[0, 0, 0]]
     pbc = [True, True, True]
 
-    pri = Atoms(["Cu"], positions=positions, cell=cell, pbc=pbc)
-    sub = Atoms(["Au"], positions=positions, cell=cell, pbc=pbc)
+    pri = Atoms(["H"], positions=positions, cell=cell, pbc=pbc)
+    sub = Atoms(["N"], positions=positions, cell=cell, pbc=pbc)
     plat = ParentLattice(pri, substitutions=[sub], pbc=pbc)
     return plat
 
@@ -85,9 +85,8 @@ def corrc(plat, cpool):
 @pytest.fixture
 def model(plat, cpool, corrc):
     # Ising-like model
-    ecisE = [0.0, -1.0]
-    multT = cpool.get_multiplicities()
-    cemodel = Model(corrc, "energy", ecis=np.multiply(ecisE, multT))
+    ecisE = np.array([2.0, -1.0])
+    cemodel = Model(corrc, "energy", ecis=ecisE)
     return cemodel
 
 
@@ -312,20 +311,28 @@ def test_sgcmc_raises(plat_bulk, model_bulk):
         )
 
 
-def test_sgcmc(plat_bulk, model_bulk):
+def test_sgcmc(plat, model):
     np.random.seed(42)
     random.seed(42)
-    scell = SuperCell(plat_bulk, 2)
+    scell = SuperCell(plat, 10)
     n_atoms = len(scell)
     mc = MonteCarlo(
-        model_bulk,
+        model,
         scell,
         nsubs={0: [n_atoms // 2]},
         predict_swap=True,
         ensemble="semigrand-canonical",
-        chemical_potentials={0: [0.0, 10.0]},
+        chemical_potentials={0: [0.0, 0.0]},
+        save_atoms_every=1000,
+        atoms_filename="ising_mc.traj",
     )
-    mc.metropolis(no_of_sampling_steps=10, temperature=600, serialize=True)
+    n_steps = 1000
+    mc.metropolis(
+        no_of_sampling_steps=n_steps,
+        temperature=np.linspace(5, 3, n_steps),
+        scale_factor=None,
+        serialize=True,
+    )
 
 
 @pytest.mark.parametrize("reduce", [False, True])

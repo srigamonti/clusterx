@@ -164,7 +164,7 @@ class MonteCarlo:
         self,
         no_of_sampling_steps: int = 100,
         scale_factor: list[float] = [1.0],
-        temperature: float = 1.0,
+        temperature: float | list[float] = 1.0,
         boltzmann_constant: float = 1.0,
         initial_decoration: list[int] | None = None,
         target_rate: float | None = None,
@@ -194,8 +194,9 @@ class MonteCarlo:
         ``no_of_sampling_steps``: integer
             Number of sampling steps
 
-        ``temperature``: float
-            Temperature at which the sampling is performed.
+        ``temperature``: float or list of float
+            Temperature at which the sampling is performed. If list, length of
+            list must be equal to `no_of_sampling_steps`.
 
         ``boltzmann_constant``: float
             Boltzmann constant
@@ -237,7 +238,12 @@ class MonteCarlo:
             scale_factor if scale_factor is not None else [self._scell.get_index()]
         )
 
-        beta = 1 / boltzmann_constant * temperature
+        if len(np.shape(temperature)) == 0:
+            beta = np.ones((no_of_sampling_steps,), dtype=float) / (
+                boltzmann_constant * temperature
+            )
+        else:
+            beta = 1 / (boltzmann_constant * temperature)
         scale_factor_product = np.prod(scale_factor)
 
         self.initialize_structure(initial_decoration, self._nsubs)
@@ -377,7 +383,7 @@ class MonteCarlo:
             if de + dmu <= 0:
                 accept_step = True
             elif np.random.uniform(0, 1) <= np.exp(
-                -beta * (de / scale_factor_product + dmu)
+                -beta[step - 1] * (de * scale_factor_product + dmu)
             ):
                 accept_step = True
             else:
