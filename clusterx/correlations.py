@@ -306,15 +306,19 @@ class CorrelationsCalculator:
             # with _timed("INIT: Computing cluster orbits for all clusters"):
             cpool = ClustersPool(scell.get_parent_lattice(), super_cell=scell)
             # with _timed("Computing cluster orbits for all clusters"):
-            from tqdm import tqdm
+            show_orbit_progressbar = False
+            if show_orbit_progressbar:
+                # this should not take long anymore with monte-carlo on reduced structure
+                from tqdm import tqdm
 
-            for icl, cluster in enumerate(
-                tqdm(
+                iterator = tqdm(
                     self._cpool.get_cpool_list(),
                     desc="Computing cluster orbits in super cell",
                     unit="cluster",
                 )
-            ):
+            else:
+                iterator = self._cpool.get_cpool_list()
+            for cluster in iterator:
                 _cluster_orbit = cpool.get_cluster_orbit(
                     scell,
                     cluster_positions=cluster.get_positions(),

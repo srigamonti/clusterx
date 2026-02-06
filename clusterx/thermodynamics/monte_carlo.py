@@ -12,7 +12,6 @@ import numpy as np
 from ase.cell import Cell
 from ase.io import Trajectory
 
-from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
 from clusterx.model import Model
@@ -126,6 +125,10 @@ class MonteCarlo:
         atoms_filename: str = "metropolis.traj",
         filename: str = "trajectory.json",
     ):
+        if (ensemble == "semigrand-canonical") and (chemical_potentials is None):
+            raise ValueError(
+                "`chemical_potentials` have to be given when ensemble is 'semigrand-canonical"
+            )
         self._emodel = energy_model
         self._emodel.reset_mc(mc=True)
         self._scell = scell
@@ -156,11 +159,6 @@ class MonteCarlo:
             self._emodel._init_interaction_dict(self._emodel.scell_reduced)
         else:
             self._emodel._init_interaction_dict(self._scell)
-
-        if (ensemble == "semigrand-canonical") and (chemical_potentials is None):
-            raise ValueError(
-                "`chemical_potentials` have to be given when ensemble is 'semigrand-canonical"
-            )
 
     def metropolis(
         self,

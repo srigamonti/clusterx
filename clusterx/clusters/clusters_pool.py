@@ -18,7 +18,7 @@ from clusterx.clusters.cluster import Cluster
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions
-from clusterx.utils import _timed, transformation_containing_sphere_diag
+from clusterx.utils import transformation_containing_sphere_diag
 
 
 class ClustersPool:
@@ -460,14 +460,11 @@ class ClustersPool:
         sites = scell.get_sites()
         satoms = scell.get_substitutional_sites()
         nsatoms = len(satoms)
-        with _timed(
-            "ClustersPool.gen_clusters0: computing matrix of interatomic distances"
-        ):
-            distances = scell.get_all_distances(mic=False)
-            sdistances = self._cpool_scell.get_substitutional_atoms().get_all_distances(
-                mic=True
-            )
-            distances_mic_true = self._cpool_scell.get_all_distances(mic=True)
+        distances = scell.get_all_distances(mic=False)
+        sdistances = self._cpool_scell.get_substitutional_atoms().get_all_distances(
+            mic=True
+        )
+        distances_mic_true = self._cpool_scell.get_all_distances(mic=True)
 
         radii = self.set_radii(sdistances, distances, npoints, self._radii)
 
@@ -601,10 +598,7 @@ class ClustersPool:
         scell = self._cpool_scell
         sites = scell.get_sites()
         satoms = scell.get_substitutional_sites()
-        with _timed(
-            "ClustersPool.gen_clusters1: computing matrix of interatomic distances"
-        ):
-            distances = scell.get_all_distances(mic=False)
+        distances = scell.get_all_distances(mic=False)
         radii = self._radii
 
         for npts, radius in zip(npoints, radii):

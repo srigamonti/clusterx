@@ -172,7 +172,6 @@ class Model:
         self.initialized_interactions = False
 
     def init_reduced_model(self):
-        print("Info(Model): setting up reduced SuperCell.")
         cpool = self.corrc.get_cpool()
         plat = cpool.get_plat()
         r_max = self.corrc.get_cpool().get_max_radii().max()
@@ -320,7 +319,6 @@ class Model:
         """Construct list of which sites are contained in which orbit.
         NOTE: This method needs to be re-called, when super_cell transformation
         (p) changes."""
-        print("Info(Model): setting up dictionary of interactions.")
         cluster_orbits = self.corrc.get_cluster_orbits_for_scell(super_cell)
         cluster_indices = []  # to which primitive cluster each cluster belongs
         cluster_orbits_array = []  # all clusters from all orbits
@@ -337,8 +335,8 @@ class Model:
         for index, cluster in enumerate(cluster_orbits_array):
             for site in cluster.get_idxs():
                 site_clusters[site].append(index)
-        n_interactions = sum([len(sc) for sc in site_clusters])
-        print(f"Info(Model): # saved interactions: {n_interactions}")
+        # n_interactions = sum([len(sc) for sc in site_clusters])
+        # print(f"Info(Model): # saved interactions: {n_interactions}")
 
         self._cluster_orbits_array = np.array(cluster_orbits_array, dtype=object)
         self._cluster_indices = np.array(cluster_indices, dtype=int)
