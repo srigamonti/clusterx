@@ -179,6 +179,9 @@ class Model:
         p_scell = transformation_containing_sphere_diag(r_max, cell, full_sphere=True)
         # round up to odd, to get a central cell
         p_scell = p_scell + np.diag(np.diagonal(p_scell % 2 == 0))
+        for i, pbc in enumerate(plat.get_pbc()):
+            if pbc == 0:
+                p_scell[i, i] = 1
         self.scell_reduced = SuperCell(plat, p_scell)
 
     def serialize(self, filepath=None, fmt=None, db_name=None):

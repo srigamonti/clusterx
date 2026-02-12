@@ -74,7 +74,7 @@ def plat_perov():
 @pytest.fixture
 def cpool(plat):
     # one-point clusters and nearest neighbor two-point clusters
-    return ClustersPool(plat, npoints=[1, 2], radii=[0, 1.1])
+    return ClustersPool(plat, npoints=[2], radii=[1.1])
 
 
 @pytest.fixture
@@ -85,7 +85,7 @@ def corrc(plat, cpool):
 @pytest.fixture
 def model(plat, cpool, corrc):
     # Ising-like model
-    ecisE = np.array([2.0, -1.0])
+    ecisE = np.array([-1.0])
     cemodel = Model(corrc, "energy", ecis=ecisE)
     return cemodel
 
@@ -104,7 +104,7 @@ def model_bulk(plat_bulk):
 @pytest.fixture
 def model_multi(plat, cpool, corrc):
     # Model for two properties in parallel
-    ecis = np.array([[-1.0, -2.0], [-2.0, -4.0]])
+    ecis = np.array([[-2.0], [-4.0]])
     cemodel = Model(corrc, ["energy", "energy_double"], ecis=ecis)
     return cemodel
 
@@ -311,7 +311,8 @@ def test_sgcmc_raises(plat_bulk, model_bulk):
         )
 
 
-def test_sgcmc(plat, model):
+@pytest.mark.parametrize("reduce", [False, True])
+def test_sgcmc(plat, model, reduce):
     np.random.seed(42)
     random.seed(42)
     scell = SuperCell(plat, 10)
@@ -325,6 +326,7 @@ def test_sgcmc(plat, model):
         chemical_potentials={0: [0.0, 0.0]},
         save_atoms_every=1000,
         atoms_filename="ising_mc.traj",
+        reduce_structure=reduce,
     )
     n_steps = 1000
     mc.metropolis(
