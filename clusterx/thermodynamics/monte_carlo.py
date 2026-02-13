@@ -458,6 +458,48 @@ class MonteCarlo:
                 nsubs=self._nsubs, mc=True
             )
 
+    def propose_step(self):
+        """Propose a new structure by performing a random flip or swap."""
+        raise NotImplementedError("Stepwise sampling is not yet implemented.")
+
+    def accept_step(self, de: float, dmu: float, beta: float) -> bool:
+        """Accept or reject the proposed step based on the energy difference, chemical potential difference, and beta."""
+        if de + dmu <= 0:
+            return True
+        elif self.rng.uniform(0, 1) <= np.exp(-beta * (de + dmu)):
+            return True
+        else:
+            return False
+
+    def update_state(self):
+        """Update the state of the system after accepting a step."""
+        raise NotImplementedError("Stepwise sampling is not yet implemented.")
+
+    def step(self) -> bool:
+        """Perform one step of the Metropolis algorithm."""
+        raise NotImplementedError("Stepwise sampling is not yet implemented.")
+
+    def run(
+        self,
+        n_steps: int,
+        temperature: float | list[float] = 1.0,
+    ):
+        """Run the Metropolis sampling."""
+        if len(np.shape(temperature)) == 0:
+            beta = np.ones((n_steps,), dtype=float) / (self.kB * temperature)
+        else:
+            beta = 1 / (self.kB * temperature)
+        self.rave = RunningAverage(1000)  # keep track of acceptance rate
+        progress = tqdm(
+            range(1, n_steps + 1),
+            total=n_steps,
+            desc="MMC sim.",
+        )
+        for i in progress:
+            self.beta = beta[i - 1]
+            accept = self.step()
+            self.rave.update_and_get_average(1.0 * accept)
+
 
 class MonteCarloTrajectory:
     """MonteCarloTrajectory class
