@@ -8,7 +8,7 @@ from typing import List
 
 import numpy as np
 from ase.calculators.calculator import Calculator
-from ase.db.core import connect
+from ase.db import connect
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.structure import Structure
@@ -41,7 +41,7 @@ class StructuresSet:
     ``calculator``: ASE calculator object (default: None)
 
     ``quick_parse``: Boolean (default: ``False``)
-        if True, it assumes that, in the json file to be parsed (see ``db_fname``),
+        if True, it assumes that, in the file to be parsed (see ``db_fname``),
         the atom indices of the structures are the same as those of the supercell.
         Otherwise, the atom positions of structures and supercell are verified for
         every structure in the structures set being parsed. This leads to a slower parsing
@@ -88,8 +88,11 @@ class StructuresSet:
         from clusterx.utils import get_cl_idx_sc
 
         self._db = connect(self._db_fname)
-        # _folders  = self._db.metadata["folders"]
-        _folders = self._db.metadata.get("folders", [])
+        # _folders = self._db.metadata["folders"]
+        _folders = []
+        for row in self._db.select():
+            _folders.append(row.folder)
+        # _folders = self._db.metadata.get("folders", [])
         _props = self._db.metadata.get("properties", {})
 
         plat_dict = self._db.metadata.get("parent_lattice")
@@ -232,11 +235,11 @@ class StructuresSet:
 
         **Parameters:**
 
-        ``structures``: list of Structure objects, path to JSON file, or StructuresSet object
+        ``structures``: list of Structure objects, path to database file, or StructuresSet object
             Structures to be added
 
         ``sort_key``: list of three integers (default:None)
-            Only relevant if ``structures`` is a JSON file. Sort atomic
+            Only relevant if ``structures`` is a database file. Sort atomic
             positions after reading. For example, the value (2,1,0)
             will sort as: increasing z-coordinate first, increasing
             y-coordinate second, increasing x-coordinate third. Useful to get
@@ -417,7 +420,7 @@ class StructuresSet:
             property_name=prop_name,
             property_calc=prop_func,
             rm_vacancies=rm_vac,
-            update_json_db=False,
+            update_db=False,
         )
 
     def compute_property_values(
@@ -425,7 +428,7 @@ class StructuresSet:
         property_name="energy",
         property_calc=None,
         rm_vacancies=True,
-        update_json_db=True,
+        update_db=True,
         **kwargs,
     ):
         """
@@ -456,8 +459,8 @@ class StructuresSet:
             i.e., atom positions containing species with species number 0 or species
             symbol "X".
 
-        ``update_json_db``: Boolean (default:``True``)
-            Whether to update the json database file (in case one is attached to the sset instance).
+        ``update_db``: Boolean (default:``True``)
+            Whether to update the database file (in case one is attached to the sset instance).
 
         ``**kwargs``: keyword argument list, arbitrary length
             keyword arguments directly passed to ``property_func`` function.
@@ -487,8 +490,8 @@ class StructuresSet:
 
         self._props[property_name] = props
 
-        if update_json_db:
-            self._update_properties_in_json_db()
+        if update_db:
+            self._update_properties_in_db()
 
         return props
 
@@ -547,13 +550,13 @@ class StructuresSet:
             [[root] /] [prefix] id [suffix] / [filename]
 
         Where ``root``, ``prefix``, ``suffix``, and ``filename`` are explained
-        below, and ``id`` + 1 is the structure id in a created JSON database with
+        below, and ``id`` + 1 is the structure id in a created database with
         path::
 
-            [[root] /] [prefix]id0-idN[suffix] . json
+            [[root] /] [prefix]id0-idN[suffix] . [json|db]
 
         where ``id0`` and ``idN`` are the smallest and largest ``id`` indices.
-        The path of the created folders are stored in the json-database created
+        The path of the created folders are stored in the database created
         by ``StructuresSet.write_files()``, under, for instance::
 
             {
@@ -860,26 +863,36 @@ class StructuresSet:
                 f.close()
 
         if update_json_db:
-            self._update_properties_in_json_db()
+            self._update_properties_in_db()
 
-    def _update_properties_in_json_db(self):
+    def _update_properties_in_db(self):
         db = self.get_db()
 
-        if db is not None:
-            for i in range(len(self)):
-                # Update properties dict for structure id i+1
-                ppts = {}
-                for k, v in self._props.items():
-                    ppts[k] = v[i]
+        if db is None:
+            return
 
-                db.update(
-                    i + 1, data={"properties": ppts}
-                )  # Writes to the "data" key of the db entry for this Atoms object
+        # If we have a filename for the attached DB, rewriting the DB is
+        # usually much faster than issuing many per-row updates.
+        if self._db_fname is not None:
+            try:
+                # Re-serialize the whole StructuresSet to the same filename.
+                # serialize() writes all rows in a single pass and updates metadata.
+                self.serialize(filepath=self._db_fname, overwrite=True)
+                # Reconnect to the DB so self._db refers to the fresh handle
+                self._db = connect(self._db_fname)
+                return
+            except Exception as exc:
+                warnings.warn(f"Failed to rewrite DB via serialize(): {exc}. Falling back to per-row updates.")
 
-            db.metadata = {**db.metadata, "properties": self._props}
+        # Fallback: update rows one-by-one (original behaviour)
+        for i in range(len(self)):
+            ppts = {k: v[i] for k, v in self._props.items()}
+            db.update(i + 1, data={"properties": ppts})
+
+        db.metadata = {**db.metadata, "properties": self._props}
 
     def set_property_values(
-        self, property_name="total_energy", property_vals=[], update_json_db=True
+        self, property_name="total_energy", property_vals=[], update_db=True
     ):
         """Set property values
 
@@ -896,12 +909,12 @@ class StructuresSet:
         ``property_vals``: array
             Array of property values
 
-        ``update_json_db``: Boolean (default:``True``)
+        ``update_db``: Boolean (default:``True``)
             Whether to update the json database file (in case one is attached to the sset instance).
         """
         self._props[property_name] = property_vals
-        if update_json_db:
-            self._update_properties_in_json_db()
+        if update_db:
+            self._update_properties_in_db()
 
     def set_property_values_from_files(
         self, property_name="property", property_file_name="property.dat", cwd="./"
