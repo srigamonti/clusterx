@@ -84,6 +84,11 @@ def main():
 
         Each listed module must be located in the specified `custom_dir`.
 
+        Instead of using a separate `custom_cell_commands.toml` file,
+        you can also include the `custom_dir` and `custom_modules` attributes
+        directly in your main input TOML file (e.g., `cellinput.toml`) under the top-level section.
+        This way, you can manage both your custom commands and your main command configurations in a single file.
+
     """
 
     # Check for cellinput.toml in the current working directory
