@@ -117,6 +117,9 @@ class Structure(SuperCell):
             self._rng_site_type_weights = None
             self._canonical_site_type_weights = None
         self.precision_positions = 5
+        self.p = self.scell.get_transformation()
+        self.structure_reduced = None
+        self.sigma_grid = None
 
     def __getattr__(self, name):
         # Only called if normal attribute lookup fails
@@ -400,30 +403,34 @@ class Structure(SuperCell):
         """Return decoration array in terms of sigma variables."""
         return self.sigmas
 
-    def get_sigma_grid(self) -> np.ndarray:
-        """Return the sigmas in the form of a 4-dim numpy array."""
-        p = self.scell.get_transformation()
-        if not is_diagonal(p):
+    def init_reduced_structure(self, scell_reduced: SuperCell):
+        if not is_diagonal(self.p):
             raise ValueError(
-                "Sigma grid cannot be generated, super cell "
-                "transformation is not diagonal."
+                f"Cannot reduce structure with non-diagonal SuperCell shape {self.p}"
             )
-        grid_shape = np.diag(p).tolist() + [len(self.get_parent_lattice())]
-        sigmas = self.get_sigmas()
-        return np.reshape(sigmas, grid_shape)
+        grid_shape = tuple(
+            np.diagonal(self.p).tolist() + [len(self.get_parent_lattice())]
+        )
+        # copy=False so that sigma_grid is explicitly a view of sigmas
+        self.sigma_grid = self.sigmas.reshape(grid_shape, copy=False)
+        self.structure_reduced = Structure(
+            scell_reduced, sigmas=np.zeros(len(scell_reduced), dtype=int)
+        )
+        self.p_reduced_diag = np.diagonal(self.structure_reduced.get_transformation())
 
-    def get_reduced_structure(self, p: list[int], index: int) -> Structure:
+    def get_reduced_structure(self, index: int) -> Structure:
         """Return a reduced structure and reduced index.
         Given transformation p, around site index."""
-        sigma_grid = self.get_sigma_grid()
-        index_grid = list(np.unravel_index(index, sigma_grid.shape))
-        sigma_grid_reduced, index_grid_reduced = take_tile(sigma_grid, index_grid, p)
-        scell_reduced = SuperCell(self.scell.get_parent_lattice(), p)
-        structure_reduced = Structure.from_sigma_grid(scell_reduced, sigma_grid_reduced)
+        index_grid = list(np.unravel_index(index, self.sigma_grid.shape))
+        sigma_grid_reduced, index_grid_reduced = take_tile(
+            self.sigma_grid, index_grid, self.p_reduced_diag
+        )
         index_reduced = int(
             np.ravel_multi_index(index_grid_reduced, sigma_grid_reduced.shape)
         )
-        return structure_reduced, index_reduced
+        # link current sigmas of structure to sigmas of structure_reduced
+        self.structure_reduced.sigmas = sigma_grid_reduced.reshape((-1,), copy=False)
+        return self.structure_reduced, index_reduced
 
     def get_supercell(self):
         """Return SuperCell member of the Structure"""

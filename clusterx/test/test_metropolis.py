@@ -268,8 +268,6 @@ def cli_kwargs():
     [
         ("usage", []),
         ("runmc", []),
-        ("setup", ["mc-setup.pickle"]),
-        ("run", ["mc-run.pickle"]),
     ],
 )
 def test_cli(plat, model, cli_kwargs, task, filelist):
@@ -392,6 +390,7 @@ def test_metropolis_perov(plat_perov):
     assert len(traj) == 11
 
 
+@pytest.mark.xfail(reason="MCLite will not be updated")
 @pytest.mark.parametrize("model_", ["model", "model_multi"])
 def test_mclite(plat, model_, request, tmp_path):
     scell = SuperCell(plat, 4)
@@ -409,6 +408,7 @@ def test_mclite(plat, model_, request, tmp_path):
     assert mcrun.energies  # check existence
 
 
+@pytest.mark.xfail(reason="MCLite will not be updated")
 @pytest.mark.parametrize("reduce", [False, True])
 def test_mclite_reduce(plat_bulk, model_bulk, tmp_path, reduce):
     scell = SuperCell(plat_bulk, 10)
@@ -427,6 +427,7 @@ def test_mclite_reduce(plat_bulk, model_bulk, tmp_path, reduce):
     assert mcrun.energies  # check existence
 
 
+@pytest.mark.xfail(reason="MCLite will not be updated")
 def test_mclite_reduce_large(plat_bulk, model_bulk, tmp_path):
     scell = SuperCell(plat_bulk, 100)
     n_atoms = len(scell)

@@ -16,7 +16,7 @@ from ase.io import Trajectory
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
 from clusterx.model import Model
-from clusterx.utils import dict_compare, is_diagonal, take_tile, RunningAverage
+from clusterx.utils import dict_compare, RunningAverage
 
 
 class MonteCarlo:
@@ -160,16 +160,6 @@ class MonteCarlo:
         else:
             self._energy_prediction_index = prop.index(energy_key)
 
-        if reduce_structure:
-            if not is_diagonal(p := self._scell.get_transformation()):
-                raise ValueError(
-                    f"Cannot reduce structure with non-diagonal SuperCell shape {p}"
-                )
-            self._emodel.init_reduced_model()
-            self._emodel._init_interaction_dict(self._emodel.scell_reduced)
-        else:
-            self._emodel._init_interaction_dict(self._scell)
-
     def metropolis(
         self,
         no_of_sampling_steps: int = 100,
@@ -262,24 +252,9 @@ class MonteCarlo:
 
         if self._reduce_structure:
             e_last = np.float64(0.0)  # undefined, we only care about energy differences
-            p = np.diagonal(structure.get_transformation())
-            p_reduced = np.diagonal(self._emodel.scell_reduced.get_transformation())
-            grid_shape = p.tolist() + [len(structure.get_parent_lattice())]
-            structure_reduced, _ = structure.get_reduced_structure(p_reduced, index=0)
-            scell_factor = np.prod(p) / np.prod(p_reduced)
-            sigma_grid = sigmas.reshape(grid_shape)
-            # make sure that sigma_grid can be accessed quickly
-            sigma_grid = np.ascontiguousarray(sigma_grid)
-            if not (
-                np.shares_memory(sigmas, sigma_grid) and (sigma_grid.base is sigmas)
-            ):
-                raise RuntimeError(
-                    "Sigma arrays do not point to same memory, "
-                    "this error cannot be handled outside the source code, "
-                    "please contact the developers."
-                )
-            # if the previous fails at some point, an explicit sigmas.view
-            # should be created, to make sure arrays access same data
+            self._emodel.init_reduced_model(structure)
+            self._emodel._init_interaction_dict(self._emodel.scell_reduced)
+            structure.init_reduced_structure(self._emodel.scell_reduced)
         else:
             e_last = self._emodel.predict(structure)
             e_last = (
@@ -287,7 +262,7 @@ class MonteCarlo:
                 if len(e_last.shape) == 0
                 else e_last[self._energy_prediction_index]
             )
-            scell_factor = 1.0
+            self._emodel._init_interaction_dict(self._scell)
 
         if filename is not None:
             self._filename = filename
@@ -353,23 +328,12 @@ class MonteCarlo:
             dmu = 0.0
             if self._predict_swap:
                 for i, new_sigma, old_sigma, site_type in flip_tuples:
-                    if self._reduce_structure:
-                        i_grid = np.unravel_index(i, grid_shape)
-                        sigma_grid_r, atom_index_r = take_tile(
-                            sigma_grid, i_grid, p_reduced
-                        )
-                        structure_reduced.sigmas = sigma_grid_r.flatten()
-                        _structure = structure_reduced
-                        _i = np.ravel_multi_index(atom_index_r, sigma_grid_r.shape)
-                    else:
-                        _i = i
-                        _structure = structure
                     de += self._emodel.predict_flip(
-                        _structure,
-                        index=_i,
+                        structure=structure,
+                        index=i,
                         old_sigma=old_sigma,
                         new_sigma=new_sigma,
-                        scell_factor=scell_factor,
+                        reduce_structure=self._reduce_structure,
                     )
                     if self._ensemble == "semigrand-canonical":
                         dmu += (

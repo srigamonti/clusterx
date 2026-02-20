@@ -112,6 +112,7 @@ class Model:
         self._mc_init_time = 0
         self.scell_reduced = None  # if needed, initialize with self.init_reduced_model
         self.initialized_interactions = False
+        self.scell_factor = 1.0
 
         if self.standardize:
             from sklearn.preprocessing import StandardScaler
@@ -171,18 +172,20 @@ class Model:
         self._mc_init_time = 0
         self.initialized_interactions = False
 
-    def init_reduced_model(self):
+    def init_reduced_model(self, structure):
         cpool = self.corrc.get_cpool()
         plat = cpool.get_plat()
         r_max = self.corrc.get_cpool().get_max_radii().max()
         cell = plat.get_cell()
-        p_scell = transformation_containing_sphere_diag(r_max, cell, full_sphere=True)
+        p_reduced = transformation_containing_sphere_diag(r_max, cell, full_sphere=True)
         # round up to odd, to get a central cell
-        p_scell = p_scell + np.diag(np.diagonal(p_scell % 2 == 0))
+        p_reduced = p_reduced + np.diag(np.diagonal(p_reduced % 2 == 0))
         for i, pbc in enumerate(plat.get_pbc()):
             if pbc == 0:
-                p_scell[i, i] = 1
-        self.scell_reduced = SuperCell(plat, p_scell)
+                p_reduced[i, i] = 1
+        self.scell_reduced = SuperCell(plat, p_reduced)
+        self.p_reduced = p_reduced
+        self.scell_factor = np.linalg.det(structure.p) / np.linalg.det(p_reduced)
 
     def serialize(self, filepath=None, fmt=None, db_name=None):
         """Write cluster expansion model to Json database
@@ -353,7 +356,7 @@ class Model:
         index: int,
         old_sigma: int,
         new_sigma: int,
-        scell_factor: float = 1.0,
+        reduce_structure: bool = False,
     ):
         """Predict property change by flipping a species.
 
@@ -369,19 +372,24 @@ class Model:
 
         ``new_sigma``: int, default None
 
-        ``scell_factor``: float, default: 1.0
-            Needs to be passed, when structure is a sub-tile of the full structure.
-            In that case, compute it with:
-                p = np.diag(structure.get_supercell().get_transformation()).tolist()
-                p_reduced = np.diag(scell_reduced.get_transformation())
-                scell_factor = np.prod(p) / np.prod(p_reduced)
+        ``reduce_structure``: bool, default: False
+            If true, use reduced structure to predict flip energy, only works
+            for diagonal supercell transformation.
         """
+        if not reduce_structure:  # default case
+            _structure = structure
+            _index = index
+            _scell = _structure.get_supercell()
+        else:
+            _structure, _index = structure.get_reduced_structure(index)
+            _scell = _structure.get_supercell()
+
         if not self.initialized_interactions:
-            self._init_interaction_dict(structure.get_supercell())
+            self._init_interaction_dict(_scell)
 
         correlations_diff = cluster_correlations_flip(
-            structure=structure,
-            ind=index,
+            structure=_structure,
+            ind=_index,
             old_sigma=old_sigma,
             new_sigma=new_sigma,
             site_clusters=self._site_clusters,
@@ -389,8 +397,8 @@ class Model:
             cluster_indices=self._cluster_indices,
             basis_set_values=self.corrc.basis_set_values,
             multiplicities=self._multiplicities,
-            multiplicity_factor=scell_factor,
         )
+        correlations_diff /= self.scell_factor
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
             try:
@@ -413,7 +421,6 @@ class Model:
         i,
         j,
         correlation=False,
-        scell_factor: float = 1.0,
     ):
         """Predict property difference with the optimal cluster expansion model.
 
@@ -427,22 +434,14 @@ class Model:
 
         ``j``: int
             index of second atom position has been swapped
-
-        ``scell_factor``: float, default: 1.0
-            Needs to be passed, when structure is a sub-tile of the full structure.
-            In that case, compute it with:
-                p = np.diag(structure.get_supercell().get_transformation()).tolist()
-                p_reduced = np.diag(scell_reduced.get_transformation())
-                scell_factor = np.prod(p) / np.prod(p_reduced)
-
         """
 
         sigma_i = structure.sigmas[i]
         sigma_j = structure.sigmas[j]
 
-        de1 = self.predict_flip(structure, i, sigma_i, sigma_j, scell_factor)
+        de1 = self.predict_flip(structure, i, sigma_i, sigma_j)
         structure.sigmas[i] = sigma_j
-        de2 = self.predict_flip(structure, j, sigma_j, sigma_i, scell_factor)
+        de2 = self.predict_flip(structure, j, sigma_j, sigma_i)
         structure.sigmas[i] = sigma_i  # restore original structure
         return de1 + de2
 

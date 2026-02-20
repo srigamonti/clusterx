@@ -478,7 +478,6 @@ def cluster_correlations_flip(
     cluster_indices: np.ndarray,
     basis_set_values: np.ndarray,
     multiplicities: np.ndarray,
-    multiplicity_factor: float = 1.0,
 ) -> np.ndarray:
     """Calculate cluster correlations for a structure with a flipped site,
     using cached cluster orbit array and multiplicities."""
@@ -503,7 +502,6 @@ def cluster_correlations_flip(
         correlations_diff[cluster_index] += cf
 
     correlations_diff /= multiplicities
-    correlations_diff /= multiplicity_factor
     return np.around(correlations_diff, decimals=12)
 
 
