@@ -369,6 +369,22 @@ def generate_derivative_structures(
 
         # Plot properties of derivative structures
         case "plot_property_vs_concentration" | "plot_property":
+            with open(dss_filepath, "rb") as f:
+                dsgen = pickle.load(f)
+            dsgen.add_fractional_concentration_binary()
+
+            plat = ParentLattice(filepath=plat_filepath)
+            stypes_plat = plat.get_sublattice_types()
+            # Identify the binary sublattice
+            binary_sublattice_id = None
+            for i, (k, v) in enumerate(stypes_plat.items()):
+                if len(v) == 2:  # Binary sublattice
+                    binary_sublattice_id = i
+                    break
+
+            with open(dss_filepath, "wb") as f:
+                pickle.dump(dsgen, f)
+
             if sset_filepath is not None:
                 sset = StructuresSet(filepath=sset_filepath)
                 model = (
@@ -384,13 +400,9 @@ def generate_derivative_structures(
                     show_plot=show_plot,
                     save_plot=save_plot,
                     fname=plot_fname,
+                    site_type=binary_sublattice_id
                 )
             else:
-                # _do_plot_properties(dss_filepath, property_name=property_name, mask_name=mask_name)
-                with open(dss_filepath, "rb") as f:
-                    dsgen = pickle.load(f)
-
-                dsgen.add_fractional_concentration_binary()
                 x = dsgen.configurations["frconc_binary"].to_numpy()
 
                 if property_name is not None and property_names is not None:
@@ -722,6 +734,7 @@ def _do_plot_properties(
     show_plot=True,
     save_plot=True,
     fname=None,
+    site_type=0,
 ):
     with open(dss_filepath, "rb") as f:
         dsgen = pickle.load(f)
@@ -737,6 +750,7 @@ def _do_plot_properties(
         show_plot=show_plot,
         save_plot=show_plot,
         fname=fname,
+        site_type=site_type
     )
 
 

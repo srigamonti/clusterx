@@ -698,11 +698,18 @@ class DSGenerator:
 
             if n_random is None:
                 if recursive:
+                    # Identify the binary sublattice
+                    binary_sublattice_id = None
+                    for i, (k, v) in enumerate(stypes_plat.items()):
+                        if len(v) == 2:  # Binary sublattice
+                            binary_sublattice_id = i
+                            break
+
                     n_max = int(partial_binom_sum(len(ssites), nsubs) / scindex)
                     with tqdm(total=n_max, desc="Finding unique sigmas") as pbar:
                         num_conf = self._generate_all_configurations_recursive(
                             ssites,
-                            {0: [nsubs]},
+                            {binary_sublattice_id: [nsubs]},
                             natoms,
                             shape_id,
                             symper_tuples,
