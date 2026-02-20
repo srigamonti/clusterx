@@ -6,6 +6,7 @@
 import json
 from copy import deepcopy
 import math
+import random
 
 from tqdm import tqdm
 import numpy as np
@@ -104,8 +105,9 @@ class MonteCarlo:
     ``filename``: string (default: ``trajectory.json``)
         Path at which to store the MonteCarloTrajectory.
 
-    .. todo:
-        Samplings in the grand canonical ensemble are not yet possible.
+    ``seed``: int or None (default: None)
+        seed value for random number generators. For reproducible results,
+        pass integer seed, otherwise seed=None
 
     """
 
@@ -124,6 +126,7 @@ class MonteCarlo:
         save_atoms_every: int = 0,
         atoms_filename: str = "metropolis.traj",
         filename: str = "trajectory.json",
+        seed: int | None = None,
     ):
         if (ensemble == "semigrand-canonical") and (chemical_potentials is None):
             raise ValueError(
@@ -142,6 +145,13 @@ class MonteCarlo:
         self._reduce_structure = reduce_structure
         self._save_atoms_every = save_atoms_every
         self._atoms_filename = atoms_filename
+        # Use two rngs, numpy.rng produces MC acceptance probability,
+        # random.Random produces hashable values for random flip sites
+        # SFC64 should be fastest bit generator in numpy at time of writing
+        self._rng_np = np.random.Generator(np.random.SFC64(seed))
+        # self._rng_np = np.random.default_rng(seed) # fall-back option
+        self._rng_std: random.Random = random
+        self._rng_std.seed(seed)
 
         prop = energy_model.property_name
         if prop is None or len(prop) == 0 or isinstance(prop, str):
@@ -324,14 +334,16 @@ class MonteCarlo:
             if self._ensemble == "canonical":
                 for _ in range(n_clics):
                     i, j, site_type = structure.get_random_swap(
-                        self._sublattice_indices
+                        self._sublattice_indices, self._rng_std
                     )
                     flip_tuples.append((i, sigmas[j], sigmas[i], site_type))
                     flip_tuples.append((j, sigmas[i], sigmas[j], site_type))
             elif self._ensemble == "semigrand-canonical":
                 for _ in range(n_clics):
                     i, sigma_initial, sigma_final, site_type = (
-                        structure.get_random_flip(self._sublattice_indices)
+                        structure.get_random_flip(
+                            self._sublattice_indices, rng=self._rng_std
+                        )
                     )
                     flip_tuples.append((i, sigma_final, sigma_initial, site_type))
             else:
@@ -382,7 +394,7 @@ class MonteCarlo:
 
             if de + dmu <= 0:
                 accept_step = True
-            elif np.random.uniform(0, 1) <= np.exp(
+            elif self._rng_np.random() <= np.exp(
                 -beta[step - 1] * (de * scale_factor_product + dmu)
             ):
                 accept_step = True
@@ -455,7 +467,7 @@ class MonteCarlo:
                 )
         else:
             self.structure = self._scell.gen_random_structure(
-                nsubs=self._nsubs, mc=True
+                nsubs=self._nsubs, mc=True, rng=self._rng_np
             )
 
     def propose_step(self):

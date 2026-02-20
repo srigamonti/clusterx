@@ -214,6 +214,7 @@ def metropolis(
                 predict_swap=predict_swap,
                 reduce_structure=reduce_structure,
                 filename=traj_filepath,
+                seed=random_seed,
             )
             mc.metropolis(
                 no_of_sampling_steps=n_mc_steps,

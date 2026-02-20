@@ -259,7 +259,7 @@ def cli_kwargs():
     args["boltzmann_constant"]: float = 1.0
     args["initial_decoration"]: Optional[List[int]] = None
     args["target_rate"]: Optional[float] = None
-    args["random_seed"]: Optional[int] = None
+    args["random_seed"]: Optional[int] = 42
     return args
 
 
@@ -313,8 +313,6 @@ def test_sgcmc_raises(plat_bulk, model_bulk):
 
 @pytest.mark.parametrize("reduce", [False, True])
 def test_sgcmc(plat, model, reduce):
-    np.random.seed(42)
-    random.seed(42)
     scell = SuperCell(plat, 10)
     n_atoms = len(scell)
     mc = MonteCarlo(
@@ -327,6 +325,7 @@ def test_sgcmc(plat, model, reduce):
         save_atoms_every=1000,
         atoms_filename="ising_mc.traj",
         reduce_structure=reduce,
+        seed=42,
     )
     n_steps = 1000
     mc.metropolis(
@@ -347,6 +346,7 @@ def test_metropolis_reduce(plat_bulk, model_bulk, reduce):
         nsubs={0: [n_atoms // 2]},
         predict_swap=True,
         reduce_structure=reduce,
+        seed=42,
     )
     mc.metropolis(no_of_sampling_steps=1000, temperature=600, serialize=True)
     traj = MonteCarloTrajectory(scell=scell, read=True)
@@ -363,6 +363,7 @@ def test_target_rate(plat_bulk, model_bulk):
         scell,
         nsubs={0: [n_atoms // 2]},
         predict_swap=True,
+        seed=42,
     )
     mc.metropolis(no_of_sampling_steps=10000, temperature=1e4, target_rate=0.5)
 
@@ -384,6 +385,7 @@ def test_metropolis_perov(plat_perov):
         reduce_structure=True,
         save_atoms_every=100,
         atoms_filename="perov_mc.traj",
+        seed=42,
     )
     mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, serialize=False)
     traj = Trajectory("perov_mc.traj")
@@ -456,6 +458,7 @@ def test_metropolis_clathrate_full_subs(
         cemodel_full_sub,
         scell,
         nsubs={0: [112, 16], 1: [0]},
+        seed=42,
     )
     nmc = 30
     kb = float(3.16681009610757e-6)

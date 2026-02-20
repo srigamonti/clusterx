@@ -193,22 +193,23 @@ def test_flip_scale_sc(plat_cubic, model_cubic):
 
 
 def test_metropolis_cubic(plat_cubic, model_cubic):
-    seed_rngs(42)
-
+    seed = 42
     p = [4, 4, 4]
     scell = SuperCell(plat_cubic, p)
     nsubs = {0: [4]}
     nsteps = 10  # might fail for larger nsteps and similar or smaller p
 
-    seed_rngs(42)
     mc_full = MonteCarlo(
-        energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=False
+        energy_model=model_cubic,
+        scell=scell,
+        nsubs=nsubs,
+        predict_swap=False,
+        seed=seed,
     )
     traj_full = mc_full.metropolis(temperature=100, no_of_sampling_steps=nsteps)
 
-    seed_rngs(42)
     mc_swap = MonteCarlo(
-        energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=True
+        energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=True, seed=seed
     )
     traj_swap = mc_swap.metropolis(temperature=100, no_of_sampling_steps=nsteps)
     np.testing.assert_allclose(traj_swap.get_energies(), traj_full.get_energies())

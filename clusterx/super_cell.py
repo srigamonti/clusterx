@@ -392,7 +392,7 @@ class SuperCell(ParentLattice):
                 )
             sigmas = rng.integers(2, size=len(self))
         elif isinstance(nsubs, dict):
-            _, sigmas = self.gen_random_decoration(nsubs)
+            _, sigmas = self.gen_random_decoration(nsubs, rng)
         else:
             raise TypeError(
                 f"Unknown type for nsubs: {type(nsubs)}, has to be either None, int, or dict"
@@ -404,18 +404,22 @@ class SuperCell(ParentLattice):
             track_indices=mc,
         )
 
-    def gen_random_decoration(self, nsubs):
+    def gen_random_decoration(
+        self, nsubs, rng: np.random.Generator = np.random.default_rng()
+    ):
         """Generate a random decoration of the super cell with given number of substitutions.
 
         Parameters:
 
-        nsubs: dictionary
+        ``nsubs``: dictionary
             The format of the dictionary is as follows::
 
                 {site_type1:[n11,n12,...], site_type2:[n21,n22,...], ...}
 
             it indicates how many substitutional atoms of every kind (n#1, n#2, ...)
             may replace the pristine species for sites of site_type#.
+
+        ``rng``: numpy random number generator with the function `integers`
 
         Returns:
 
@@ -440,7 +444,7 @@ class SuperCell(ParentLattice):
             sub_list = np.asarray([])
             for i, n in enumerate(nsub):
                 sub_idxs = np.setdiff1d(sub_idxs, sub_list)
-                sub_list = np.random.choice(sub_idxs, n, replace=False)
+                sub_list = rng.choice(sub_idxs, n, replace=False)
 
                 for atom_index in sub_list:
                     decoration[atom_index] = idx_subs[tag][i + 1]
