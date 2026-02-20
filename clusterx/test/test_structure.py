@@ -82,10 +82,12 @@ def test_reduced_structure(parent_lattice):
     p = [10, 10, 10]
     p_reduced = [3, 3, 3]
     super_cell = SuperCell(parent_lattice, p)
+    super_cell_reduced = SuperCell(parent_lattice, p_reduced)
     sites = super_cell.get_sites()
     sigmas = [len(site) - 1 for site in sites.values()]
     structure = Structure(super_cell, sigmas=sigmas)
-    structure_reduced, index_reduced = structure.get_reduced_structure(p_reduced, 0)
+    structure.init_reduced_structure(super_cell_reduced)
+    structure_reduced, index_reduced = structure.get_reduced_structure(0)
     assert isinstance(structure_reduced, Structure)
     assert isinstance(index_reduced, int)
 
@@ -132,9 +134,7 @@ def test_sigma_grid_orthorhombic(parent_lattice):
     struct_flat = Structure(super_cell, sigmas=sigmas)
     struct_grid = Structure.from_sigma_grid(super_cell, sigma_grid)
     np.testing.assert_array_equal(struct_flat.get_sigmas(), struct_grid.get_sigmas())
-    np.testing.assert_array_equal(
-        struct_flat.get_sigma_grid(), struct_grid.get_sigma_grid()
-    )
+    np.testing.assert_array_equal(struct_flat.sigmas, struct_grid.sigmas)
 
 
 def test_initializations(parent_lattice):
@@ -156,9 +156,7 @@ def test_initializations(parent_lattice):
 
     for other in others:
         assert reference == other
-        np.testing.assert_array_equal(
-            reference.get_sigma_grid(), other.get_sigma_grid()
-        )
+        np.testing.assert_array_equal(reference.sigmas, other.sigmas)
 
 
 def test_swap(super_cell):

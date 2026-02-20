@@ -98,14 +98,15 @@ def test_flip_2D(reduce):
     sub = Atoms("Au", positions=[[0, 0, 0]], cell=[1, 1, 1], pbc=[1, 1, 0])
     plat = ParentLattice(atoms=pri, substitutions=[sub])
     p = [10, 10, 1]
-    p_reduced = [3, 3, 1]
-    scell_factor = np.prod(p) / np.prod(p_reduced)
     scell = SuperCell(plat, p)
-    scell_reduced = SuperCell(plat, p_reduced)
     structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
     cpool = ClustersPool(plat, npoints=[2], radii=[1.5])
     corrc = CorrelationsCalculator("trigonometric", plat, cpool)
     model = Model(corrc, "energy", ecis=[1, 1])
+    if reduce:
+        model.init_reduced_model(structure)
+        model._init_interaction_dict(model.scell_reduced)
+        structure.init_reduced_structure(model.scell_reduced)
 
     preds_full = []
     preds_flip = []
@@ -113,23 +114,7 @@ def test_flip_2D(reduce):
         pred_init = model.predict(structure)
         old_sigma = structure.sigmas[i]
         new_sigma = 1 - old_sigma
-        if reduce:
-            sigma_grid = structure.get_sigma_grid()
-            grid_shape = sigma_grid.shape
-            k = np.unravel_index(i, grid_shape)
-            sigma_grid_sub, i_grid = take_tile(sigma_grid, k, p_reduced)
-            structure_reduced = Structure.from_sigma_grid(scell_reduced, sigma_grid_sub)
-            i_reduced = np.ravel_multi_index(i_grid, p_reduced + [1])
-
-            pred_flip = model.predict_flip(
-                structure_reduced,
-                i_reduced,
-                old_sigma,
-                new_sigma,
-                scell_factor=scell_factor,
-            )
-        else:
-            pred_flip = model.predict_flip(structure, i, old_sigma, new_sigma)
+        pred_flip = model.predict_flip(structure, i, old_sigma, new_sigma, reduce)
         structure.sigmas[i] = new_sigma
         pred_final = model.predict(structure)
         preds_full.append(pred_final - pred_init)
@@ -142,34 +127,19 @@ def test_flip(plat_cubic, model_cubic, reduce):
     seed_rngs(42)
 
     p = [5, 5, 5]
-    p_reduced = [3, 3, 3]
-    scell_factor = np.prod(p) / np.prod(p_reduced)
     scell = SuperCell(plat_cubic, p)
-    scell_reduced = SuperCell(plat_cubic, p_reduced)
     structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
+    if reduce:
+        model_cubic.init_reduced_model(structure)
+        model_cubic._init_interaction_dict(model_cubic.scell_reduced)
+        structure.init_reduced_structure(model_cubic.scell_reduced)
     preds_full = []
     preds_flip = []
     for i in range(len(structure)):
         pred_init = model_cubic.predict(structure)
         old_sigma = structure.sigmas[i]
         new_sigma = 1 - old_sigma
-        if reduce:
-            sigma_grid = structure.get_sigma_grid()
-            grid_shape = sigma_grid.shape
-            k = np.unravel_index(i, grid_shape)
-            sigma_grid_sub, i_grid = take_tile(sigma_grid, k, p_reduced)
-            structure_reduced = Structure.from_sigma_grid(scell_reduced, sigma_grid_sub)
-            i_reduced = np.ravel_multi_index(i_grid, p_reduced + [1])
-
-            pred_flip = model_cubic.predict_flip(
-                structure_reduced,
-                i_reduced,
-                old_sigma,
-                new_sigma,
-                scell_factor=scell_factor,
-            )
-        else:
-            pred_flip = model_cubic.predict_flip(structure, i, old_sigma, new_sigma)
+        pred_flip = model_cubic.predict_flip(structure, i, old_sigma, new_sigma, reduce)
         structure.sigmas[i] = new_sigma
         pred_final = model_cubic.predict(structure)
         preds_full.append(pred_final - pred_init)

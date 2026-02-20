@@ -404,6 +404,8 @@ class Structure(SuperCell):
         return self.sigmas
 
     def init_reduced_structure(self, scell_reduced: SuperCell):
+        """Initialize reduced structure, which has the same parent lattice
+        as self, but with SuperCell scell_reduced."""
         if not is_diagonal(self.p):
             raise ValueError(
                 f"Cannot reduce structure with non-diagonal SuperCell shape {self.p}"
@@ -421,6 +423,10 @@ class Structure(SuperCell):
     def get_reduced_structure(self, index: int) -> Structure:
         """Return a reduced structure and reduced index.
         Given transformation p, around site index."""
+        if self.structure_reduced is None:
+            raise RuntimeError(
+                "structure.get_reduced_structure was called before structure.init_reduced_structure"
+            )
         index_grid = list(np.unravel_index(index, self.sigma_grid.shape))
         sigma_grid_reduced, index_grid_reduced = take_tile(
             self.sigma_grid, index_grid, self.p_reduced_diag
