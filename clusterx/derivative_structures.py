@@ -101,7 +101,7 @@ class DSGenerator:
     def get_configurations(self, mask_name=None):
         if mask_name is not None:
             return self.configurations[
-                self.configurations["config_id"] in self.get_mask(mask_name)
+                self.configurations["config_id"].isin(self.get_mask(mask_name))
             ]
         return self.configurations
 
