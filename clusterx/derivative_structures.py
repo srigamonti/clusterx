@@ -1503,3 +1503,119 @@ def get_unique_supercells_nearest_orthogonal(n, parent_lattice: object, elements
     return [
         SuperCell(parent_lattice, p) for p in small_angle_sc_shapes
     ], small_angle_sc_shapes
+
+
+def add_binary_complements(self, mask_name=None, mode="new", skip_existing=True):
+    """
+    Generate the binary complements of configurations (flip 0<->1 on substitutional sites).
+
+    Steps:
+      1) Check that parent lattice is binary (self.plat.is_nary(2)).
+      2) For each configuration, build/cached SuperCell for its shape_id.
+      3) Require exactly one substitutional sublattice:
+            len(scell.get_substitutional_tags()) == 1
+      4) Flip sigma entries at scell.get_substitutional_sites() (only those sites).
+      5) Either return a new DSGenerator with the complemented configurations (mode="new"),
+         or extend self by adding them (mode="extend").
+
+    Parameters
+    ----------
+    mask_name : str or None
+        If provided, only configurations in the mask are processed (uses get_configurations()).
+    mode : {"new", "extend"}
+        - "new": return a new DSGenerator with only complemented configs.
+        - "extend": add complemented configs to self and return self.
+    skip_existing : bool
+        If True, do not add complements that already exist (same sigma and shape_id).
+
+    Returns
+    -------
+    DSGenerator
+        The new generator (mode="new") or self (mode="extend").
+
+    Raises
+    ------
+    ValueError
+        If parent lattice is not binary, or if a configuration's supercell does not have
+        exactly one substitutional sublattice.
+    """
+    # Local import to avoid import cycles if any
+    from clusterx.super_cell import SuperCell
+
+    if not self.plat.is_nary(2):
+        raise ValueError(
+            "add_binary_complements() requires a binary ParentLattice: self.plat.is_nary(2) must be True."
+        )
+
+    if mode not in {"new", "extend"}:
+        raise ValueError("mode must be 'new' or 'extend'.")
+
+    # Choose target container
+    if mode == "new":
+        out = self.__class__(self.plat)
+        # keep scell shapes available in the returned object
+        out.scell_shapes = self.scell_shapes.copy(deep=True)
+
+        out.masks = dict(self.masks)
+        out.property_names = set(self.property_names)
+    else:
+        out = self
+
+    # For quick existence checks
+    if skip_existing:
+        existing = set(
+            (tuple(row["sigma"]), int(row["shape_id"]))
+            for _, row in out.configurations.iterrows()
+        )
+    else:
+        existing = set()
+
+    scell_cache = {}
+
+    # Use mask-aware accessor
+    configs_df = self.get_configurations(mask_name=mask_name)
+
+    for _, row in configs_df.iterrows():
+        shape_id = int(row["shape_id"])
+        sigma = tuple(row["sigma"])
+
+        # Build or reuse the SuperCell for this shape
+        if shape_id in scell_cache:
+            scell = scell_cache[shape_id]
+        else:
+            scell = SuperCell(self.plat, p=self.get_scell_shape(shape_id))
+            scell_cache[shape_id] = scell
+
+        tags = scell.get_substitutional_tags()
+        if len(tags) != 1:
+            raise ValueError(
+                f"Expected exactly one substitutional sublattice (len(get_substitutional_tags())==1), "
+                f"but got {len(tags)} for shape_id={shape_id}."
+            )
+
+        sub_sites = scell.get_substitutional_sites()  # indices into sigma
+        # Flip only the substitutional sites
+        sigma_list = list(sigma)
+        for i in sub_sites:
+            val = sigma_list[i]
+            if val == 0:
+                sigma_list[i] = 1
+            elif val == 1:
+                sigma_list[i] = 0
+            else:
+                raise ValueError(
+                    f"Non-binary occupation value {val} at sigma[{i}] for config_id={row['config_id']}, "
+                    f"shape_id={shape_id}. Expected only 0/1 on substitutional sites."
+                )
+
+        flipped_sigma = tuple(sigma_list)
+
+        key = (flipped_sigma, shape_id)
+        if skip_existing and key in existing:
+            continue
+
+        out.add_configuration(flipped_sigma, shape_id)
+        if skip_existing:
+            existing.add(key)
+
+    return out
