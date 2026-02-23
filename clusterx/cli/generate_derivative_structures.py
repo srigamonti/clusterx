@@ -87,6 +87,12 @@ commands = ["generate_derivative_structures"]
     n_random=("Number of random structures to include.", "option", None, int),
     random_state=("Seed for random number generators.", "option", None, int),
     task=("Task to perform.", "option", "task", str),
+    skip_existing=(
+        "when adding binary complements, skip those that already exist in the DSS instead of raising an error",
+        "flag",
+        "skip",
+        bool,
+    ),
     non_recursive=(
         "Use slow non-recursive method for finding derivative structures",
         "flag",
@@ -122,6 +128,7 @@ def generate_derivative_structures(
     colors=None,
     markers=None,
     sizes=None,
+    skip_existing=False,
     non_recursive=False,
 ):
     """
@@ -329,6 +336,16 @@ def generate_derivative_structures(
                 recursive=not non_recursive,
             )
 
+        case "add_binary_complements":
+            print("Loading DSS from file...")
+            dss = DSGenerator.from_file(dss_filepath)
+
+            print("Adding binary complements...")
+            dss.add_binary_complements(mode="extend", skip_existing=skip_existing)
+
+            print("Serializing updated DSS to file...")
+            dss.serialize(filepath=dss_filepath)
+
         # Compute property with CE model
         case "compute_property_with_ce_model" | "compute_property_ce":
             model = (
@@ -400,7 +417,7 @@ def generate_derivative_structures(
                     show_plot=show_plot,
                     save_plot=save_plot,
                     fname=plot_fname,
-                    site_type=binary_sublattice_id
+                    site_type=binary_sublattice_id,
                 )
             else:
                 x = dsgen.configurations["frconc_binary"].to_numpy()
@@ -750,7 +767,7 @@ def _do_plot_properties(
         show_plot=show_plot,
         save_plot=show_plot,
         fname=fname,
-        site_type=site_type
+        site_type=site_type,
     )
 
 
