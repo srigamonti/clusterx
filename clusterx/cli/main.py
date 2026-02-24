@@ -89,6 +89,12 @@ def main():
         directly in your main input TOML file (e.g., `cellinput.toml`) under the top-level section.
         This way, you can manage both your custom commands and your main command configurations in a single file.
 
+    Notes to develpoers:
+        - We use plac, which is a simple and intuitive library for creating command-line interfaces in Python.
+        - To avoid problems between plac and python type hints, we specify the type of each argument in
+            the plac.annotations decorator. For using annotations (see https://plac.readthedocs.io/en/latest/#more-features)
+            consider that annotatio is a 6-tuple of the form (help, kind, abbrev, type, choices, metavar).
+
     """
 
     # Check for cellinput.toml in the current working directory
