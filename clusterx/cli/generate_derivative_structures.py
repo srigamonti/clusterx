@@ -386,21 +386,18 @@ def generate_derivative_structures(
 
         # Plot properties of derivative structures
         case "plot_property_vs_concentration" | "plot_property":
-            with open(dss_filepath, "rb") as f:
-                dsgen = pickle.load(f)
+            dsgen = DSGenerator.from_file(dss_filepath)
             dsgen.add_fractional_concentration_binary()
+            dsgen.serialize(filepath=dss_filepath)
 
             plat = ParentLattice(filepath=plat_filepath)
             stypes_plat = plat.get_sublattice_types()
             # Identify the binary sublattice
-            binary_sublattice_id = None
+            binary_sublattice_id = 0
             for i, (k, v) in enumerate(stypes_plat.items()):
                 if len(v) == 2:  # Binary sublattice
                     binary_sublattice_id = i
                     break
-
-            with open(dss_filepath, "wb") as f:
-                pickle.dump(dsgen, f)
 
             if sset_filepath is not None:
                 sset = StructuresSet(filepath=sset_filepath)
