@@ -48,6 +48,12 @@ commands = ["plot_property"]
         "mm",
         bool,
     ),
+    y_axis_label=(
+        "Label for the y-axis of the plot.",
+        "option",
+        "y",
+        str,
+    ),
     show_loo_predictions=(
         "Show Leave-One-Out cross-validation predictions.",
         "flag",
@@ -64,6 +70,7 @@ def plot_property(
     fig_fname: Optional[str] = None,  # possible extensions: .npz, .json, .txt, .dat
     figdata_fname: Optional[str] = None,
     mark_min: bool = False,
+    y_axis_label: Optional[str] = None,
     show_loo_predictions: bool = False,
 ):
     """Make plot of property versus concentration"""
@@ -97,4 +104,5 @@ def plot_property(
         data_fname=figdata_fname,
         show_loo_predictions=show_loo_predictions,
         sset_gss=sset_gss,
+        yaxis_label=y_axis_label,
     )
