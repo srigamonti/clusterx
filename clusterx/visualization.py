@@ -637,7 +637,7 @@ def plot_property_vs_concentration(
     )
 
     if cemodel is not None and show_loo_predictions:
-        cvs = cemodel.get_cv_score(sset)
+        cvs = cemodel.get_cv_score(sset, property_name)
         pred_cv = np.array(cvs["Predictions-CV"])
     else:
         pred_cv = None
