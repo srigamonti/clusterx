@@ -596,9 +596,11 @@ class WangLandau:
             struc = Structure(self._scell, initial_decoration, track_indices=True)
         else:
             if self._nsubs is not None:
-                struc = self._scell.gen_random_structure(nsubs=self._nsubs, mc=True)
+                struc = self._scell.gen_random_structure(
+                    nsubs=self._nsubs, track_indices=True
+                )
             else:
-                struc = self._scell.gen_random_structure(mc=True)
+                struc = self._scell.gen_random_structure(track_indices=True)
 
         e = self._em.predict(struc) * self._ef
 

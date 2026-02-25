@@ -37,7 +37,7 @@ def structure(super_cell):
 def structure_random(super_cell: SuperCell):
     # nsubs = {0: [3], 1: [1, 1, 1], 2: [2, 1]}  # failing for some reason
     nsubs = None
-    return super_cell.gen_random_structure(nsubs=nsubs, mc=True)
+    return super_cell.gen_random_structure(nsubs=nsubs, track_indices=True)
 
 
 def test_get_atoms(structure):

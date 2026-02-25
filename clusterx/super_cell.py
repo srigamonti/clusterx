@@ -348,14 +348,15 @@ class SuperCell(ParentLattice):
         )
 
     def gen_random_structure(
-        self, rng: np.random.Generator = np.random.default_rng(), nsubs=None, mc=False
+        self,
+        nsubs=None,
+        rng: np.random.Generator = np.random.default_rng(),
+        track_indices=False,
     ):
         """
         Generate a random Structure with given number of substitutions.
 
         **Parameters:**
-        ``rng``: numpy random number generator with the function `integers`
-
         ``nsubs``: None, int or dictionary (default: None)
             If dictionary, the ``nsubs`` argument must have the format ``{site_type0:[nsub01,nsub02,...], site_type1: ...}``
             where ``site_type#`` and ``nsub##`` are, respectively, an integer indicating
@@ -368,6 +369,12 @@ class SuperCell(ParentLattice):
 
             If ``None``, the number of substitutions in each sublattice is
             generated at random.
+
+        ``rng``: numpy random number generator with the method `integers`
+
+        ``track_indices``: bool (default: False)
+            internally keep track which sites are occupied with which species,
+            enables faster generation of MonteCarlo steps.
 
         **Notes:**
 
@@ -401,7 +408,7 @@ class SuperCell(ParentLattice):
         return Structure(
             self,
             sigmas=sigmas,
-            track_indices=mc,
+            track_indices=track_indices,
         )
 
     def gen_random_decoration(

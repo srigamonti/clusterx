@@ -431,7 +431,7 @@ class MonteCarlo:
                 )
         else:
             self.structure = self._scell.gen_random_structure(
-                nsubs=self._nsubs, mc=True, rng=self._rng_np
+                nsubs=self._nsubs, rng=self._rng_np, track_indices=True
             )
 
     def propose_step(self):

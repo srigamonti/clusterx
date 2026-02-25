@@ -47,7 +47,9 @@ def scell(plat):
 @pytest.fixture
 def structure(plat, scell):
     rng = np.random.default_rng(42)
-    return scell.gen_random_structure(rng, nsubs=int(np.prod(scell.get_index()) / 2))
+    return scell.gen_random_structure(
+        nsubs=int(np.prod(scell.get_index()) / 2), rng=rng
+    )
 
 
 @pytest.fixture
@@ -81,7 +83,7 @@ def structures_set(structures_set_empty, scell, dummy_ce_11, dummy_ce_12):
     rng = np.random.default_rng(42)  # failed seeds: 42, success: 43
     n_structures = 10
     for i in range(n_structures):
-        sset.add_structure(scell.gen_random_structure(rng))
+        sset.add_structure(scell.gen_random_structure(rng=rng))
     sset.set_calculator(EMT2())
     sset.compute_property_values(property_name="energy_emt2")
 
@@ -130,8 +132,7 @@ def test_ecis_estimator_init(model, model_estimator, structure):
 
 
 @pytest.mark.parametrize(
-    "prop,shape",
-    [("dummy_ce_11", ()), (["dummy_ce_11", "dummy_ce_12"], (2,))]
+    "prop,shape", [("dummy_ce_11", ()), (["dummy_ce_11", "dummy_ce_12"], (2,))]
 )
 @pytest.mark.parametrize(
     "selector_type,selector_opts",
