@@ -50,6 +50,41 @@ def model(plat, cpool):
     return cemodel
 
 
+def test_reduced(plat, model):
+    p = [4, 4, 1]
+    scell = SuperCell(plat, p)
+    nsubs = {0: [int(np.prod(p) / 2)]}
+    energy_range = [-2.0, 3.0]
+
+    wl = WangLandau(
+        energy_model=model,
+        scell=scell,
+        ensemble="canonical",
+        nsubs=nsubs,
+        predict_swap=False,
+    )
+    cdos = wl.wang_landau_sampling(
+        energy_range=energy_range,
+        energy_bin_width=0.2,
+        f_range=[4, 1.9],
+        update_method="square_root",
+        flatness_conditions=[[0.5, 2], [0.5, 1]],
+        initial_decoration=None,
+        serialize=False,
+        filename="cdos.json",
+        serialize_during_sampling=False,
+        restart_from_file=False,
+        plot_hist_real_time=False,
+        acc_prob_init_structure=1e-3,
+        acc_prob_dist_init_structure="gaussian",
+        itmax_init_structure=int(1e8),
+        niter_per_sweep=1000,
+        nproc=0,
+        seed=1,
+    )
+    cdos.get_cdos(ln=True, normalization=False)
+
+
 def test_cli(plat, model):
     # serialize objects
     model_filepath = "model_wl.pickle"
