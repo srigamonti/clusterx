@@ -57,6 +57,8 @@ class DSGenerator:
 
         self.property_names = set()
 
+        self.metadata = {}
+
     def serialize(self, filepath):
         """
         Serialize the current instance to a binary file using pickle.
