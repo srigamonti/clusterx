@@ -535,6 +535,8 @@ def plot_property_vs_concentration(
     save_plot: bool = True,
     refs: Union[List[float], NDArray[np.float64]] = [0.0, 0.0],
     yaxis_label: Optional[str] = None,
+    ymin: Optional[float] = None,
+    ymax: Optional[float] = None,
     show_yzero_axis: bool = True,
     data_fname: Optional[str] = None,
     fname: str = "property_vs_concentration.png",
@@ -671,7 +673,7 @@ def plot_property_vs_concentration(
 
     _ = (
         scatter_plot(
-            ax, frconc, energies - vl_en, marker_styles["Calculated"], "Calculated"
+            ax, frconc, energies - vl_en, marker_styles["Calculated"], "DFT data"
         )
         if sset is not None
         else None
@@ -682,7 +684,7 @@ def plot_property_vs_concentration(
             frconc,
             predictions - vl_en,
             marker_styles["Predicted-fit"],
-            "Predicted-fit",
+            "Predicted (fit)",
         )
     if pred_cv is not None:
         scatter_plot(
@@ -690,7 +692,7 @@ def plot_property_vs_concentration(
             frconc,
             pred_cv - vl_en,
             marker_styles["Predicted-CV"],
-            "Predicted-CV",
+            "Predicted (CV)",
         )
     if pred_enum is not None:
         scatter_plot(
@@ -705,7 +707,7 @@ def plot_property_vs_concentration(
             ax,
             frconc_gss,
             pred_gss - vl_en_gss,
-            marker_styles["Predicted GS"],
+            marker_styles["Predicted-GS"],
             "Predicted GS",
         )
 
@@ -723,12 +725,29 @@ def plot_property_vs_concentration(
     plt.ylabel(yaxis_label if yaxis_label else property_name)
     data["xlabel"] = xlabel
 
-    ax.set_ylim(auto_scale_yaxis(data["property"], data))
+    yrange = auto_scale_yaxis(data["property"], data)
+    if ymin is not None:
+        yrange[0] = ymin
+    if ymax is not None:
+        yrange[1] = ymax
+
+    ax.set_ylim(yrange)
 
     if show_yzero_axis:
         ax.axhline(y=0, color="k", linewidth=0.5)
 
-    plt.legend()
+    # plt.legend()
+    # ax.legend(loc="best", frameon=True)
+    # ax.legend(
+    #     loc="center left",
+    #     bbox_to_anchor=(1.02, 0.5),
+    #     borderaxespad=0.0,
+    # )
+    # fig.subplots_adjust(right=0.78)
+    ax.legend(loc="best", framealpha=0.5)
+
+    plt.tight_layout(pad=0.1)
+
     save_plot_data(data, data_fname)
     if fname is not None and save_plot:
         plt.savefig(fname)
