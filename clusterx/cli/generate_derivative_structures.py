@@ -6,10 +6,12 @@ import importlib.util
 import os
 import pickle
 import sys
-from typing import Callable, List, Optional, Union
+from pathlib import Path
+from typing import Callable, Iterable, List, Optional, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import plac
 from ase.calculators.calculator import Calculator
 
@@ -43,6 +45,12 @@ commands = ["generate_derivative_structures"]
         list,
     ),
     sset_filepath=("Path to a serialized StructuresSet object.", "option", "ssfp", str),
+    sset_gss_filepath=(
+        "Path to a serialized GSS StructuresSet object.",
+        "option",
+        "ssgfp",
+        str,
+    ),
     model_filepath=("Filepath of a serialized CE model object.", "option", "mfp", str),
     plat_filepath=(
         "Filepath of a serialized ParentLattice object.",
@@ -54,6 +62,18 @@ commands = ["generate_derivative_structures"]
         "Filepath to serialize or retrieve derivative structures.",
         "option",
         "dssfp",
+        str,
+    ),
+    dss_filepaths=(
+        "List of filepaths to existing derivative structures for task=merge_dsses.",
+        "option",
+        "dssfps",
+        list,
+    ),
+    merged_dss_filepath=(
+        "Filepath to serialize or retrieve merged derivative structures.",
+        "option",
+        "mdssfp",
         str,
     ),
     property_name=(
@@ -99,6 +119,9 @@ commands = ["generate_derivative_structures"]
         "rec",
         bool,
     ),
+    y_axis_label=("Label for the y-axis of the plot.", "option", "y", str),
+    ymin=("Minimum y-value for the plot axis.", "option", None, float),
+    ymax=("Maximum y-value for the plot axis.", "option", None, float),
     show_plot=("If True, show the plot in a new window.", "option", "sp", bool),
     save_plot=("If True, save the plot to file.", "option", "svp", bool),
     plot_fname=("Filepath to save the plot at.", "option", "pf", str),
@@ -108,9 +131,12 @@ def generate_derivative_structures(
     shapes_nearest_orthogonal: Union[bool, List[int]] = False,
     nsubs_list: Optional[Union[int, List[int], List[List[int]]]] = None,
     sset_filepath: Optional[str] = None,
+    sset_gss_filepath: Optional[str] = None,
     model_filepath: Optional[str] = None,
     plat_filepath: Optional[str] = None,
     dss_filepath: Optional[str] = "dss.pickle",
+    dss_filepaths: Optional[List[str]] = None,
+    merged_dss_filepath: Optional[str] = None,
     property_name: Optional[str] = None,
     property_names: Optional[List[str]] = None,
     property_solver: Optional[dict] = None,
@@ -122,6 +148,9 @@ def generate_derivative_structures(
     n_random: Optional[int] = 0,
     random_state: Optional[int] = None,
     task: str = "do_full_enumeration",
+    y_axis_label: Optional[str] = None,
+    ymin: Optional[float] = None,
+    ymax: Optional[float] = None,
     show_plot: bool = True,
     save_plot: bool = True,
     plot_fname: str = "property_vs_concentration.png",
@@ -401,6 +430,10 @@ def generate_derivative_structures(
 
             if sset_filepath is not None:
                 sset = StructuresSet(filepath=sset_filepath)
+                if sset_gss_filepath is not None:
+                    sset_gss = StructuresSet(filepath=sset_gss_filepath)
+                else:
+                    sset_gss = None
                 model = (
                     Model(filepath=model_filepath)
                     if model_filepath is not None
@@ -410,11 +443,15 @@ def generate_derivative_structures(
                     dss_filepath,
                     property_name=property_name,
                     sset=sset,
+                    sset_gss=sset_gss,
                     cem=model,
                     show_plot=show_plot,
                     save_plot=save_plot,
                     fname=plot_fname,
                     site_type=binary_sublattice_id,
+                    y_axis_label=y_axis_label,
+                    ymin=ymin,
+                    ymax=ymax,
                 )
             else:
                 x = dsgen.configurations["frconc_binary"].to_numpy()
@@ -522,6 +559,16 @@ def generate_derivative_structures(
 
             print("serializing sset")
             sset.serialize(filepath=sset_filepath, overwrite=True)
+
+        case "merge_dsses":
+            merged = _do_merge_dss(
+                paths=dss_filepaths,
+                provenance_col="source_path",
+                make_ids_unique=True,
+                store_source_map=True,
+                check_parent_lattice=True,
+            )
+            merged.serialize(filepath=merged_dss_filepath)
 
         case 100:
             model = (
@@ -743,12 +790,16 @@ def _do_plot_properties(
     dss_filepath,
     property_name: str = "property",
     sset=None,
+    sset_gss=None,
     cem=None,
     mask_name=None,
     show_plot=True,
     save_plot=True,
     fname=None,
     site_type=0,
+    y_axis_label=None,
+    ymin=None,
+    ymax=None,
 ):
     with open(dss_filepath, "rb") as f:
         dsgen = pickle.load(f)
@@ -762,9 +813,13 @@ def _do_plot_properties(
         property_name=property_name,
         cemodel=cem,
         show_plot=show_plot,
-        save_plot=show_plot,
+        save_plot=save_plot,
         fname=fname,
         site_type=site_type,
+        yaxis_label=y_axis_label,
+        sset_gss=sset_gss,
+        ymin=ymin,
+        ymax=ymax,
     )
 
 
@@ -917,3 +972,134 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
 
     # Show the plot
     show(p)
+
+
+def _do_merge_dss(
+    paths: Iterable[str],
+    provenance_col: str = "source_id",
+    make_ids_unique: bool = True,
+    store_source_map: bool = True,
+    check_parent_lattice: bool = True,
+) -> "DSGenerator":
+    """
+    Merge multiple serialized DSGenerator objects into a new DSGenerator.
+
+    Parameters
+    ----------
+    paths:
+        Iterable of file paths to serialized DSGenerator objects.
+    provenance_col:
+        Column name added to `configurations` to store an integer provenance id.
+    make_ids_unique:
+        If True, offsets config_id and shape_id per file so they don't collide across sources.
+        Recommended unless you're 100% sure ids are globally unique already.
+    store_source_map:
+        If True, store a mapping {source_id: path} in the returned object as `source_paths`.
+    check_parent_lattice:
+        If True, sanity-check that all DSS share the same parent lattice (by repr()).
+
+    Returns
+    -------
+    DSGenerator
+        New merged DSGenerator.
+    """
+    paths = [str(p) for p in paths]
+    if not paths:
+        raise ValueError("No paths provided.")
+
+    # Load first to seed the merged object
+    first_path = Path(paths[0])
+    dss0 = DSGenerator.from_file(first_path)
+
+    merged = type(dss0)(dss0.plat)  # new DSGenerator with same parent lattice
+    merged.property_names = set(getattr(dss0, "property_names", set()))
+
+    # We'll build these and concat at the end (tree-reduction to avoid quadratic concat cost)
+    conf_parts: List[pd.DataFrame] = []
+    shape_parts: List[pd.DataFrame] = []
+
+    source_map: Dict[int, str] = {}
+
+    next_config_offset = 0
+    next_shape_offset = 0
+
+    for source_id, p in enumerate(paths):
+        path = Path(p)
+        dss = DSGenerator.from_file(path)
+
+        if check_parent_lattice:
+            # Cheap-ish check. Replace with a stronger equality if you have one.
+            if repr(dss.plat) != repr(dss0.plat):
+                raise ValueError(f"Parent lattice mismatch for: {path}")
+
+        merged.property_names |= set(getattr(dss, "property_names", set()))
+
+        source_map[source_id] = str(path)
+
+        # --- Shapes ---
+        shapes = dss.scell_shapes
+        if shapes is not None and len(shapes) > 0:
+            shapes = shapes.copy()
+
+            if make_ids_unique:
+                # Ensure unique shape_id across sources
+                shapes["shape_id"] = (
+                    shapes["shape_id"].astype("int64") + next_shape_offset
+                )
+
+            shape_parts.append(shapes)
+
+        # --- Configurations ---
+        conf = dss.configurations
+        if conf is None or len(conf) == 0:
+            # Still advance offsets consistently
+            if make_ids_unique:
+                # If empty, offsets unchanged
+                pass
+            continue
+
+        conf = conf.copy()
+
+        # Add provenance column as small int
+        conf[provenance_col] = pd.Series(source_id, index=conf.index, dtype="int32")
+
+        if make_ids_unique:
+            conf["config_id"] = conf["config_id"].astype("int64") + next_config_offset
+            conf["shape_id"] = conf["shape_id"].astype("int64") + next_shape_offset
+
+        # Keep sigma as-is (tuple of ints => object dtype). No conversion needed.
+        conf_parts.append(conf)
+
+        # Update offsets for next file (only if uniqueness requested)
+        if make_ids_unique:
+            # We assume ids are non-negative integers
+            next_config_offset = int(conf["config_id"].max()) + 1
+            if shapes is not None and len(shapes) > 0:
+                next_shape_offset = int(shapes["shape_id"].max()) + 1
+            else:
+                # If there were no shapes in this dss, still offset shape ids
+                # based on the config's max shape_id to avoid collisions
+                next_shape_offset = max(
+                    next_shape_offset, int(conf["shape_id"].max()) + 1
+                )
+
+    # Final concatenation (single concat each => efficient)
+    if shape_parts:
+        merged.scell_shapes = pd.concat(shape_parts, ignore_index=True, copy=False)
+    else:
+        merged.scell_shapes = pd.DataFrame(columns=["shape_id", "shape"])
+
+    if conf_parts:
+        merged.configurations = pd.concat(conf_parts, ignore_index=True, copy=False)
+    else:
+        merged.configurations = pd.DataFrame(
+            columns=["config_id", "sigma", "shape_id", provenance_col]
+        )
+
+    # Store provenance mapping
+    if store_source_map:
+        merged.metadata["source_paths"] = source_map
+
+    merged.masks = {}
+
+    return merged
