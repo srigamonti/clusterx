@@ -11,13 +11,11 @@ import numpy as np
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.structure import Structure
 from clusterx.model import Model
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.thermodynamics.monte_carlo import MonteCarlo
 from clusterx.test.defaults import get_clathrate_supercell, get_clathrate_model
-from clusterx.utils import take_tile
 
 
 @pytest.fixture
@@ -145,6 +143,33 @@ def test_flip(plat_cubic, model_cubic, reduce):
         preds_full.append(pred_final - pred_init)
         preds_flip.append(pred_flip)
     np.testing.assert_allclose(preds_flip, preds_full)
+
+
+def test_predict_partial_flip(plat_cubic, model_cubic):
+    model = model_cubic
+    seed_rngs(42)
+    p = [5, 5, 5]
+    scell = SuperCell(plat_cubic, p)
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
+
+    model.init_reduced_model(structure)
+    model._init_interaction_dict(model.scell_reduced)
+    structure.init_reduced_structure(model.scell_reduced)
+
+    preds_full = []
+    preds_partial = []
+    for i in range(len(structure)):
+        pred_init = model.predict(structure)
+        pred_partial_i = model.predict_partial(structure, i)
+        old_sigma = structure.sigmas[i]
+        new_sigma = 1 - old_sigma
+
+        structure.sigmas[i] = new_sigma
+        pred_final = model.predict(structure)
+        pred_partial_f = model.predict_partial(structure, i)
+        preds_full.append(pred_final - pred_init)
+        preds_partial.append(pred_partial_f - pred_partial_i)
+    np.testing.assert_allclose(preds_partial, preds_full)
 
 
 def test_flip_scale_sc(plat_cubic, model_cubic):

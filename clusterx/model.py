@@ -17,6 +17,7 @@ from clusterx.clusters_selector import ClustersSelector
 from clusterx.correlations import (
     CorrelationsCalculator,
     cluster_correlations_flip,
+    cluster_correlations_partial,
 )
 from clusterx.estimators.estimator_factory import EstimatorFactory
 from clusterx.structure import Structure
@@ -320,6 +321,40 @@ class Model:
             if self.standardize:
                 corrs = self.stdscaler.transform(corrs)
             return np.dot(self.ecis, corrs)
+
+    def predict_partial(self, structure: Structure, index: int):
+        """Note: only works for diagonal super cells"""
+        _structure, _index = structure.get_reduced_structure(index)
+        _scell = _structure.get_supercell()
+
+        if not self.initialized_interactions:
+            self._init_interaction_dict(_scell)
+
+        correlations_partial = cluster_correlations_partial(
+            structure=_structure,
+            ind=_index,
+            site_clusters=self._site_clusters,
+            cluster_orbits_array=self._cluster_orbits_array,
+            cluster_indices=self._cluster_indices,
+            basis_set_values=self.corrc.basis_set_values,
+            multiplicities=self._multiplicities,
+        )
+
+        correlations_partial /= self.scell_factor
+        if self.estimator is not None:
+            # Intercept must be subctracted from computation of energy change.
+            try:
+                return (
+                    self.estimator.predict(correlations_partial.reshape(1, -1))[0]
+                    - self.estimator.intercept_
+                )
+            except AttributeError:
+                return (
+                    self.estimator.predict(correlations_partial.reshape(1, -1))[0]
+                    - self.estimator[-1].intercept_
+                )
+        else:
+            return np.dot(self.ecis, correlations_partial)
 
     def _init_interaction_dict(self, super_cell: SuperCell):
         """Construct list of which sites are contained in which orbit.
