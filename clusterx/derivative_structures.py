@@ -105,7 +105,7 @@ class DSGenerator:
             return self.configurations[
                 self.configurations["config_id"].isin(self.get_mask(mask_name))
             ]
-        return self.configurations
+        return self.configurations.copy()
 
     def get_property(self, config_id, property_name):
         """
@@ -1242,8 +1242,6 @@ class DSGenerator:
             If parent lattice is not binary, or if a configuration's supercell does not have
             exactly one substitutional sublattice.
         """
-        import pandas as pd
-        from tqdm import tqdm
 
         from clusterx.super_cell import SuperCell
 
