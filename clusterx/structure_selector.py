@@ -5,258 +5,372 @@
 from clusterx.structures_set import StructuresSet
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
+from typing import List, Optional
 import numpy as np
+import sympy
 
-
-class StructureSelector:
+class StructureSelector():
     """Structure selector class
-
-    Objects of this class are used to select optimal structures to enhance the predictive performance
-    of the current cluster expansion model.
+    
+    Objects of this class are used to select optimal structures to enhance the
+    predictive performance of the current cluster expansion model.
+    Speficially structures can be selected such that the variance of the
+    training set including the selected structure is reduced.
 
     **Parameters**
 
-    ``cluster_pool``: ClustersPool() object
-        The optimal set of clusters for the training data.
+    ``clusters_pool``: ClustersPool() object
+        Cluster pool to be used to calculate the correlations of the
+        training set and the domain matrix.
     ``training_set``: StructuresSet() object
-        Contains the current training set
+        Contains the current training set.
     ``candidate_set``: StructuresSet() object
-        Pool of new structures, that might be selected to enter the training set.
+        Pool of new structures, that might be selected to enter the
+        training set.
         If it remains 'None', the class can only assess the training set.
     ``correlations_calculator``: CorrelationsCalculator object
         Used to calculate the correlations of structures and clusters.
-        IF THIS IS LEFT EMPTY (or set to None) the correlations are calculated with
-        a trigonometric basis.
+        If this is not assigned a CorrelationsCalculator object, a default
+        CorrelationsCalculator object with a trigonometric basis and the chosen
+        clusters_pool is used.
+    ``regularization_strength``: float
+        The default is None, such that no regularization is applied to the
+        Gram matrix X^T X.
+        Regularization should be applied if the Gram matrix is not invertible,
+        e.g. if number of structures in training set is smaller than
+        the number of clusters in the clusters_pool.
+        Then an identity matrix multiplied by the regularization_strength is 
+        added to the Gram matrix, such that it becomes invertible.
 
     """
 
-    def __init__(
-        self,
-        cluster_pool,
-        training_set,
-        candidate_set=None,
-        correlations_calculator=None,
-    ):
-        "Barricade against bad input:"
-        if not (isinstance(cluster_pool, ClustersPool)):
-            raise TypeError("cluster_pool needs to be a ClustersPool object.")
-        if not (isinstance(training_set, StructuresSet)):
-            raise TypeError("training_set needs to be a StructuresSet object.")
-        if not (candidate_set is None or isinstance(candidate_set, StructuresSet)):
-            raise TypeError("candidate_set needs to be a StructuresSet object or None.")
-        if not (
-            correlations_calculator is None
-            or isinstance(correlations_calculator, CorrelationsCalculator)
-        ):
-            raise TypeError(
-                "correlations_calculator needs to be a CorrelationsCalculator object or None."
-            )
+    def __init__(self, clusters_pool, training_set, candidate_set = None, correlations_calculator = None, regularization_strength=0):
+        'Barricade against bad input:'
+        if not(isinstance(clusters_pool, ClustersPool)):
+            raise TypeError('clusters_pool needs to be a ClustersPool object.')
+        if not(isinstance(training_set, StructuresSet)):
+            raise TypeError('training_set needs to be a StructuresSet object.')
+        if not(candidate_set is None or isinstance(candidate_set, StructuresSet)):
+            raise TypeError('candidate_set needs to be a StructuresSet object or None.')
+        if not(correlations_calculator is None or isinstance(correlations_calculator, CorrelationsCalculator)):
+            raise TypeError('correlations_calculator needs to be a CorrelationsCalculator object or None.')
 
-        self._cluster_pool = cluster_pool
+        self._clusters_pool = clusters_pool
         self._training_set = training_set
         self._candidate_set = candidate_set
+        self._regularization_strength = regularization_strength
 
-        if correlations_calculator is None:
-            self._correlations_calculator = CorrelationsCalculator(
-                "trigonometric", training_set.get_parent_lattice(), cluster_pool
-            )
+        if(correlations_calculator is None):
+            self._correlations_calculator = CorrelationsCalculator("trigonometric", training_set.get_parent_lattice(), clusters_pool)
         else:
             self._correlations_calculator = correlations_calculator
 
-        "Calculate covariance matrix"
-        correlation_matrix = self._correlations_calculator.get_correlation_matrix(
-            self._training_set
-        )
-        self._covariance_matrix = np.linalg.inv(
-            np.dot(correlation_matrix.T, correlation_matrix)
-        )
+        correlation_matrix = self._correlations_calculator.get_correlation_matrix(self._training_set)
+        'Calculate covariance matrix of training set'
+        if regularization_strength==0:
+            self._covariance_matrix = np.linalg.inv(np.dot(correlation_matrix.T, correlation_matrix))
+        else:
+            gram_matrix = np.dot(correlation_matrix.T, correlation_matrix)
+            regularized_covariance_matrix = np.linalg.inv(gram_matrix + regularization_strength*np.eye(gram_matrix.shape[0]))
+            self._covariance_matrix = regularized_covariance_matrix
 
     def set_candidate_set(self, new_candidate_set):
-        """Set the candidate set
-
+        '''Set the candidate set
+        
         Changes the set of candidates to be selected for the training set.
         The input parameter is, thus, a StructureSet object.
-
+        
         Parameters:
-
+        
         new_candidate_set: StructureSet object
             The new set of candidate structures.
-
-        """
-        if not (isinstance(new_candidate_set, StructuresSet)):
-            raise TypeError(
-                "set_candidate_set() needs a StructuresSet object as input."
-            )
+        
+        '''
+        if not(isinstance(new_candidate_set, StructuresSet)):
+            raise TypeError('set_candidate_set() needs a StructuresSet object as input.')
         self._candidate_set = new_candidate_set
 
-    def calculate_population_variance(
-        self, domain_calculation_method="averagedConcentration", concentration=None
-    ):
-        """Calculate the cluster expansions prediction variance of the structural property
-        averaged over all possible structures.
-
+    def calculate_population_variance(self, domain_calculation_method = 'averagedConcentration', concentration = None):
+        '''Calculate the cluster expansions prediction variance of the structural property
+        averaged over all possible structures. 
+        
         The input parameter 'domain_calculation_method'
         defines with which method the domain matrix is calculated (see Mueller2010 PRB 82, 184107).
-
+	
         The options for this input parameter are 'averagedConcentration', 'infiniteCrystalFiniteClusters', 'byConcentration', 'vdWalleAndCeder'.
         If 'byConcentration' is chosen, one needs to supply the routine with a second input parameter, the 'concentration'.
-
+	
         'concentration' is limited to the range [0, 1] and means the concentration of one of the binaries in the alloy.
-
+        
         Parameters:
-
+	
         domain_calculation_method: string
             Defines the method used to calculate the domain matrix.
         concentration: float
             Defines the concentration for which the domain matrix should be evaluated.
-        """
+        '''
 
-        domain_matrix = self._calculate_domain_matrix(
-            method=domain_calculation_method, concentration=concentration
-        )
+        domain_matrix = self._calculate_domain_matrix(method = domain_calculation_method, concentration = concentration)
         covariance_matrix = self._covariance_matrix
 
-        "compute Hadamard product and sum"
-        population_variance = np.sum(
-            np.sum(np.multiply(domain_matrix, covariance_matrix))
-        )
+        'Compute Frobenius product of covarinace matrix and domain matrix'
+        # this is equivalent to the value of tau defined in Mueller2010 PRB 82, 184107
+        population_variance = np.trace(np.dot(covariance_matrix.T, domain_matrix))
 
         return population_variance
-
-    def select_structure(self, method=None, concentration=None):
-        """Select a structure to enter the training set
-
+        
+    def select_structure(self, method = None, concentration = None, recompute_correlation_matrix=False):
+        '''Select a structure to enter the training set
+	
         This method needs a candidate set. If no candidate set was passed to the class object, set it with set_candidate_set().
-
+	
         The routine takes each structure and adds it temporarily to the training set. With the enlarged training set
-        the population variance is computed. To compute the population variance, supply a 'method' parameter, and maybe a
+        the population variance is computed. To compute the population variance, supply a 'method' parameter, and maybe a 
         'concentration' (see calculate_population_variance). Afterwards the structure is removed from the training set,
         and the next structure is taken. The routine selects the structure that minimizes the population variance.
-
+	
         Parameters:
-
+	
         method: string
             Defines the method used to calculate the domain matrix. Options are
             'global_averagedConcentration', 'global_infiniteCrystalFiniteClusters', 'global_byConcentration', 'global_vdWalleAndCeder'
         concentration: float
             Defines the concentration for which the domain matrix should be evaluated.
-        """
-        if self._candidate_set is None:
-            raise ValueError("There are no candidate structures, use set_candidate_set")
-        if not (
-            isinstance(method, str)
-            and (method[:6] == "greedy" or method[:6] == "global")
-        ):
-            raise ValueError(
-                'Method needs to be a string starting with "greedy" or "global_".'
-            )
+        recompute_gram_matrix: bool
+            Default is False, such that the correlation matrix of the training set
+            is only computed once in the beginning.
+            In order to use an active learning workflow as defined in 
+            select_structures_set the correlation matrix has to be recomputed
+            each time a structure is added to the training set, that is,
+            in each step, since the training set changes in each iteration.
+        '''
+        if(self._candidate_set is None):
+            raise ValueError('There are no candidate structures, use set_candidate_set')
+        if not(isinstance(method, str) and (method[:6] == 'greedy' or method[:6] == 'global')):
+            raise ValueError('Method needs to be a string starting with "greedy" or "global_".')
 
         global_or_greedy = method[:6]
-        covariance_matrix = self._covariance_matrix
 
-        if global_or_greedy == "global":
-            domain_calculation_method = method.replace("global_", "")
-            domain_matrix = self._calculate_domain_matrix(
-                method=domain_calculation_method, concentration=concentration
-            )
+        if recompute_correlation_matrix is True:
+            correlation_matrix = self._correlations_calculator.get_correlation_matrix(self._training_set)
+            if self._regularization_strength == 0:
+                covariance_matrix = np.linalg.inv(np.dot(correlation_matrix.T, correlation_matrix))
+            else:
+                gram_matrix = np.dot(correlation_matrix.T, correlation_matrix)
+                regularized_covariance_matrix = np.linalg.inv(gram_matrix + self._regularization_strength*np.eye(gram_matrix.shape[0]))
+                covariance_matrix = regularized_covariance_matrix
+        else:
+            covariance_matrix = self._covariance_matrix
 
-            candidate_correlations = (
-                self._correlations_calculator.get_correlation_matrix(
-                    self._candidate_set
-                )
-            )
+        if(global_or_greedy == 'global'):
+            domain_calculation_method = method.replace("global_","")
+            domain_matrix = self._calculate_domain_matrix(method = domain_calculation_method, concentration = concentration)
 
-            number_candidates, number_clusters = candidate_correlations.shape
+            candidate_correlations = self._correlations_calculator.get_correlation_matrix(self._candidate_set)
 
-            "score vector for each structure in selection"
+            number_candidates ,_ = candidate_correlations.shape
+
+            'score vector for each structure in selection'
             candidate_scores = np.zeros(number_candidates)
 
             for candidate_idx in range(number_candidates):
-                candidate_corr = candidate_correlations[candidate_idx, :]
+                candidate_corr = candidate_correlations[candidate_idx,:]
                 scaled_correlation = np.dot(covariance_matrix, candidate_corr)
-                denominator = 1 + np.dot(candidate_corr, scaled_correlation)
-                numerator = np.dot(
-                    scaled_correlation, np.dot(domain_matrix, scaled_correlation)
-                )
-                candidate_scores[candidate_idx] = numerator / denominator
+                denominator = 1+np.dot(candidate_corr, scaled_correlation)
+                numerator = np.dot(scaled_correlation, np.dot(domain_matrix, scaled_correlation))
+                candidate_scores[candidate_idx] = numerator/denominator
 
             return np.argmax(candidate_scores)
 
-        elif global_or_greedy == "greedy":
-            candidate_correlations = (
-                self._correlations_calculator.get_correlation_matrix(
-                    self._candidate_set
-                )
-            )
+        elif(global_or_greedy == 'greedy'):
+            candidate_correlations = self._correlations_calculator.get_correlation_matrix(self._candidate_set)
 
-            number_candidates, number_clusters = candidate_correlations.shape
+            number_candidates ,_ = candidate_correlations.shape
 
-            "score vector for each structure in selection"
+            'score vector for each structure in selection'
             candidate_scores = np.zeros(number_candidates)
 
             for candidate_idx in range(number_candidates):
-                candidate_corr = candidate_correlations[candidate_idx, :]
-                candidate_scores[candidate_idx] = np.dot(
-                    candidate_corr, np.dot(covariance_matrix, candidate_corr)
-                )
+                candidate_corr= candidate_correlations[candidate_idx,:]
+                candidate_scores[candidate_idx] = np.dot(candidate_corr, np.dot(covariance_matrix, candidate_corr))
 
             return np.argmax(candidate_scores)
 
         else:
-            raise ValueError("No valid selector chosen.")
+            raise ValueError('No valid selector chosen.')
+    
+    def _calculate_domain_matrix(self, method = None, concentration = None, lower_concentration_limit = 0, upper_concentration_limit=1):
+        if(method is None):
+            raise ValueError('No method for calculation chosen.')
+        method_list = ['averagedConcentration', 'infiniteCrystalFiniteClusters', 'byConcentration', 'vdWalleAndCeder']
+        if not(method is s for s in method_list):
+            raise ValueError('No valid method for calculation chosen. Choose one of: ' + str(method_list))
 
-    def _calculate_domain_matrix(self, method=None, concentration=None):
-        if method is None:
-            raise ValueError("No method for calculation chosen.")
-        method_list = [
-            "averagedConcentration",
-            "infiniteCrystalFiniteClusters",
-            "byConcentration",
-            "vdWalleAndCeder",
-        ]
-        if not (method is s for s in method_list):
-            raise ValueError(
-                "No valid method for calculation chosen. Choose one of: "
-                + str(method_list)
-            )
-
-        """
+        '''
         Calculate domain matrix from Mueller2010 paper PRB 82, 184107
-        """
-
-        npoints = self._cluster_pool.get_all_npoints()
+        '''
+        
+        npoints = self._clusters_pool.get_all_npoints()
         number_clusters = len(npoints)
-        domain_matrix = np.zeros((number_clusters, number_clusters), dtype=float)
+        domain_matrix = np.zeros((number_clusters, number_clusters), dtype = float)
 
-        "Domain matrix uniformly averaged over concentration for structures in infinite crystal"
-        if method == "averagedConcentration":
-            "Number of occupations a cluster depends on"
+        'Domain matrix uniformly averaged over concentration for structures in infinite crystal'
+        if(method == 'averagedConcentration'):
+            # averaged concentration method calculates the integral from lower 
+            # to the upper concentration limit:
+            # integral ((2c-1)^(n_points_alpha + n_points_beta))
+            # for integration borders 0 and 1 this simplifies to:
+            'Number of occupations a cluster depends on'
+            if lower_concentration_limit==0 and upper_concentration_limit==1:
+                for rowIdx in range(number_clusters):
+                    for colIdx in range(number_clusters):
+                        sum_points = npoints[rowIdx] + npoints[colIdx]
+                        domain_matrix[rowIdx, colIdx] = 1/(sum_points + 1)*((sum_points + 1) % 2)
+            else:
+                for rowIdx in range(number_clusters):
+                    for colIdx in range(number_clusters):
+                        conc = sympy.symbols('conc')
+                        integrand = np.power((2*conc - 1), npoints[rowIdx] + npoints[colIdx])
+                        domain_matrix[rowIdx, colIdx] = sympy.integrate(integrand, (conc, lower_concentration_limit, upper_concentration_limit))
 
+                    
+        elif(method == 'infiniteCrystalFiniteClusters'):
+            'The crystal be infinite, the clusters have finite number of points they depend on'
+            domain_matrix[0,0] = 1
+        elif(method == 'byConcentration'):
+            'Calculate domain matrix for infinite crystal at given concentration'
+            if not(isinstance(concentration, float)):
+                raise TypeError('Concentration needs to be a float.')
+            'Number of occupations a cluster depends on'
             for rowIdx in range(number_clusters):
                 for colIdx in range(number_clusters):
-                    sum_points = npoints[rowIdx] + npoints[colIdx]
-                    domain_matrix[rowIdx, colIdx] = (
-                        1 / (sum_points + 1) * ((sum_points + 1) % 2)
-                    )
+                    domain_matrix[rowIdx, colIdx] = np.power((2*concentration - 1), npoints[rowIdx] + npoints[colIdx])
 
-        elif method == "infiniteCrystalFiniteClusters":
-            "The crystal be infinite, the clusters have finite number of points they depend on"
-            domain_matrix[0, 0] = 1
-        elif method == "byConcentration":
-            "Calculate domain matrix for infinite crystal at given concentration"
-            if not (isinstance(concentration, float)):
-                raise TypeError("Concentration needs to be a float.")
-            "Number of occupations a cluster depends on"
-            for rowIdx in range(number_clusters):
-                for colIdx in range(number_clusters):
-                    domain_matrix[rowIdx, colIdx] = np.power(
-                        (2 * concentration - 1), npoints[rowIdx] + npoints[colIdx]
-                    )
-
-        elif method == "vdWalleAndCeder":
-            "Use A. vd Walles and G. Ceders method"
+        elif(method == 'vdWalleAndCeder'):
+            'Use A. vd Walles and G. Ceders method'
             domain_matrix = domain_matrix + np.identity(number_clusters)
         else:
-            raise ValueError(f"Invalid method: {method}")
+            raise ValueError(f'Invalid method: {method}')
 
         return domain_matrix
+
+    def select_structures_set(
+            self,
+            method: str,
+            nr_structures: Optional[int] = None,
+            concentrations: Optional[List[float]] = None,
+            cpool_candidates: Optional[ClustersPool] = None,
+            candidate_correlations: Optional[np.ndarray] = None
+            ) -> StructuresSet:
+        """
+        Active learning workflow to iteratively select a specified number
+        of optimal structures from a candidate_set in order to reduce the
+        variance of the training_set.
+
+        In each iteration an optimal structure is selected from the
+        current candidate_set using the specified method.
+        The selected structure is added to the training_set and
+        removed from the candidate_set.
+        An additional StructuresSet containing the selected structures
+        from all iterations is created and returned.
+
+        ***Parameters***:
+        method (string):
+            method to use for selecting the structure; available options are:
+            - 'global_averagedConcentration'
+            - 'global_infiniteCrystalFiniteClusters'
+            - 'global_vdWalleAndCeder'
+            - 'global_byConcentration'
+        nr_structures (int, optional):
+            Default: None
+            Do not assign if method is 'global_byConcentration' and instead 
+            provide a list of concentrations for which you want to reduce the variance.
+            If method is 'global_averagedConcentration',
+            'global_infiniteCrystalFiniteClusters'
+            or 'global_vdWalleAndCeder' assign this as the number of structures
+            that shall be chosen from the candidate_set.
+        concentrations (list of floats, optional):
+            Concentration for which a structure should be selected
+            Use together with method: 'global_byConcentration'
+            Default: None
+        cpool_candidates: (ClusterPool object, optional):
+            Larger clusters_pool (as large as possible) to calculate the candidate
+            correlations to exclude structures with the same correlations.
+            This is to ensure that no equivalent structures are in the candidate set.
+            Careful: 
+            The smaller the chosen clusters pool the higher the risk to 
+            exclude structures that are actually not equivalent.
+        candidate_correlations (matrix: np.ndarray[float], optional):
+            Default: None
+            If not assigned the correlation matrix for the candidate set is 
+            calculated with the correlations calculator.
+            If you have already calculated this before, you can resuse the result
+            and provide the candidate correlations matrix as input here.
+
+        """
+        len_orig_training_set = len(self._training_set)
+        print("Len original training set: ", len_orig_training_set)
+        print("Len original candidate set: ", len(self._candidate_set))
+        if candidate_correlations is None:
+            if cpool_candidates is not None:
+                basis = self._correlations_calculator.get_basis()
+                plat = self._training_set.get_parent_lattice()
+                correlations_calcluator_candidates = CorrelationsCalculator(basis, plat, cpool_candidates)
+                candidate_correlations = correlations_calcluator_candidates.get_correlation_matrix(self._candidate_set)
+            else:
+                candidate_correlations = self._correlations_calculator.get_correlation_matrix(self._candidate_set)
+        # To avoid having equivalent structures in the candidate set we compute the candidate correlations
+        # and get rid of structures with the same candidate correlations.
+        # This bears the risk to exclude structures that are not equivalent (especially when using a small cpool),
+        # but ensures that we do not have equivalent structures in the candidate set for cases in which 
+        # generate_derivative_structures results in equivalent structures in the predicted StructuresSet.
+        # It is advised to select a larger cpool only to calculate the candidate correlations once to exclude
+        # equivalent ones and then continue with a smaller cpool for structure selection to save computational time.
+        _, unique_indices = np.unique(
+                                        candidate_correlations, return_index=True,
+                                        axis=0
+                                     )
+        sorted_unique_indices = np.sort(unique_indices)
+        unique_candidate_set = self._candidate_set.get_subset(sorted_unique_indices)
+        nr_unique_candidates = len(unique_candidate_set)
+        self._candidate_set = unique_candidate_set.get_subset(list(range(nr_unique_candidates)))
+        print("New len candidate set: ", len(self._candidate_set))
+
+        if method == 'global_byConcentration':
+            if concentrations is None:
+                raise ValueError('To select with global_byConcentration please provide a list of concentrations to select for.')
+            for concentration in concentrations:
+                selected_index = self.select_structure(method='global_byConcentration',
+                                                    concentration=concentration, recompute_correlation_matrix=True)
+                print(f'Structure {selected_index} is selected from the candidate set')
+                indices_remaining_candidates = [i for i in range(len(self._candidate_set)) if i != selected_index]
+                new_candidate_set = self._candidate_set.get_subset(indices_remaining_candidates)
+                indices_train = list(range(len(self._training_set)))
+                new_training_set = self._training_set.get_subset(indices_train)
+                new_training_set.add_structure(self._candidate_set[selected_index])
+                self._training_set = new_training_set
+                self._candidate_set = new_candidate_set
+            indices_selected_candidates = list(range(len_orig_training_set, len(new_training_set)))
+            sset_selected_candidates = new_training_set.get_subset(indices_selected_candidates)
+
+            return sset_selected_candidates
+    
+        else:
+            if nr_structures is None:
+                raise ValueError('Please provide the number of structures you want to select.')
+            for j in range(nr_structures):
+                selected_index = self.select_structure(method=method, concentration=None, recompute_correlation_matrix=True)
+                print(f'Step {j}: Structure {selected_index} is selected from the candidate set') 
+                indices_remaining_candidates = [i for i in range(len(self._candidate_set)) if i != selected_index]
+                new_candidate_set = self._candidate_set.get_subset(indices_remaining_candidates)
+                indices_train = list(range(len(self._training_set)))
+                new_training_set = self._training_set.get_subset(indices_train)
+                new_training_set.add_structure(self._candidate_set[selected_index])
+                self._training_set = new_training_set
+                self._candidate_set = new_candidate_set
+            indices_selected_candidates = list(range(len_orig_training_set, len(new_training_set)))
+            sset_selected_candidates = new_training_set.get_subset(indices_selected_candidates)
+
+            return sset_selected_candidates
+        
+
