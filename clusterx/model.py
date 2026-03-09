@@ -12,7 +12,6 @@ import numpy as np
 from sklearn.pipeline import Pipeline
 
 from clusterx.clusters.clusters_pool import ClustersPool
-from clusterx.structures_set import StructuresSet
 from clusterx.clusters_selector import ClustersSelector
 from clusterx.correlations import (
     CorrelationsCalculator,
@@ -20,6 +19,7 @@ from clusterx.correlations import (
 )
 from clusterx.estimators.estimator_factory import EstimatorFactory
 from clusterx.structure import Structure
+from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
 from clusterx.utils import is_diagonal
 
@@ -94,8 +94,8 @@ class Model:
             self.ecis = final_estimator.coef_
             self.intercept = final_estimator.intercept_
         elif estimator is not None:
-            self.ecis = estimator.coef_
-            self.intercept = estimator.intercept_
+            self.ecis = getattr(estimator, "coef_", None)
+            self.intercept = getattr(estimator, "intercept_", None)
         elif ecis is not None:
             self.ecis = ecis
             self.intercept = 0
