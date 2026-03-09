@@ -9,11 +9,12 @@ from typing import Optional
 import numpy as np
 import plac
 from sklearn.feature_selection import SelectFromModel
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import (
     LeaveOneOut,
     cross_val_predict,
     cross_val_score,
+    train_test_split,
 )
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -76,6 +77,24 @@ commands = ["build_nonlinear_model"]
         str,
     ),
     standardize=("Standardize the input data.", "flag", "std", bool),
+    test_size=(
+        "Fraction of samples to reserve as a hold-out test set. If not provided or <= 0, no split is performed.",
+        "option",
+        "ts",
+        float,
+    ),
+    random_state=(
+        "Random seed used for the optional train/test split.",
+        "option",
+        "rs",
+        int,
+    ),
+    shuffle=(
+        "Shuffle samples before the optional train/test split.",
+        "flag",
+        "sh",
+        bool,
+    ),
 )
 def build_nonlinear_model(
     property_name: str,
@@ -89,6 +108,9 @@ def build_nonlinear_model(
     nonlinear_transformation: Optional[dict] = None,
     weights_filepath: Optional[str] = None,
     standardize: bool = False,
+    test_size: Optional[float] = None,
+    random_state: int = 42,
+    shuffle: bool = True,
 ):
     """
     Build and serialize a nonlinear cluster expansion (CE) model.
@@ -142,6 +164,13 @@ def build_nonlinear_model(
     standardize : bool, optional
         Whether to standardize the input data prior to fitting.
         Default is ``False``.
+    test_size : float, optional
+        Fraction of samples reserved for a final hold-out test set. If
+        ``None`` or ``<= 0``, no split is performed.
+    random_state : int, optional
+        Random seed for the optional train/test split.
+    shuffle : bool, optional
+        Whether to shuffle before splitting.
 
     Returns
     -------
@@ -176,8 +205,17 @@ def build_nonlinear_model(
     print(f"Info({get_command_name()}): Initialization")
 
     ccalc = CorrelationsCalculator(filepath=ccalc_filepath)
-    comat = np.load(xp_filepath)["comat"]
-    pvals = np.load(xp_filepath)[f"property_{property_name}"]
+    xp = np.load(xp_filepath)
+    comat = xp["comat"]
+    pvals = xp[f"property_{property_name}"]
+
+    weights = None
+    if weights_filepath is not None:
+        weights = np.load(weights_filepath)["weights"]
+        if len(weights) != len(pvals):
+            raise ValueError(
+                f"weights has length {len(weights)}, but pvals has length {len(pvals)}."
+            )
 
     default_regression_model = {
         "module": "sklearn.linear_model",
@@ -207,6 +245,60 @@ def build_nonlinear_model(
             **nonlinear_transformation,
         }
 
+    do_split = test_size is not None and test_size > 0.0
+
+    if do_split:
+        if not (0.0 < test_size < 1.0):
+            raise ValueError(
+                f"test_size must be between 0 and 1 (exclusive), got {test_size}."
+            )
+
+        print(f"Info({get_command_name()}): Splitting data into train/test sets")
+        print(
+            f"  test_size = {test_size}, random_state = {random_state}, shuffle = {shuffle}"
+        )
+
+        if weights is not None:
+            (
+                x_train,
+                x_test,
+                y_train,
+                y_test,
+                w_train,
+                w_test,
+            ) = train_test_split(
+                comat,
+                pvals,
+                weights,
+                test_size=test_size,
+                random_state=random_state,
+                shuffle=shuffle,
+            )
+        else:
+            x_train, x_test, y_train, y_test = train_test_split(
+                comat,
+                pvals,
+                test_size=test_size,
+                random_state=random_state,
+                shuffle=shuffle,
+            )
+            w_train = None
+            w_test = None
+
+        print(f"  Total samples: {len(pvals)}")
+        print(f"  Train samples: {len(y_train)}")
+        print(f"  Test samples : {len(y_test)}")
+    else:
+        x_train = comat
+        y_train = pvals
+        x_test = None
+        y_test = None
+        w_train = weights
+        w_test = None
+
+        print(f"Info({get_command_name()}): No train/test split requested")
+        print(f"  Total samples used for training: {len(y_train)}")
+
     print(f"Info({get_command_name()}): Computing model")
 
     reg = _build_pipeline(
@@ -218,32 +310,95 @@ def build_nonlinear_model(
         standardize=standardize,
     )
 
-    if weights_filepath is not None:
-        weights = np.load(weights_filepath)["weights"]
-        kind = regression_model["kind"].lower()
-        kwargs = {f"{kind}__sample_weight": weights}
-        reg.fit(comat, pvals, **kwargs)
+    if w_train is not None:
+        regressor_step_name = reg.steps[-1][
+            0
+        ]  # This is the regression_model at the end of the pipeline
+        fit_kwargs = {f"{regressor_step_name}__sample_weight": w_train}
+        reg.fit(x_train, y_train, **fit_kwargs)
     else:
-        reg.fit(comat, pvals)
+        reg.fit(x_train, y_train)
 
-    preds = reg.predict(comat)
-    fit_error = np.sqrt(mean_squared_error(pvals, preds))
-    print(f"Fit RMSE: {fit_error:.5f}")
+    # ------------------------------------------------------------------
+    # Training metrics
+    # ------------------------------------------------------------------
 
+    train_preds = reg.predict(x_train)
+    train_rmse = np.sqrt(mean_squared_error(y_train, train_preds))
+    train_mae = mean_absolute_error(y_train, train_preds)
+    train_r2 = r2_score(y_train, train_preds)
+    train_maxae = np.max(np.abs(y_train - train_preds))
+
+    print("\n" + "=" * 72)
+    print("Training-set performance")
+    print("=" * 72)
+    print(f"Train RMSE : {train_rmse:.8f}")
+    print(f"Train MAE  : {train_mae:.8f}")
+    print(f"Train MaxAE: {train_maxae:.8f}")
+    print(f"Train R^2  : {train_r2:.8f}")
+
+    if w_train is not None:
+        train_wrmse = np.sqrt(
+            mean_squared_error(y_train, train_preds, sample_weight=w_train)
+        )
+        print(f"Train wRMSE: {train_wrmse:.8f}")
+
+    # ------------------------------------------------------------------
+    # Hold-out test metrics
+    # ------------------------------------------------------------------
+    if x_test is not None:
+        test_preds = reg.predict(x_test)
+        test_rmse = np.sqrt(mean_squared_error(y_test, test_preds))
+        test_mae = mean_absolute_error(y_test, test_preds)
+        test_r2 = r2_score(y_test, test_preds)
+        test_maxae = np.max(np.abs(y_test - test_preds))
+
+        print("\n" + "=" * 72)
+        print("Hold-out test-set performance")
+        print("=" * 72)
+        print(f"Test RMSE : {test_rmse:.8f}")
+        print(f"Test MAE  : {test_mae:.8f}")
+        print(f"Test MaxAE: {test_maxae:.8f}")
+        print(f"Test R^2  : {test_r2:.8f}")
+
+        if w_test is not None:
+            test_wrmse = np.sqrt(
+                mean_squared_error(y_test, test_preds, sample_weight=w_test)
+            )
+            print(f"Test wRMSE: {test_wrmse:.8f}")
+
+        abs_errors = np.abs(y_test - test_preds)
+        sorted_indices = np.argsort(abs_errors)[::-1]
+        topn = min(10, len(sorted_indices))
+
+        print(f"\nLargest absolute errors on hold-out test set (top {topn})")
+        for rank, idx in enumerate(sorted_indices[:topn], start=1):
+            print(
+                f"[{rank:2d}] local_test_index={idx}, "
+                f"abs_err={abs_errors[idx]:.8f}, "
+                f"pred={test_preds[idx]:.8f}, "
+                f"target={y_test[idx]:.8f}, "
+                f"diff(target-pred)={(y_test[idx] - test_preds[idx]):.8f}"
+            )
+
+    # ------------------------------------------------------------------
+    # Model summaries on training data only
+    # ------------------------------------------------------------------
     if selection_model is not None:
         print(reg.named_steps["selector"].estimator_)
         summarize_model(
             reg.named_steps["selector"].estimator_,
-            comat,
-            pvals,
+            x_train,
+            y_train,
             selection_model["class"],
             label="SELECTOR",
         )
+
     print(reg.named_steps["regressor"])
     summarize_model(
         reg.named_steps["regressor"],
-        comat,
-        pvals,
+        x_train,
+        y_train,
         regression_model["class"],
         label="REGRESSOR",
     )
@@ -252,6 +407,7 @@ def build_nonlinear_model(
 
     nlmodel = Model(corrc=ccalc, property_name=property_name, estimator=reg)
     nlmodel.serialize(model_filepath)
+    print(f"Info({get_command_name()}): Model serialized to '{model_filepath}'")
 
 
 def summarize_model(regressor, x, y, model_type: str, label: str = "MODEL"):
@@ -327,7 +483,8 @@ def summarize_model(regressor, x, y, model_type: str, label: str = "MODEL"):
             print(
                 f"Structure index: {i}, Absolute error: {v}, Prediction (CV): {pred_cv[i]}, ab-initio: {y[i]}, Diff(ai-pred): {y[i] - pred_cv[i]}"
             )
-
+    elif model_type == "Ridge":
+        pass
     else:
         print(f"Unsupported model type: {model_type}")
         return
@@ -343,9 +500,12 @@ def summarize_model(regressor, x, y, model_type: str, label: str = "MODEL"):
         print("\nOptimal alpha:", regressor.alpha_)
         print("Number of features:", regressor.n_features_in_)
 
-    print(
-        f"Number of non-zero coefficients: {np.count_nonzero(regressor.coef_)} out of {len(regressor.coef_)}"
-    )
+    if model_type in ["Ridge", "LinearRegression"]:
+        print(f"Number of non-zero coefficients: {np.count_nonzero(regressor.coef_)}.")
+    else:
+        print(
+            f"Number of non-zero coefficients: {np.count_nonzero(regressor.coef_)} out of {len(regressor.coef_)}."
+        )
     print("First 10 coefficients:\n", regressor.coef_[:10])
 
     print("=" * 72 + "\n")
