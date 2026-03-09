@@ -154,7 +154,6 @@ def test_tau_selection(
 def test_calc_domain_matrix(method, structure_selector):
     structure_selector._calculate_domain_matrix(method, concentration=0.2)
 
-# added this (according to test 5 of old notebook)
 @pytest.mark.parametrize(
     "method",
     [
