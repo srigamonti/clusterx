@@ -153,3 +153,28 @@ def test_tau_selection(
 )
 def test_calc_domain_matrix(method, structure_selector):
     structure_selector._calculate_domain_matrix(method, concentration=0.2)
+
+# added this (according to test 5 of old notebook)
+@pytest.mark.parametrize(
+    "method",
+    [
+        "global_averagedConcentration",
+        "global_infiniteCrystalFiniteClusters",
+        "global_byConcentration",
+        "global_vdWalleAndCeder",
+    ],
+)
+
+def test_structure_object(
+            seed, method, plat, scell, structure_selector
+):
+    candidate_set = StructuresSet(plat)
+    n_candidates = 6
+    np.random.seed(seed)  # For reproducibility
+    for _ in range(n_candidates):
+        candidate_set.add_structure(scell.gen_random_structure(nsubs={0: [5]}))
+    structure_selector.set_candidate_set(candidate_set)
+    selected_structure_idx = structure_selector.select_structure(
+        method=method, concentration=0.2)
+    structure = candidate_set.get_structure(selected_structure_idx)
+    assert isinstance(structure, Structure),"selected structure is not a Structure object"
