@@ -8,6 +8,7 @@ from clusterx.correlations import CorrelationsCalculator
 from typing import List, Optional
 import numpy as np
 import sympy
+import warnings
 
 
 class StructureSelector:
@@ -339,6 +340,7 @@ class StructureSelector:
         method: str,
         nr_structures: Optional[int] = None,
         concentrations: Optional[List[float]] = None,
+        exclude_equivalent_candidates: Optional[bool] = False, 
         cpool_candidates: Optional[ClustersPool] = None,
         candidate_correlations: Optional[np.ndarray] = None,
     ) -> StructuresSet:
@@ -373,6 +375,15 @@ class StructureSelector:
             Concentration for which a structure should be selected
             Use together with method: 'global_byConcentration'
             Default: None
+        exclude_equivalent_candidates (bool, optional):
+        # continue here
+        # To avoid having equivalent structures in the candidate set we compute the candidate correlations
+        # and get rid of structures with the same candidate correlations.
+        # This bears the risk to exclude structures that are not equivalent (especially when using a small cpool),
+        # but ensures that we do not have equivalent structures in the candidate set for cases in which
+        # generate_derivative_structures results in equivalent structures in the predicted StructuresSet.
+        # It is advised to select a larger cpool only to calculate the candidate correlations once to exclude
+        # equivalent ones and then continue with a smaller cpool for structure selection to save computational time.
         cpool_candidates: (ClusterPool object, optional):
             Larger cpool (as large as possible) to calculate the candidate
             correlations to exclude structures with the same correlations.
@@ -388,7 +399,20 @@ class StructureSelector:
             and provide the candidate correlations matrix as input here.
 
         """
+        method_list = [
+            "global_averagedConcentration",
+            "global_infiniteCrystalFiniteClusters",
+            "global_byConcentration",
+            "global_vdWalleAndCeder",
+        ]
+        if not (method is s for s in method_list):
+            raise ValueError(
+                "No valid method for calculation chosen. Choose one of: "
+                + str(method_list)
+            )
+
         len_orig_training_set = len(self._training_set)
+        len_orig_candidate_set = len(self._candidate_set)
         print("Len original training set: ", len_orig_training_set)
         print("Len original candidate set: ", len(self._candidate_set))
         if candidate_correlations is None:
@@ -409,21 +433,18 @@ class StructureSelector:
                         self._candidate_set
                     )
                 )
-        # To avoid having equivalent structures in the candidate set we compute the candidate correlations
-        # and get rid of structures with the same candidate correlations.
-        # This bears the risk to exclude structures that are not equivalent (especially when using a small cpool),
-        # but ensures that we do not have equivalent structures in the candidate set for cases in which
-        # generate_derivative_structures results in equivalent structures in the predicted StructuresSet.
-        # It is advised to select a larger cpool only to calculate the candidate correlations once to exclude
-        # equivalent ones and then continue with a smaller cpool for structure selection to save computational time.
-        _, unique_indices = np.unique(candidate_correlations, return_index=True, axis=0)
-        sorted_unique_indices = np.sort(unique_indices)
-        unique_candidate_set = self._candidate_set.get_subset(sorted_unique_indices)
-        nr_unique_candidates = len(unique_candidate_set)
-        self._candidate_set = unique_candidate_set.get_subset(
-            list(range(nr_unique_candidates))
-        )
-        print("New len candidate set: ", len(self._candidate_set))
+        if exclude_equivalent_candidates is True:
+            _, unique_indices = np.unique(candidate_correlations, return_index=True, axis=0)
+            sorted_unique_indices = np.sort(unique_indices)
+            unique_candidate_set = self._candidate_set.get_subset(sorted_unique_indices)
+            nr_unique_candidates = len(unique_candidate_set)
+            self._candidate_set = unique_candidate_set.get_subset(
+                list(range(nr_unique_candidates))
+            )
+            print("New len candidate set: ", len(self._candidate_set))
+            if len(self._candidate_set) < 0.8 * len_orig_candidate_set:
+                warnings.warn("Reduced candidate set contains less than 80 % of original candidate set. "
+                "Consider increasing cpool_candidates to reduce risk of excluding of symmetrically distinct structures.")
 
         if method == "global_byConcentration":
             if concentrations is None:
