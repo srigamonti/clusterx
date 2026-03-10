@@ -124,6 +124,12 @@ commands = ["generate_derivative_structures"]
     ymax=("Maximum y-value for the plot axis.", "option", None, float),
     show_plot=("If True, show the plot in a new window.", "option", "sp", bool),
     save_plot=("If True, save the plot to file.", "option", "svp", bool),
+    store_ensemble_predictions=(
+        "If True, for task compute_property_with_ce_model, and if the model in model_filepath is a bagging regressor.",
+        "option",
+        "sep",
+        bool,
+    ),
     plot_fname=("Filepath to save the plot at.", "option", "pf", str),
 )
 def generate_derivative_structures(
@@ -153,6 +159,7 @@ def generate_derivative_structures(
     ymax: Optional[float] = None,
     show_plot: bool = True,
     save_plot: bool = True,
+    store_ensemble_predictions: bool = False,
     plot_fname: str = "property_vs_concentration.png",
     colors=None,
     markers=None,
@@ -387,6 +394,7 @@ def generate_derivative_structures(
                 dss_filepath=dss_filepath,
                 per_formula_unit=per_formula_unit,
                 linear_reference=linear_reference,
+                store_ensemble_predictions=store_ensemble_predictions,
             )
 
         # Compute property using custom property solver
@@ -700,6 +708,7 @@ def _do_compute_properties(
     property_names: str = None,
     dss_filepath: str = "dss.pickle",
     per_formula_unit: bool = False,
+    store_ensemble_predictions: bool = False,
     linear_reference: Optional[Union[List[List[float]], List[dict], str]] = None,
 ) -> None:
     linear_reference = process_linear_reference(linear_reference)
@@ -714,6 +723,7 @@ def _do_compute_properties(
             cemodel=cem,
             per_formula_unit=per_formula_unit,
             linear_reference=linear_reference,
+            store_ensemble_predictions=store_ensemble_predictions,
         )
     elif calculator is not None:
         dss.compute_properties(
@@ -815,6 +825,7 @@ def _do_plot_properties(
         show_plot=show_plot,
         save_plot=save_plot,
         fname=fname,
+        data_fname=fname + ".npz",
         site_type=site_type,
         yaxis_label=y_axis_label,
         sset_gss=sset_gss,
