@@ -7,7 +7,6 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
 from typing import List, Optional
 import numpy as np
-import sympy
 import warnings
 
 
@@ -114,7 +113,8 @@ class StructureSelector:
         self._candidate_set = new_candidate_set
 
     def calculate_population_variance(
-        self, domain_calculation_method="averagedConcentration", concentration=None
+        self, domain_calculation_method="averagedConcentration", concentration=None,
+        lower_conc_limit=0, upper_conc_limit=1
     ):
         """Calculate the cluster expansions prediction variance of the structural property
         averaged over all possible structures.
@@ -133,10 +133,21 @@ class StructureSelector:
             Defines the method used to calculate the domain matrix.
         concentration: float
             Defines the concentration for which the domain matrix should be evaluated.
+        lower_conc_limit: float
+            Default: 0
+            Lower concentration limit for the system.
+            Used in the calculation of the domain matrix 
+            as lower limit of integration for the averagedConcentration method. 
+        upper_conc_limit: float
+            Default: 1
+            Upper concentration limit for the system.
+            Used in the calculation of the domain matrix 
+            as upper limit of integration for the averagedConcentration method. 
         """
 
         domain_matrix = self._calculate_domain_matrix(
-            method=domain_calculation_method, concentration=concentration
+            method=domain_calculation_method, concentration=concentration,
+            lower_conc_limit=lower_conc_limit, upper_conc_limit=upper_conc_limit
         )
         covariance_matrix = self._covariance_matrix
 
@@ -147,7 +158,8 @@ class StructureSelector:
         return population_variance
 
     def select_structure(
-        self, method=None, concentration=None, recompute_correlation_matrix=False
+        self, method=None, concentration=None, recompute_correlation_matrix=False,
+        lower_conc_limit=0, upper_conc_limit=1, 
     ):
         """Select a structure to enter the training set
 
@@ -172,6 +184,16 @@ class StructureSelector:
             select_structures_set the correlation matrix has to be recomputed
             each time a structure is added to the training set, that is,
             in each step, since the training set changes in each iteration.
+        lower_conc_limit: float
+            Default: 0
+            Lower concentration limit for the system.
+            Used in the calculation of the domain matrix 
+            as lower limit of integration for the averagedConcentration method. 
+        upper_conc_limit: float
+            Default: 1
+            Upper concentration limit for the system.
+            Used in the calculation of the domain matrix 
+            as upper limit of integration for the averagedConcentration method. 
         """
         if self._candidate_set is None:
             raise ValueError("There are no candidate structures, use set_candidate_set")
@@ -206,7 +228,9 @@ class StructureSelector:
         if global_or_greedy == "global":
             domain_calculation_method = method.replace("global_", "")
             domain_matrix = self._calculate_domain_matrix(
-                method=domain_calculation_method, concentration=concentration
+                method=domain_calculation_method, concentration=concentration,
+                lower_conc_limit=lower_conc_limit, 
+                upper_conc_limit=upper_conc_limit
             )
 
             candidate_correlations = (
@@ -258,8 +282,8 @@ class StructureSelector:
         self,
         method=None,
         concentration=None,
-        lower_concentration_limit=0,
-        upper_concentration_limit=1,
+        lower_conc_limit=0,
+        upper_conc_limit=1,
     ):
         if method is None:
             raise ValueError("No method for calculation chosen.")
@@ -290,7 +314,7 @@ class StructureSelector:
             # integral ((2c-1)^(n_points_alpha + n_points_beta))
             # for integration borders 0 and 1 this simplifies to:
             "Number of occupations a cluster depends on"
-            if lower_concentration_limit == 0 and upper_concentration_limit == 1:
+            if lower_conc_limit == 0 and upper_conc_limit == 1:
                 for rowIdx in range(number_clusters):
                     for colIdx in range(number_clusters):
                         sum_points = npoints[rowIdx] + npoints[colIdx]
@@ -300,18 +324,10 @@ class StructureSelector:
             else:
                 for rowIdx in range(number_clusters):
                     for colIdx in range(number_clusters):
-                        conc = sympy.symbols("conc")
-                        integrand = np.power(
-                            (2 * conc - 1), npoints[rowIdx] + npoints[colIdx]
-                        )
-                        domain_matrix[rowIdx, colIdx] = sympy.integrate(
-                            integrand,
-                            (
-                                conc,
-                                lower_concentration_limit,
-                                upper_concentration_limit,
-                            ),
-                        )
+                        sum_points = npoints[rowIdx] + npoints[colIdx]
+                        upper_limit = np.power((2*upper_conc_limit-1), (sum_points+1))
+                        lower_limit = np.power((2*lower_conc_limit-1), (sum_points+1))
+                        domain_matrix[rowIdx, colIdx] = 1/(2*(sum_points+1))*(upper_limit-lower_limit)
 
         elif method == "infiniteCrystalFiniteClusters":
             "The crystal be infinite, the clusters have finite number of points they depend on"
@@ -338,16 +354,19 @@ class StructureSelector:
     def select_structures_set(
         self,
         method: str,
+        lower_conc_limit: float = 0,
+        upper_conc_limit: float = 1,
+        exclude_equivalent_candidates: bool = False,
+        cpool_candidates: Optional[ClustersPool] = None, 
         nr_structures: Optional[int] = None,
         concentrations: Optional[List[float]] = None,
-        exclude_equivalent_candidates: Optional[bool] = False, 
-        cpool_candidates: Optional[ClustersPool] = None,
         candidate_correlations: Optional[np.ndarray] = None,
     ) -> StructuresSet:
         """
         Active learning workflow to iteratively select a specified number
         of optimal structures from a candidate_set in order to reduce the
-        variance of the training_set.
+        variance of predicted property values among a population of 
+        structures for the training_set.
 
         In each iteration an optimal structure is selected from the
         current candidate_set using the specified method.
@@ -363,38 +382,47 @@ class StructureSelector:
             - 'global_infiniteCrystalFiniteClusters'
             - 'global_vdWalleAndCeder'
             - 'global_byConcentration'
+        lower_conc_limit: float
+            Default: 0
+            Lower concentration limit for the system.
+            Used in the calculation of the domain matrix 
+            as lower limit of integration for the averagedConcentration method. 
+        upper_conc_limit: float
+            Default: 1
+            Upper concentration limit for the system.
+            Used in the calculation of the domain matrix 
+            as upper limit of integration for the averagedConcentration method. 
         nr_structures (int, optional):
             Default: None
-            Do not assign if method is 'global_byConcentration' and instead
-            provide a list of concentrations for which you want to reduce the variance.
-            If method is 'global_averagedConcentration',
-            'global_infiniteCrystalFiniteClusters'
-            or 'global_vdWalleAndCeder' assign this as the number of structures
-            that shall be chosen from the candidate_set.
-        concentrations (list of floats, optional):
-            Concentration for which a structure should be selected
-            Use together with method: 'global_byConcentration'
-            Default: None
-        exclude_equivalent_candidates (bool, optional):
-        # continue here
-        # To avoid having equivalent structures in the candidate set we compute the candidate correlations
-        # and get rid of structures with the same candidate correlations.
-        # This bears the risk to exclude structures that are not equivalent (especially when using a small cpool),
-        # but ensures that we do not have equivalent structures in the candidate set for cases in which
-        # generate_derivative_structures results in equivalent structures in the predicted StructuresSet.
-        # It is advised to select a larger cpool only to calculate the candidate correlations once to exclude
-        # equivalent ones and then continue with a smaller cpool for structure selection to save computational time.
+            Specifies the number of structures you want to select from candidate_set.
+            Not used if method is 'global_byConcentration'; instead
+            provide a list of concentrations.
+        exclude_equivalent_candidates (bool):
+            Default: False
+            To avoid the presence of symmetrically equivalent structures in the candidate
+            set, this parameter can be set to True.
+            In this case, the correlations of all candidates are calculated and those
+            with equal correlations are removed from the candidate set.
+            This could lead to symmetrically inequivalent structures also being excluded,
+            as they could have same correlations, especially if correlations are computed
+            with a small clusters pool. To reduce this risk, it is advised to provide a
+            clusters pool as large as possible for cpool_candidates.
         cpool_candidates: (ClusterPool object, optional):
-            Larger cpool (as large as possible) to calculate the candidate
-            correlations to exclude structures with the same correlations.
-            This is to ensure that no equivalent structures are in the candidate set.
-            Careful:
-            The smaller the chosen clusters pool the higher the risk to
-            exclude structures that are actually not equivalent.
+            Clusters pool to calculate the candidate correlations in order to exclude
+            structures with the same correlations. 
+            You may want to use a large clusters pool here.
+            cpool_candidates is only used once to calculate the correlations. For structure
+            selection a smaller clusters pool (set in the structure_selector) is used, as
+            otherwise it would be computationally too expensive.
+        concentrations (list of floats, optional):
+            Default: None
+            List of concentrations for which structure selection should be optimized.
+            This does not /have to) correspond to the concentrations of the selected structures.
+            Use together with method: 'global_byConcentration'
         candidate_correlations (matrix: np.ndarray[float], optional):
             Default: None
-            If not assigned the correlation matrix for the candidate set is
-            calculated with the correlations calculator.
+            If not assigned, the correlation matrix for the candidate set is
+            calculated with the correlations calculator of the structure selector.
             If you have already calculated this before, you can resuse the result
             and provide the candidate correlations matrix as input here.
 
@@ -443,14 +471,19 @@ class StructureSelector:
             )
             print("New len candidate set: ", len(self._candidate_set))
             if len(self._candidate_set) < 0.8 * len_orig_candidate_set:
-                warnings.warn("Reduced candidate set contains less than 80 % of original candidate set. "
-                "Consider increasing cpool_candidates to reduce risk of excluding of symmetrically distinct structures.")
+                warnings.warn("Reduced candidate set contains less than 80 % of original candidate set."
+                "Consider increasing cpool_candidates to reduce risk of excluding symmetrically distinct structures.")
 
         if method == "global_byConcentration":
             if concentrations is None:
                 raise ValueError(
-                    "To select with global_byConcentration please provide a list of concentrations to select for."
+                    "To select with global_byConcentration" 
+                    "please provide a list of concentrations to select for."
                 )
+            # note: do we have cases of negative concentration or concentration larger 1?
+            # If so, remove the next two lines of code.
+            if any (c < 0 or c > 1 for c in concentrations):
+                raise ValueError("Concentrations need to be between 0 and 1.")
             for concentration in concentrations:
                 selected_index = self.select_structure(
                     method="global_byConcentration",
@@ -485,7 +518,8 @@ class StructureSelector:
                 )
             for j in range(nr_structures):
                 selected_index = self.select_structure(
-                    method=method, concentration=None, recompute_correlation_matrix=True
+                    method=method, concentration=None, recompute_correlation_matrix=True,
+                    lower_conc_limit=lower_conc_limit, upper_conc_limit=upper_conc_limit
                 )
                 print(
                     f"Step {j}: Structure {selected_index} is selected from the candidate set"
