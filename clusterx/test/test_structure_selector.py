@@ -3,6 +3,8 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import pytest
+import warnings
+import sympy
 from ase import Atoms
 import numpy as np
 
@@ -60,8 +62,8 @@ def candidate_set(plat, scell):
 
 
 @pytest.fixture
-def structure_selector(cpool, training_set):
-    return StructureSelector(cpool=cpool, training_set=training_set)
+def structure_selector(cpool, training_set, candidate_set):
+    return StructureSelector(cpool=cpool, training_set=training_set, candidate_set=candidate_set)
 
 
 def test_covariance_setup(plat, cpool, training_set, structure_selector):
@@ -81,15 +83,13 @@ def test_empty_set(structure_selector):
 
 
 @pytest.mark.parametrize("method", ["global_abc", "abc"])
-def test_invalid_method_select(structure_selector, candidate_set, method):
-    structure_selector.set_candidate_set(candidate_set)
+def test_invalid_method_select(structure_selector, method):
     with pytest.raises(ValueError):
         structure_selector.select_structure(method=method)
 
 
 @pytest.mark.parametrize("method", ["global_abc", "abc"])
-def test_invalid_method_domain_matrix(structure_selector, candidate_set, method):
-    structure_selector.set_candidate_set(candidate_set)
+def test_invalid_method_domain_matrix(structure_selector, method):
     with pytest.raises(ValueError):
         structure_selector._calculate_domain_matrix(method=method)
 
@@ -127,7 +127,6 @@ def test_structure_selection(
     # TODO: test greedy method how?
     calculate_tau_method = method.replace("global_", "")
     n_candidates = len(candidate_set)
-    structure_selector.set_candidate_set(candidate_set)
     structure_idx = structure_selector.select_structure(
         method=method, concentration=0.2
     )
@@ -145,9 +144,16 @@ def test_structure_selection(
         )
 
     structure_chosen = np.argmin(tau)
+    structure_chosen_by_greedy_method = structure_selector.select_structure(method="greedy")
     assert structure_chosen == structure_idx, f"""structure selection failed. 
         Criteria are not optimally reducing prediction variance according 
         to themselves. generated tau values: {tau}, seed {seed}"""
+    # Note: following code shows if greedy algortihm produces same result as other methods (which it does not have to)
+    if structure_chosen != structure_chosen_by_greedy_method:
+        warnings.warn( f"""Greedy algorithm produces
+        different results than the global methods: Structure chosen by greedy: 
+        {structure_chosen_by_greedy_method}
+        vs. structure chosen by global: {structure_chosen}""")
 
 
 @pytest.mark.parametrize(
@@ -162,6 +168,49 @@ def test_structure_selection(
 def test_calc_domain_matrix(method, structure_selector):
     structure_selector._calculate_domain_matrix(method, concentration=0.2)
 
+def test_integral_calculation_averagedConcentration(structure_selector):
+    lower_conc_limit=0.1
+    upper_conc_limit=0.5
+    domain_matrix = structure_selector._calculate_domain_matrix(method='averagedConcentration',
+                                                                lower_conc_limit=lower_conc_limit,
+                                                                upper_conc_limit=upper_conc_limit)
+    npoints = structure_selector._cpool.get_all_npoints()
+    number_clusters = len(npoints)
+    domain_matrix_control = np.zeros((number_clusters, number_clusters), dtype=float)
+    for rowIdx in range(number_clusters):
+        for colIdx in range(number_clusters):
+            conc = sympy.symbols("conc")
+            sum_points = npoints[rowIdx] + npoints[colIdx]
+            integrand = np.power(
+                (2*conc-1), sum_points
+            )
+            domain_matrix_control[rowIdx, colIdx] = sympy.integrate(
+                integrand,
+                (conc,
+                lower_conc_limit,
+                upper_conc_limit)
+            )
+    try:
+        np.testing.assert_allclose(
+            domain_matrix,
+            domain_matrix_control,
+            atol=1e-12,
+        )
+    except AssertionError:
+        raise AssertionError("Domain matrix is not computed correctly"
+                             "for averagedConcentration method."
+                             "Check the integration.")
+
+# note: test may not be neccessary; delete?
+# tested beforehand for which concentration limits another structure is selected then for limits 0 to 1
+# therefore test cannot be reproduced with random integral limits, as it could be that same structures selected then
+def test_structure_selection_with_differing_concentration_limits(structure_selector):
+    idx1 = structure_selector.select_structure(method="global_averagedConcentration",
+                                                        lower_conc_limit=0, upper_conc_limit=1)
+    idx2 = structure_selector.select_structure(method="global_averagedConcentration",
+                                                        lower_conc_limit=0, upper_conc_limit=0.05)
+    assert idx1 != idx2, "Same structure selected, even though settings should lead to different selected structures"
+
 @pytest.mark.parametrize("seed", [42])
 @pytest.mark.parametrize(
     "method",
@@ -173,9 +222,10 @@ def test_calc_domain_matrix(method, structure_selector):
     ],
 )
 def test_structure_object(
-            seed, method, plat, scell, candidate_set, structure_selector
+            seed, method, plat, scell, 
+            candidate_set, 
+            structure_selector
 ):
-    structure_selector.set_candidate_set(candidate_set)
     selected_structure_idx = structure_selector.select_structure(
         method=method, concentration=0.2)
     structure = candidate_set.get_structure(selected_structure_idx)
@@ -190,13 +240,17 @@ def test_structure_object(
         "global_vdWalleAndCeder",
     ],
 )
-def test_input_validation_for_select_structures_set(method, structure_selector, candidate_set):
-    # method input already tested above and same code was used, so its not tested again here
-    structure_selector.set_candidate_set(candidate_set)
+def test_input_validation_for_select_structures_set(method, structure_selector):
+    # note: method input already tested above and same code was used, so its not tested again here
     if method == "global_byConcentration":
-        with pytest.raises(ValueError, match="To select with global_byConcentration please provide a list of concentrations to select for."):
+        with pytest.raises(ValueError, match="To select with global_byConcentration"
+                                            "please provide a list of concentrations to select for."):
             structure_selector.select_structures_set(
                                                     concentrations=None,
+                                                    method=method)
+        # note: may be deleted if concentration range is incorrect
+        with pytest.raises(ValueError, match="Concentrations need to be between 0 and 1."):
+            structure_selector.select_structures_set(concentrations=[1.1, -0.5],
                                                     method=method)
     else:
         with pytest.raises(ValueError, match="Please provide the number of structures you want to select."):
@@ -205,24 +259,18 @@ def test_input_validation_for_select_structures_set(method, structure_selector, 
                                                     method=method)
             
 def test_reduction_candidate_set(structure_selector, candidate_set, cpool_candidates):
-    structure_selector.set_candidate_set(candidate_set)
-    method = "global_averagedConcentration"
+    method = "global_averagedConcentration" # note: any method could be chosen here
     structure_selector.select_structures_set(nr_structures=1,
                                             method=method)
     len_candidate_set_wo_reduction = len(structure_selector._candidate_set)
     structure_selector.set_candidate_set(candidate_set)
     structure_selector.select_structures_set(exclude_equivalent_candidates=True,
-                                            cpool_candidates = cpool_candidates,
+                                            cpool_candidates=cpool_candidates,
                                             nr_structures=1,
                                             method=method)
     len_candidate_set_w_reduction = len(structure_selector._candidate_set)
     assert len_candidate_set_w_reduction < len_candidate_set_wo_reduction, ("Candidate set was not reduced.")
 
-#
-
-# def test_reduction_training_set
-
-# @pytest.mark.parametrize("seed", [42])
 @pytest.mark.parametrize(
     "method",
     [
@@ -234,7 +282,6 @@ def test_reduction_candidate_set(structure_selector, candidate_set, cpool_candid
 )
 def test_warning_reduction_candidate_set(plat, cpool_candidates, candidate_set, structure_selector, method):
     basis = structure_selector._correlations_calculator.get_basis()
-    structure_selector.set_candidate_set(candidate_set)
     correlations_calcluator_candidates = CorrelationsCalculator(basis, plat, cpool_candidates)
     candidate_correlations = correlations_calcluator_candidates.get_correlation_matrix(candidate_set)
     print(f"Candidate correlations {candidate_correlations}")
@@ -244,20 +291,55 @@ def test_warning_reduction_candidate_set(plat, cpool_candidates, candidate_set, 
     # choose random columns to replace
     row_idxs_to_replace = np.random.choice(nr_rows, nr_rows_to_replace, replace=False)
     candidate_correlations[row_idxs_to_replace, :] = candidate_correlations[0, :]
-    print(f"Updated candidate correlations {candidate_correlations}")
     if method == "global_byConcentration":
-        with pytest.warns(UserWarning, match="Reduced candidate set contains less than 80 % of original candidate set. "
-                "Consider increasing cpool_candidates to reduce risk of excluding of symmetrically distinct structures."):
+        with pytest.warns(UserWarning, match="Reduced candidate set contains less than 80 % of original candidate set."
+                "Consider increasing cpool_candidates to reduce risk of excluding symmetrically distinct structures."):
             structure_selector.select_structures_set(exclude_equivalent_candidates=True, 
                                                     candidate_correlations=candidate_correlations,
                                                     concentrations=[0.1, 0.2],
                                                     method=method)
     else:
-        with pytest.warns(UserWarning, match="Reduced candidate set contains less than 80 % of original candidate set. "
-                "Consider increasing cpool_candidates to reduce risk of excluding of symmetrically distinct structures."):
+        with pytest.warns(UserWarning, match="Reduced candidate set contains less than 80 % of original candidate set."
+                "Consider increasing cpool_candidates to reduce risk of excluding symmetrically distinct structures."):
             structure_selector.select_structures_set(exclude_equivalent_candidates=True, 
                                                     candidate_correlations=candidate_correlations,
                                                     nr_structures=2,
                                                     method=method)
 
-# TODO: test active learning workflow how?
+@pytest.mark.parametrize(
+    "method",
+    [
+        "global_averagedConcentration",
+        "global_infiniteCrystalFiniteClusters",
+        "global_byConcentration",
+        "global_vdWalleAndCeder",
+    ],
+)
+def test_structure_set_selection(structure_selector, method, candidate_set):
+    len_candidate_set_it0 = len(structure_selector._candidate_set)
+    len_training_set_it0 = len(structure_selector._training_set)
+    idx0 = structure_selector.select_structure(method=method, concentration=0.2)
+    structure0 = structure_selector._candidate_set.get_structure(idx0)
+    sset0 = structure_selector.select_structures_set(method=method,
+                                                            nr_structures=1,
+                                                            concentrations=[0.2])
+    structure0_control = sset0.get_structure(0)
+    len_candidate_set_it1 = len(structure_selector._candidate_set)
+    len_training_set_it1 = len(structure_selector._training_set)
+    assert len_candidate_set_it1 == len_candidate_set_it0 - 1, "Candidate set not reduced as expected"
+    assert len_training_set_it1 == len_training_set_it0 + 1, "Training set not extended as expected"
+    idx1 = structure_selector.select_structure(method=method, concentration=0.3)
+    structure1 = structure_selector._candidate_set.get_structure(idx1)
+    sset1 = structure_selector.select_structures_set(method=method,
+                                                    nr_structures=1,
+                                                    concentrations=[0.3])
+    structure1_control = sset1.get_structure(0)
+    sset = sset0 + sset1
+    assert structure0 == structure0_control, "Not the same structures selected in first iteration"
+    assert structure1 == structure1_control, "Not the same structures selected in second iteration"
+    structure_selector.set_candidate_set(candidate_set)
+    sset_control = structure_selector.select_structures_set(method=method,
+                                                            nr_structures=2,
+                                                            concentrations=[0.2, 0.3])
+    assert sset.get_structure(0) == sset_control.get_structure(0), "Selected structures set does not match control set"
+    assert sset.get_structure(1) == sset_control.get_structure(1), "Selected structures set does not match control set"
