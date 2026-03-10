@@ -116,7 +116,7 @@ def build_nonlinear_model_bagging(
     standardize: bool = False,
     test_size: Optional[float] = None,
     random_state: int = 42,
-    shuffle: bool = True,
+    shuffle: bool = False,
     bagging_model: Optional[dict] = None,
 ):
     """
