@@ -1100,6 +1100,7 @@ def _do_merge_dss(
     # We'll build these and concat at the end (tree-reduction to avoid quadratic concat cost)
     conf_parts: List[pd.DataFrame] = []
     shape_parts: List[pd.DataFrame] = []
+    merged_masks_acc: Dict[str, List[int]] = {}
 
     source_map: Dict[int, str] = {}
 
@@ -1130,6 +1131,7 @@ def _do_merge_dss(
             continue
 
         conf = conf.copy()
+        old_config_ids = conf["config_id"].astype("int64").to_numpy()
 
         # --- Shapes (only those referenced by selected configurations) ---
         shapes = dss.scell_shapes
@@ -1152,6 +1154,16 @@ def _do_merge_dss(
         if make_ids_unique:
             conf["config_id"] = conf["config_id"].astype("int64") + next_config_offset
             conf["shape_id"] = conf["shape_id"].astype("int64") + next_shape_offset
+
+        new_config_ids = conf["config_id"].astype("int64").to_numpy()
+        id_map = dict(zip(old_config_ids.tolist(), new_config_ids.tolist()))
+
+        # Keep/remap masks from source DSS, restricted to selected configurations.
+        for src_mask_name, src_mask_ids in getattr(dss, "masks", {}).items():
+            src_ids = np.asarray(src_mask_ids).ravel()
+            remapped_ids = [id_map[int(cid)] for cid in src_ids if int(cid) in id_map]
+            if remapped_ids:
+                merged_masks_acc.setdefault(str(src_mask_name), []).extend(remapped_ids)
 
         # Keep sigma as-is (tuple of ints => object dtype). No conversion needed.
         conf_parts.append(conf)
@@ -1189,6 +1201,9 @@ def _do_merge_dss(
             sid: masks_per_source[sid] for sid in range(len(masks_per_source))
         }
 
-    merged.masks = {}
+    merged.masks = {
+        mname: np.asarray(mids, dtype="int64")
+        for mname, mids in merged_masks_acc.items()
+    }
 
     return merged
