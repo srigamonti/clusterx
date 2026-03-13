@@ -949,7 +949,7 @@ def _do_plot_properties3(dss_filepath, mask_name=None, property_names=[]):
 
 
 def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
-    from bokeh.models import ColumnDataSource, HoverTool
+    from bokeh.models import ColumnDataSource, CustomJSHover, HoverTool
     from bokeh.palettes import Category10
     from bokeh.plotting import figure, show
 
@@ -958,14 +958,52 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
 
     dsgen.add_fractional_concentration_binary()
 
-    configurations = dsgen.configurations
+    configurations = dsgen.configurations.copy()
     masks = dsgen.masks
+
+    use_jitter = True
+    jitter_width = 0.003
+    x_column = "frconc_binary"
+    plot_x_column = x_column
+
+    if use_jitter:
+        plot_x_column = "frconc_binary_jittered"
+        jitter = np.random.uniform(
+            -jitter_width, jitter_width, size=len(configurations)
+        )
+        configurations[plot_x_column] = configurations[x_column].to_numpy() + jitter
 
     # Prepare data sources
     source = ColumnDataSource(configurations)
-    mask1_source = ColumnDataSource(
-        configurations[configurations["config_id"].isin(masks[mask_name])]
+    mask1_source = None
+    if mask_name is not None:
+        mask1_source = ColumnDataSource(
+            configurations[configurations["config_id"].isin(masks[mask_name])]
+        )
+
+    # Build dynamic tooltips from all DataFrame columns (skip internal jitter column).
+    # Long values (e.g. ensemble-prediction arrays) are truncated by a JS formatter.
+    _skip_cols = {plot_x_column} if use_jitter else set()
+    _max_tooltip_chars = 80
+    _truncate_fmt = CustomJSHover(
+        code="""
+        var s = String(value);
+        if (s.length > """
+        + str(80)
+        + """) {
+            return s.slice(0, """
+        + str(80)
+        + """) + '...';
+        }
+        return s;
+    """
     )
+    _tooltip_cols = [col for col in configurations.columns if col not in _skip_cols]
+    # The {custom} placeholder in the format string triggers the CustomJSHover.
+    dynamic_tooltips = [(col, "@{" + col + "}{custom}") for col in _tooltip_cols]
+    _formatters: dict[str, str | CustomJSHover] = {
+        "@{" + col + "}": _truncate_fmt for col in _tooltip_cols
+    }
 
     # Create a Bokeh figure
     p = figure(
@@ -973,7 +1011,6 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
         x_axis_label="frconc_binary",
         y_axis_label=property_names[0],
         tools="pan,box_zoom,reset,save",
-        tooltips=[("Config ID", "@config_id"), ("frconc_binary", "@frconc_binary")],
     )
 
     # Assign colors and markers for the two properties
@@ -982,7 +1019,7 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
 
     # Plot property1 and property2 for all data
     p.scatter(
-        x="frconc_binary",
+        x=plot_x_column,
         y=property_names[0],
         source=source,
         color=colors[0],
@@ -992,7 +1029,7 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
     )
     if len(property_names) == 2:
         p.scatter(
-            x="frconc_binary",
+            x=plot_x_column,
             y=property_names[1],
             source=source,
             color=colors[1],
@@ -1001,28 +1038,29 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
             size=8,
         )
 
-    # Highlight property1 for mask1
-    p.scatter(
-        x="frconc_binary",
-        y=property_names[0],
-        source=mask1_source,
-        color=colors[2],
-        marker=markers[2],
-        legend_label=property_names[0] + " (" + mask_name + ")",
-        size=10,
-        line_width=2,
-    )
+    # Highlight property1 for mask1, if requested
+    if mask_name is not None:
+        assert mask1_source is not None
+        p.scatter(
+            x=plot_x_column,
+            y=property_names[0],
+            source=mask1_source,
+            color=colors[2],
+            marker=markers[2],
+            legend_label=property_names[0] + " (" + mask_name + ")",
+            size=10,
+            line_width=2,
+        )
 
-    # Add hover tool to display config_id
-    hover = HoverTool(
-        tooltips=[("Config ID", "@config_id"), ("frconc_binary", "@frconc_binary")]
-    )
+    # Add hover tool to display all columns (values truncated to _max_tooltip_chars)
+    hover = HoverTool(tooltips=dynamic_tooltips, formatters=_formatters)  # type: ignore[arg-type]
     p.add_tools(hover)
 
     # Style the plot
-    p.legend.title = "Legend"
-    p.legend.location = "top_left"
-    p.legend.click_policy = "hide"  # Allow clicking to toggle visibility
+    if p.legend:
+        p.legend[0].title = "Legend"
+        p.legend[0].location = "top_left"
+        p.legend[0].click_policy = "hide"  # Allow clicking to toggle visibility
 
     # Show the plot
     show(p)
