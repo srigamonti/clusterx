@@ -122,10 +122,11 @@ class StructureSelector:
         The input parameter 'domain_calculation_method'
         defines with which method the domain matrix is calculated (see Mueller2010 PRB 82, 184107).
 
-        The options for this input parameter are 'averagedConcentration', 'infiniteCrystalFiniteClusters', 'byConcentration', 'vdWalleAndCeder'.
-        If 'byConcentration' is chosen, one needs to supply the routine with a second input parameter, the 'concentration'.
-
-        'concentration' is limited to the range [0, 1] and means the concentration of one of the binaries in the alloy.
+        The options for this input parameter are 'averagedConcentration', 'infiniteCrystalFiniteClusters',
+        'byConcentration', 'vdWalleAndCeder'.
+        If 'byConcentration' is chosen, one needs to supply the routine with a second input parameter,
+        the 'concentration'. 'concentration' is limited to the range [0, 1] and means the concentration of one of the
+        binaries in the alloy.
 
         Parameters:
 
@@ -136,13 +137,13 @@ class StructureSelector:
         lower_conc_limit: float
             Default: 0
             Lower concentration limit for the system.
-            Used in the calculation of the domain matrix 
-            as lower limit of integration for the averagedConcentration method. 
+            Used in the calculation of the domain matrix
+            as lower limit of integration for the averagedConcentration method.
         upper_conc_limit: float
             Default: 1
             Upper concentration limit for the system.
-            Used in the calculation of the domain matrix 
-            as upper limit of integration for the averagedConcentration method. 
+            Used in the calculation of the domain matrix
+            as upper limit of integration for the averagedConcentration method.
         """
 
         domain_matrix = self._calculate_domain_matrix(
@@ -159,11 +160,12 @@ class StructureSelector:
 
     def select_structure(
         self, method=None, concentration=None, recompute_correlation_matrix=False,
-        lower_conc_limit=0, upper_conc_limit=1, 
+        lower_conc_limit=0, upper_conc_limit=1,
     ):
         """Select a structure to enter the training set
 
-        This method needs a candidate set. If no candidate set was passed to the class object, set it with set_candidate_set().
+        This method needs a candidate set. If no candidate set was passed to the class object,
+        set it with set_candidate_set().
 
         The routine takes each structure and adds it temporarily to the training set. With the enlarged training set
         the population variance is computed. To compute the population variance, supply a 'method' parameter, and maybe a
@@ -174,7 +176,8 @@ class StructureSelector:
 
         method: string
             Defines the method used to calculate the domain matrix. Options are
-            'global_averagedConcentration', 'global_infiniteCrystalFiniteClusters', 'global_byConcentration', 'global_vdWalleAndCeder'
+            'global_averagedConcentration', 'global_infiniteCrystalFiniteClusters', 'global_byConcentration',
+            'global_vdWalleAndCeder'
         concentration: float
             Defines the concentration for which the domain matrix should be evaluated.
         recompute_gram_matrix: bool
@@ -187,13 +190,13 @@ class StructureSelector:
         lower_conc_limit: float
             Default: 0
             Lower concentration limit for the system.
-            Used in the calculation of the domain matrix 
-            as lower limit of integration for the averagedConcentration method. 
+            Used in the calculation of the domain matrix
+            as lower limit of integration for the averagedConcentration method.
         upper_conc_limit: float
             Default: 1
             Upper concentration limit for the system.
-            Used in the calculation of the domain matrix 
-            as upper limit of integration for the averagedConcentration method. 
+            Used in the calculation of the domain matrix
+            as upper limit of integration for the averagedConcentration method.
         """
         if self._candidate_set is None:
             raise ValueError("There are no candidate structures, use set_candidate_set")
@@ -357,23 +360,19 @@ class StructureSelector:
         lower_conc_limit: float = 0,
         upper_conc_limit: float = 1,
         exclude_equivalent_candidates: bool = False,
-        cpool_candidates: Optional[ClustersPool] = None, 
+        cpool_candidates: Optional[ClustersPool] = None,
         nr_structures: Optional[int] = None,
         concentrations: Optional[List[float]] = None,
         candidate_correlations: Optional[np.ndarray] = None,
     ) -> StructuresSet:
         """
-        Active learning workflow to iteratively select a specified number
-        of optimal structures from a candidate_set in order to reduce the
-        variance of predicted property values among a population of 
+        Active learning workflow to iteratively select a specified number of optimal structures from a candidate_set
+        in order to reduce the variance of predicted property values among a population of
         structures for the training_set.
 
-        In each iteration an optimal structure is selected from the
-        current candidate_set using the specified method.
-        The selected structure is added to the training_set and
-        removed from the candidate_set.
-        An additional StructuresSet containing the selected structures
-        from all iterations is created and returned.
+        In each iteration an optimal structure is selected from the current candidate_set using the specified method.
+        The selected structure is added to the training_set and removed from the candidate_set.
+        An additional StructuresSet containing the selected structures from all iterations is created and returned.
 
         ***Parameters***:
         method (string):
@@ -385,34 +384,31 @@ class StructureSelector:
         lower_conc_limit: float
             Default: 0
             Lower concentration limit for the system.
-            Used in the calculation of the domain matrix 
-            as lower limit of integration for the averagedConcentration method. 
+            Used in the calculation of the domain matrix as lower limit of integration for the
+            averagedConcentration method.
         upper_conc_limit: float
             Default: 1
             Upper concentration limit for the system.
-            Used in the calculation of the domain matrix 
-            as upper limit of integration for the averagedConcentration method. 
+            Used in the calculation of the domain matrix as upper limit of integration for the
+            averagedConcentration method.
         nr_structures (int, optional):
             Default: None
             Specifies the number of structures you want to select from candidate_set.
-            Not used if method is 'global_byConcentration'; instead
-            provide a list of concentrations.
+            Not used if method is 'global_byConcentration', where on needs to provide a list of concentrations instead.
         exclude_equivalent_candidates (bool):
             Default: False
-            To avoid the presence of symmetrically equivalent structures in the candidate
-            set, this parameter can be set to True.
-            In this case, the correlations of all candidates are calculated and those
-            with equal correlations are removed from the candidate set.
-            This could lead to symmetrically inequivalent structures also being excluded,
-            as they could have same correlations, especially if correlations are computed
-            with a small clusters pool. To reduce this risk, it is advised to provide a
-            clusters pool as large as possible for cpool_candidates.
+            To avoid the presence of symmetrically equivalent structures in the candidate set,
+            this parameter can be set to True.
+            In this case, the correlations of all candidates are calculated and those with equal correlations
+            are removed from the candidate set.
+            This could lead to symmetrically inequivalent structures also being excluded, as they could have same
+            correlations, especially if correlations are computed with a small clusters pool. To reduce this risk,
+            it is advised to provide a clusters pool as large as possible for cpool_candidates.
         cpool_candidates: (ClusterPool object, optional):
-            Clusters pool to calculate the candidate correlations in order to exclude
-            structures with the same correlations. 
-            You may want to use a large clusters pool here.
-            cpool_candidates is only used once to calculate the correlations. For structure
-            selection a smaller clusters pool (set in the structure_selector) is used, as
+            Clusters pool to calculate the candidate correlations in order to exclude structures with the same
+            correlations. You may want to use a large clusters pool here.
+            cpool_candidates is only used once to calculate the correlations.
+            For structure selection a smaller clusters pool (set in the structure_selector) is used, as
             otherwise it would be computationally too expensive.
         concentrations (list of floats, optional):
             Default: None
