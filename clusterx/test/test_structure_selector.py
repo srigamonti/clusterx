@@ -145,13 +145,13 @@ def test_structure_selection(
 
     structure_chosen = np.argmin(tau)
     structure_chosen_by_greedy_method = structure_selector.select_structure(method="greedy")
-    assert structure_chosen == structure_idx, f"""structure selection failed. 
-        Criteria are not optimally reducing prediction variance according 
+    assert structure_chosen == structure_idx, f"""structure selection failed.
+        Criteria are not optimally reducing prediction variance according
         to themselves. generated tau values: {tau}, seed {seed}"""
     # Note: following code shows if greedy algortihm produces same result as other methods (which it does not have to)
     if structure_chosen != structure_chosen_by_greedy_method:
         warnings.warn( f"""Greedy algorithm produces
-        different results than the global methods: Structure chosen by greedy: 
+        different results than the global methods: Structure chosen by greedy:
         {structure_chosen_by_greedy_method}
         vs. structure chosen by global: {structure_chosen}""")
 
@@ -222,8 +222,8 @@ def test_structure_selection_with_differing_concentration_limits(structure_selec
     ],
 )
 def test_structure_object(
-            seed, method, plat, scell, 
-            candidate_set, 
+            seed, method, plat, scell,
+            candidate_set,
             structure_selector
 ):
     selected_structure_idx = structure_selector.select_structure(
@@ -257,7 +257,7 @@ def test_input_validation_for_select_structures_set(method, structure_selector):
              structure_selector.select_structures_set(
                                                     nr_structures=None,
                                                     method=method)
-            
+
 def test_reduction_candidate_set(structure_selector, candidate_set, cpool_candidates):
     method = "global_averagedConcentration" # note: any method could be chosen here
     structure_selector.select_structures_set(nr_structures=1,
@@ -294,14 +294,14 @@ def test_warning_reduction_candidate_set(plat, cpool_candidates, candidate_set, 
     if method == "global_byConcentration":
         with pytest.warns(UserWarning, match="Reduced candidate set contains less than 80 % of original candidate set."
                 "Consider increasing cpool_candidates to reduce risk of excluding symmetrically distinct structures."):
-            structure_selector.select_structures_set(exclude_equivalent_candidates=True, 
+            structure_selector.select_structures_set(exclude_equivalent_candidates=True,
                                                     candidate_correlations=candidate_correlations,
                                                     concentrations=[0.1, 0.2],
                                                     method=method)
     else:
         with pytest.warns(UserWarning, match="Reduced candidate set contains less than 80 % of original candidate set."
                 "Consider increasing cpool_candidates to reduce risk of excluding symmetrically distinct structures."):
-            structure_selector.select_structures_set(exclude_equivalent_candidates=True, 
+            structure_selector.select_structures_set(exclude_equivalent_candidates=True,
                                                     candidate_correlations=candidate_correlations,
                                                     nr_structures=2,
                                                     method=method)
