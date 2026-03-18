@@ -136,14 +136,14 @@ class StructureSelector:
             Defines the concentration for which the domain matrix should be evaluated.
         lower_conc_limit: float
             Default: 0
+            Used together with method 'global_averagedConcentration'; ignored for other methods
             Lower concentration limit for the system.
-            Used in the calculation of the domain matrix
-            as lower limit of integration for the averagedConcentration method.
+            Used in the calculation of the domain matrix as lower limit of integration over concentration.
         upper_conc_limit: float
             Default: 1
+            Used together with method 'global_averagedConcentration'; ignored for other methods
             Upper concentration limit for the system.
-            Used in the calculation of the domain matrix
-            as upper limit of integration for the averagedConcentration method.
+            Used in the calculation of the domain matrix as upper limit of integration over concentration.
         """
 
         domain_matrix = self._calculate_domain_matrix(
@@ -189,14 +189,14 @@ class StructureSelector:
             in each step, since the training set changes in each iteration.
         lower_conc_limit: float
             Default: 0
+            Used together with method 'global_averagedConcentration'; ignored for other methods
             Lower concentration limit for the system.
-            Used in the calculation of the domain matrix
-            as lower limit of integration for the averagedConcentration method.
+            Used in the calculation of the domain matrix as lower limit of integration over concentration.
         upper_conc_limit: float
             Default: 1
+            Used together with method 'global_averagedConcentration'; ignored for other methods
             Upper concentration limit for the system.
-            Used in the calculation of the domain matrix
-            as upper limit of integration for the averagedConcentration method.
+            Used in the calculation of the domain matrix as upper limit of integration over concentration.
         """
         if self._candidate_set is None:
             raise ValueError("There are no candidate structures, use set_candidate_set")
@@ -232,7 +232,7 @@ class StructureSelector:
             domain_calculation_method = method.replace("global_", "")
             domain_matrix = self._calculate_domain_matrix(
                 method=domain_calculation_method, concentration=concentration,
-                lower_conc_limit=lower_conc_limit, 
+                lower_conc_limit=lower_conc_limit,
                 upper_conc_limit=upper_conc_limit
             )
 
@@ -321,16 +321,14 @@ class StructureSelector:
                 for rowIdx in range(number_clusters):
                     for colIdx in range(number_clusters):
                         sum_points = npoints[rowIdx] + npoints[colIdx]
-                        domain_matrix[rowIdx, colIdx] = (
-                            1 / (sum_points + 1) * ((sum_points + 1) % 2)
-                        )
+                        domain_matrix[rowIdx, colIdx] = 1/(sum_points + 1)*((sum_points + 1) % 2)
             else:
                 for rowIdx in range(number_clusters):
                     for colIdx in range(number_clusters):
                         sum_points = npoints[rowIdx] + npoints[colIdx]
-                        upper_limit = np.power((2*upper_conc_limit-1), (sum_points+1))
-                        lower_limit = np.power((2*lower_conc_limit-1), (sum_points+1))
-                        domain_matrix[rowIdx, colIdx] = 1/(2*(sum_points+1))*(upper_limit-lower_limit)
+                        result_upper_limit = np.power((2*upper_conc_limit-1), (sum_points+1))
+                        result_lower_limit = np.power((2*lower_conc_limit-1), (sum_points+1))
+                        domain_matrix[rowIdx, colIdx] = 1/(2*(sum_points+1))*(result_upper_limit-result_lower_limit)
 
         elif method == "infiniteCrystalFiniteClusters":
             "The crystal be infinite, the clusters have finite number of points they depend on"
@@ -383,14 +381,14 @@ class StructureSelector:
             - 'global_byConcentration'
         lower_conc_limit: float
             Default: 0
+            Used together with method 'global_averagedConcentration'; ignored for other methods
             Lower concentration limit for the system.
-            Used in the calculation of the domain matrix as lower limit of integration for the
-            averagedConcentration method.
+            Used in the calculation of the domain matrix as lower limit of integration over concentration.
         upper_conc_limit: float
             Default: 1
+            Used together with method 'global_averagedConcentration'; ignored for other methods
             Upper concentration limit for the system.
-            Used in the calculation of the domain matrix as upper limit of integration for the
-            averagedConcentration method.
+            Used in the calculation of the domain matrix as upper limit of integration over concentration.
         nr_structures (int, optional):
             Default: None
             Specifies the number of structures you want to select from candidate_set.
