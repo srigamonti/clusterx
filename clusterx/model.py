@@ -292,13 +292,17 @@ class Model:
         """Return correlations calculator of the Model object"""
         return self.corrc
 
-    def predict(self, structure, flag=None):
+    def predict(self, structure: Structure, reduce_structure: bool = False, flag=None):
         """Predict property with the optimal cluster expansion model.
 
         **Parameters:**
 
         ``structure``: Structure object
             structure object to calculate property to.
+
+        ``reduce_structure``: bool, default: False
+            If true, use reduced structure to predict, only works for diagonal
+            supercell transformation.
 
         ``flag``: dict or None
             it flags whether the member corrc correlationsCalculator computed
@@ -312,18 +316,29 @@ class Model:
                    print("INFO: correlations calculator computed orbits from scrach.")
                    model.serialize(filepath="myfilepath.pickle")
         """
-        # with _timed("Model.predict: Get cluster correlations"):
-        corrs = self.corrc.get_cluster_correlations(structure, flag=flag)
+        if not reduce_structure:
+            # with _timed("Model.predict: Get cluster correlations"):
+            corrs = self.corrc.get_cluster_correlations(structure, flag=flag)
 
-        if self.estimator is not None:
-            return self.estimator.predict(corrs.reshape(1, -1))[0]
+            if self.estimator is not None:
+                return self.estimator.predict(corrs.reshape(1, -1))[0]
+            else:
+                if self.standardize:
+                    corrs = self.stdscaler.transform(corrs)
+                return np.dot(self.ecis, corrs)
         else:
-            if self.standardize:
-                corrs = self.stdscaler.transform(corrs)
-            return np.dot(self.ecis, corrs)
+            prediction = self.predict_partial(structure, 0, True)
+            for i in range(1, len(structure.sigmas)):
+                prediction += self.predict_partial(structure, i, True)
+            return prediction
 
-    def predict_partial(self, structure: Structure, index: int):
-        """Note: only works for diagonal super cells"""
+    def predict_partial(
+        self, structure: Structure, index: int, divide_n_body: bool = False
+    ):
+        """Predict property using only the correlations around site `index`.
+        This uses all correlations of all clusters that include this site.
+        Note: only works for diagonal super cells.
+        """
         _structure, _index = structure.get_reduced_structure(index)
         _scell = _structure.get_supercell()
 
@@ -339,6 +354,9 @@ class Model:
             basis_set_values=self.corrc.basis_set_values,
             multiplicities=self._multiplicities,
         )
+
+        if divide_n_body:  # undo double counting, when looping over all sites
+            correlations_partial /= self._n_body_list
 
         correlations_partial /= self.scell_factor
         if self.estimator is not None:
@@ -364,8 +382,10 @@ class Model:
         cluster_indices = []  # to which primitive cluster each cluster belongs
         cluster_orbits_array = []  # all clusters from all orbits
         multiplicities = []  # relative to cluster_orbits_array
+        n_body_list = []  # list of n's where n is number of sites for each primitive cluster
         for cluster_index, cluster_orbit in enumerate(cluster_orbits):
             multiplicities.append(len(cluster_orbit))
+            n_body_list.append(len(cluster_orbit[0]))
             for cluster in cluster_orbit:
                 cluster_indices.append(cluster_index)
                 cluster_orbits_array.append(cluster)
@@ -382,6 +402,7 @@ class Model:
         self._cluster_orbits_array = np.array(cluster_orbits_array, dtype=object)
         self._cluster_indices = np.array(cluster_indices, dtype=int)
         self._multiplicities = np.array(multiplicities, dtype=int)
+        self._n_body_list = np.array(n_body_list)
         self._site_clusters = site_clusters
         self.initialized_interactions = True
 
