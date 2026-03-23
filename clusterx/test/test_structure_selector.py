@@ -190,16 +190,12 @@ def test_integral_calculation_averagedConcentration(structure_selector):
                 lower_conc_limit,
                 upper_conc_limit)
             )
-    try:
-        np.testing.assert_allclose(
+    np.testing.assert_allclose(
             domain_matrix,
             domain_matrix_control,
             atol=1e-12,
+            err_msg="Domain matrix is not computed correctly for averagedConcentration method. Check the integration."
         )
-    except AssertionError:
-        raise AssertionError("Domain matrix is not computed correctly"
-                             "for averagedConcentration method."
-                             "Check the integration.")
 
 # note: test may not be neccessary; delete?
 # tested beforehand for which concentration limits another structure is selected then for limits 0 to 1
