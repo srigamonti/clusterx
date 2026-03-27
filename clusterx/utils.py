@@ -242,13 +242,17 @@ def _is_integrable(s):
 
 
 def list_integer_named_folders(
-    root=".", prefix="", suffix="", containing_files=[], not_containing_files=[]
+    root=".", prefix="", suffix="", containing_files=None, not_containing_files=None
 ):
-    """Return array of integer named folders.
+    """Return integer-named folders or their original string names.
 
-    Scans folders in ``root`` and detects those which are named
-    with an integer number. It returns then a sorted list of the
-    found integers, e.g. , if the folder structure is::
+    Scans folders in `root` and detects those whose names match:
+
+        prefix + integer + suffix
+
+    Examples
+    --------
+    If the folder structure is::
 
         root/
             1/
@@ -264,42 +268,63 @@ def list_integer_named_folders(
             folderx/
             foldery/
 
+    then with default arguments this returns::
 
-    then the following array is returned::
+        [1, 2, 5, 7, 8]
 
-        [1,2,5,7,8].
+    If prefix="run_", this returns::
 
-    If ``prefix`` is set to some string, then it returns a (sorted)
-    list of strings. For example, if prefix is set to ``"run_"``, then this
-    will return the array::
+        ["run_2", "run_3", "run_4", "run_5"]
 
-        ["run_2","run_3","run_4","run_5"]
+    If folders are zero-padded, e.g.::
 
-    Parameters:
+        root/
+            01/
+            02/
+            10/
+            11/
 
-    ``root``: string
-        path of the root folder in which to scan for integer named folders.
-    ``prefix``: string
-        scan for folders whose name starts with the string ``prefix`` followed
-        by and integer number (and possibly the string ``suffix``).
-    ``suffix``: string
-        scan for folders whose name ends with the string ``suffix`` and
-        is preceded by an integer number (and possibly the string ``prefix``).
-    ``containing_files``: array of strings
-        a list of file names that should be contained in the returned folders.
-    ``not_containing_files``: array of strings
-        a list of file names that should not be contained in the returned folders.
+    then this returns::
 
-    Returns:
-        array of integers if default value for ``prefix`` is used. Otherwise
-        returns an array of strings
+        ["01", "02", "10", "11"]
 
+    Parameters
+    ----------
+    root : str
+        Path of the root folder in which to scan for integer-named folders.
+    prefix : str
+        Required prefix before the integer part.
+    suffix : str
+        Required suffix after the integer part.
+    containing_files : list[str]
+        File names that must exist inside the returned folders.
+    not_containing_files : list[str]
+        File names that must not exist inside the returned folders.
+
+    Returns
+    -------
+    list[int] or list[str]
+        Returns integers only when:
+        - prefix == ""
+        - suffix == ""
+        - and none of the matched folder names uses zero padding
+
+        Otherwise returns the original folder names as strings, preserving
+        zero padding.
     """
+    if containing_files is None:
+        containing_files = []
+    if not_containing_files is None:
+        not_containing_files = []
+
     folders = sub_folders(root)
 
-    flist = []
+    matches = []
+    padded_found = False
+
     for folder in folders:
         include = True
+
         for fn in not_containing_files:
             if os.path.exists(os.path.join(root, folder, fn)):
                 include = False
@@ -314,33 +339,32 @@ def list_integer_named_folders(
         if not include:
             continue
 
-        if prefix == folder[: len(prefix)] and suffix == folder[-len(suffix) :]:
-            if len(prefix) != 0 and len(suffix) != 0:
-                d = folder[len(prefix) :][: -len(suffix)]
-            elif len(prefix) != 0 and len(suffix) == 0:
-                d = folder[len(prefix) :]
-            elif len(prefix) == 0 and len(suffix) != 0:
-                d = folder[: -len(suffix)]
-            else:
-                d = folder[:]
+        if not folder.startswith(prefix):
+            continue
+        if suffix and not folder.endswith(suffix):
+            continue
 
-            if _is_integrable(d):
-                flist.append(int(d))
-        else:
-            if _is_integrable(folder):
-                flist.append(int(folder))
+        start = len(prefix)
+        end = len(folder) - len(suffix) if suffix else len(folder)
+        d = folder[start:end]
 
-    flist.sort()
+        if _is_integrable(d):
+            value = int(d)
+            matches.append((value, folder))
 
-    if prefix != "" or suffix != "":
-        slist = []
-        for f in flist:
-            slist.append(prefix + str(f) + suffix)
+            # detect zero padding: "01", "002", etc.
+            # but do not count plain "0" as padded
+            if len(d) > 1 and d[0] == "0":
+                padded_found = True
 
-        return slist
+    matches.sort(key=lambda x: x[0])
 
-    else:
-        return flist
+    # Only return integers if there is no prefix/suffix and no zero padding
+    if prefix == "" and suffix == "" and not padded_found:
+        return [value for value, _ in matches]
+
+    # Otherwise preserve the original names exactly
+    return [folder for _, folder in matches]
 
 
 def atat_to_cell(
