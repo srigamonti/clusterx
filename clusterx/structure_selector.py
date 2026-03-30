@@ -46,13 +46,12 @@ class StructureSelector:
 
     def __init__(
         self,
-        cpool,
-        training_set,
-        candidate_set=None,
-        correlations_calculator=None,
-        regularization_strength=0,
+        cpool: ClustersPool,
+        training_set: StructuresSet,
+        candidate_set: StructuresSet | None = None,
+        correlations_calculator: CorrelationsCalculator | None = None,
+        regularization_strength: float = 0.0,
     ):
-        "Barricade against bad input:"
         if not (isinstance(cpool, ClustersPool)):
             raise TypeError("cpool needs to be a ClustersPool object.")
         if not (isinstance(training_set, StructuresSet)):
@@ -82,7 +81,7 @@ class StructureSelector:
         correlation_matrix = self._correlations_calculator.get_correlation_matrix(
             self._training_set
         )
-        "Calculate covariance matrix of training set"
+        # Calculate covariance matrix of training set
         if regularization_strength == 0:
             self._covariance_matrix = np.linalg.inv(
                 np.dot(correlation_matrix.T, correlation_matrix)
@@ -94,7 +93,9 @@ class StructureSelector:
             )
             self._covariance_matrix = regularized_covariance_matrix
 
-    def set_candidate_set(self, new_candidate_set):
+    def set_candidate_set(
+        self,
+        new_candidate_set: StructuresSet):
         """Set the candidate set
 
         Changes the set of candidates to be selected for the training set.
@@ -113,9 +114,12 @@ class StructureSelector:
         self._candidate_set = new_candidate_set
 
     def calculate_population_variance(
-        self, domain_calculation_method="averagedConcentration", concentration=None,
-        lower_conc_limit=0, upper_conc_limit=1
-    ):
+        self,
+        domain_calculation_method: str = "averagedConcentration",
+        concentration: float | None = None,
+        lower_conc_limit: float = 0.0,
+        upper_conc_limit: float = 1.0
+    ) -> float:
         """Calculate the cluster expansions prediction variance of the structural property
         averaged over all possible structures.
 
@@ -152,16 +156,20 @@ class StructureSelector:
         )
         covariance_matrix = self._covariance_matrix
 
-        "Compute Frobenius product of covarinace matrix and domain matrix"
+        # Compute Frobenius product of covarinace matrix and domain matrix
         # this is equivalent to the value of tau defined in Mueller2010 PRB 82, 184107
         population_variance = np.trace(np.dot(covariance_matrix.T, domain_matrix))
 
         return population_variance
 
     def select_structure(
-        self, method=None, concentration=None, recompute_correlation_matrix=False,
-        lower_conc_limit=0, upper_conc_limit=1,
-    ):
+        self,
+        method: str | None = None,
+        concentration: float | None = None,
+        recompute_correlation_matrix: bool = False,
+        lower_conc_limit: float = 0.0,
+        upper_conc_limit: float = 1.0,
+    ) -> float:
         """Select a structure to enter the training set
 
         This method needs a candidate set. If no candidate set was passed to the class object,
@@ -283,10 +291,10 @@ class StructureSelector:
 
     def _calculate_domain_matrix(
         self,
-        method=None,
-        concentration=None,
-        lower_conc_limit=0,
-        upper_conc_limit=1,
+        method: str | None = None,
+        concentration: float | None = None,
+        lower_conc_limit: float = 0.0,
+        upper_conc_limit: float = 1.0,
     ):
         if method is None:
             raise ValueError("No method for calculation chosen.")
@@ -302,21 +310,18 @@ class StructureSelector:
                 + str(method_list)
             )
 
-        """
-        Calculate domain matrix from Mueller2010 paper PRB 82, 184107
-        """
+        # Calculate domain matrix from Mueller2010 paper PRB 82, 184107
 
         npoints = self._cpool.get_all_npoints()
         number_clusters = len(npoints)
         domain_matrix = np.zeros((number_clusters, number_clusters), dtype=float)
 
-        "Domain matrix uniformly averaged over concentration for structures in infinite crystal"
+        # Domain matrix uniformly averaged over concentration for structures in infinite crystal
         if method == "averagedConcentration":
             # averaged concentration method calculates the integral from lower
             # to the upper concentration limit:
             # integral ((2c-1)^(n_points_alpha + n_points_beta))
             # for integration borders 0 and 1 this simplifies to:
-            "Number of occupations a cluster depends on"
             if lower_conc_limit == 0 and upper_conc_limit == 1:
                 for rowIdx in range(number_clusters):
                     for colIdx in range(number_clusters):
@@ -331,13 +336,12 @@ class StructureSelector:
                         domain_matrix[rowIdx, colIdx] = 1/(2*(sum_points+1))*(result_upper_limit-result_lower_limit)
 
         elif method == "infiniteCrystalFiniteClusters":
-            "The crystal be infinite, the clusters have finite number of points they depend on"
+            # The crystal be infinite, the clusters have finite number of points they depend on
             domain_matrix[0, 0] = 1
         elif method == "byConcentration":
-            "Calculate domain matrix for infinite crystal at given concentration"
+            # Calculate domain matrix for infinite crystal at given concentration
             if not (isinstance(concentration, float)):
                 raise TypeError("Concentration needs to be a float.")
-            "Number of occupations a cluster depends on"
             for rowIdx in range(number_clusters):
                 for colIdx in range(number_clusters):
                     domain_matrix[rowIdx, colIdx] = np.power(
@@ -345,7 +349,7 @@ class StructureSelector:
                     )
 
         elif method == "vdWalleAndCeder":
-            "Use A. vd Walles and G. Ceders method"
+            # Use A. vd Walles and G. Ceders method
             domain_matrix = domain_matrix + np.identity(number_clusters)
         else:
             raise ValueError(f"Invalid method: {method}")
@@ -355,13 +359,13 @@ class StructureSelector:
     def select_structures_set(
         self,
         method: str,
-        lower_conc_limit: float = 0,
-        upper_conc_limit: float = 1,
+        lower_conc_limit: float = 0.0,
+        upper_conc_limit: float = 1.0,
         exclude_equivalent_candidates: bool = False,
-        cpool_candidates: Optional[ClustersPool] = None,
-        nr_structures: Optional[int] = None,
-        concentrations: Optional[List[float]] = None,
-        candidate_correlations: Optional[np.ndarray] = None,
+        cpool_candidates: ClustersPool | None = None,
+        nr_structures: int | None = None,
+        concentrations: List[float] | None = None,
+        candidate_correlations: np.ndarray | None = None,
     ) -> StructuresSet:
         """
         Active learning workflow to iteratively select a specified number of optimal structures from a candidate_set
@@ -471,7 +475,7 @@ class StructureSelector:
         if method == "global_byConcentration":
             if concentrations is None:
                 raise ValueError(
-                    "To select with global_byConcentration" 
+                    "To select with global_byConcentration"
                     "please provide a list of concentrations to select for."
                 )
             # note: do we have cases of negative concentration or concentration larger 1?
