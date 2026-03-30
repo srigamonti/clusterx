@@ -315,42 +315,34 @@ class StructureSelector:
         npoints = self._cpool.get_all_npoints()
         number_clusters = len(npoints)
         domain_matrix = np.zeros((number_clusters, number_clusters), dtype=float)
+        npoints_row, npoints_col = np.meshgrid(npoints, npoints, indexing="ij")
+        sum_points_matrix = npoints_row + npoints_col
 
         # Domain matrix uniformly averaged over concentration for structures in infinite crystal
         if method == "averagedConcentration":
-            # averaged concentration method calculates the integral from lower
-            # to the upper concentration limit:
+            # averaged concentration method calculates the integral from lower to upper concentration limit:
             # integral ((2c-1)^(n_points_alpha + n_points_beta))
             # for integration borders 0 and 1 this simplifies to:
-            if lower_conc_limit == 0 and upper_conc_limit == 1:
-                for rowIdx in range(number_clusters):
-                    for colIdx in range(number_clusters):
-                        sum_points = npoints[rowIdx] + npoints[colIdx]
-                        domain_matrix[rowIdx, colIdx] = 1/(sum_points + 1)*((sum_points + 1) % 2)
+            if lower_conc_limit == 0.0 and upper_conc_limit == 1.0:
+                domain_matrix= 1/(sum_points_matrix + 1)*((sum_points_matrix + 1) % 2)
             else:
-                for rowIdx in range(number_clusters):
-                    for colIdx in range(number_clusters):
-                        sum_points = npoints[rowIdx] + npoints[colIdx]
-                        result_upper_limit = np.power((2*upper_conc_limit-1), (sum_points+1))
-                        result_lower_limit = np.power((2*lower_conc_limit-1), (sum_points+1))
-                        domain_matrix[rowIdx, colIdx] = 1/(2*(sum_points+1))*(result_upper_limit-result_lower_limit)
+                result_upper_limit = np.power((2*upper_conc_limit-1), (sum_points_matrix+1))
+                result_lower_limit = np.power((2*lower_conc_limit-1), (sum_points_matrix+1))
+                domain_matrix = 1/(2*(sum_points_matrix+1))*(result_upper_limit-result_lower_limit)
 
         elif method == "infiniteCrystalFiniteClusters":
             # The crystal be infinite, the clusters have finite number of points they depend on
             domain_matrix[0, 0] = 1
+
         elif method == "byConcentration":
             # Calculate domain matrix for infinite crystal at given concentration
             if not (isinstance(concentration, float)):
                 raise TypeError("Concentration needs to be a float.")
-            for rowIdx in range(number_clusters):
-                for colIdx in range(number_clusters):
-                    domain_matrix[rowIdx, colIdx] = np.power(
-                        (2 * concentration - 1), npoints[rowIdx] + npoints[colIdx]
-                    )
+            domain_matrix = np.power((2*concentration-1), sum_points_matrix)
 
         elif method == "vdWalleAndCeder":
             # Use A. vd Walles and G. Ceders method
-            domain_matrix = domain_matrix + np.identity(number_clusters)
+            domain_matrix = np.identity(number_clusters)
         else:
             raise ValueError(f"Invalid method: {method}")
 
