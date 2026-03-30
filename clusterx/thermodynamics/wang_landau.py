@@ -658,7 +658,7 @@ class WangLandau:
                 return struc
             return struc
 
-    def _wls_init_from_file(self, cd, update_method, flatness_conditions, f_range):
+    def _init_from_file(self, cd, update_method, flatness_conditions, f_range):
         cdos = []
         for ell, eb in enumerate(cd._energy_bins):
             cdos.append([eb, cd._cdos[ell], 0])
@@ -694,17 +694,17 @@ class WangLandau:
         while f < flatness_conditions[fi][1]:
             fi += 1
             if fi < len(flatness_conditions):
-                histogram_flatness = float(flatness_conditions[fi][0])
+                target_flatness = float(flatness_conditions[fi][0])
             else:
-                histogram_flatness = float(0.99)
+                target_flatness = float(0.99)
                 break
 
-        return cdos, f, histogram_flatness, f_range, flatness_conditions, fi
+        return cdos, f, target_flatness, f_range, flatness_conditions, fi
 
-    def _wls_init_from_scratch(
+    def _init_from_scratch(
         self, energy_range, energy_bin_width, flatness_conditions, f_range
     ):
-        cdos = []
+        cdos = []  # cdos[:] = [energy_bin, log(cdos), histogram]
         eb = energy_range[0]
         while eb < energy_range[1]:
             cdos.append([eb, 0.0, 0])  # log(cdos=1.0)=0.0
@@ -713,11 +713,11 @@ class WangLandau:
 
         f = f_range[0]
         fi = 0
-        histogram_flatness = flatness_conditions[fi][0]
+        target_flatness = flatness_conditions[fi][0]
 
-        return cdos, f, histogram_flatness, fi
+        return cdos, f, target_flatness, fi
 
-    def _wls_locate_histogram_bin(self, e, energies, energy_bin_width):
+    def _locate_histogram_bin(self, e, energies, energy_bin_width):
         emin = energies[0]
         emax = energies[-1] + energy_bin_width
 
@@ -730,7 +730,7 @@ class WangLandau:
                 if e >= energies[i] and e < energies[i] + energy_bin_width:
                     return i, False
 
-    def _wls_update_modification_factor(self, f, update_method):
+    def _update_modification_factor(self, f, update_method):
         if update_method == "square_root":
             f = math.sqrt(f)
         else:
@@ -926,8 +926,8 @@ class WangLandau:
             cd = ConfigurationalDensityOfStates(
                 filename=filename, scell=self._scell, read=True, **kwargs
             )
-            cdos, f, histogram_flatness, f_range, flatness_conditions, fi = (
-                self._wls_init_from_file(cd, update_method, flatness_conditions)
+            cdos, f, target_flatness, f_range, flatness_conditions, fi = (
+                self._init_from_file(cd, update_method, flatness_conditions)
             )
 
         else:
@@ -945,14 +945,14 @@ class WangLandau:
                 chemical_potentials=self._chemical_potentials,
                 **kwargs,
             )
-            cdos, f, histogram_flatness, fi = self._wls_init_from_scratch(
+            cdos, f, target_flatness, fi = self._init_from_scratch(
                 energy_range, energy_bin_width, flatness_conditions, f_range
             )
 
         e = self._em.predict(struc, self._reduce_structure) * self._ef
 
         energies = cdos[:, 0]
-        ibin, is_inside_range = self._wls_locate_histogram_bin(
+        ibin, is_inside_range = self._locate_histogram_bin(
             e, energies, energy_bin_width
         )
 
@@ -969,13 +969,13 @@ class WangLandau:
         print("----------------------------------------")
         print("Info (Wang-Landau): Running WL sampling.")
         print(
-            f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
+            f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} | {'emin':11s} | {'emax':11s} "
         )
         while f > f_range[1]:
             # print("----------------------------------------")
             # print("Info (Wang-Landau): Running WL sampling.")
             # print(f"Info (Wang-Landau): Modification factor: {f}")
-            # print(f"Info (Wang-Landau): Histogram flatness: {histogram_flatness}")
+            # print(f"Info (Wang-Landau): Target flatness: {target_flatness}")
             struc, e, g, ibin, cdos, hist_cond, niter = self.flat_histogram(
                 struc,
                 e,
@@ -983,7 +983,7 @@ class WangLandau:
                 ibin,
                 f,
                 cdos,
-                histogram_flatness,
+                target_flatness,
                 energy_bin_width,
                 niter_per_sweep,
             )
@@ -994,7 +994,7 @@ class WangLandau:
             cd.store_cdos(
                 cdos,
                 f,
-                histogram_flatness,
+                target_flatness,
                 hist_cond,
                 niter,
                 self._n_mc_steps_total,
@@ -1007,21 +1007,21 @@ class WangLandau:
             if serialize_during_sampling:
                 cd.serialize()
 
-            f = self._wls_update_modification_factor(f, update_method)
+            f = self._update_modification_factor(f, update_method)
 
             if f < flatness_conditions[fi][1]:
                 fi += 1
                 if fi < len(flatness_conditions):
-                    histogram_flatness = float(flatness_conditions[fi][0])
+                    target_flatness = float(flatness_conditions[fi][0])
                 else:
-                    histogram_flatness = float(0.99)
+                    target_flatness = float(0.99)
 
         if serialize:
             cd.serialize()
 
         return cd
 
-    def _wls_get_hist_min_and_avg(self, hist):
+    def _get_hist_min_and_avg(self, hist):
         hist_sum = 0
         count_nonzero_bins = 0
         for h in hist:
@@ -1045,7 +1045,7 @@ class WangLandau:
         inde,
         f,
         cdos,
-        histogram_flatness,
+        target_flatness,
         energy_bin_width,
         niter_per_sweep=100000,
     ):
@@ -1063,11 +1063,11 @@ class WangLandau:
         # print(
         #    f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
         # )
-        while (hist_min < histogram_flatness * hist_avg) or (
+        while (hist_min < target_flatness * hist_avg) or (
             n_nonzero_bins < nonzero_bins_thresh
         ):
             print(
-                f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min / hist_avg:8.3f} | {histogram_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
+                f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min / hist_avg:8.3f} | {target_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
             )
 
             struc, e, g, inde, cdos = self.dos_steps(
@@ -1075,16 +1075,14 @@ class WangLandau:
             )
             niter += niter_per_sweep
 
-            hist_min, hist_avg, n_nonzero_bins = self._wls_get_hist_min_and_avg(
-                cdos[:, 2]
-            )
+            hist_min, hist_avg, n_nonzero_bins = self._get_hist_min_and_avg(cdos[:, 2])
             if n_nonzero_bins < 10:
                 print(
                     f"{inde:4d} | {cdos[0, 0]:11.3f} | {e:11.3f} | {cdos[-1, 0]:11.3f}"
                 )
 
         print(
-            f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min / hist_avg:8.3f} | {histogram_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d}"
+            f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min / hist_avg:8.3f} | {target_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
         )
 
         return struc, e, g, inde, cdos, [hist_min, hist_avg], niter
@@ -1118,7 +1116,7 @@ class WangLandau:
             else:
                 e1 = self._em.predict(struc) * self._ef
 
-            ibin, is_outside_interval = self._wls_locate_histogram_bin(
+            ibin, is_outside_interval = self._locate_histogram_bin(
                 e1, energies, energy_bin_width
             )
 
