@@ -50,7 +50,8 @@ def model(plat, cpool):
     return cemodel
 
 
-def test_reduced(plat, model):
+@pytest.mark.parametrize("reduce_structure", [False, True])
+def test_reduced(plat, model, reduce_structure):
     p = [4, 4, 1]
     scell = SuperCell(plat, p)
     nsubs = {0: [int(np.prod(p) / 2)]}
@@ -61,7 +62,8 @@ def test_reduced(plat, model):
         scell=scell,
         ensemble="canonical",
         nsubs=nsubs,
-        predict_swap=False,
+        predict_swap=True,
+        reduce_structure=reduce_structure,
     )
     cdos = wl.wang_landau_sampling(
         energy_range=energy_range,

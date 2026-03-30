@@ -7,6 +7,7 @@ import time
 import datetime
 import json
 import math
+import random
 
 import numpy as np
 import scipy
@@ -18,6 +19,7 @@ from ase.atoms import Atoms
 from clusterx.structure import Structure
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
+from clusterx.model import Model
 from clusterx.utils import isclose, dict_compare
 
 
@@ -470,17 +472,6 @@ class WangLandau:
         CE model for predicting the internal energy of the supercell (see ``scell`` below)
         in [eV]. If other units are employed, see parameter ``energy_factor`` below.
 
-    ``energy_factor``: float (default: 1.0)
-        Multiplicator factor (:math:`s`) applied to the predictions of ``energy_model``
-        (:math:`E_{CE}`). Set this factor such that :math:`s *  E_{CE}` gives
-        the total energy, in [eV], of the supercell (``scell`` below).
-        For instance, if the CE model predicts the energy in meV/atom, set this parameter
-        to 1000*Nsc, where Nsc is the total number of atoms of the supercel (``len(scell)``).
-        If CE predicts the energy in Hartree
-        per parent lattice, set ``energy_factor`` to 27.2114*Npl, where Npl is
-        the number of parent lattices contained in the supercell (this can be obtained
-        with :meth:`scell.get_index() <clusterx.super_cell.SuperCell.get_index()>`).
-
     ``scell``: SuperCell object
         Simulation cell in which the sampling is performed.
 
@@ -507,6 +498,17 @@ class WangLandau:
         to a reduced number of sublattices. E.g. in the case of nsubs = {0:[4,6], 1:[4]}. Here, sublattices 0 and 1
         contain substitutional sites, but only a sampling in sublattice 0 is wanted. Then, put ``sublattice_indices`` = [0].
 
+    ``energy_factor``: float (default: 1.0)
+        Multiplicator factor (:math:`s`) applied to the predictions of ``energy_model``
+        (:math:`E_{CE}`). Set this factor such that :math:`s *  E_{CE}` gives
+        the total energy, in [eV], of the supercell (``scell`` below).
+        For instance, if the CE model predicts the energy in meV/atom, set this parameter
+        to 1000*Nsc, where Nsc is the total number of atoms of the supercel (``len(scell)``).
+        If CE predicts the energy in Hartree
+        per parent lattice, set ``energy_factor`` to 27.2114*Npl, where Npl is
+        the number of parent lattices contained in the supercell (this can be obtained
+        with :meth:`scell.get_index() <clusterx.super_cell.SuperCell.get_index()>`).
+
     ``chemical_potentials``: dictionary (default: None)
         Define the chemical potentials used for samplings in the grand canonical ensemble.
 
@@ -516,6 +518,11 @@ class WangLandau:
     ``predict_swap``: boolean (default: False)
        If set to **True**, this parameter makes the sampling faster by calculating the correlation difference of the
        proposed structure with respect to the previous structure.
+
+    ``reduce_structure``: bool (default: False)
+        If true, cluster orbits/correlations are computed and evaluated on
+        subset of sigmas, in a box around central site in the structure.
+        Incompatible with non-diagonal supercell shapes.
 
     ``error_reset``: integer (default: None)
        If not **None**  and ``predict_swap`` equal to **True**, the correlations are calculated as usual (no differences) every n-th step.
@@ -527,20 +534,22 @@ class WangLandau:
 
     def __init__(
         self,
-        energy_model,
-        energy_factor=1.0,
-        scell=None,  # TODO: this should not have a default value, but be required
+        energy_model: Model,
+        scell: SuperCell,
         nsubs=None,
         ensemble="canonical",
         sublattice_indices=[],
+        energy_factor=1.0,
         chemical_potentials=None,
         predict_swap=False,
+        reduce_structure: bool = False,
         error_reset=None,
     ):
         self._em = energy_model
         self._ef = energy_factor
         self._scell = scell
         self._nsubs = nsubs
+        self._reduce_structure = reduce_structure
 
         if not sublattice_indices:
             try:
@@ -573,13 +582,17 @@ class WangLandau:
 
         if self._error_reset is not None:
             self._error_steps = int(self._error_reset)
-            self._x = 1
+        else:
+            self._error_steps = np.iinfo(
+                np.int64
+            ).max  # maximum 64 bit integer in numpy
+        self._steps_since_reset = 1
 
-    def _wls_create_initial_structure(
+    def _bring_structure_into_energy_window(
         self,
-        initial_decoration,
-        emin,
-        emax,
+        struc: Structure,
+        emin: float,
+        emax: float,
         prob_dist="gaussian",
         trans_prob=1e-3,
         itmax=int(1e8),
@@ -592,17 +605,7 @@ class WangLandau:
             emean = (emax + emin) / 2.0
             scale = emax - emin
 
-        if initial_decoration is not None:
-            struc = Structure(self._scell, initial_decoration, track_indices=True)
-        else:
-            if self._nsubs is not None:
-                struc = self._scell.gen_random_structure(
-                    nsubs=self._nsubs, track_indices=True
-                )
-            else:
-                struc = self._scell.gen_random_structure(track_indices=True)
-
-        e = self._em.predict(struc) * self._ef
+        e = self._em.predict(struc, self._reduce_structure) * self._ef
 
         if e >= emin and e <= emax and nitsampling == 1:
             return struc
@@ -617,10 +620,14 @@ class WangLandau:
                 if countsampling:
                     scou += 1
 
-                ind1, ind2, site_type, rindices = struc.swap_random(
-                    self._sublattice_indices
+                ind1, ind2, site_type = struc.get_random_swap(self._sublattice_indices)
+
+                de = (
+                    self._em.predict_swap(
+                        struc, i=ind1, j=ind2, reduce_structure=self._reduce_structure
+                    )
+                    * self._ef
                 )
-                de = self._em.predict_swap(struc, i=ind1, j=ind2) * self._ef
                 e1 = e + de
                 if e1 >= emin and e1 <= emax:
                     countsampling = True
@@ -642,8 +649,7 @@ class WangLandau:
 
                 if accept_swap:
                     e = e1
-                else:
-                    struc.swap(ind2, ind1, site_type=site_type, rindices=rindices)
+                    struc.swap(ind2, ind1, site_type=site_type)
             f.close()
             if cou >= itmax:
                 print(
@@ -876,8 +882,9 @@ class WangLandau:
             Number of processes to use for the initial structure search.
 
         ``seed``: integer (default: None)
-            Seed for the numpy random number generator. If None, sequences are non-deterministic, if set with integer,
-            sequences are deterministic, i.e. pseudo-random. TODO: in future move to np.random.Generator
+            Seed for the random.Random and numpy random number generator.
+            If None, sequences are non-deterministic, if set with integer,
+            sequences are deterministic, i.e. pseudo-random.
 
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the ConfigurationalDensityOfStates object that is initialized in this method.
@@ -887,11 +894,26 @@ class WangLandau:
             from the previous outer loops.
 
         """
-        self._em.corrc.reset_mc(mc=True)
-        np.random.seed(seed)
+        # self._em.corrc.reset_mc(mc=True)
+        self.np_rng = np.random.default_rng(seed)
+        random.seed(seed)
 
-        struc = self._wls_create_initial_structure(
-            initial_decoration,
+        if initial_decoration is not None:
+            struc = Structure(self._scell, initial_decoration, track_indices=True)
+        else:
+            struc = self._scell.gen_random_structure(
+                nsubs=self._nsubs, track_indices=True, rng=self.np_rng
+            )
+
+        if self._reduce_structure:
+            self._em.init_reduced_model(struc)
+            self._em._init_interaction_dict(self._em.scell_reduced)
+            struc.init_reduced_structure(self._em.scell_reduced)
+        else:
+            self._em._init_interaction_dict(self._scell)
+
+        struc = self._bring_structure_into_energy_window(
+            struc,
             energy_range[0],
             energy_range[1],
             trans_prob=acc_prob_init_structure,
@@ -927,7 +949,7 @@ class WangLandau:
                 energy_range, energy_bin_width, flatness_conditions, f_range
             )
 
-        e = self._em.predict(struc) * self._ef
+        e = self._em.predict(struc, self._reduce_structure) * self._ef
 
         energies = cdos[:, 0]
         ibin, is_inside_range = self._wls_locate_histogram_bin(
@@ -1077,31 +1099,22 @@ class WangLandau:
             # Compute new energy
             e1 = None
             if self._predict_swap:
-                if self._error_reset:
-                    if self._x > self._error_steps:
-                        self._x = 1
-                        e1 = self._em.predict(struc) * self._ef
-                    else:
-                        self._x += 1
-                        de = (
-                            self._em.predict_swap(
-                                struc,
-                                i=ind1,
-                                j=ind2,
-                            )
-                            * self._ef
-                        )
-                        e1 = e + de
+                if self._steps_since_reset > self._error_steps:
+                    self._steps_since_reset = 1
+                    e1 = self._em.predict(struc, self._reduce_structure) * self._ef
                 else:
+                    self._steps_since_reset += 1
                     de = (
                         self._em.predict_swap(
                             struc,
                             i=ind1,
                             j=ind2,
+                            reduce_structure=self._reduce_structure,
                         )
                         * self._ef
                     )
                     e1 = e + de
+
             else:
                 e1 = self._em.predict(struc) * self._ef
 
@@ -1118,7 +1131,7 @@ class WangLandau:
                     accept_swap = True
                 else:
                     trans_prob = math.exp(g - g1)
-                    if np.random.uniform(0, 1) <= trans_prob:
+                    if self.np_rng.uniform(0, 1) <= trans_prob:
                         accept_swap = True
                     else:
                         accept_swap = False

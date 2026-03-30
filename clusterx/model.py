@@ -476,7 +476,7 @@ class Model:
         structure,
         i,
         j,
-        correlation=False,
+        reduce_structure: bool = False,
     ):
         """Predict property difference with the optimal cluster expansion model.
 
@@ -495,9 +495,9 @@ class Model:
         sigma_i = structure.sigmas[i]
         sigma_j = structure.sigmas[j]
 
-        de1 = self.predict_flip(structure, i, sigma_i, sigma_j)
+        de1 = self.predict_flip(structure, i, sigma_i, sigma_j, reduce_structure)
         structure.sigmas[i] = sigma_j
-        de2 = self.predict_flip(structure, j, sigma_j, sigma_i)
+        de2 = self.predict_flip(structure, j, sigma_j, sigma_i, reduce_structure)
         structure.sigmas[i] = sigma_i  # restore original structure
         return de1 + de2
 
