@@ -4,7 +4,7 @@
 
 import pytest
 import warnings
-import sympy
+import scipy
 from ase import Atoms
 import numpy as np
 
@@ -179,17 +179,9 @@ def test_integral_calculation_averagedConcentration(structure_selector):
     domain_matrix_control = np.zeros((number_clusters, number_clusters), dtype=float)
     for rowIdx in range(number_clusters):
         for colIdx in range(number_clusters):
-            conc = sympy.symbols("conc")
             sum_points = npoints[rowIdx] + npoints[colIdx]
-            integrand = np.power(
-                (2*conc-1), sum_points
-            )
-            domain_matrix_control[rowIdx, colIdx] = sympy.integrate(
-                integrand,
-                (conc,
-                lower_conc_limit,
-                upper_conc_limit)
-            )
+            domain_matrix_control[rowIdx, colIdx] = scipy.integrate.quad(lambda c: np.power((2*c-1), sum_points),
+                                                                            lower_conc_limit, upper_conc_limit)[0]
     np.testing.assert_allclose(
             domain_matrix,
             domain_matrix_control,
