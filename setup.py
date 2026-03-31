@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
     name="clusterX",
@@ -25,7 +25,7 @@ setup(
         "pytest-html",
         "tqdm",
         "pandas",
-        "numba",
+        "numba>=0.59.0",
     ],
     entry_points={"console_scripts": ["cell=clusterx.cli.main:main"]},
     flake8={"max-line-length": 120},
