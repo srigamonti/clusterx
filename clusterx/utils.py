@@ -546,6 +546,30 @@ def _is_integer_matrix(m, rnd=5):
     return True
 
 
+class SuperCellIndexSearcher:
+    """Does the job of get_cl_idx_sc more efficiently by using a KDTree.
+    This is useful for large supercells."""
+
+    def __init__(self, positions_scell):
+        from scipy.spatial import KDTree
+
+        self.kdtree = KDTree(positions_scell)
+
+    def get_cluster_indices(self, positions_cluster, tol=1e-3):
+        """Return atom indexes of cluster points in SuperCell
+
+        **Parameters:**
+
+        ``cl``: npoints x 3 matrix
+            matrix of cartesian coordinates of cluster points. Cluster
+            positions are expected to be wrapped inside supercell ``sc``
+        ``tol``: real positive number
+            tolerance to determine whether cluster and atom positions are the same.
+        """
+        _, idxs = self.kdtree.query(positions_cluster, k=1, distance_upper_bound=tol)
+        return idxs
+
+
 def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
     """Return atom indexes of cluster points in SuperCell
 

@@ -13,7 +13,7 @@ from ase.atoms import Atoms
 import numpy as np
 from ase.db import connect
 
-from clusterx.utils import get_cl_idx_sc
+from clusterx.utils import get_cl_idx_sc, SuperCellIndexSearcher
 from clusterx.clusters.cluster import Cluster
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
@@ -1487,6 +1487,8 @@ class ClusterOrbit(ClustersPool):
                 spos[:, i] %= 1.0
                 spos[:, i] %= 1.0
 
+        searcher = SuperCellIndexSearcher(spos)
+
         # Get cluster orbit for the point symmetry operations of the parent lattice only (small cluster orbit)
         sp0 = get_scaled_positions(
             p0, self._plat.get_cell(), pbc=super_cell.get_pbc(), wrap=False
@@ -1519,7 +1521,8 @@ class ClusterOrbit(ClustersPool):
             ):  # Now apply the internal translations
                 __sp1 = np.add(_sp1, tr)
                 __sp1 = wrap_scaled_positions(__sp1, super_cell.get_pbc())
-                _cl = get_cl_idx_sc(__sp1, spos, method=1, tol=tol)
+                # _cl = get_cl_idx_sc(__sp1, spos, method=1, tol=tol)
+                _cl = searcher.get_cluster_indices(__sp1, tol=tol)
 
                 ocl = Cluster(_cl, cluster_species)
                 _orbit.append(ocl)
