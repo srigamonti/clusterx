@@ -65,6 +65,7 @@ class MonteCarloLite:
         If true, cluster orbits/correlations are computed and evaluated on
         subset of sigmas, in a box around central site in the structure.
         Incompatible with non-diagonal supercell shapes.
+        NOTE: currently not used in MonteCarloLite, only in full MonteCarlo.
 
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
@@ -434,37 +435,19 @@ class MonteCarloLite:
             old_sigmas = []
             for j in range(n_clics):
                 if ensemble == "grandcanonical":
-                    if self._reduce_structure:
-                        atom_index = rng.integers(
-                            grid_shape, dtype=int
-                        )  # random multi-index
-                        sigma_initial = sigma_grid[*atom_index]
-                        sigma_final = 1 - sigma_grid[*atom_index]
-                    else:
-                        atom_index = rng.integers(low=0, high=len(sigmas))
-                        sigma_initial = sigmas[atom_index]
-                        sigma_final = 1 - sigmas[atom_index]
+                    atom_index = rng.integers(low=0, high=len(sigmas))
+                    sigma_initial = sigmas[atom_index]
+                    sigma_final = 1 - sigmas[atom_index]
                     atom_indices.append(atom_index)
                     old_sigmas.append(sigma_initial)
                     new_sigmas.append(sigma_final)
                 elif ensemble == "canonical":
-                    if self._reduce_structure:
-                        atom_index = tuple(
-                            rng.integers(grid_shape, dtype=int).tolist()
-                        )  # random multi-index, tolist is need for correct type
-                        sigma_initial = sigma_grid[*atom_index]
-                        sigma_final = 1 - sigma_grid[*atom_index]
-                        atom_index_other = occupation_indices[int(sigma_final)].choice()
-
-                        sigma_initial_other = sigma_grid[*atom_index_other]
-                        sigma_final_other = 1 - sigma_grid[*atom_index_other]
-                    else:
-                        atom_index = rng.integers(low=0, high=len(sigmas))
-                        sigma_initial = sigmas[atom_index]
-                        sigma_final = 1 - sigmas[atom_index]
-                        atom_index_other = occupation_indices[sigma_final].choice()
-                        sigma_initial_other = sigmas[atom_index_other]
-                        sigma_final_other = 1 - sigmas[atom_index_other]
+                    atom_index = rng.integers(low=0, high=len(sigmas))
+                    sigma_initial = sigmas[atom_index]
+                    sigma_final = 1 - sigmas[atom_index]
+                    atom_index_other = occupation_indices[sigma_final].choice()
+                    sigma_initial_other = sigmas[atom_index_other]
+                    sigma_final_other = 1 - sigmas[atom_index_other]
                     # NOTE: this can include the same index multiple times
                     atom_indices.append(atom_index)
                     atom_indices.append(atom_index_other)
@@ -499,14 +482,9 @@ class MonteCarloLite:
                 )[self._energy_prediction_index]
 
                 # perform flip
-                if self._reduce_structure:
-                    sigma_grid[*atom_index] = int(new_sigma)
-                    occupation_indices[old_sigma].remove(atom_index)
-                    occupation_indices[new_sigma].add(atom_index)
-                else:
-                    sigmas[atom_index] = int(new_sigma)
-                    occupation_indices[old_sigma].remove(atom_index)
-                    occupation_indices[new_sigma].add(atom_index)
+                sigmas[atom_index] = int(new_sigma)
+                occupation_indices[old_sigma].remove(atom_index)
+                occupation_indices[new_sigma].add(atom_index)
 
             e1 = e + de
 
@@ -524,18 +502,13 @@ class MonteCarloLite:
                 for atom_index, new_sigma, old_sigma in zip(
                     atom_indices[::-1], new_sigmas[::-1], old_sigmas[::-1]
                 ):
-                    if self._reduce_structure:
-                        sigma_grid[*atom_index] = old_sigma
-                        occupation_indices[new_sigma].remove(atom_index)
-                        occupation_indices[old_sigma].add(atom_index)
-                    else:
-                        sigmas[atom_index] = old_sigma
-                        structure.sigmas = sigmas
-                        occupation_indices[new_sigma].remove(atom_index)
-                        occupation_indices[old_sigma].add(atom_index)
-                        # self.structure.update_arrays(
-                        #    atom_indices=atom_indices[::-1], new_sigmas=old_sigmas[::-1]
-                        # )
+                    sigmas[atom_index] = old_sigma
+                    structure.sigmas = sigmas
+                    occupation_indices[new_sigma].remove(atom_index)
+                    occupation_indices[old_sigma].add(atom_index)
+                    # self.structure.update_arrays(
+                    #    atom_indices=atom_indices[::-1], new_sigmas=old_sigmas[::-1]
+                    # )
 
             if (
                 n_error_reset is not None
