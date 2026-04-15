@@ -1,12 +1,12 @@
-""" "
+""""
 This module is designed to extract data from NOMAD or
-a NOMAD OASIS database (such as total energy values, structures, etc.)
-and use this data to generate structure sets along with their
-associated properties in CELL, which can then be used to create models.
+a NOMAD Oasis database. The data (e.g. materials properties, such as
+total energy values) can be used to generate structure sets along with their
+associated properties in CELL.
 
-It is especially useful if one groups the data that should be used
-for one model into a NOMAD dataset and then uses this module to
-retrieve the properties using the dataset id.
+It is especially useful if one groups the calculations for structures
+of a training set in one dataset. Then only the dataset id is required
+to get property values for all structures in the dataset/training set.
 """
 
 import json
@@ -32,13 +32,11 @@ class SingleEntry:
     ``token``: *string*
         Default: None
         This only has to be overwritten if you want to access a NOMAD OASIS
-        database instead of NOMAD.
-        Refers to the access token for the OASIS which you can
+        database or private data in NOMAD.
+        Refers to the access token, which you can
         create if you have a registered account that has access to
-        the OASIS.
-        You may use the function get_nomad_oasis_access_token to retrieve it or
-        create the token by using
-        'https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#/auth/get_token_via_query_auth_token_get'
+        the NOMAD OASIS or the private data.
+        You may use the function get_nomad_oasis_access_token to retrieve it.
 
     ``base_url``: *string*
         base URL of the OASIS database
@@ -56,15 +54,14 @@ class SingleEntry:
         )
 
     def get_archive(self):
-        """ "
-        Returns the archive of a single entry in OASIS.
+        """
+        Returns the archive of a single entry in NOMAD.
         """
         # defines how the data should be queried
         query_type = {"required": "*"}
-        # The entry archive of the entry with the corresponding entry id is
+        # The archive of the entry with the corresponding entry id is
         # queried according to the query_type to get a repsonse.
-        # The section archive of the data of the response is stored as json
-        # in archive.
+        # The section 'archive' of the response data is stored as archive in json format.
         request_url = f"{self.base_url}entries/{self.entry_id}/archive/query"
         try:
             response = requests.post(request_url, headers=self.headers, json=query_type)
@@ -85,27 +82,34 @@ class SingleEntry:
             print(f"The following error occured: {error}")
 
     def get_total_energy(self):
-        """ "
-        Returns the total energy value in eV for a single entry in NOMAD
+        """
+        Returns the total energy value in eV for a single NOMAD entry
         """
         archive = self.get_archive()
-        # To get the converged energy result access the last calculation
+        # To get the converged energy result call the last calculation
         result = archive["run"][0]["calculation"][-1]
         # if the last calculation does not calculate the total energy
         # (it could be a DOS calculation instead)
         # access the result from the previous calculation
         if "total" not in result["energy"]:
             result = archive["run"][0]["calculation"][-2]
+            if "total" not in result["energy"]:
+                raise ValueError("No total energy result found in the up to two last calculations.")
         # convert the total energy value to eV
-        total_energy_ev = result["energy"]["total"]["value"] * 1 / electron_volt
+        total_energy_ev = result["energy"]["total"]["value"] * 1/electron_volt
         return total_energy_ev
 
     def get_atoms_object(self):
-        """ "
-        Returns an ase Atoms object from the data stored in a NOMAD entry
+        """
+        Returns an ase Atoms object from the data stored in a NOMAD entry.
+
+        This is useful, if you do not upload CELL structure objects
+        together with your entries and do not want to use get_structure_objects.
+        If you use get_structure_objects, you can access the ase Atoms objects
+        directly frum the structure objects, by calling structure.get_atoms().
         """
         archive = self.get_archive()
-        # get the last entry for system to ensure to get the relaxed geometry
+        # get the last entry to ensure to get the relaxed geometry
         nomad_atoms = archive["run"][0]["system"][-1]["atoms"]
         positions_meter = nomad_atoms["positions"]
         cell_meter = nomad_atoms["lattice_vectors"]
@@ -119,7 +123,7 @@ class SingleEntry:
 
     def get_structure_object(self, filename: str = "structure.json"):
         """
-        Returns the CELL structure object of the entry.
+        Returns the CELL structure object of a NOMAD entry.
         This requires that the structure object is saved as json file in the
         same directory as the associated run before uploading to NOMAD.
 
@@ -146,10 +150,45 @@ class SingleEntry:
             print("https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#")
             print(f"The following error occured: {error}")
 
+    def get_lattice_constant(self, normalize=False):
+        """"
+        Returns the three lattice constants of the structure.
+        The smallest lattice constant is returned first,
+        the largest is returned last.
+
+        **Parameters:**
+        ``normalize``: bool
+            Default:False
+            If set to True the lattice constants are normalized to the
+            parent lattice.
+        """
+        if not normalize:
+            atoms_object = self.get_atoms_object()
+            cell = atoms_object.cell
+            lattice_constant_1 = np.sqrt(cell[0][0]**2+cell[0][1]**2+cell[0][2]**2)
+            lattice_constant_2 = np.sqrt(cell[1][0]**2+cell[1][1]**2+cell[1][2]**2)
+            lattice_constant_3 = np.sqrt(cell[2][0]**2+cell[2][1]**2+cell[2][2]**2)
+        else:
+            structure = self.get_structure_object()
+            atoms_object = self.get_atoms_object()
+            cell = atoms_object.cell
+            # get transformation from parent lattice to super cell
+            transformation_matrix = structure.get_supercell().get_transformation()
+            # apply inverse transformation matrix to cell
+            normalized_cell = np.dot(np.linalg.inv(transformation_matrix), cell)
+            # obtain lattice constants normalized to parent lattice
+            lattice_constant_1 = np.sqrt(normalized_cell[0][0]**2+normalized_cell[0][1]**2+normalized_cell[0][2]**2)
+            lattice_constant_2 = np.sqrt(normalized_cell[1][0]**2+normalized_cell[1][1]**2+normalized_cell[1][2]**2)
+            lattice_constant_3 = np.sqrt(normalized_cell[2][0]**2+normalized_cell[2][1]**2+normalized_cell[2][2]**2)
+            # sort lattice constants such that smalles lattice constant is returned first,
+            # and largest last
+        a, b, c = np.sort([lattice_constant_1, lattice_constant_2, lattice_constant_3])
+        return a, b, c
+
 
 class Dataset:
-    """ "
-    This class is applicable for datasets in NOMAD.
+    """
+    This class is applicable to datasets in NOMAD.
     Using its dataset id the data of all entries inside the dataset
     can be accessed.
 
@@ -159,8 +198,8 @@ class Dataset:
 
     ``pagination_page_size``: *int*
         Maximum number of items contained in one response
-        Set this to number of entries in dataset or lower to retrieve only a
-        subset of the entries. In case of timout errors try if decreasing
+        Set this to the number of entries in the dataset or lower to retrieve only a
+        subset of the entries. In case of timeout errors try if decreasing
         the pagination_page_size solves your problem
 
     ``token``: *string*
@@ -175,10 +214,10 @@ class Dataset:
         'https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#/auth/get_token_via_query_auth_token_get'
 
     ``base_url``: *string*
-        base url of the OASIS database
-        The default is the base url for NOMAD:
+        base URL of the OASIS database
+        The default is the base URL for NOMAD:
         'http://nomad-lab.eu/prod/v1/api/v1/'
-        You may use the base url of your OASIS instead.
+        You may use the base URL of your OASIS instead.
     """
 
     def __init__(
@@ -197,13 +236,13 @@ class Dataset:
         self.headers = {"Authorization": f"Bearer {self.token}"}
 
     def get_data(self):
-        """ "
+        """
         Returns the data section of the dataset
         """
         query_type = {
-            # solves visibility issues; enables you to see
-            # published entries without embargo or unpublished entries
-            # that belong to you or are shared with you
+            # set "owner": "visible" to ensure that you can get
+            # entries of yours/shared with you
+            # even when they are not yet published
             "owner": "visible",
             "query": {"datasets.dataset_id": self.dataset_id},
             "pagination": {"page_size": self.pagination_page_size},
@@ -231,7 +270,7 @@ class Dataset:
         """
         Saves the data section of the dataset by either
         retrieving the data for the first time or caching and reusing it
-        when called again
+        when called again.
         """
         if self.dataset_data is None:
             print("Accessing NOMAD to retrieve data")
@@ -241,8 +280,8 @@ class Dataset:
         return self.dataset_data
 
     def get_entry_ids(self):
-        """ "
-        Get entry ids of the entries contained in the dataset
+        """
+        Get entry ids of the entries contained in the NOMAD dataset.
         """
         entry_ids = [
             entry["archive"]["metadata"]["entry_id"] for entry in self.download_data()
@@ -256,17 +295,16 @@ class Dataset:
         """
         energy_values_ev = []
         for entry in self.download_data():
-            # To get the converged energy result access the last calculation
+            # To get the converged energy result call upon the last calculation
             result = entry["archive"]["run"][0]["calculation"][-1]
-            # if the last calculation does not calculate the total energy
-            # (it could be a DOS calculation instead)
-            # access the result from the previous calculation
-            if "energy" in result and "total" in result["energy"]:
-                total_energy = result["energy"]["total"]["value"] * 1 / electron_volt
-            else:
+            # check if total energy is stored in last calculation
+            if "total" not in result["energy"]:
                 result = entry["archive"]["run"][0]["calculation"][-2]
-                total_energy = result["energy"]["total"]["value"] * 1 / electron_volt
-            energy_values_ev.append(total_energy)
+                if "total" not in result["energy"]:
+                    raise ValueError("No total energy result found in the up to two last calculations.")
+            # convert total energy to eV
+            total_energy_ev = result["energy"]["total"]["value"] * 1/electron_volt
+            energy_values_ev.append(total_energy_ev)
         return energy_values_ev
 
     def get_structure_objects(self, filename="structure.json"):
@@ -329,80 +367,64 @@ class Dataset:
             list_of_atoms_objects.append(atoms)
         return list_of_atoms_objects
 
-    def get_lattice_constants(self):
-        """ "
-        Returns three lists; one for each lattice constant for entries in the dataset
-        """
-        list_of_lattice_constant_a = []
-        list_of_lattice_constant_b = []
-        list_of_lattice_constant_c = []
-        list_of_atoms_objects = self.get_atoms_objects()
-        list_of_structures = self.get_structure_objects()
-        list_of_indices = []
-        for structure in list_of_structures:
-            list_of_indices.append(structure.index)
-        for atoms_object in list_of_atoms_objects:
-            cell = atoms_object.cell
-            lattice_constant_1 = np.sqrt(
-                cell[0][0] ** 2 + cell[0][1] ** 2 + cell[0][2] ** 2
-            )
-            lattice_constant_2 = np.sqrt(
-                cell[1][0] ** 2 + cell[1][1] ** 2 + cell[1][2] ** 2
-            )
-            lattice_constant_3 = np.sqrt(
-                cell[2][0] ** 2 + cell[2][1] ** 2 + cell[2][2] ** 2
-            )
-            a, b, c = np.sort(
-                [lattice_constant_1, lattice_constant_2, lattice_constant_3]
-            )
-            list_of_lattice_constant_a.append(a)
-            list_of_lattice_constant_b.append(b)
-            list_of_lattice_constant_c.append(c)
-        return (
-            list_of_lattice_constant_a,
-            list_of_lattice_constant_b,
-            list_of_lattice_constant_c,
-        )
+    def get_lattice_constants(self, normalize=False):
+        """"
+        Returns the lattice constants of the structures in the dataset as
+        three lists: one list for each lattice constant.
+        Setting normalize to True normalizes the lattice constants with respect
+        to the parent lattice and returns the smallest lattice constant first,
+        and the largest last.
 
-    def get_normalized_lattice_constants(self):
-        """ "
-        Returns three lists; one for each lattice constant for entries in the dataset
+        **Parameters:**
+        ``normalize``: bool
+            Default:False
+            If set to True the lattice constants are normalized to the
+            parent lattice.
         """
-        list_of_lattice_constant_a = []
-        list_of_lattice_constant_b = []
-        list_of_lattice_constant_c = []
-        list_of_atoms_objects = self.get_atoms_objects()
-        list_of_structures = self.get_structure_objects()
-        list_of_indices = []
-        for structure in list_of_structures:
-            list_of_indices.append(structure.index)
-        for structure, atoms_object in zip(list_of_structures, list_of_atoms_objects):
-            cell = atoms_object.cell
-            transformation_matrix = structure.get_supercell().get_transformation()
-            normalized_cell = np.dot(np.linalg.inv(transformation_matrix), cell)
-            lattice_constant_1 = np.sqrt(
-                normalized_cell[0][0] ** 2
-                + normalized_cell[0][1] ** 2
-                + normalized_cell[0][2] ** 2
-            )
-            lattice_constant_2 = np.sqrt(
-                normalized_cell[1][0] ** 2
-                + normalized_cell[1][1] ** 2
-                + normalized_cell[1][2] ** 2
-            )
-            lattice_constant_3 = np.sqrt(
-                normalized_cell[2][0] ** 2
-                + normalized_cell[2][1] ** 2
-                + normalized_cell[2][2] ** 2
-            )
-            a, b, c = np.sort(
-                [lattice_constant_1, lattice_constant_2, lattice_constant_3]
-            )
-            list_of_lattice_constant_a.append(a)
-            list_of_lattice_constant_b.append(b)
-            list_of_lattice_constant_c.append(c)
-        return (
-            list_of_lattice_constant_a,
-            list_of_lattice_constant_b,
-            list_of_lattice_constant_c,
-        )
+        lattice_constants_1 = []
+        lattice_constants_2 = []
+        lattice_constants_3 = []
+        atoms_objects = self.get_atoms_objects()
+        if not normalize:
+            for atoms_object in atoms_objects:
+                cell = atoms_object.cell
+                lattice_constant_1 = np.sqrt(cell[0][0]**2
+                                            + cell[0][1]**2
+                                            + cell[0][2]**2)
+                lattice_constant_2 = np.sqrt(cell[1][0]**2
+                                            + cell[1][1]**2
+                                            + cell[1][2]**2)
+                lattice_constant_3 = np.sqrt(cell[2][0]**2
+                                            + cell[2][1]**2
+                                            + cell[2][2]**2)
+                # a, b, c = np.sort([lattice_constant_1, lattice_constant_2, lattice_constant_3])
+                lattice_constants_1.append(lattice_constant_1)
+                lattice_constants_2.append(lattice_constant_2)
+                lattice_constants_3.append(lattice_constant_3)
+        else:
+            structures = self.get_structure_objects()
+            # We need cell parameters from DFT calculation. This is contained in atoms object.
+            # Also we need supercell transformation matrix; this is contained in structures object
+            for structure, atoms_object in zip(structures, atoms_objects):
+                cell = atoms_object.cell
+                # get transformation from parent lattice to super cell
+                transformation_matrix = structure.get_supercell().get_transformation()
+                # apply inverse transformation matrix to cell
+                normalized_cell = np.dot(np.linalg.inv(transformation_matrix), cell)
+                # obtain lattice constants normalized to parent lattice
+                lattice_constant_1 = np.sqrt(normalized_cell[0][0]**2
+                                            + normalized_cell[0][1]**2
+                                            + normalized_cell[0][2]**2)
+                lattice_constant_2 = np.sqrt(normalized_cell[1][0]**2
+                                            + normalized_cell[1][1]**2
+                                            + normalized_cell[1][2]**2)
+                lattice_constant_3 = np.sqrt(normalized_cell[2][0]**2
+                                            + normalized_cell[2][1]**2
+                                            + normalized_cell[2][2]**2)
+            # sort lattice constants such that smalles lattice constant is returned first,
+            # and largest last
+                a, b, c = np.sort([lattice_constant_1, lattice_constant_2, lattice_constant_3])
+                lattice_constants_1.append(a)
+                lattice_constants_2.append(b)
+                lattice_constants_3.append(c)
+        return lattice_constants_1, lattice_constants_2, lattice_constants_3
