@@ -3,7 +3,6 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import pytest
-import warnings
 import scipy
 from ase import Atoms
 import numpy as np
@@ -144,16 +143,9 @@ def test_structure_selection(
         )
 
     structure_chosen = np.argmin(tau)
-    structure_chosen_by_greedy_method = structure_selector.select_structure(method="greedy")
     assert structure_chosen == structure_idx, f"""structure selection failed.
         Criteria are not optimally reducing prediction variance according
         to themselves. generated tau values: {tau}, seed {seed}"""
-    # Note: following code shows if greedy algortihm produces same result as other methods (which it does not have to)
-    if structure_chosen != structure_chosen_by_greedy_method:
-        warnings.warn( f"""Greedy algorithm produces
-        different results than the global methods: Structure chosen by greedy:
-        {structure_chosen_by_greedy_method}
-        vs. structure chosen by global: {structure_chosen}""")
 
 
 @pytest.mark.parametrize(
