@@ -193,6 +193,11 @@ class ParentLattice(Atoms):
 
         self._natoms = len(self._atoms)
 
+        # for caching and loading positions with or without wrapping
+        self._positions_cache = None
+        self._last_wrap = False
+        self._last_wrap_kw = {}
+
         if sites is not None or site_symbols is not None and substitutions is None:
             if site_symbols is not None:
                 from ase.data import atomic_numbers as an
@@ -294,7 +299,18 @@ class ParentLattice(Atoms):
         return len(self._atoms)
 
     def get_positions(self, wrap=False, **wrap_kw):
-        return super(ParentLattice, self).get_positions(wrap, **wrap_kw)
+        """This method caches positions, otherwise ASE would copy large arrays."""
+        if (
+            wrap != self._last_wrap
+            or wrap_kw != self._last_wrap_kw
+            or self._positions_cache is None
+        ):
+            self._last_wrap = wrap
+            self._last_wrap_kw = wrap_kw
+            self._positions_cache = super(ParentLattice, self).get_positions(
+                wrap, **wrap_kw
+            )
+        return self._positions_cache
 
     def get_cell(self, complete=False):
         return super(ParentLattice, self).get_cell(complete)

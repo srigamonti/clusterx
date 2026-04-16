@@ -158,6 +158,7 @@ class SuperCell(ParentLattice):
         self.internal_trans = None  # Scaled to super_cell
         self.sym_perm = None
         self.sym_perm_platt = None
+        self.tags = super(ParentLattice, self).get_tags()
 
     def compute_sym_perm(self, include_sc_trans=True):
         if include_sc_trans:

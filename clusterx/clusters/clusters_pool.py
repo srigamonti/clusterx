@@ -1442,6 +1442,8 @@ class ClusterOrbit(ClustersPool):
             return
 
         cluster_species = np.array(cluster_species)
+        pbc = super_cell.get_pbc()
+        cell_scell = super_cell.get_cell()
 
         # Get internal translation of the parent lattice in the super cell
         if no_trans:
@@ -1458,7 +1460,7 @@ class ClusterOrbit(ClustersPool):
             spos1, 8
         )  # Wrapping in ASE doesn't always work. Here a hard external fix by rounding and then applying again ASE's style wrapping.
 
-        for i, periodic in enumerate(super_cell.get_pbc()):
+        for i, periodic in enumerate(pbc):
             if periodic:
                 spos[:, i] %= 1.0
                 spos[:, i] %= 1.0
@@ -1467,7 +1469,7 @@ class ClusterOrbit(ClustersPool):
 
         # Get cluster orbit for the point symmetry operations of the parent lattice only (small cluster orbit)
         sp0 = get_scaled_positions(
-            p0, self._plat.get_cell(), pbc=super_cell.get_pbc(), wrap=False
+            p0, self._plat.get_cell(), pbc=pbc, wrap=False
         )  # sp0: scaled cluster positions with respect to parent lattice
 
         _orbit = []
@@ -1482,19 +1484,15 @@ class ClusterOrbit(ClustersPool):
         for _sp1 in orbit0:
             # Get cartesian, then scaled to supercell
             _p1 = np.dot(_sp1, self._plat.get_cell())
-            __sp1 = get_scaled_positions(
-                _p1, super_cell.get_cell(), pbc=super_cell.get_pbc(), wrap=True
-            )
+            __sp1 = get_scaled_positions(_p1, cell_scell, pbc=pbc, wrap=True)
             reduced_orbit0.append(__sp1)
 
         reduced_mult = mult
 
         for _sp1 in reduced_orbit0:
-            for itr, tr in enumerate(
-                internal_trans
-            ):  # Now apply the internal translations
-                sp_scell = np.add(_sp1, tr)
-                sp_scell = wrap_scaled_positions(sp_scell, super_cell.get_pbc())
+            for translation in internal_trans:
+                sp_scell = np.add(_sp1, translation)
+                sp_scell = wrap_scaled_positions(sp_scell, pbc)
                 cluster_indices = searcher.get_cluster_indices(sp_scell, tol=tol)
                 _orbit.append(Cluster(cluster_indices, cluster_species))
 

@@ -63,17 +63,14 @@ class Cluster:
             # Set alphas, site_type, and positions
             self.alphas = np.zeros(len(atom_indexes), dtype=int)
             self.site_type = np.zeros(len(atom_indexes), dtype=int)
-            sites = super_cell.get_sites()
-            tags = super_cell.get_tags()
+            self.positions_cartesian = np.zeros((self.npoints, 3))
 
-            self.positions_cartesian = np.zeros((self.npoints, 3))
-            # self.positions_scaled = np.zeros((self.npoints,3))
-            positions_car = super_cell.get_positions()
-            self.positions_cartesian = np.zeros((self.npoints, 3))
-            # self.positions_scaled = np.zeros((self.npoints,3))
-            positions_car = super_cell.get_positions()
+            sites = super_cell.get_sites()
+            tags = super_cell.tags
+            positions_scell = super_cell.get_positions()
+
             for ip, idx in enumerate(atom_indexes):
-                self.positions_cartesian[ip] = positions_car[idx]
+                self.positions_cartesian[ip] = positions_scell[idx]
                 self.site_type[ip] = tags[idx]
                 self.alphas[ip] = np.argwhere(sites[idx] == self.ans[ip])[0, 0]
 
