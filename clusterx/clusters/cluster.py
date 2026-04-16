@@ -166,6 +166,9 @@ class Cluster:
         return "Cluster[" + str(list(zip(self.ais, self.ans))) + "]"
 
     def __hash__(self):
+        # TODO: in the future, include the supercell hash,
+        # if the supercell is included in the cluster definition. Otherwise
+        # we might get hash collisions for clusters with different scell.
         return hash(str(list(zip(self.ais, self.ans))))
 
     def __eq__(self, other):

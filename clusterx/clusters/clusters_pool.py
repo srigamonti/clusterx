@@ -1495,8 +1495,6 @@ class ClusterOrbit(ClustersPool):
         )  # sp0: scaled cluster positions with respect to parent lattice
 
         _orbit = []
-        clset = set()
-
         orbit0 = self._get_small_cluster_orbit(sp0, cluster_species)
 
         mult = len(
@@ -1519,38 +1517,21 @@ class ClusterOrbit(ClustersPool):
             for itr, tr in enumerate(
                 internal_trans
             ):  # Now apply the internal translations
-                __sp1 = np.add(_sp1, tr)
-                __sp1 = wrap_scaled_positions(__sp1, super_cell.get_pbc())
-                # _cl = get_cl_idx_sc(__sp1, spos, method=1, tol=tol)
-                _cl = searcher.get_cluster_indices(__sp1, tol=tol)
+                sp_scell = np.add(_sp1, tr)
+                sp_scell = wrap_scaled_positions(sp_scell, super_cell.get_pbc())
+                cluster_indices = searcher.get_cluster_indices(sp_scell, tol=tol)
+                _orbit.append(Cluster(cluster_indices, cluster_species))
 
-                ocl = Cluster(_cl, cluster_species)
-                _orbit.append(ocl)
-                clset.add(ocl)
+        orbit_dict = {}  # keys are clusters, values are weights
+        for cluster in _orbit:
+            if cluster in orbit_dict:
+                orbit_dict[cluster] += 1
+            else:
+                cluster_sc = Cluster(cluster.get_idxs(), cluster.get_nrs(), super_cell)
+                orbit_dict[cluster_sc] = 1
+                self.add_cluster(cluster_sc)
 
-        weights = []
-        orbit = []
-        crossedout = set()
-        ncl = len(_orbit)
-        cnt = 0
-        for i in range(ncl):
-            if i not in crossedout:
-                weights.append(1)
-                orbit.append(
-                    Cluster(_orbit[i].get_idxs(), _orbit[i].get_nrs(), super_cell)
-                )
-                cnt += 1
-
-                for j in range(i + 1, ncl):
-                    if j not in crossedout:
-                        if _orbit[i].myhash == _orbit[j].myhash:
-                            weights[cnt - 1] += 1
-                            crossedout.add(j)
-
-        for cl in orbit:
-            self.add_cluster(cl)
-
-        self.weights = np.array(weights, int)
+        self.weights = np.array(list(orbit_dict.values()), dtype=np.int64)
         self.multiplicity = mult
         self.reduced_multiplicity = reduced_mult
 
