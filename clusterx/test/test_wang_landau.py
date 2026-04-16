@@ -4,6 +4,7 @@
 
 import os
 import math
+import random
 
 import pytest
 import numpy as np
@@ -47,6 +48,43 @@ def model(plat, cpool):
     multT = cpool.get_multiplicities()
     cemodel = Model(corc, "energy", ecis=np.multiply(ecisE, multT))
     return cemodel
+
+
+@pytest.mark.parametrize("reduce_structure", [False, True])
+def test_reduced(plat, model, reduce_structure):
+    p = [4, 4, 1]
+    scell = SuperCell(plat, p)
+    nsubs = {0: [int(np.prod(p) / 2)]}
+    energy_range = [-2.0, 3.0]
+
+    wl = WangLandau(
+        energy_model=model,
+        scell=scell,
+        ensemble="canonical",
+        nsubs=nsubs,
+        predict_swap=True,
+        reduce_structure=reduce_structure,
+    )
+    cdos = wl.wang_landau_sampling(
+        energy_range=energy_range,
+        energy_bin_width=0.2,
+        f_range=[4, 1.9],
+        update_method="square_root",
+        flatness_conditions=[[0.5, 2], [0.5, 1]],
+        initial_decoration=None,
+        serialize=False,
+        filename="cdos.json",
+        serialize_during_sampling=False,
+        restart_from_file=False,
+        plot_hist_real_time=False,
+        acc_prob_init_structure=1e-3,
+        acc_prob_dist_init_structure="gaussian",
+        itmax_init_structure=int(1e8),
+        niter_per_sweep=1000,
+        nproc=0,
+        seed=1,
+    )
+    cdos.get_cdos(ln=True, normalization=False)
 
 
 def test_cli(plat, model):
@@ -97,6 +135,7 @@ def test_sampling_clathrate():
     np.random.seed(
         10
     )  # setting a seed for the random package for comparible random structures
+    random.seed(45)
 
     plat = get_clathrate_plat()
 

@@ -5,6 +5,7 @@
 import random
 
 import pytest
+from ase import Atoms
 from ase.build import bulk
 import numpy as np
 
@@ -89,32 +90,107 @@ def test_swap(plat_cubic, model_cubic):
 
 
 @pytest.mark.parametrize("reduce", [False, True])
+def test_flip_2D(reduce):
+    seed_rngs(42)
+    pri = Atoms("Cu", positions=[[0, 0, 0]], cell=[1, 1, 1], pbc=[1, 1, 0])
+    sub = Atoms("Au", positions=[[0, 0, 0]], cell=[1, 1, 1], pbc=[1, 1, 0])
+    plat = ParentLattice(atoms=pri, substitutions=[sub])
+    p = [10, 10, 1]
+    scell = SuperCell(plat, p)
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
+    cpool = ClustersPool(plat, npoints=[2], radii=[1.5])
+    corrc = CorrelationsCalculator("trigonometric", plat, cpool)
+    model = Model(corrc, "energy", ecis=[1, 1])
+    if reduce:
+        model.init_reduced_model(structure)
+        model._init_interaction_dict(model.scell_reduced)
+        structure.init_reduced_structure(model.scell_reduced)
+
+    preds_full = []
+    preds_flip = []
+    for i in range(len(structure)):
+        pred_init = model.predict(structure)
+        old_sigma = structure.sigmas[i]
+        new_sigma = 1 - old_sigma
+        pred_flip = model.predict_flip(structure, i, old_sigma, new_sigma, reduce)
+        structure.sigmas[i] = new_sigma
+        pred_final = model.predict(structure)
+        preds_full.append(pred_final - pred_init)
+        preds_flip.append(pred_flip)
+    np.testing.assert_allclose(preds_flip, preds_full, atol=1e-12)
+
+
+@pytest.mark.parametrize("reduce", [False, True])
 def test_flip(plat_cubic, model_cubic, reduce):
     seed_rngs(42)
 
-    p = [3, 3, 3]
+    p = [5, 5, 5]
     scell = SuperCell(plat_cubic, p)
     structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
+    if reduce:
+        model_cubic.init_reduced_model(structure)
+        model_cubic._init_interaction_dict(model_cubic.scell_reduced)
+        structure.init_reduced_structure(model_cubic.scell_reduced)
     preds_full = []
     preds_flip = []
     for i in range(len(structure)):
         pred_init = model_cubic.predict(structure)
         old_sigma = structure.sigmas[i]
         new_sigma = 1 - old_sigma
-        if reduce:
-            with pytest.warns(UserWarning):
-                pred_flip = model_cubic.predict_flip(
-                    structure, i, old_sigma, new_sigma, reduce=reduce
-                )
-        else:
-            pred_flip = model_cubic.predict_flip(
-                structure, i, old_sigma, new_sigma, reduce=reduce
-            )
+        pred_flip = model_cubic.predict_flip(structure, i, old_sigma, new_sigma, reduce)
         structure.sigmas[i] = new_sigma
         pred_final = model_cubic.predict(structure)
         preds_full.append(pred_final - pred_init)
         preds_flip.append(pred_flip)
     np.testing.assert_allclose(preds_flip, preds_full)
+
+
+@pytest.mark.parametrize("reduce", [False, True])
+def test_predict_partial_flip(plat_cubic, model_cubic, reduce):
+    model = model_cubic
+    rng = np.random.default_rng()
+    p = [5, 5, 5]
+    scell = SuperCell(plat_cubic, p)
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2), rng=rng)
+
+    model.init_reduced_model(structure)
+    model._init_interaction_dict(model.scell_reduced)
+    structure.init_reduced_structure(model.scell_reduced)
+
+    preds_full = []
+    preds_partial = []
+    for i in range(len(structure)):
+        pred_init = model.predict(structure, reduce_structure=reduce)
+        pred_partial_i = model.predict_partial(structure, i)
+        old_sigma = structure.sigmas[i]
+        new_sigma = 1 - old_sigma
+
+        structure.sigmas[i] = new_sigma
+        pred_final = model.predict(structure, reduce_structure=reduce)
+        pred_partial_f = model.predict_partial(structure, i)
+        preds_full.append(pred_final - pred_init)
+        preds_partial.append(pred_partial_f - pred_partial_i)
+    np.testing.assert_allclose(preds_partial, preds_full)
+
+
+def test_predict_partial_full(plat_cubic, model_cubic):
+    model = model_cubic
+    rng = np.random.default_rng()
+    p = [5, 5, 5]
+    scell = SuperCell(plat_cubic, p)
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2), rng=rng)
+
+    model.init_reduced_model(structure)
+    model._init_interaction_dict(model.scell_reduced)
+    structure.init_reduced_structure(model.scell_reduced)
+
+    for _ in range(100):
+        structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2), rng=rng)
+        structure.init_reduced_structure(model.scell_reduced)
+
+        pred_full = model.predict(structure)
+        pred_partial = model.predict(structure, reduce_structure=True)
+        np.testing.assert_allclose(pred_partial, pred_full, atol=1e-10)
 
 
 def test_flip_scale_sc(plat_cubic, model_cubic):
@@ -133,22 +209,23 @@ def test_flip_scale_sc(plat_cubic, model_cubic):
 
 
 def test_metropolis_cubic(plat_cubic, model_cubic):
-    seed_rngs(42)
-
+    seed = 42
     p = [4, 4, 4]
     scell = SuperCell(plat_cubic, p)
     nsubs = {0: [4]}
     nsteps = 10  # might fail for larger nsteps and similar or smaller p
 
-    seed_rngs(42)
     mc_full = MonteCarlo(
-        energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=False
+        energy_model=model_cubic,
+        scell=scell,
+        nsubs=nsubs,
+        predict_swap=False,
+        seed=seed,
     )
     traj_full = mc_full.metropolis(temperature=100, no_of_sampling_steps=nsteps)
 
-    seed_rngs(42)
     mc_swap = MonteCarlo(
-        energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=True
+        energy_model=model_cubic, scell=scell, nsubs=nsubs, predict_swap=True, seed=seed
     )
     traj_swap = mc_swap.metropolis(temperature=100, no_of_sampling_steps=nsteps)
     np.testing.assert_allclose(traj_swap.get_energies(), traj_full.get_energies())

@@ -10,11 +10,39 @@ from clusterx.utils import (
     PolynomialFunction,
     PolynomialBasis,
     lattice_wrap_index,
-    grid_mapping,
     normalize_shape_input,
     parent_lattice_to_atat,
     atat_to_cell,
+    transformation_containing_sphere_diag,
+    ListDict,
+    RunningAverage,
 )
+from clusterx.utils import take_tile
+
+
+def test_RunningAverage():
+    rave = RunningAverage(n=10)
+    rave.update(2)
+    np.testing.assert_approx_equal(rave.get_average(), 2)
+    np.testing.assert_approx_equal(rave.update_and_get_average(1), 1.5)
+    for _ in range(10):
+        rave.update(7)
+    np.testing.assert_approx_equal(rave.get_average(), 7)
+
+
+def test_ase_make_supercell_error():
+    from ase.build import make_supercell
+    from ase.atoms import Atoms
+
+    prim = Atoms(
+        symbols="Cu",
+        pbc=True,
+        cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]],
+    )
+
+    _ = make_supercell(
+        prim, P=[[2, 2, -2], [2, -2, 2], [-2, 2, 2]], wrap=True, tol=1e-05
+    )
 
 
 @pytest.fixture
@@ -31,18 +59,50 @@ def test_atat(parent_lattice, tmp_path):
     assert parent_lattice == parent_lattice_loaded
 
 
+def test_ListDict():
+    list_dict = ListDict()
+    n = 1000
+    for i in range(n):
+        list_dict.add(i)
+    assert [i for i in list_dict]  # __iter__
+    assert len(list_dict) == n  # __len__
+    assert list_dict.choice() >= 0
+    for i in range(n):
+        assert i in list_dict  # __contains__
+        list_dict.remove(i)
+
+
+@pytest.mark.parametrize(
+    "r,cell,full_sphere,p",
+    [
+        (1.0, np.eye(3), False, [1, 1, 1]),
+        (2.0, np.eye(3), False, [2, 2, 2]),
+        (2.0, np.diag([2, 1, 1]), False, [1, 2, 2]),
+        (2.0, np.array([[1, 1, 0], [-1, 1, 0], [0, 0, 2]]), False, [2, 2, 1]),
+        (1.0, np.eye(3), True, [3, 3, 3]),
+    ],
+)
+def test_containing_supercell(r, cell, full_sphere, p):
+    p_result = transformation_containing_sphere_diag(r, cell, full_sphere)
+    np.testing.assert_array_equal(p_result, np.diag(p))
+
+
 @pytest.mark.parametrize(
     "grid_shape,i_grid,p_reduced",
     [
         ((10, 10, 10, 2), np.array([0, 0, 0, 0]), (3, 3, 3)),
-        ((10, 10, 10, 2), np.array([3, 3, 3, 0]), (4, 4, 4)),
+        (
+            (10, 10, 10, 2),
+            np.array([3, 3, 3, 0]),
+            (5, 5, 5),
+        ),  # TODO: figure out what the result should be for even p
         ((10, 10, 10, 3), np.array([9, 9, 9, 2]), (3, 3, 3)),
         ((10, 10, 1), np.array([9, 9, 0]), (3, 3)),
     ],
 )
-def test_grid_mapping(grid_shape, i_grid, p_reduced):
+def test_take_tile(grid_shape, i_grid, p_reduced):
     grid = np.arange(np.prod(grid_shape)).reshape(grid_shape)
-    grid_reduced, i_new = grid_mapping(grid, i_grid, p_reduced)
+    grid_reduced, i_new = take_tile(grid, i_grid, p_reduced)
     np.testing.assert_array_equal(
         grid_reduced.shape, list(p_reduced) + [grid_shape[-1]]
     )

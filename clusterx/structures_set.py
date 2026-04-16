@@ -473,15 +473,11 @@ class StructuresSet:
             from clusterx.utils import remove_vacancies
         for i, st in enumerate(self):
             if property_calc is None:
-                ats = st.get_atoms()
+                atoms = st.get_atoms()
                 if rm_vacancies:
-                    _ats = remove_vacancies(ats)
-                else:
-                    _ats = ats.copy()
-                    _ats.set_calculator(
-                        ats.get_calculator()
-                    )  # ASE's copy() forgets calculator
-                props.append(_ats.get_potential_energy())
+                    atoms = remove_vacancies(atoms)
+                atoms.calc = self.get_calculator()
+                props.append(atoms.get_potential_energy())
             else:
                 props.append(property_calc(i, st, **kwargs))
 

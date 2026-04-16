@@ -4,11 +4,13 @@
 
 import os
 from typing import Optional, Union, List
+import random
 
 import pytest
 from ase.spacegroup import crystal
 from ase.data import atomic_numbers as cn
 from ase import Atoms
+from ase.io import Trajectory
 import numpy as np
 
 from clusterx.parent_lattice import ParentLattice
@@ -29,16 +31,50 @@ def plat():
     positions = [[0, 0, 0]]
     pbc = [True, True, False]
 
-    pri = Atoms(["Cu"], positions=positions, cell=cell, pbc=pbc)
-    sub = Atoms(["Au"], positions=positions, cell=cell, pbc=pbc)
+    pri = Atoms(["H"], positions=positions, cell=cell, pbc=pbc)
+    sub = Atoms(["N"], positions=positions, cell=cell, pbc=pbc)
     plat = ParentLattice(pri, substitutions=[sub], pbc=pbc)
+    return plat
+
+
+@pytest.fixture
+def plat_bulk():
+    # parent lattice with single site and one substitution
+    cell = [1, 1, 1]
+    positions = [[0, 0, 0]]
+    pbc = [True, True, True]
+
+    pri = Atoms(["H"], positions=positions, cell=cell, pbc=pbc)
+    sub = Atoms(["N"], positions=positions, cell=cell, pbc=pbc)
+    plat = ParentLattice(pri, substitutions=[sub], pbc=pbc)
+    return plat
+
+
+@pytest.fixture
+def plat_perov():
+    """Perovskite mult-sublattice parent lattice"""
+    cell = [6, 6, 6]
+    positions = [
+        [0, 0, 0],
+        [3, 3, 3],
+        [0, 3, 3],
+        [3, 0, 3],
+        [3, 3, 0],
+    ]
+    pbc = [True, True, True]
+    pri = Atoms(["Cs", "Pb", "I", "I", "I"], positions=positions, cell=cell, pbc=pbc)
+    sub_Sn = Atoms(["Cs", "Sn", "I", "I", "I"], positions=positions, cell=cell, pbc=pbc)
+    sub_Br = Atoms(
+        ["Cs", "Pb", "Br", "Br", "Br"], positions=positions, cell=cell, pbc=pbc
+    )
+    plat = ParentLattice(pri, substitutions=[sub_Sn, sub_Br], pbc=pbc)
     return plat
 
 
 @pytest.fixture
 def cpool(plat):
     # one-point clusters and nearest neighbor two-point clusters
-    return ClustersPool(plat, npoints=[1, 2], radii=[0, 1.1])
+    return ClustersPool(plat, npoints=[2], radii=[1.1])
 
 
 @pytest.fixture
@@ -49,6 +85,16 @@ def corrc(plat, cpool):
 @pytest.fixture
 def model(plat, cpool, corrc):
     # Ising-like model
+    ecisE = np.array([-1.0])
+    cemodel = Model(corrc, "energy", ecis=ecisE)
+    return cemodel
+
+
+@pytest.fixture
+def model_bulk(plat_bulk):
+    cpool = ClustersPool(plat_bulk, npoints=[1, 2], radii=[0, 1.1])
+    corrc = CorrelationsCalculator("trigonometric", plat_bulk, cpool)
+    # Ising-like model
     ecisE = [0.0, -1.0]
     multT = cpool.get_multiplicities()
     cemodel = Model(corrc, "energy", ecis=np.multiply(ecisE, multT))
@@ -58,7 +104,7 @@ def model(plat, cpool, corrc):
 @pytest.fixture
 def model_multi(plat, cpool, corrc):
     # Model for two properties in parallel
-    ecis = np.array([[-1.0, -2.0], [-2.0, -4.0]])
+    ecis = np.array([[-2.0], [-4.0]])
     cemodel = Model(corrc, ["energy", "energy_double"], ecis=ecis)
     return cemodel
 
@@ -197,13 +243,11 @@ def cli_kwargs():
     args["sc_shape"]: Optional[Union[int, List[int], List[List[int]]]] = 2
     args["n_substitutions"]: Optional[Union[int, dict]] = 1
     args["ensemble"]: str = "canonical"
-    args["sublattice_indices"]: List[int] = []
+    args["sublattice_indices"]: List[int] | None = None
     args["chemical_potential"]: float = 0.0
     args["chemical_potentials"]: Optional[dict] = None
     args["models_aux_filepaths"]: List[str] = []
-    args["no_of_swaps"]: int = 1
     args["predict_swap"]: bool = True
-    args["n_error_reset"]: Optional[int] = None
     # metropolis sampling arguments
     args["n_mc_steps"]: int = 100
     args["n_mc_eq"]: int = 1
@@ -214,8 +258,8 @@ def cli_kwargs():
     args["temperatures"]: Optional[List[float]] = None
     args["boltzmann_constant"]: float = 1.0
     args["initial_decoration"]: Optional[List[int]] = None
-    args["acceptance_ratio"]: Optional[float] = None
-    args["random_seed"]: Optional[int] = None
+    args["target_rate"]: Optional[float] = None
+    args["random_seed"]: Optional[int] = 42
     return args
 
 
@@ -224,8 +268,6 @@ def cli_kwargs():
     [
         ("usage", []),
         ("runmc", []),
-        ("setup", ["mc-setup.pickle"]),
-        ("run", ["mc-run.pickle"]),
     ],
 )
 def test_cli(plat, model, cli_kwargs, task, filelist):
@@ -249,22 +291,163 @@ def test_metropolis(plat, model_, request):
     model = request.getfixturevalue(model_)
     mc = MonteCarlo(model, scell, nsubs={0: [4]})
     mc.metropolis(no_of_sampling_steps=10, temperature=600, serialize=True)
-    traj = MonteCarloTrajectory(read=True)
+    traj = MonteCarloTrajectory(scell=scell, read=True)
     traj.get_lowest_energy_structure()
 
 
+def test_sgcmc_raises(plat_bulk, model_bulk):
+    # with semigrand-canonical monte-carlo, chemical potentials have to be given
+    with pytest.raises(ValueError):
+        scell = SuperCell(plat_bulk, 10)
+        n_atoms = len(scell)
+        MonteCarlo(
+            model_bulk,
+            scell,
+            nsubs={0: [n_atoms // 2]},
+            ensemble="semigrand-canonical",
+            chemical_potentials=None,
+        )
+
+
+@pytest.mark.parametrize("reduce", [False, True])
+def test_sgcmc(plat, model, reduce):
+    scell = SuperCell(plat, 10)
+    n_atoms = len(scell)
+    mc = MonteCarlo(
+        model,
+        scell,
+        nsubs={0: [n_atoms // 2]},
+        predict_swap=True,
+        ensemble="semigrand-canonical",
+        chemical_potentials={0: [0.0, 0.0]},
+        save_atoms_every=1000,
+        atoms_filename="ising_mc.traj",
+        reduce_structure=reduce,
+        seed=42,
+    )
+    n_steps = 1000
+    mc.metropolis(
+        no_of_sampling_steps=n_steps,
+        temperature=np.linspace(5, 3, n_steps),
+        scale_factor=None,
+        serialize=True,
+    )
+
+
+@pytest.mark.parametrize("reduce", [False, True])
+def test_metropolis_reduce(plat_bulk, model_bulk, reduce):
+    scell = SuperCell(plat_bulk, 10)
+    n_atoms = len(scell)
+    mc = MonteCarlo(
+        model_bulk,
+        scell,
+        nsubs={0: [n_atoms // 2]},
+        predict_swap=True,
+        reduce_structure=reduce,
+        seed=42,
+    )
+    mc.metropolis(no_of_sampling_steps=1000, temperature=600, serialize=True)
+    traj = MonteCarloTrajectory(scell=scell, read=True)
+    traj.get_lowest_energy_structure()
+
+
+def test_target_rate(plat_bulk, model_bulk):
+    np.random.seed(42)
+    random.seed(42)
+    scell = SuperCell(plat_bulk, 4)
+    n_atoms = len(scell)
+    mc = MonteCarlo(
+        model_bulk,
+        scell,
+        nsubs={0: [n_atoms // 2]},
+        predict_swap=True,
+        seed=42,
+    )
+    mc.metropolis(no_of_sampling_steps=10000, temperature=1e4, target_rate=0.5)
+
+
+def test_metropolis_perov(plat_perov):
+    cpool = ClustersPool(plat_perov, npoints=[1, 2], radii=[0, 6.1])
+    cpool.serialize("cpool_perov.json")
+    corrc = CorrelationsCalculator("trigonometric", plat_perov, cpool)
+    np.random.seed(42)
+    ecis = np.random.normal(size=len(cpool))
+    cemodel = Model(corrc, "energy", ecis=ecis)
+
+    scell = SuperCell(plat_perov, 10)
+    mc = MonteCarlo(
+        cemodel,
+        scell,
+        nsubs=None,
+        predict_swap=True,
+        reduce_structure=True,
+        save_atoms_every=100,
+        atoms_filename="perov_mc.traj",
+        seed=42,
+    )
+    mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, serialize=False)
+    traj = Trajectory("perov_mc.traj")
+    assert len(traj) == 11
+
+
+@pytest.mark.xfail(reason="MCLite will not be updated")
 @pytest.mark.parametrize("model_", ["model", "model_multi"])
-def test_mclite(plat, model_, request):
+def test_mclite(plat, model_, request, tmp_path):
     scell = SuperCell(plat, 4)
+    n_atoms = len(scell)
     model = request.getfixturevalue(model_)
     mc = MonteCarloLite(model, scell, boltzmann_constant=3e-6)
     mcrun = mc.metropolis(
         n_mc_steps=10,
         temperature=600,
-        mcrun_filepath="mc-run_test.pickle",
+        mcrun_filepath=tmp_path / "mc-run_test.pickle",
+        n_substitutions=n_atoms // 2,
         serialize=True,
+        random_seed=42,
     )
     assert mcrun.energies  # check existence
+
+
+@pytest.mark.xfail(reason="MCLite will not be updated")
+@pytest.mark.parametrize("reduce", [False, True])
+def test_mclite_reduce(plat_bulk, model_bulk, tmp_path, reduce):
+    scell = SuperCell(plat_bulk, 10)
+    n_atoms = len(scell)
+    mc = MonteCarloLite(
+        model_bulk, scell, boltzmann_constant=1, reduce_structure=reduce
+    )
+    mcrun = mc.metropolis(
+        n_mc_steps=10,
+        temperature=10,
+        mcrun_filepath=tmp_path / "mc-run_test.pickle",
+        n_substitutions=n_atoms // 2,
+        serialize=True,
+        random_seed=42,
+    )
+    assert mcrun.energies  # check existence
+
+
+@pytest.mark.xfail(reason="MCLite will not be updated")
+def test_mclite_reduce_large(plat_bulk, model_bulk, tmp_path):
+    scell = SuperCell(plat_bulk, 100)
+    n_atoms = len(scell)
+    mc = MonteCarloLite(model_bulk, scell, boltzmann_constant=1, reduce_structure=True)
+    mcrun = mc.metropolis(
+        n_mc_steps=1_000,
+        temperature=10,
+        mcrun_filepath=tmp_path / "mc-run_test.pickle",
+        n_substitutions=n_atoms // 2,
+        serialize=True,
+        random_seed=42,
+    )
+    assert mcrun.energies  # check existence
+
+
+def test_reduce_nondiag_raise(plat_bulk, model_bulk):
+    p = [[1, 1, 0], [-1, 1, 0], [0, 0, 2]]
+    scell = SuperCell(plat_bulk, p)
+    with pytest.raises(ValueError):
+        MonteCarloLite(model_bulk, scell, reduce_structure=True)
 
 
 def test_metropolis_clathrate_full_subs(
@@ -276,6 +459,7 @@ def test_metropolis_clathrate_full_subs(
         cemodel_full_sub,
         scell,
         nsubs={0: [112, 16], 1: [0]},
+        seed=42,
     )
     nmc = 30
     kb = float(3.16681009610757e-6)

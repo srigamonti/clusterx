@@ -12,8 +12,11 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple, Any
 
 import numpy as np
+from tqdm import tqdm
 
-from clusterx.utils import _timed
+from clusterx.model import Model
+from clusterx.super_cell import SuperCell
+from clusterx.utils import take_tile, ListDict, is_diagonal
 
 
 class MonteCarloLite:
@@ -58,6 +61,12 @@ class MonteCarloLite:
         energy_key needs to match one of the strings in energy_model.property_names, so that the energy
         prediction can be indexed from prediction vector.
 
+    ``reduce_structure``: bool (default: False)
+        If true, cluster orbits/correlations are computed and evaluated on
+        subset of sigmas, in a box around central site in the structure.
+        Incompatible with non-diagonal supercell shapes.
+        NOTE: currently not used in MonteCarloLite, only in full MonteCarlo.
+
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
 
@@ -65,11 +74,12 @@ class MonteCarloLite:
 
     def __init__(
         self,
-        energy_model,
-        scell,
-        energy_scale_factor=None,
-        boltzmann_constant=1.0,
+        energy_model: Model,
+        scell: SuperCell,
+        energy_scale_factor: float | None = None,
+        boltzmann_constant: float = 1.0,
         energy_key: str = "energy",
+        reduce_structure: bool = False,
     ):
         prop = energy_model.property_name
         if prop is None or len(prop) == 0 or isinstance(prop, str):
@@ -85,36 +95,45 @@ class MonteCarloLite:
         self._energy_scale_factor = (
             energy_scale_factor
             if energy_scale_factor is not None
-            else scell.get_index()
+            else self._scell.get_index()
         )
         self._kb = boltzmann_constant
 
-        if not scell.is_nary(2):
+        if not self._scell.is_nary(2):
             raise ValueError(
                 "MonteCarloLite.init(): MonteCarloLite works only for binary materials."
             )
 
-        self._substitutional_sublattice = None
-        for k, v in scell.get_sublattice_types().items():
-            if len(v) == 2:
-                self._substitutional_sublattice = int(k)
+        self._sublattice_index: int
+        for (
+            sublattice_index,
+            atomic_numbers,
+        ) in self._scell.get_sublattice_types().items():
+            if len(atomic_numbers) == 2:
+                self._sublattice_index = int(sublattice_index)
                 break
 
-        with _timed("MonteCarloLite.init(): Generating pristine structure"):
-            self.structure = self._scell.get_pristine_structure()
+        self.structure = self._scell.get_pristine_structure()
 
-        with _timed("MonteCarloLite.init(): Computing energy of pristine structure"):
+        if reduce_structure:
+            if not is_diagonal(p := self._scell.get_transformation()):
+                raise ValueError(
+                    f"Cannot reduce structure with non-diagonal SuperCell shape {p}"
+                )
+            self.e_pristine = None  # undefined, we only care about energy differences
+            self._emodel.init_reduced_model()
+            self._emodel._init_interaction_dict(self._emodel.scell_reduced)
+        else:
             self.e_pristine = self._emodel.predict(self.structure)[
                 self._energy_prediction_index
             ]
-
-        with _timed("MonteCarloLite.init(): Initialize interaction dictionaries"):
             self._emodel._init_interaction_dict(self._scell)
+        self._reduce_structure = reduce_structure
 
         print("\n" + "=" * 70)
         print("MonteCarloLite Initialized")
         print("=" * 70)
-        print(f"Sublattice index:          {self._substitutional_sublattice}")
+        print(f"Sublattice index:          {self._sublattice_index}")
         print(f"Energy scale factor:       {self._energy_scale_factor}")
         print(f"Boltzmann constant (kB):   {self._kb}")
         print(f"Supercell size:            {self._scell.get_index()} parent lattices")
@@ -184,7 +203,7 @@ class MonteCarloLite:
         mcrun_filepath: Optional[str],
         temperature: float,
         ensemble: str,
-        is_simulated_annelaing: bool,
+        is_simulated_annealing: bool,
         keep_sigmas=1,
     ):
         """
@@ -220,7 +239,7 @@ class MonteCarloLite:
                 keep_sigmas=keep_sigmas,
             )
 
-        if path.exists() and not is_simulated_annelaing:
+        if path.exists() and not is_simulated_annealing:
             mcrun = MCRun.from_file(path)
 
             # Warn if stored temperature differs from requested one
@@ -244,15 +263,11 @@ class MonteCarloLite:
             mcrun.set_keep_sigmas(keep_sigmas)
             return mcrun
 
-        if not is_simulated_annelaing:
-            warnings.warn(  # @SR: Why is this a warning, should be just print or log?
-                f"MC run file not found at: {path}. Starting a new run instance.",
-                UserWarning,
-            )
+        if not is_simulated_annealing:
+            print(f"MC run file not found at: {path}. Starting a new run instance.")
         else:
-            warnings.warn(  # @SR: Why is this a warning, should be just print or log?
+            print(
                 f"Simulated annealing. Starting a new run instance and ignoring state at {path}.",
-                UserWarning,
             )
 
         return MCRun(
@@ -268,7 +283,7 @@ class MonteCarloLite:
         temperature=None,
         n_mc_steps=None,
         n_clics=1,
-        ensemble=None,
+        ensemble: str = "canonical",
         n_substitutions=None,
         initial_structure=None,
         initial_sigmas=None,
@@ -277,7 +292,7 @@ class MonteCarloLite:
         keep_sigmas=1,
         n_error_reset=None,
         random_seed: Optional[int] = None,
-        is_simulated_annelaing=False,
+        is_simulated_annealing=False,
         **kwargs,
     ) -> MCRun:
         r"""Perform Monte-Carlo Metropolis simulation
@@ -347,16 +362,13 @@ class MonteCarloLite:
         may be provided. If none are given, the pristine structure or the one from a
         previous Metropolis run will be used.
         """
-        import math
-
-        from tqdm import tqdm
-
+        rng = np.random.default_rng(random_seed)
         if random_seed is not None:
             random.seed(random_seed)
             np.random.seed(random_seed)
 
         mcrun = self._load_or_create_mcrun(
-            mcrun_filepath, temperature, ensemble, is_simulated_annelaing, keep_sigmas
+            mcrun_filepath, temperature, ensemble, is_simulated_annealing, keep_sigmas
         )
 
         self._validate_initialization_args_metropolis(
@@ -368,7 +380,7 @@ class MonteCarloLite:
             self.structure.set_arrays(sigmas=sigmas)
         elif n_substitutions is not None:
             _, sigmas = self._scell.gen_random_decoration(
-                nsubs={self._substitutional_sublattice: [n_substitutions]}
+                nsubs={self._sublattice_index: [n_substitutions]}
             )
             self.structure.set_arrays(sigmas=sigmas)
         elif initial_structure is not None:
@@ -376,131 +388,148 @@ class MonteCarloLite:
             self.structure.set_arrays(sigmas=sigmas)
         elif initial_sigmas is not None:
             self.structure.set_arrays(sigmas=initial_sigmas)
-
         else:
             sigmas = self.structure.get_sigmas()
-
         scaledbeta = self._energy_scale_factor / self._kb / temperature
+        structure = self.structure
 
-        with _timed("MonteCarloLite.metropolis: Compute energy of initial structure"):
-            e = self._emodel.predict(self.structure)[self._energy_prediction_index]
+        if self._reduce_structure:
+            e = np.array([0.0])  # undefined, we only care about energy differences
+            p = np.diagonal(structure.get_transformation())
+            p_reduced = np.diagonal(self._emodel.scell_reduced.get_transformation())
+            grid_shape = p.tolist() + [1]
+            structure_reduced, _ = structure.get_reduced_structure(p_reduced, index=0)
+            scell_factor = np.prod(p) / np.prod(p_reduced)
+        else:
+            e = self._emodel.predict(structure)[self._energy_prediction_index]
+            scell_factor = 1.0
+
+        # save which sites are occupied by which species
+        occupation_indices = [
+            ListDict(),
+            ListDict(),
+        ]  # use ListDict for fast insertion and removal
+        if self._reduce_structure:
+            sigma_grid = sigmas.reshape(grid_shape)
+            for ix in range(grid_shape[0]):
+                for iy in range(grid_shape[1]):
+                    for iz in range(grid_shape[2]):
+                        for ib in range(grid_shape[3]):
+                            sigma = sigma_grid[ix, iy, iz, ib]
+                            occupation_indices[sigma].add((ix, iy, iz, ib))
+            # make sure that sigma_grid can be accessed quickly
+            sigma_grid = np.ascontiguousarray(sigma_grid)
+        else:
+            for i, sigma in enumerate(sigmas):
+                occupation_indices[sigma].add(i)
 
         mcrun.add_step(0, sigmas, e)
 
         progress = tqdm(range(1, n_mc_steps + 1), total=n_mc_steps, desc="MMC sim.")
 
-        use_arrays_backup_for_rejected_moves = (
-            False  # Very slow, use only for benchmarking
-        )
-
         i_reset = 0
         e_error = 0
-        with _timed("Metropolis: MC steps"):
-            for i in progress:
-                atom_indices = []
-                new_sigmas = []
-                old_sigmas = []
-                for j in range(n_clics):
-                    if ensemble == "grandcanonical":
-                        atom_index, sigma_initial, sigma_final = (
-                            self.structure.flip_random(self._substitutional_sublattice)
-                        )
-                        atom_indices.append(atom_index)
-                        old_sigmas.append(sigma_initial)
-                        new_sigmas.append(sigma_final)
-                    elif ensemble == "canonical":
-                        atom_index1, sigma_initial1, sigma_final1 = (
-                            self.structure.flip_random(self._substitutional_sublattice)
-                        )
-                        atom_index2, sigma_initial2, sigma_final2 = (
-                            self.structure.flip_random(
-                                self._substitutional_sublattice,
-                                sigma_initial=sigma_final1,
-                                sigma_final=sigma_initial1,
-                            )
-                        )
+        for i in progress:
+            atom_indices = []
+            new_sigmas = []
+            old_sigmas = []
+            for j in range(n_clics):
+                if ensemble == "grandcanonical":
+                    atom_index = rng.integers(low=0, high=len(sigmas))
+                    sigma_initial = sigmas[atom_index]
+                    sigma_final = 1 - sigmas[atom_index]
+                    atom_indices.append(atom_index)
+                    old_sigmas.append(sigma_initial)
+                    new_sigmas.append(sigma_final)
+                elif ensemble == "canonical":
+                    atom_index = rng.integers(low=0, high=len(sigmas))
+                    sigma_initial = sigmas[atom_index]
+                    sigma_final = 1 - sigmas[atom_index]
+                    atom_index_other = occupation_indices[sigma_final].choice()
+                    sigma_initial_other = sigmas[atom_index_other]
+                    sigma_final_other = 1 - sigmas[atom_index_other]
+                    # NOTE: this can include the same index multiple times
+                    atom_indices.append(atom_index)
+                    atom_indices.append(atom_index_other)
+                    old_sigmas.append(sigma_initial)
+                    old_sigmas.append(sigma_initial_other)
+                    new_sigmas.append(sigma_final)
+                    new_sigmas.append(sigma_final_other)
 
-                        if (
-                            atom_index1 not in atom_indices
-                            and atom_index2 not in atom_indices
-                        ):
-                            atom_indices.append(atom_index1)
-                            old_sigmas.append(sigma_initial1)
-                            new_sigmas.append(sigma_final1)
-
-                            atom_indices.append(atom_index2)
-                            old_sigmas.append(sigma_initial2)
-                            new_sigmas.append(sigma_final2)
-
-                # compute new energy
-
-                if use_arrays_backup_for_rejected_moves:
-                    self.structure.backup_arrays()
-                de = 0.0
-                for atom_index, new_sigma, old_sigma in zip(
-                    atom_indices, new_sigmas, old_sigmas
-                ):
-                    de += self._emodel.predict_flip(
-                        self.structure,
-                        index=atom_index,
-                        old_sigma=old_sigma,
-                        new_sigma=new_sigma,
-                        site_types=[self._substitutional_sublattice],
-                    )[self._energy_prediction_index]
-                    self.structure.update_arrays(
-                        atom_indices=[atom_index], new_sigmas=[new_sigma]
+            de = 0.0
+            for atom_index, new_sigma, old_sigma in zip(
+                atom_indices, new_sigmas, old_sigmas
+            ):
+                # assign structure and calculate where flip is taking place
+                if self._reduce_structure:
+                    sigma_grid_r, atom_index_r = take_tile(
+                        sigma_grid, atom_index, p_reduced
                     )
-
-                e1 = e + de
-
-                if de <= 0:
-                    accept_clic = True
-                    boltzmann_factor = 0
+                    structure_reduced.sigmas = sigma_grid_r.flatten()
+                    structure_pred = structure_reduced
+                    index = np.ravel_multi_index(atom_index_r, sigma_grid_r.shape)
                 else:
-                    boltzmann_factor = math.exp(-de * scaledbeta)
+                    structure_pred = structure
+                    index = atom_index
 
-                    if np.random.uniform(0, 1) <= boltzmann_factor:
-                        accept_clic = True
-                    else:
-                        accept_clic = False
+                # calculate flip energy
+                de += self._emodel.predict_flip(
+                    structure_pred,
+                    index=index,
+                    old_sigma=old_sigma,
+                    new_sigma=new_sigma,
+                    scell_factor=scell_factor,
+                )[self._energy_prediction_index]
 
-                if accept_clic:
-                    e = e1
+                # perform flip
+                sigmas[atom_index] = int(new_sigma)
+                occupation_indices[old_sigma].remove(atom_index)
+                occupation_indices[new_sigma].add(atom_index)
 
-                    sigmas = self.structure.get_sigmas()
-                    mcrun.add_step(i, sigmas, e)
+            e1 = e + de
 
-                else:
-                    if use_arrays_backup_for_rejected_moves:
-                        self.structure.restore_arrays()
-                    else:
-                        self.structure.update_arrays(
-                            atom_indices=atom_indices[::-1], new_sigmas=old_sigmas[::-1]
-                        )
+            if de <= 0:
+                accept_clic = True
+            else:
+                accept_clic = rng.uniform(0, 1) <= np.exp(-de * scaledbeta)
 
-                if (
-                    n_error_reset is not None
-                    and n_error_reset > 0
-                    and i % n_error_reset == 0
+            if accept_clic:
+                e = e1
+                sigmas = self.structure.get_sigmas()
+                mcrun.add_step(i, sigmas, e)
+            else:
+                # reset sigmas in reverse order
+                for atom_index, new_sigma, old_sigma in zip(
+                    atom_indices[::-1], new_sigmas[::-1], old_sigmas[::-1]
                 ):
-                    e0 = e
-                    e = self._emodel.predict(self.structure)[
-                        self._energy_prediction_index
-                    ]
-                    mcrun.energies[-1] = e
-                    e_error = e - e0
-                    i_reset = i
+                    sigmas[atom_index] = old_sigma
+                    structure.sigmas = sigmas
+                    occupation_indices[new_sigma].remove(atom_index)
+                    occupation_indices[old_sigma].add(atom_index)
+                    # self.structure.update_arrays(
+                    #    atom_indices=atom_indices[::-1], new_sigmas=old_sigmas[::-1]
+                    # )
 
-                ratio = mcrun.acceptance_ratio_last(1000)
-                progress.set_description(
-                    f"MMC sim. | Acc. ratio: {ratio:.4f} | E-reset@{i_reset}: {e_error:.3e}"
-                )
+            if (
+                n_error_reset is not None
+                and n_error_reset > 0
+                and i % n_error_reset == 0
+            ):
+                e0 = e
+                e = self._emodel.predict(self.structure)[self._energy_prediction_index]
+                mcrun.energies[-1] = e
+                e_error = e - e0
+                i_reset = i
+
+            ratio = mcrun.acceptance_ratio_last(1000)
+            progress.set_description(
+                f"MMC sim. | Acc. ratio: {ratio:.4f} | E-reset@{i_reset}: {e_error:.3e}"
+            )
 
         mcrun.add_step(i, sigmas, e)  # record last step
 
-        with _timed("Metropolis: serialization"):
-            if mcrun_filepath is not None:
-                mcrun.serialize(filepath=mcrun_filepath)
+        if mcrun_filepath is not None:
+            mcrun.serialize(filepath=mcrun_filepath)
 
         return mcrun
 

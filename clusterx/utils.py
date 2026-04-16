@@ -9,8 +9,10 @@ import time
 import warnings
 from contextlib import contextmanager
 from typing import List, Optional, Union
+import random
 
 import numpy as np
+from ase.cell import Cell
 from ase import Atoms
 from ase.build.supercells import (  # needed by make_supercell
     clean_matrix,
@@ -19,7 +21,92 @@ from ase.build.supercells import (  # needed by make_supercell
 from ase.data import chemical_symbols as cs
 
 
-def grid_mapping(grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple):
+class RunningAverage:
+    def __init__(self, n: int):
+        self.n = n
+        self.average: float
+        self.values = []
+
+    def update(self, value) -> None:
+        """Update the window of values by appending `value`, and compute new average."""
+        self.values.append(value)
+        if len(self.values) > self.n:
+            value_0 = self.values.pop(0)
+            self.average += (value - value_0) / self.n
+        elif len(self.values) == 1:
+            self.average = value
+        else:
+            diff = (value - self.average) / len(self.values)
+            self.average += diff
+
+    def get_average(self) -> float:
+        return self.average
+
+    def update_and_get_average(self, value) -> float:
+        self.update(value)
+        return self.average
+
+
+class ListDict(object):
+    """
+    Datastructure that allows efficient (O(1)) insert, remove and random sampling.
+    Adapted from https://stackoverflow.com/questions/15993447/python-data-structure-for-efficient-add-remove-and-random-choice.
+    """
+
+    def __init__(self):
+        self.item_to_position = {}
+        self.items = []
+
+    def __contains__(self, item):
+        return item in self.item_to_position
+
+    def __iter__(self):
+        return iter(self.items)
+
+    def __len__(self):
+        return len(self.items)
+
+    def add(self, item):
+        if item in self.item_to_position:
+            return
+        self.items.append(item)
+        self.item_to_position[item] = len(self.items) - 1
+
+    def remove(self, item):
+        position = self.item_to_position.pop(item)
+        last_item = self.items.pop()
+        if position != len(self.items):
+            self.items[position] = last_item
+            self.item_to_position[last_item] = position
+
+    def choice(self, rng: random.Random = random):
+        return rng.choice(self.items)
+
+
+def transformation_containing_sphere_diag(
+    r: float, cell: np.ndarray | Cell, full_sphere: bool = False
+) -> np.ndarray:
+    """Return diagonal transformation p of `cell` that describe a supercell,
+    such that a all pairs of points with distance `r` are contained in the
+    supercell. Only valid for dim=3 (len(cell.shape)==3).
+
+    If `full_sphere`, returned transformation is large enough,
+    such that a sphere with radius `r` can be fully contained in corresponding
+    supercell, with the center at any point in the original cell."""
+    c = np.zeros((3, 3))
+    h = np.zeros(3)
+    # Get distances h between parallel planes of the unit cell
+    for i in range(3):
+        c[i] = np.cross(cell[(i + 1) % 3], cell[(i + 2) % 3])
+        h[i] = np.dot(cell[i], c[i] / np.linalg.norm(c[i]))
+    # number of repetitions of unit cell along each lattice vector to contain largest cluster
+    if full_sphere:
+        return np.diag([int(p) for p in np.ceil(2 * r / h + 1)])
+    else:
+        return np.diag([int(p) for p in np.ceil(r / h)])
+
+
+def take_tile(grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple):
     """Map values from grid to reduced grid around grid index i_grid.
 
     **parameters**
@@ -27,16 +114,12 @@ def grid_mapping(grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple):
     ``i_grid``: ndarray, shape (d + 1,)
     ``p_reduced``: tuple of int, shape (d,)
     """
-    d = len(grid.shape) - 1
-    plat_index = i_grid[-1]
-    indices = np.indices(p_reduced)
-    offset = i_grid[:-1] - np.array(p_reduced) // 2
-    offset = offset.reshape([-1] + [1] * d)
-    indices += offset
-    indices %= np.array(grid.shape[:-1]).reshape([-1] + [1] * d)
-    i_grid_new = np.array((np.array(p_reduced) // 2).tolist() + [plat_index])
-    # return grid[*indices, :], i_grid_new  # threw an error in CI, see next line
-    return grid[tuple(indices) + (slice(None),)], i_grid_new
+    for axis, (d, p) in enumerate(zip(i_grid[:-1], p_reduced)):
+        grid = np.take(
+            grid, np.arange(d - p // 2, d + p // 2 + 1), axis=axis, mode="wrap"
+        )
+    i_grid_new = np.array((np.array(p_reduced) // 2).tolist() + [i_grid[-1]])
+    return grid, i_grid_new
 
 
 def is_diagonal(x: np.ndarray):

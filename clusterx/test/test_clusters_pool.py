@@ -71,7 +71,10 @@ def test_0_point_raises(plat, npoints, radii):
         ClustersPool(plat, npoints=npoints + [0], radii=radii + [0])
 
 
-@pytest.mark.xfail(raises=AssertionError, reason="Methods are known to currently produce different clusters.")
+@pytest.mark.xfail(
+    raises=AssertionError,
+    reason="Methods are known to currently produce different clusters.",
+)
 def test_methods(plat, npoints, radii):
     cp_list = []
     for method in [0, 1]:
@@ -305,7 +308,7 @@ def test_2D_acute_angle():
 
     atom_idxs, atom_nrs = cp.get_cpool_arrays()
     a = an["Au"]
-    np.testing.assert_array_equal(atom_idxs, np.array([[0, 1], [5, 20]]))
+    np.testing.assert_array_equal(atom_idxs, np.array([[0, 1], [5, 25]]))
     np.testing.assert_array_equal(atom_nrs, np.array([[a, a], [a, a]]))
 
 
@@ -338,9 +341,7 @@ def test_pt_111():
     radii = cp.get_all_radii()
     npoints = cp.get_all_npoints()
 
-    mult_ref = np.array(
-        [1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 6, 3, 3, 6, 6, 3, 1, 1, 6, 1, 6, 6, 6]
-    )
+    mult_ref = np.array([1] * 3 + [3] * 7 + [6] * 3 + [3, 3, 6, 3, 1, 1, 1] + [6] * 5)
     npoints_ref = np.array(
         [1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
     )
@@ -390,8 +391,8 @@ def test_clathrate():
     radii = cp.get_all_radii()
     npoints = cp.get_all_npoints()
 
-    mult_ref = np.array([24, 16, 6, 8, 48, 12, 24, 24, 48, 48, 48, 48, 48, 12, 24])
-    npoints_ref = np.array([1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
+    mult_ref = np.array([24, 16, 6, 8, 48, 12, 24, 24, 48, 48, 48, 48, 24, 12, 24, 12])
+    npoints_ref = np.array([1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2])
     radii_ref = np.array(
         [
             0.0,
@@ -409,6 +410,7 @@ def test_clathrate():
             4.054079,
             4.121802,
             4.365504,
+            4.789581,
         ]
     )
 

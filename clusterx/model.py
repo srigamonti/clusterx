@@ -17,11 +17,12 @@ from clusterx.clusters_selector import ClustersSelector
 from clusterx.correlations import (
     CorrelationsCalculator,
     cluster_correlations_flip,
+    cluster_correlations_partial,
 )
 from clusterx.estimators.estimator_factory import EstimatorFactory
 from clusterx.structure import Structure
 from clusterx.super_cell import SuperCell
-from clusterx.utils import is_diagonal
+from clusterx.utils import transformation_containing_sphere_diag
 
 
 class Model:
@@ -110,8 +111,9 @@ class Model:
         self._mc_multiplicities: List[int] = []
         self._mc_start_time = 0
         self._mc_init_time = 0
-        self.scell_reduced = None
+        self.scell_reduced = None  # if needed, initialize with self.init_reduced_model
         self.initialized_interactions = False
+        self.scell_factor = 1.0
 
         if self.standardize:
             from sklearn.preprocessing import StandardScaler
@@ -171,10 +173,20 @@ class Model:
         self._mc_init_time = 0
         self.initialized_interactions = False
 
-    def init_reduced_model(self):
-        print("Info(Model): setting up reduced SuperCell.")
+    def init_reduced_model(self, structure):
         cpool = self.corrc.get_cpool()
-        self.scell_reduced = cpool.get_containing_supercell()
+        plat = cpool.get_plat()
+        r_max = self.corrc.get_cpool().get_max_radii().max()
+        cell = plat.get_cell()
+        p_reduced = transformation_containing_sphere_diag(r_max, cell, full_sphere=True)
+        # round up to odd, to get a central cell
+        p_reduced = p_reduced + np.diag(np.diagonal(p_reduced % 2 == 0))
+        for i, pbc in enumerate(plat.get_pbc()):
+            if pbc == 0:
+                p_reduced[i, i] = 1
+        self.scell_reduced = SuperCell(plat, p_reduced)
+        self.p_reduced = p_reduced
+        self.scell_factor = np.linalg.det(structure.p) / np.linalg.det(p_reduced)
 
     def serialize(self, filepath=None, fmt=None, db_name=None):
         """Write cluster expansion model to Json database
@@ -280,13 +292,17 @@ class Model:
         """Return correlations calculator of the Model object"""
         return self.corrc
 
-    def predict(self, structure, flag=None):
+    def predict(self, structure: Structure, reduce_structure: bool = False, flag=None):
         """Predict property with the optimal cluster expansion model.
 
         **Parameters:**
 
         ``structure``: Structure object
             structure object to calculate property to.
+
+        ``reduce_structure``: bool, default: False
+            If true, use reduced structure to predict, only works for diagonal
+            supercell transformation.
 
         ``flag``: dict or None
             it flags whether the member corrc correlationsCalculator computed
@@ -300,25 +316,76 @@ class Model:
                    print("INFO: correlations calculator computed orbits from scrach.")
                    model.serialize(filepath="myfilepath.pickle")
         """
-        # with _timed("Model.predict: Get cluster correlations"):
-        corrs = self.corrc.get_cluster_correlations(structure, flag=flag)
+        if not reduce_structure:
+            # with _timed("Model.predict: Get cluster correlations"):
+            corrs = self.corrc.get_cluster_correlations(structure, flag=flag)
 
-        if self.estimator is not None:
-            return self.estimator.predict(corrs.reshape(1, -1))[0]
+            if self.estimator is not None:
+                return self.estimator.predict(corrs.reshape(1, -1))[0]
+            else:
+                if self.standardize:
+                    corrs = self.stdscaler.transform(corrs)
+                return np.dot(self.ecis, corrs)
         else:
-            if self.standardize:
-                corrs = self.stdscaler.transform(corrs)
-            return np.dot(self.ecis, corrs)
+            prediction = self.predict_partial(structure, 0, True)
+            for i in range(1, len(structure.sigmas)):
+                prediction += self.predict_partial(structure, i, True)
+            return prediction
+
+    def predict_partial(
+        self, structure: Structure, index: int, divide_n_body: bool = False
+    ):
+        """Predict property using only the correlations around site `index`.
+        This uses all correlations of all clusters that include this site.
+        Note: only works for diagonal super cells.
+        """
+        _structure, _index = structure.get_reduced_structure(index)
+        _scell = _structure.get_supercell()
+
+        if not self.initialized_interactions:
+            self._init_interaction_dict(_scell)
+
+        correlations_partial = cluster_correlations_partial(
+            structure=_structure,
+            ind=_index,
+            site_clusters=self._site_clusters,
+            cluster_orbits_array=self._cluster_orbits_array,
+            cluster_indices=self._cluster_indices,
+            basis_set_values=self.corrc.basis_set_values,
+            multiplicities=self._multiplicities,
+        )
+
+        if divide_n_body:  # undo double counting, when looping over all sites
+            correlations_partial /= self._n_body_list
+
+        correlations_partial /= self.scell_factor
+        if self.estimator is not None:
+            # Intercept must be subctracted from computation of energy change.
+            try:
+                return (
+                    self.estimator.predict(correlations_partial.reshape(1, -1))[0]
+                    - self.estimator.intercept_
+                )
+            except AttributeError:
+                return (
+                    self.estimator.predict(correlations_partial.reshape(1, -1))[0]
+                    - self.estimator[-1].intercept_
+                )
+        else:
+            return np.dot(self.ecis, correlations_partial)
 
     def _init_interaction_dict(self, super_cell: SuperCell):
-        """Construct list of which sites are contained in which orbit."""
-        print("Info(Model): setting up dictionary of interactions.")
+        """Construct list of which sites are contained in which orbit.
+        NOTE: This method needs to be re-called, when super_cell transformation
+        (p) changes."""
         cluster_orbits = self.corrc.get_cluster_orbits_for_scell(super_cell)
         cluster_indices = []  # to which primitive cluster each cluster belongs
         cluster_orbits_array = []  # all clusters from all orbits
         multiplicities = []  # relative to cluster_orbits_array
+        n_body_list = []  # list of n's where n is number of sites for each primitive cluster
         for cluster_index, cluster_orbit in enumerate(cluster_orbits):
             multiplicities.append(len(cluster_orbit))
+            n_body_list.append(len(cluster_orbit[0]))
             for cluster in cluster_orbit:
                 cluster_indices.append(cluster_index)
                 cluster_orbits_array.append(cluster)
@@ -329,12 +396,13 @@ class Model:
         for index, cluster in enumerate(cluster_orbits_array):
             for site in cluster.get_idxs():
                 site_clusters[site].append(index)
-        n_interactions = sum([len(sc) for sc in site_clusters])
-        print(f"Info(Model): # saved interactions: {n_interactions}")
+        # n_interactions = sum([len(sc) for sc in site_clusters])
+        # print(f"Info(Model): # saved interactions: {n_interactions}")
 
         self._cluster_orbits_array = np.array(cluster_orbits_array, dtype=object)
         self._cluster_indices = np.array(cluster_indices, dtype=int)
         self._multiplicities = np.array(multiplicities, dtype=int)
+        self._n_body_list = np.array(n_body_list)
         self._site_clusters = site_clusters
         self.initialized_interactions = True
 
@@ -344,8 +412,7 @@ class Model:
         index: int,
         old_sigma: int,
         new_sigma: int,
-        site_types=[0],
-        reduce: bool = False,
+        reduce_structure: bool = False,
     ):
         """Predict property change by flipping a species.
 
@@ -361,36 +428,24 @@ class Model:
 
         ``new_sigma``: int, default None
 
-        ``reduce``: bool, default False
-            if True, use the reduced structure around the flipped sigma
+        ``reduce_structure``: bool, default: False
+            If true, use reduced structure to predict flip energy, only works
+            for diagonal supercell transformation.
         """
-        if reduce:
-            warnings.warn(
-                "model.predict_flip using reduce=True is currently very slow.",
-                category=UserWarning,
-            )
-            p = np.diag(structure.get_supercell().get_transformation()).tolist()
-            if not is_diagonal(p):
-                raise ValueError(
-                    "Reduced structure cannot be initialized "
-                    "with non-diagonal super cell transformation."
-                )
-
-            if self.scell_reduced is None:
-                self.init_reduced_model()
-            p_reduced = np.diag(self.scell_reduced.get_transformation())
-            multiplicity_factor = np.prod(p) / np.prod(p_reduced)
-
-            structure, index = structure.get_reduced_structure(p_reduced, index)
+        if not reduce_structure:  # default case
+            _structure = structure
+            _index = index
+            _scell = _structure.get_supercell()
         else:
-            multiplicity_factor = 1.0
+            _structure, _index = structure.get_reduced_structure(index)
+            _scell = _structure.get_supercell()
 
         if not self.initialized_interactions:
-            self._init_interaction_dict(structure.get_supercell())
+            self._init_interaction_dict(_scell)
 
         correlations_diff = cluster_correlations_flip(
-            structure=structure,
-            ind=index,
+            structure=_structure,
+            ind=_index,
             old_sigma=old_sigma,
             new_sigma=new_sigma,
             site_clusters=self._site_clusters,
@@ -398,8 +453,8 @@ class Model:
             cluster_indices=self._cluster_indices,
             basis_set_values=self.corrc.basis_set_values,
             multiplicities=self._multiplicities,
-            multiplicity_factor=multiplicity_factor,
         )
+        correlations_diff /= self.scell_factor
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
             try:
@@ -417,7 +472,11 @@ class Model:
             return np.dot(self.ecis, correlations_diff)
 
     def predict_swap(
-        self, structure, i, j, correlation=False, site_types=[0], reduce=False
+        self,
+        structure,
+        i,
+        j,
+        reduce_structure: bool = False,
     ):
         """Predict property difference with the optimal cluster expansion model.
 
@@ -431,18 +490,14 @@ class Model:
 
         ``j``: int
             index of second atom position has been swapped
-
-        ``reduce``: bool, default False
-            if True, use the reduced structure around the swapped sigmas
-
         """
 
         sigma_i = structure.sigmas[i]
         sigma_j = structure.sigmas[j]
 
-        de1 = self.predict_flip(structure, i, sigma_i, sigma_j, site_types, reduce)
+        de1 = self.predict_flip(structure, i, sigma_i, sigma_j, reduce_structure)
         structure.sigmas[i] = sigma_j
-        de2 = self.predict_flip(structure, j, sigma_j, sigma_i, site_types, reduce)
+        de2 = self.predict_flip(structure, j, sigma_j, sigma_i, reduce_structure)
         structure.sigmas[i] = sigma_i  # restore original structure
         return de1 + de2
 

@@ -306,15 +306,19 @@ class CorrelationsCalculator:
             # with _timed("INIT: Computing cluster orbits for all clusters"):
             cpool = ClustersPool(scell.get_parent_lattice(), super_cell=scell)
             # with _timed("Computing cluster orbits for all clusters"):
-            from tqdm import tqdm
+            show_orbit_progressbar = False
+            if show_orbit_progressbar:
+                # this should not take long anymore with monte-carlo on reduced structure
+                from tqdm import tqdm
 
-            for icl, cluster in enumerate(
-                tqdm(
+                iterator = tqdm(
                     self._cpool.get_cpool_list(),
                     desc="Computing cluster orbits in super cell",
                     unit="cluster",
                 )
-            ):
+            else:
+                iterator = self._cpool.get_cpool_list()
+            for cluster in iterator:
                 _cluster_orbit = cpool.get_cluster_orbit(
                     scell,
                     cluster_positions=cluster.get_positions(),
@@ -474,7 +478,6 @@ def cluster_correlations_flip(
     cluster_indices: np.ndarray,
     basis_set_values: np.ndarray,
     multiplicities: np.ndarray,
-    multiplicity_factor: float = 1.0,
 ) -> np.ndarray:
     """Calculate cluster correlations for a structure with a flipped site,
     using cached cluster orbit array and multiplicities."""
@@ -499,7 +502,37 @@ def cluster_correlations_flip(
         correlations_diff[cluster_index] += cf
 
     correlations_diff /= multiplicities
-    correlations_diff /= multiplicity_factor
+    return np.around(correlations_diff, decimals=12)
+
+
+def cluster_correlations_partial(
+    structure: Structure,
+    ind: int,
+    site_clusters: list,
+    cluster_orbits_array: np.ndarray,
+    cluster_indices: np.ndarray,
+    basis_set_values: np.ndarray,
+    multiplicities: np.ndarray,
+) -> np.ndarray:
+    """Compute partial cluster correlations around site `ind`."""
+    indices = site_clusters[ind]
+    clusters = cluster_orbits_array[indices]
+    cluster_indices = cluster_indices[indices]
+    correlations_diff = np.zeros_like(multiplicities, dtype=float)
+
+    for cluster, cluster_index in zip(clusters, cluster_indices):
+        cluster_sites = cluster.get_idxs()
+        cluster_funcs = cluster.alphas
+        cf = cluster_function_partial(
+            cluster_sites,
+            cluster_funcs,
+            structure.sigmas.take(cluster_sites),
+            structure.ems.take(cluster_sites),
+            basis_set_values,
+        )
+        correlations_diff[cluster_index] += cf
+
+    correlations_diff /= multiplicities
     return np.around(correlations_diff, decimals=12)
 
 
@@ -587,6 +620,8 @@ def cluster_function_flip(
     sigma_new: int,
     basis_set_values: np.ndarray,
 ) -> float:
+    """Calculate difference in cluster function if site i_flip is changed from
+    sigma_old to sigma_new."""
     cf = 1.0
     flipped = False  # only flip once, otherwise, could go wrong for wrapped sites
     # SR: I think this is not necesary, since wrapping reflects the periodicity
@@ -600,4 +635,19 @@ def cluster_function_flip(
             flipped = True
         else:
             cf *= basis_set_values[alpha, sigma, em]
+    return cf
+
+
+@jit
+def cluster_function_partial(
+    cluster_sites: list,
+    cluster_alphas: np.ndarray,
+    sigmas: np.ndarray,
+    ems: np.ndarray,
+    basis_set_values: np.ndarray,
+) -> float:
+    """Return partial cluster function on given sites, alphas and sigmas."""
+    cf = 1.0
+    for site, alpha, sigma, em in zip(cluster_sites, cluster_alphas, sigmas, ems):
+        cf *= basis_set_values[alpha, sigma, em]
     return cf

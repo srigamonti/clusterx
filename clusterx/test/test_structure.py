@@ -33,14 +33,61 @@ def structure(super_cell):
     return Structure(super_cell, decoration=[1] * len(super_cell))
 
 
+@pytest.fixture
+def structure_random(super_cell: SuperCell):
+    # nsubs = {0: [3], 1: [1, 1, 1], 2: [2, 1]}  # failing for some reason
+    nsubs = None
+    return super_cell.gen_random_structure(nsubs=nsubs, track_indices=True)
+
+
+def test_get_atoms(structure):
+    atoms = structure.get_atoms()
+    assert isinstance(atoms, Atoms)
+    numbers = structure.get_atomic_numbers()
+    assert len(numbers) == 9
+    symbols = structure.get_chemical_symbols()
+    assert len(symbols) == 9
+    atoms = structure.get_atoms(ignore_observer_atoms=True)
+    assert len(atoms) == 6
+
+
+def test_random_flips(structure_random: Structure):
+    for _ in range(100):
+        i, si, sj, site_type = structure_random.get_random_flip()
+        structure_random.flip(i, si, sj, site_type)
+
+
+def test_random_swaps(structure_random: Structure):
+    for _ in range(10):
+        try:
+            i, j, site_type = structure_random.get_random_swap(site_types=None)
+        except RuntimeError:
+            print("Impossible substitution for swap!")
+            continue
+        structure_random.swap(i, j, site_type)
+
+
+def test_large_index_map(parent_lattice):
+    p = 200
+    super_cell = SuperCell(parent_lattice, [p, p, 1])
+    structure = Structure(
+        super_cell, decoration=[1] * len(super_cell), track_indices=False
+    )
+    assert not structure._track_indices
+    structure.track_indices()
+    assert len(structure._index_maps) == 3
+
+
 def test_reduced_structure(parent_lattice):
     p = [10, 10, 10]
     p_reduced = [3, 3, 3]
     super_cell = SuperCell(parent_lattice, p)
+    super_cell_reduced = SuperCell(parent_lattice, p_reduced)
     sites = super_cell.get_sites()
     sigmas = [len(site) - 1 for site in sites.values()]
     structure = Structure(super_cell, sigmas=sigmas)
-    structure_reduced, index_reduced = structure.get_reduced_structure(p_reduced, 0)
+    structure.init_reduced_structure(super_cell_reduced)
+    structure_reduced, index_reduced = structure.get_reduced_structure(0)
     assert isinstance(structure_reduced, Structure)
     assert isinstance(index_reduced, int)
 
@@ -87,9 +134,7 @@ def test_sigma_grid_orthorhombic(parent_lattice):
     struct_flat = Structure(super_cell, sigmas=sigmas)
     struct_grid = Structure.from_sigma_grid(super_cell, sigma_grid)
     np.testing.assert_array_equal(struct_flat.get_sigmas(), struct_grid.get_sigmas())
-    np.testing.assert_array_equal(
-        struct_flat.get_sigma_grid(), struct_grid.get_sigma_grid()
-    )
+    np.testing.assert_array_equal(struct_flat.sigmas, struct_grid.sigmas)
 
 
 def test_initializations(parent_lattice):
@@ -111,9 +156,7 @@ def test_initializations(parent_lattice):
 
     for other in others:
         assert reference == other
-        np.testing.assert_array_equal(
-            reference.get_sigma_grid(), other.get_sigma_grid()
-        )
+        np.testing.assert_array_equal(reference.sigmas, other.sigmas)
 
 
 def test_swap(super_cell):

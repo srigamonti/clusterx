@@ -15,7 +15,7 @@ setup(
         "scipy",
         "scikit-learn",
         "matplotlib",
-        "ase",
+        "ase>=3.25.0",
         "plac",
         "toml",
         "pytest",

@@ -18,7 +18,7 @@ from clusterx.clusters.cluster import Cluster
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.symmetry import get_scaled_positions, wrap_scaled_positions
-from clusterx.utils import _timed
+from clusterx.utils import transformation_containing_sphere_diag
 
 
 class ClustersPool:
@@ -460,14 +460,11 @@ class ClustersPool:
         sites = scell.get_sites()
         satoms = scell.get_substitutional_sites()
         nsatoms = len(satoms)
-        with _timed(
-            "ClustersPool.gen_clusters0: computing matrix of interatomic distances"
-        ):
-            distances = scell.get_all_distances(mic=False)
-            sdistances = self._cpool_scell.get_substitutional_atoms().get_all_distances(
-                mic=True
-            )
-            distances_mic_true = self._cpool_scell.get_all_distances(mic=True)
+        distances = scell.get_all_distances(mic=False)
+        sdistances = self._cpool_scell.get_substitutional_atoms().get_all_distances(
+            mic=True
+        )
+        distances_mic_true = self._cpool_scell.get_all_distances(mic=True)
 
         radii = self.set_radii(sdistances, distances, npoints, self._radii)
 
@@ -601,10 +598,7 @@ class ClustersPool:
         scell = self._cpool_scell
         sites = scell.get_sites()
         satoms = scell.get_substitutional_sites()
-        with _timed(
-            "ClustersPool.gen_clusters1: computing matrix of interatomic distances"
-        ):
-            distances = scell.get_all_distances(mic=False)
+        distances = scell.get_all_distances(mic=False)
         radii = self._radii
 
         for npts, radius in zip(npoints, radii):
@@ -992,36 +986,18 @@ class ClustersPool:
         as large as the largest cluster radius.
         """
         rmax = np.amax(self._radii)
-        # l = LA.norm(self._plat.get_cell(), axis=1) # Lengths of the cell vectors
-
         cell = self._plat.get_cell()
-
-        c = np.zeros((3, 3))
-        h = np.zeros(3)
-        # Get distances h between parallel planes of the unit cell
-        for i in range(3):
-            c[i] = np.cross(cell[(i + 1) % 3], cell[(i + 2) % 3])
-            h[i] = np.dot(cell[i], c[i] / np.linalg.norm(c[i]))
 
         if rmax == 0:
             m = np.diag([1, 1, 1])
         else:
-            if tight:
-                m = np.diag(
-                    [int(n) for n in np.ceil(rmax / h)]
-                )  # number of repetitions of unit cell along each lattice vector to contain largest cluster
-            else:
-                m = np.diag(
-                    [int(n) for n in np.ceil(2 * rmax / h)]
-                )  # number of repetitions of unit cell along each lattice vector to contain largest cluster
+            m = transformation_containing_sphere_diag(rmax, cell, full_sphere=not tight)
 
         for i, p in enumerate(self._plat.get_pbc()):  # Apply pbc's
             if not p:
                 m[i, i] = 1
 
-        sc = SuperCell(self._plat, m)
-
-        return sc
+        return SuperCell(self._plat, m)
 
     def gen_atoms_database(self, fname="clusters.json"):
         """

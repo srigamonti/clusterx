@@ -104,7 +104,7 @@ def test_clusters_selector_execute(method):
     )
     # Get the DATA(comat) + TARGET(energies)
     strset.set_calculator(EMT2())
-    strset.calculate_property()  # calculate 'energy' property
+    strset.compute_property_values(update_json_db=False)  # calculate 'energy' property
     clsel = ClustersSelector(selector_type=method, clusters_sets="size")
     clsel.select_clusters(strset, cpool, "energy")
 
@@ -202,7 +202,7 @@ def test_clusters_selector_compare_ref():
     # Get the DATA(comat) + TARGET(energies)
     _ = corrcal.get_correlation_matrix(strset)
     strset.set_calculator(EMT2())
-    _ = strset.calculate_property()
+    _ = strset.compute_property_values(update_json_db=False)
 
     # fitter_model = Fitter(method = "skl_LinearRegression")
 

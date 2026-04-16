@@ -63,7 +63,7 @@ def test_clathrate_mc():
     nmc = 10
 
     for i in range(nmc):
-        struc = scellE.gen_random_structure({0: [16]})
+        struc = scellE.gen_random_structure(nsubs={0: [16]})
         corrs = corcE.get_cluster_correlations(struc)
         print(corrs)
         erg = 0

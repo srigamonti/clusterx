@@ -5,15 +5,18 @@
 ## packages needed for MonteCarloTrajectory
 import json
 from copy import deepcopy
+import math
+import random
 
+from tqdm import tqdm
 import numpy as np
-
-# needed for NumpyEncoder class at the end of this module
 from ase.cell import Cell
+from ase.io import Trajectory
 
-## packages needed for MonteCarlo
-# from clusterx.structures_set import StructuresSet
+from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
+from clusterx.model import Model
+from clusterx.utils import dict_compare, RunningAverage
 
 
 class MonteCarlo:
@@ -47,8 +50,8 @@ class MonteCarlo:
     ``ensemble``: string (default: ``canonical``)
         ``canonical`` allows for swaps of atoms that conserve the concentration defined with ``nsubs``.
 
-        ``grandcanonical`` allows for replacing atoms in the sub-lattices defined with ``sublattice_indices``.
-        (So far, ``grandcanonical`` is not yet implemented.)
+        ``semigrand-canonical`` allows replacing atoms in sub-lattices defined with ``sublattice_indices``
+        with other atoms in said sub-lattice.
 
     ``nsubs``: dictionary (default = None)
         Defines the number of substituted atoms in each sub-lattice of the
@@ -85,15 +88,14 @@ class MonteCarlo:
 
         Properties from Model obejects can also be calculated after the sampling by using the MonteCarloTrajectory class.
 
-    ``no_of_swaps``: integer (default: 1)
-        Number of atom swaps/replacements per sampling step.
-
     ``predict_swap``: boolean (default: False)
        If set to **True**, this parameter makes the sampling faster by calculating the correlation difference of the
        proposed structure with respect to the previous structure.
 
-    ``error_reset``: integer (default: None)
-       If not **None*  and ``predict_swap`` equal to **True**, the correlations are calculated as usual (no differences) every n-th step.
+    ``reduce_structure``: bool (default: False)
+        If true, cluster orbits/correlations are computed and evaluated on
+        subset of sigmas, in a box around central site in the structure.
+        Incompatible with non-diagonal supercell shapes.
 
     ``energy_key``: string (default: ``energy``)
         For a multi-linear model, one of the predictions needs to be the energy prediction,
@@ -103,58 +105,53 @@ class MonteCarlo:
     ``filename``: string (default: ``trajectory.json``)
         Path at which to store the MonteCarloTrajectory.
 
-    .. todo:
-        Samplings in the grand canonical ensemble are not yet possible.
+    ``seed``: int or None (default: None)
+        seed value for random number generators. For reproducible results,
+        pass integer seed, otherwise seed=None
 
     """
 
     def __init__(
         self,
-        energy_model,
-        scell,
-        nsubs=None,
-        ensemble="canonical",
-        sublattice_indices=[],
-        chemical_potentials=None,
-        models=[],
-        no_of_swaps=1,
-        predict_swap=False,
-        error_reset=None,
+        energy_model: Model,
+        scell: SuperCell,
+        nsubs: dict | None = None,
+        ensemble: str = "canonical",
+        sublattice_indices: list | None = None,
+        chemical_potentials: dict | None = None,
+        models: list = [],
+        predict_swap: bool = False,
+        reduce_structure: bool = False,
         energy_key: str = "energy",
+        save_atoms_every: int = 0,
+        atoms_filename: str = "metropolis.traj",
         filename: str = "trajectory.json",
+        seed: int | None = None,
     ):
-        self._em = energy_model
+        if (ensemble == "semigrand-canonical") and (chemical_potentials is None):
+            raise ValueError(
+                "`chemical_potentials` have to be given when ensemble is 'semigrand-canonical"
+            )
+        self._emodel = energy_model
+        self._emodel.reset_mc(mc=True)
         self._scell = scell
         self._nsubs = nsubs
         self._filename = filename
-
-        if not sublattice_indices:
-            try:
-                self._sublattice_indices = [k for k in self._nsubs.keys()]
-
-                if ensemble == "canonical":
-                    for key in self._nsubs.keys():
-                        if all([subs == 0 for subs in self._nsubs[key]]):
-                            self._sublattice_indices.remove(key)
-
-            except AttributeError:
-                raise AttributeError(
-                    "Sublattice for the sampling is not properly assigned, look at the documentation."
-                )
-        else:
-            self._sublattice_indices = sublattice_indices
-
-            if ensemble == "canonical":
-                for subind in self._sublattice_indices:
-                    if subind not in self._nsubs.keys():
-                        raise AttributeError(
-                            "Sublattice for the sampling is not properly assigned, look at the documentation."
-                        )
-
-        if not self._sublattice_indices:
-            raise AttributeError(
-                "Sublattice for the sampling is not correctly assigned, look at the documatation."
-            )
+        self._sublattice_indices = sublattice_indices
+        self._chemical_potentials = chemical_potentials
+        self._models = models
+        self._ensemble = ensemble
+        self._predict_swap = predict_swap
+        self._reduce_structure = reduce_structure
+        self._save_atoms_every = save_atoms_every
+        self._atoms_filename = atoms_filename
+        # Use two rngs, numpy.rng produces MC acceptance probability,
+        # random.Random produces hashable values for random flip sites
+        # SFC64 should be fastest bit generator in numpy at time of writing
+        self._rng_np = np.random.Generator(np.random.SFC64(seed))
+        # self._rng_np = np.random.default_rng(seed) # fall-back option
+        self._rng_std: random.Random = random
+        self._rng_std.seed(seed)
 
         prop = energy_model.property_name
         if prop is None or len(prop) == 0 or isinstance(prop, str):
@@ -163,32 +160,17 @@ class MonteCarlo:
         else:
             self._energy_prediction_index = prop.index(energy_key)
 
-        self._models = []
-        if models:
-            self._models = models
-
-        self._ensemble = ensemble
-        self._no_of_swaps = no_of_swaps
-
-        if self._no_of_swaps > 1:
-            self._control_flag = False
-        elif predict_swap:
-            self._control_flag = True
-        else:
-            self._control_flag = False
-
-        self._error_reset = error_reset
-
     def metropolis(
         self,
-        no_of_sampling_steps=100,
-        scale_factor=[1.0],
-        temperature=1.0,
-        boltzmann_constant=1.0,
-        initial_decoration=None,
-        acceptance_ratio=None,
-        serialize=False,
-        filename=None,
+        no_of_sampling_steps: int = 100,
+        scale_factor: list[float] = [1.0],
+        temperature: float | list[float] = 1.0,
+        boltzmann_constant: float = 1.0,
+        initial_decoration: list[int] | None = None,
+        target_rate: float | None = None,
+        n_clics: int = 1,
+        serialize: bool = False,
+        filename: str | None = None,
         **kwargs,
     ):
         r"""Perform Monte-Carlo Metropolis simulation
@@ -212,8 +194,9 @@ class MonteCarlo:
         ``no_of_sampling_steps``: integer
             Number of sampling steps
 
-        ``temperature``: float
-            Temperature at which the sampling is performed.
+        ``temperature``: float or list of float
+            Temperature at which the sampling is performed. If list, length of
+            list must be equal to `no_of_sampling_steps`.
 
         ``boltzmann_constant``: float
             Boltzmann constant
@@ -228,21 +211,21 @@ class MonteCarlo:
             Atomic numbers of the initial structure, from which the sampling starts.
             If ``None``, sampling starts with a structure randomly generated.
 
-        ``acceptance_ratio``: float (default: None)
-            Real number between 0 and 100. Represents the percentage of accepted moves.
+        ``target_rate``: float (default: None)
+            Real number between 0 and 1. Represents the targeted acceptance rate.
             If not ``None``, the initial temperature will be adjusted to match the given
-            acceptance ratio. The acceptance ratio during the simulation is computed using
-            the last 100 moves.
+            acceptance rate. The acceptance ratio during the simulation is computed using
+            the last 1000 moves.
+
+        ``n_clics``: integer
+            Number of species flips (grandcanonical) or species swaps (canonical) per sampling step.
+            Defaults to 1.
 
         ``serialize``: boolean (default: False)
             Serialize the MonteCarloTrajectory object into a Json file after the sampling.
 
         ``filename``: string (default: ``trajectory.json``)
             Name of a Json file in which the trajectory is serialized after the sampling if ``serialize`` is **True**.
-
-        ``reduce_super_cell``: boolean (default: False)
-            If **True**, the super cell is reduced to the smallest possible size
-            that contains all clusters.
 
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the MonteCarloTrajectory object that is initialized in this method.
@@ -251,24 +234,185 @@ class MonteCarlo:
             Trajectory containing the complete information of the sampling trajectory.
 
         """
-        import math
-
-        from tqdm import tqdm
-
-        from clusterx.utils import poppush
-
         scale_factor = (
             scale_factor if scale_factor is not None else [self._scell.get_index()]
         )
 
-        scale_factor_product = boltzmann_constant * temperature
-        for el in scale_factor:
-            scale_factor_product *= el
+        if len(np.shape(temperature)) == 0:
+            beta = np.ones((no_of_sampling_steps,), dtype=float) / (
+                boltzmann_constant * temperature
+            )
+        else:
+            beta = 1 / (boltzmann_constant * temperature)
+        scale_factor_product = np.prod(scale_factor)
 
+        self.initialize_structure(initial_decoration, self._nsubs)
+        structure = self.structure
+        sigmas = structure.get_sigmas()
+
+        if self._reduce_structure:
+            e_last = np.float64(0.0)  # undefined, we only care about energy differences
+            self._emodel.init_reduced_model(structure)
+            self._emodel._init_interaction_dict(self._emodel.scell_reduced)
+            structure.init_reduced_structure(self._emodel.scell_reduced)
+        else:
+            e_last = self._emodel.predict(structure)
+            e_last = (
+                e_last
+                if len(e_last.shape) == 0
+                else e_last[self._energy_prediction_index]
+            )
+            self._emodel._init_interaction_dict(self._scell)
+
+        if filename is not None:
+            self._filename = filename
+        else:
+            filename = self._filename
+
+        if self._save_atoms_every > 0:
+            atoms_traj = Trajectory(self._atoms_filename, mode="w")
+            atoms_traj.write(structure.get_atoms(ignore_observer_atoms=True))
+
+        traj = MonteCarloTrajectory(
+            self._scell,
+            filename=filename,
+            models=self._models,
+            no_of_sampling_steps=no_of_sampling_steps,
+            temperature=temperature,
+            boltzmann_constant=boltzmann_constant,
+            scale_factor=scale_factor,
+            target_rate=target_rate,
+            **kwargs,
+        )
+        key_value_pairs = {}
+        for m, mo in enumerate(self._models):
+            key_value_pairs.update({mo.property_name: mo.predict(structure)})
+        traj.add_step(
+            step=0,
+            energy=e_last,
+            indices_list=[],
+            new_sigmas=[],
+            sigmas=sigmas,
+            key_value_pairs=key_value_pairs,
+        )
+
+        progress = tqdm(
+            range(1, no_of_sampling_steps + 1),
+            total=no_of_sampling_steps,
+            desc="MMC sim.",
+        )
+        rave = RunningAverage(1000)  # keep track of acceptance rate
+
+        for step in progress:
+            flip_tuples = []  # store tuples with (index, new_sigma, old_sigma, site_type)
+
+            if self._ensemble == "canonical":
+                for _ in range(n_clics):
+                    i, j, site_type = structure.get_random_swap(
+                        self._sublattice_indices, self._rng_std
+                    )
+                    flip_tuples.append((i, sigmas[j], sigmas[i], site_type))
+                    flip_tuples.append((j, sigmas[i], sigmas[j], site_type))
+            elif self._ensemble == "semigrand-canonical":
+                for _ in range(n_clics):
+                    i, sigma_initial, sigma_final, site_type = (
+                        structure.get_random_flip(
+                            self._sublattice_indices, rng=self._rng_std
+                        )
+                    )
+                    flip_tuples.append((i, sigma_final, sigma_initial, site_type))
+            else:
+                raise NotImplementedError(f"Unknown ensemble: {self._ensemble}")
+
+            de = 0.0
+            dmu = 0.0
+            if self._predict_swap:
+                for i, new_sigma, old_sigma, site_type in flip_tuples:
+                    de += self._emodel.predict_flip(
+                        structure=structure,
+                        index=i,
+                        old_sigma=old_sigma,
+                        new_sigma=new_sigma,
+                        reduce_structure=self._reduce_structure,
+                    )
+                    if self._ensemble == "semigrand-canonical":
+                        dmu += (
+                            self._chemical_potentials[site_type][new_sigma]
+                            - self._chemical_potentials[site_type][old_sigma]
+                        )
+            else:
+                for i, new_sigma, old_sigma, site_type in flip_tuples:
+                    structure.flip(i, old_sigma, new_sigma, site_type)
+                    if self._ensemble == "semigrand-canonical":
+                        dmu += (
+                            self._chemical_potentials[site_type][new_sigma]
+                            - self._chemical_potentials[site_type][old_sigma]
+                        )
+                de = self._emodel.predict(structure) - e_last
+                # revert flips
+                for i, new_sigma, old_sigma, site_type in flip_tuples[::-1]:
+                    structure.flip(i, new_sigma, old_sigma, site_type)
+
+            # handle multi-linear model, make sure that `de` is np.float64
+            de = de if len(de.shape) == 0 else de[self._energy_prediction_index]
+
+            if de + dmu <= 0:
+                accept_step = True
+            elif self._rng_np.random() <= np.exp(
+                -beta[step - 1] * (de * scale_factor_product + dmu)
+            ):
+                accept_step = True
+            else:
+                accept_step = False
+
+            if accept_step:
+                for i, new_sigma, old_sigma, site_type in flip_tuples:
+                    structure.flip(i, old_sigma, new_sigma, site_type)
+                e_last += de
+
+                key_value_pairs = {}
+                for m, mo in enumerate(self._models):
+                    key_value_pairs.update({mo.property_name: mo.predict(structure)})
+                if serialize:
+                    traj.add_step(
+                        step=step,
+                        energy=e_last,
+                        indices_list=[i for i, _, _, _ in flip_tuples],
+                        new_sigmas=[new_sigma for _, new_sigma, _, _ in flip_tuples],
+                        key_value_pairs=key_value_pairs,
+                    )
+
+            rate = rave.update_and_get_average(1.0 * accept_step)
+            if target_rate is not None:
+                if step % 10 == 0 and step >= 1000:
+                    beta /= math.exp((target_rate - rate) / 10.0)
+
+            if self._save_atoms_every > 0 and step % self._save_atoms_every == 0:
+                structure.set_arrays(sigmas)
+                atoms_traj.write(
+                    structure.get_atoms(ignore_observer_atoms=True), energy=de
+                )
+
+            if step % 1000 == 0 or no_of_sampling_steps < 1000:
+                # if updated too often, progress display might delay steps
+                progress.set_description(
+                    f"MMC sim. | Acc. rate: {rate:.4f} | delta_E: {de:.1e}"
+                )
+
+        if serialize:
+            traj.serialize()
+
+        return traj
+
+    def initialize_structure(
+        self, initial_decoration: list[int] | None = None, nsubs: dict | None = None
+    ):
         if initial_decoration is not None:
-            struc = Structure(self._scell, initial_decoration, mc=True)
-            conc = struc.get_fractional_concentrations()
-            nsites = struc.get_nsites_per_type()
+            self.structure = Structure(
+                self._scell, initial_decoration, track_indices=True
+            )
+            conc = self.structure.get_fractional_concentrations()
+            nsites = self.structure.get_nsites_per_type()
             check_dict = {}
             for key in conc.keys():
                 ns = nsites[key]
@@ -280,151 +424,57 @@ class MonteCarlo:
                         nl.append(int(round(cel * ns, 0)))
                 check_dict.update({key: nl})
 
-            from clusterx.utils import dict_compare
-
             bol = dict_compare(check_dict, self._nsubs)
             if not bol:
-                import sys
-
-                sys.exit(
+                raise ValueError(
                     "Number of substitutents does not coincides with them from the inital decoration."
                 )
-
         else:
-            if self._nsubs is not None:
-                struc = self._scell.gen_random_structure(self._nsubs, mc=True)
-            else:
-                struc = self._scell.gen_random_structure(mc=True)
-
-        self._em.reset_mc(mc=True)
-        e_last = self._em.predict(struc)[self._energy_prediction_index]
-
-        if filename is not None:
-            self._filename = filename
-        else:
-            filename = self._filename
-
-        traj = MonteCarloTrajectory(
-            self._scell,
-            filename=filename,
-            models=self._models,
-            no_of_sampling_steps=no_of_sampling_steps,
-            temperature=temperature,
-            boltzmann_constant=boltzmann_constant,
-            scale_factor=scale_factor,
-            acceptance_ratio=acceptance_ratio,
-            **kwargs,
-        )
-        if self._no_of_swaps > 1:
-            raise NotImplementedError("No. of swaps > 1 functionality not implemented")
-
-        if self._models:
-            key_value_pairs = {}
-            for m, mo in enumerate(self._models):
-                key_value_pairs.update({mo.property_name: mo.predict(struc)})
-            traj.add_decoration(
-                0, e_last, [], decoration=struc.decor, key_value_pairs=key_value_pairs
+            self.structure = self._scell.gen_random_structure(
+                nsubs=self._nsubs, rng=self._rng_np, track_indices=True
             )
+
+    def propose_step(self):
+        """Propose a new structure by performing a random flip or swap."""
+        raise NotImplementedError("Stepwise sampling is not yet implemented.")
+
+    def accept_step(self, de: float, dmu: float, beta: float) -> bool:
+        """Accept or reject the proposed step based on the energy difference, chemical potential difference, and beta."""
+        if de + dmu <= 0:
+            return True
+        elif self.rng.uniform(0, 1) <= np.exp(-beta * (de + dmu)):
+            return True
         else:
-            traj.add_decoration(0, e_last, [], decoration=struc.decor)
+            return False
 
-        if acceptance_ratio:
-            nar = 100
-            ar = acceptance_ratio
-            hist = np.zeros(nar, dtype=int)
+    def update_state(self):
+        """Update the state of the system after accepting a step."""
+        raise NotImplementedError("Stepwise sampling is not yet implemented.")
 
-        if self._error_reset is not None:
-            error_steps = int(self._error_reset)
-            x = 1
+    def step(self) -> bool:
+        """Perform one step of the Metropolis algorithm."""
+        raise NotImplementedError("Stepwise sampling is not yet implemented.")
 
-        for i in tqdm(
-            range(1, no_of_sampling_steps + 1),
-            total=no_of_sampling_steps,
-            desc="MMC simulation",
-        ):
-            indices_list = []
-
-            for j in range(self._no_of_swaps):
-                ind1, ind2, site_type, rindices = struc.get_swap_random(
-                    self._sublattice_indices
-                )
-                indices_list.append([ind1, ind2, [site_type, rindices]])
-
-            if self._control_flag:
-                if self._error_reset:
-                    if x > error_steps:
-                        x = 1
-                        struc.swap(ind1, ind2, site_type, rindices)
-                        de = (
-                            self._em.predict(struc)[self._energy_prediction_index]
-                            - e_last
-                        )
-                        struc.swap(ind1, ind2, site_type, rindices)
-                    else:
-                        x += 1
-                        de = self._em.predict_swap(
-                            struc,
-                            ind1,
-                            ind2,
-                            site_types=self._sublattice_indices,
-                        )[self._energy_prediction_index]
-                else:
-                    de = self._em.predict_swap(
-                        struc, ind1, ind2, site_types=self._sublattice_indices
-                    )[self._energy_prediction_index]
-            else:
-                struc.swap(ind1, ind2, site_type, rindices)
-                de = self._em.predict(struc)[self._energy_prediction_index] - e_last
-                struc.swap(ind1, ind2, site_type, rindices)
-
-            if de <= 0:
-                accept_swap = True
-                boltzmann_factor = 0
-            else:
-                boltzmann_factor = np.exp(-de / scale_factor_product)
-
-                if np.random.uniform(0, 1) <= boltzmann_factor:
-                    accept_swap = True
-                else:
-                    accept_swap = False
-
-            if accept_swap:
-                struc.swap(ind1, ind2, site_type, rindices)
-                e_last += de
-
-                if self._models:
-                    key_value_pairs = {}
-                    for m, mo in enumerate(self._models):
-                        key_value_pairs.update({mo.property_name: mo.predict(struc)})
-                    traj.add_decoration(
-                        i,
-                        e_last,
-                        [[li[0], li[1]] for li in indices_list],
-                        key_value_pairs=key_value_pairs,
-                    )
-
-                else:
-                    traj.add_decoration(
-                        i, e_last, [[li[0], li[1]] for li in indices_list]
-                    )
-
-                if acceptance_ratio:
-                    ar = poppush(hist, 1)
-
-            else:
-                if acceptance_ratio:
-                    ar = poppush(hist, 0)
-
-            if acceptance_ratio:
-                if i % 10 == 0 and i >= nar:
-                    scale_factor_product *= math.exp(
-                        (acceptance_ratio / 100.0 - ar) / 10.0
-                    )
-
-        if serialize:
-            traj.serialize()
-
-        return traj
+    def run(
+        self,
+        n_steps: int,
+        temperature: float | list[float] = 1.0,
+    ):
+        """Run the Metropolis sampling."""
+        if len(np.shape(temperature)) == 0:
+            beta = np.ones((n_steps,), dtype=float) / (self.kB * temperature)
+        else:
+            beta = 1 / (self.kB * temperature)
+        self.rave = RunningAverage(1000)  # keep track of acceptance rate
+        progress = tqdm(
+            range(1, n_steps + 1),
+            total=n_steps,
+            desc="MMC sim.",
+        )
+        for i in progress:
+            self.beta = beta[i - 1]
+            accept = self.step()
+            self.rave.update_and_get_average(1.0 * accept)
 
 
 class MonteCarloTrajectory:
@@ -440,7 +490,7 @@ class MonteCarloTrajectory:
 
     **Parameters**:
 
-    ``scell``: SuperCell object (default: None)
+    ``scell``: SuperCell object
         Super cell in which the sampling is performed.
 
     ``filename``: string (default: trajectory.json)
@@ -459,7 +509,7 @@ class MonteCarloTrajectory:
 
     """
 
-    def __init__(self, scell=None, filename="trajectory.json", read=False, **kwargs):
+    def __init__(self, scell, filename="trajectory.json", read=False, **kwargs):
         # Load Boltzmann constant in eV / K from ASE
         from ase.units import kB
 
@@ -483,9 +533,9 @@ class MonteCarloTrajectory:
             self._temperature = kwargs.pop("temperature", None)
             self._boltzmann_constant = kwargs.pop("boltzmann_constant", kB)
             self._scale_factor = kwargs.pop("scale_factor", None)
-            self._acceptance_ratio = kwargs.pop("acceptance_ratio", None)
+            self._target_rate = kwargs.pop("target_rate", None)
             self._keyword_arguments = kwargs
-            self._reduce_supercell = kwargs.pop("reduce_super_cell", False)
+            self._reduce_structure = kwargs.pop("reduce_structure", False)
 
     def calculate_properties(self, models=[], prop_func=None, prop_name=None, **kwargs):
         """Calculate the property for all decorations in the trajectory. The property can be
@@ -510,10 +560,11 @@ class MonteCarloTrajectory:
                 self._models.append(mo)
 
         predict_swap = kwargs.pop("predict_swap", False)
-        print("predict swap ?", predict_swap)
 
-        sx = Structure(
-            self._scell, decoration=self._trajectory[0]["decoration"], mc=True
+        structure = Structure(
+            self._scell,
+            decoration=self._trajectory[0]["decoration"],
+            track_indices=True,
         )
         for m, mo in enumerate(models):
             mo.corrc.reset_mc(mc=True)
@@ -521,64 +572,54 @@ class MonteCarloTrajectory:
         for t, tr in enumerate(self._trajectory):
             indices_list = tr["swapped_positions"]
             for j in range(len(indices_list)):
-                sx.swap(indices_list[j][0], indices_list[j][1])
+                structure.swap(indices_list[j][0], indices_list[j][1])
 
             sdict = {}
             if predict_swap:
                 if t == 0:
                     movalue = np.zeros(len(models))
                     for m, mo in enumerate(models):
-                        movalue[m] = mo.predict(sx)
+                        movalue[m] = mo.predict(structure)
                         sdict.update({mo.property_name: movalue[m]})
                 else:
                     for m, mo in enumerate(models):
                         # only works for single swaps
                         dmo = mo.predict_swap(
-                            sx,
+                            structure,
                             indices_list[0][0],
                             indices_list[0][1],
-                            site_types=self._sublattice_indices,
                         )
                         movalue[m] = movalue[m] + dmo
                         sdict.update({mo.property_name: movalue[m]})
 
             else:
                 for m, mo in enumerate(models):
-                    sdict.update({mo.property_name: mo.predict(sx)})
+                    sdict.update({mo.property_name: mo.predict(structure)})
 
             if prop_func is not None:
-                sdict.update({prop_name: prop_func(sx, tr, **kwargs)})
+                sdict.update({prop_name: prop_func(structure, tr, **kwargs)})
 
             self._trajectory[t]["key_value_pairs"].update(sdict)
 
-    def add_decoration(
-        self, step, energy, indices_list, decoration=None, key_value_pairs={}
+    def add_step(
+        self,
+        step: int,
+        energy: float,
+        indices_list: list[int],
+        new_sigmas: list[int],
+        sigmas: list[int] | None = None,
+        key_value_pairs: dict = {},
     ):
         """Add entry of the structure visited in the sampling to the trajectory."""
-        if indices_list:
-            self._trajectory.append(
-                dict(
-                    [
-                        ("sampling_step_no", int(step)),
-                        ("energy", energy),
-                        ("swapped_positions", indices_list),
-                        ("key_value_pairs", key_value_pairs),
-                    ]
-                )
-            )
-        else:
-            self._trajectory.append(
-                dict(
-                    [
-                        ("sampling_step_no", int(step)),
-                        ("energy", energy),
-                        ("swapped_positions", [[0, 0]]),
-                        ("decoration", deepcopy(decoration)),
-                        ("super_cell_definition", self._scell.as_dict()),
-                        ("key_value_pairs", key_value_pairs),
-                    ]
-                )
-            )
+        step_dict = {
+            "sampling_step_no": int(step),
+            "energy": energy,
+            "indices": indices_list,
+            "new_sigmas": new_sigmas,
+            "sigmas": sigmas,
+            "key_value_pairs": key_value_pairs,
+        }
+        self._trajectory.append(step_dict)
 
     def get_sampling_step_entry_at_step(self, nstep):
         """Return the entry, e.g. the dictionary stored for the n-th samplig step (``nstep``) in trajectory."""
@@ -594,22 +635,18 @@ class MonteCarloTrajectory:
 
     def get_structure(self, nid):
         """Return structure in form of a Structure object, at index ``nid`` in trajectory."""
-
+        traj = self._trajectory
         if nid < 0:
-            _trajlength = len(self._trajectory)
+            _trajlength = len(traj)
             nid = int(_trajlength + nid)
 
-        decoration = deepcopy(self._trajectory[0]["decoration"])
+        sigmas = deepcopy(traj[0]["sigmas"])
+        for step_dict in traj:
+            for i, new_sigma in zip(step_dict["indices"], step_dict["new_sigmas"]):
+                sigmas[i] = new_sigma
 
-        for t, tr in enumerate(self._trajectory[0 : nid + 1]):
-            indices_list = tr["swapped_positions"]
-            for j in range(len(indices_list)):
-                idx1 = indices_list[j][0]
-                idx2 = indices_list[j][1]
-                decoration[idx1], decoration[idx2] = decoration[idx2], decoration[idx1]
-
-        sx = Structure(self._scell, decoration=decoration)
-        return sx
+        structure = Structure(self._scell, sigmas=sigmas)
+        return structure
 
     def get_lowest_energy_structure(self):
         """Return Structure object with the lowest energy in trajectory."""
@@ -828,8 +865,8 @@ class MonteCarloTrajectory:
         traj_info.update({"boltzmann_constant": self._boltzmann_constant})
         if self._scale_factor is not None:
             traj_info.update({"scale_factor": self._scale_factor})
-        if self._acceptance_ratio is not None:
-            traj_info.update({"acceptance_ratio", self._acceptance_ratio})
+        if self._target_rate is not None:
+            traj_info.update({"target_rate", self._target_rate})
 
         for key in self._keyword_arguments.keys():
             traj_info.update({key: self._keyword_arguments[key]})
@@ -868,7 +905,7 @@ class MonteCarloTrajectory:
             self._temperature = traj_info.pop("temperature", None)
             self._boltzmann_constant = traj_info.pop("boltzmann_constant", None)
             self._scale_factor = traj_info.pop("scale_factor", None)
-            self._acceptance_ratio = traj_info.pop("acceptance_ratio", None)
+            self._target_rate = traj_info.pop("target_rate", None)
             self._keyword_arguments = traj_info
 
         data_keys = sorted([int(el) for el in set(data.keys())])
@@ -883,48 +920,6 @@ class MonteCarloTrajectory:
             if exchange:
                 tr["energy"] = tr.pop("model_total_energy")
             self._trajectory.append(tr)
-
-        if self._scell is None:
-            from ase.atoms import Atoms
-
-            from clusterx.parent_lattice import ParentLattice
-            from clusterx.super_cell import SuperCell
-
-            _trajz = self._trajectory[0]
-
-            nsp = sorted(
-                [
-                    int(el)
-                    for el in set(
-                        _trajz["super_cell_definition"]["parent_lattice"]["numbers"]
-                    )
-                ]
-            )
-            species = []
-            for n in nsp:
-                species.append(
-                    _trajz["super_cell_definition"]["parent_lattice"]["numbers"][str(n)]
-                )
-
-            _plat = ParentLattice(
-                atoms=Atoms(
-                    positions=_trajz["super_cell_definition"]["parent_lattice"][
-                        "positions"
-                    ],
-                    cell=_trajz["super_cell_definition"]["parent_lattice"]["unit_cell"],
-                    numbers=np.zeros(len(species)),
-                    pbc=np.asarray(
-                        _trajz["super_cell_definition"]["parent_lattice"]["pbc"]
-                    ),
-                ),
-                sites=np.asarray(species),
-                pbc=np.asarray(
-                    _trajz["super_cell_definition"]["parent_lattice"]["pbc"]
-                ),
-            )
-            self._scell = SuperCell(
-                _plat, np.asarray(_trajz["super_cell_definition"]["tmat"])
-            )
 
 
 class NumpyEncoder(json.JSONEncoder):

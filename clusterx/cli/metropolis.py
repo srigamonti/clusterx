@@ -62,10 +62,10 @@ commands = ["metropolis"]
         "aux_models",
         list,
     ),
-    no_of_swaps=(
-        "Number of swaps in metropolis sampling",
+    n_clics=(
+        "Number of clics (swaps in canonical, flips in grand-canoncial)",
         "option",
-        "n_swaps",
+        "n_clics",
         int,
     ),
     predict_swap=(
@@ -74,11 +74,11 @@ commands = ["metropolis"]
         "pred_swap",
         bool,
     ),
-    n_error_reset=(
-        "Reset error after this many steps for numerical accuracy",
+    reduce_structure=(
+        "Use reduced structure, when supercell shape is diagonal",
         "option",
-        "err_reset",
-        int,
+        "reduce",
+        bool,
     ),
     n_mc_steps=(
         "Number of metropolis steps to perform",
@@ -111,11 +111,11 @@ commands = ["metropolis"]
         "init_dec",
         list,
     ),
-    acceptance_ratio=(
-        """Real number between 0 and 100. Represents the percentage of accepted moves.
+    target_rate=(
+        """Real number between 0 and 1. Represents the rate of accepted moves.
         If not ``None``, the initial temperature will be adjusted to match the given
         acceptance ratio. The acceptance ratio during the simulation is computed using
-        the last 100 moves.""",
+        the last 1000 moves.""",
         "option",
         "acc_ratio",
         float,
@@ -154,9 +154,8 @@ def metropolis(
     chemical_potential: float = 0.0,
     chemical_potentials: Optional[dict] = None,
     models_aux_filepaths: List[str] = [],
-    no_of_swaps: int = 1,
     predict_swap: bool = True,
-    n_error_reset: Optional[int] = None,
+    reduce_structure: bool = False,
     # metropolis sampling arguments
     n_mc_steps: int = 100,
     n_mc_eq: int = 1,
@@ -167,7 +166,7 @@ def metropolis(
     temperatures: Optional[List[float]] = None,
     boltzmann_constant: float = 1.0,
     initial_decoration: Optional[List[int]] = None,
-    acceptance_ratio: Optional[float] = None,
+    target_rate: Optional[float] = None,
     random_seed: Optional[int] = None,
     # deprecated
     scale_factor: Optional[List[float]] = None,  # use energy_scale_factor instead
@@ -212,10 +211,10 @@ def metropolis(
                 sublattice_indices=sublattice_indices,
                 chemical_potentials=chemical_potentials,
                 models=models_aux,
-                no_of_swaps=no_of_swaps,
                 predict_swap=predict_swap,
-                error_reset=n_error_reset,
+                reduce_structure=reduce_structure,
                 filename=traj_filepath,
+                seed=random_seed,
             )
             mc.metropolis(
                 no_of_sampling_steps=n_mc_steps,
@@ -225,7 +224,8 @@ def metropolis(
                 temperature=temperature,
                 boltzmann_constant=boltzmann_constant,
                 initial_decoration=initial_decoration,
-                acceptance_ratio=acceptance_ratio,
+                target_rate=target_rate,
+                n_clics=n_clics,
                 serialize=True,
                 filename=traj_filepath,
                 **sampling_kwargs,
@@ -320,7 +320,7 @@ def metropolis(
                         mcrun_filepath=mcrun_filepath,
                         random_seed=random_seed,
                         n_clics=n_clics,
-                        is_simulated_annelaing=True,
+                        is_simulated_annealing=True,
                         keep_sigmas=keep_sigmas,
                     )
                 else:
@@ -330,7 +330,7 @@ def metropolis(
                         ensemble="canonical",
                         mcrun_filepath=mcrun_filepath,
                         n_clics=n_clics,
-                        is_simulated_annelaing=True,
+                        is_simulated_annealing=True,
                         keep_sigmas=keep_sigmas,
                     )
 
