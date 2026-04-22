@@ -16,7 +16,7 @@ def get_nomad_oasis_access_token(base_url: str = "https://nomad-lab.eu/prod/v1/s
     The token is needed if you use a NOMAD OASIS that requires your login information
     or if you want to access private data on NOMAD.
     It requires having a NOMAD (NOMAD OASIS) account with permission
-    to use the corresponding NOMAD OASIS.
+    to use the corresponding NOMAD (OASIS) data.
 
     **Parameters**
     ``base_url``: *string*
@@ -27,7 +27,7 @@ def get_nomad_oasis_access_token(base_url: str = "https://nomad-lab.eu/prod/v1/s
         https://sol-oasis.physik.hu-berlin.de/nomad-oasis/api/v1/
     ``path_to_dotenv``: *string*
         It is advised to the user to create a .env file to access the username
-        and password of your NOMAD or NOMAD OASIS account as environment variables,
+        and password of your NOMAD (OASIS) account as environment variables,
         instead of putting them in the code visibly.
         The .env file should contain two lines:
             OASIS_USER_NAME="your_username"
