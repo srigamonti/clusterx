@@ -26,6 +26,7 @@ setup(
         "tqdm",
         "pandas",
         "numba>=0.59.0",
+        "python-dotenv"
     ],
     entry_points={"console_scripts": ["cell=clusterx.cli.main:main"]},
     flake8={"max-line-length": 120},
