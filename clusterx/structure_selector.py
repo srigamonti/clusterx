@@ -5,7 +5,7 @@
 from clusterx.structures_set import StructuresSet
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
-from typing import List, Optional
+from typing import List
 import numpy as np
 import warnings
 
@@ -470,8 +470,6 @@ class StructureSelector:
                     "To select with global_byConcentration"
                     "please provide a list of concentrations to select for."
                 )
-            # note: do we have cases of negative concentration or concentration larger 1?
-            # If so, remove the next two lines of code.
             if any (c < 0 or c > 1 for c in concentrations):
                 raise ValueError("Concentrations need to be between 0 and 1.")
             for concentration in concentrations:

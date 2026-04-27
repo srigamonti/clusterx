@@ -181,8 +181,8 @@ def test_integral_calculation_averagedConcentration(structure_selector):
             err_msg="Domain matrix is not computed correctly for averagedConcentration method. Check the integration."
         )
 
-# note: test may not be neccessary; delete?
-# tested beforehand for which concentration limits another structure is selected then for limits 0 to 1
+# note:
+# tested beforehand for which concentration limits another structure is selected than for limits 0 to 1
 # therefore test cannot be reproduced with random integral limits, as it could be that same structures selected then
 def test_structure_selection_with_differing_concentration_limits(structure_selector):
     idx1 = structure_selector.select_structure(method="global_averagedConcentration",
@@ -221,14 +221,12 @@ def test_structure_object(
     ],
 )
 def test_input_validation_for_select_structures_set(method, structure_selector):
-    # note: method input already tested above and same code was used, so its not tested again here
     if method == "global_byConcentration":
         with pytest.raises(ValueError, match="To select with global_byConcentration"
                                             "please provide a list of concentrations to select for."):
             structure_selector.select_structures_set(
                                                     concentrations=None,
                                                     method=method)
-        # note: may be deleted if concentration range is incorrect
         with pytest.raises(ValueError, match="Concentrations need to be between 0 and 1."):
             structure_selector.select_structures_set(concentrations=[1.1, -0.5],
                                                     method=method)
@@ -239,7 +237,7 @@ def test_input_validation_for_select_structures_set(method, structure_selector):
                                                     method=method)
 
 def test_reduction_candidate_set(structure_selector, candidate_set, cpool_candidates):
-    method = "global_averagedConcentration" # note: any method could be chosen here
+    method = "global_averagedConcentration"
     structure_selector.select_structures_set(nr_structures=1,
                                             method=method)
     len_candidate_set_wo_reduction = len(structure_selector._candidate_set)
