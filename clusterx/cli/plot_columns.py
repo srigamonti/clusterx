@@ -4,6 +4,7 @@
 
 import json
 import os
+import warnings
 from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
@@ -45,6 +46,18 @@ def _infer_box_violin_width(x: np.ndarray) -> float:
         None,
         str,
     ),
+    xcolumn=(
+        "Default x-axis column used by series that do not define xcolumn.",
+        "option",
+        None,
+        str,
+    ),
+    ycolumn=(
+        "Default y-axis column used by series that do not define ycolumn.",
+        "option",
+        None,
+        str,
+    ),
     title=("Figure title.", "option", "t", str),
     xlabel=("Label for the x-axis of the plot.", "option", "xl", str),
     ylabel=("Label for the y-axis of the plot.", "option", "yl", str),
@@ -76,14 +89,17 @@ def _infer_box_violin_width(x: np.ndarray) -> float:
         "source_filepath (optional), mask_name (optional), label (optional), "
         "color/marker/size/edgecolor/facecolor/linewidth/alpha (optional), "
         "or style={...} for grouped styling. Also supports ymode in "
-        "{marker,cloud,violin,boxplot,auto} for array-valued y columns.",
+        "{marker,cloud,violin,boxplot,auto} for array-valued y columns. "
+        "Set binned=true to group scalar y values by unique x bin (with optional xtol snap).",
         "option",
         None,
         list,
     ),
 )
 def plot_columns(
-    source_filepath: str,
+    source_filepath: Optional[str] = None,
+    xcolumn: Optional[str] = None,
+    ycolumn: Optional[str] = None,
     title: Optional[str] = None,
     xlabel: Optional[str] = None,
     ylabel: Optional[str] = None,
@@ -104,7 +120,10 @@ def plot_columns(
 
     Top-level options
     -----------------
-    - ``source_filepath`` (str): default DSGenerator pickle used by all series.
+    - ``source_filepath`` (str, optional): default DSGenerator pickle used by
+        all series that do not explicitly set ``source_filepath``.
+    - ``xcolumn`` / ``ycolumn`` (str, optional): default x/y columns used by
+        series that do not explicitly set them.
     - ``title`` (str, optional): figure title.
     - ``xlabel`` / ``ylabel`` (str, optional): axis labels.
     - ``xrange`` / ``yrange`` (list[float, float], optional): axis limits.
@@ -119,7 +138,7 @@ def plot_columns(
 
     Per-series options (``[[plot_columns.series]]``)
     -------------------------------------------------
-    Required:
+    Required (directly or via top-level defaults):
     - ``xcolumn`` (str): x-axis column from ``dsg.configurations``.
     - ``ycolumn`` (str): y-axis column from ``dsg.configurations``.
 
@@ -145,6 +164,20 @@ def plot_columns(
         use ``"mean"`` (default) or ``"median"``.
     - ``xjitter`` (float): optional x-jitter amplitude for ``ymode="cloud"``.
     - ``width`` (float): width for ``violin``/``boxplot``.
+    - ``binned`` (bool): if ``True``, group the scalar y values by unique x
+        before plotting; ``ymode`` and ``aggregation`` then act on the
+        per-bin y distribution (e.g. ``ymode="marker", aggregation="mean"``
+        plots one mean per bin; ``ymode="violin"`` plots the full
+        per-bin distribution). Ignored when y is already array-valued.
+    - ``xtol`` (float): snap x values to a grid of this spacing before
+        grouping (useful when concentrations differ only by floating-point
+        noise, e.g. ``xtol=1e-6``).
+    - ``mean_line`` (bool): if ``True``, overlay a line joining per-x means
+        (x sorted in increasing order). Useful with ``binned=true`` or
+        array-valued y columns.
+    - ``mean_line_style`` (dict): optional matplotlib ``plot`` style for the
+        mean line (e.g. ``linewidth``, ``linestyle``, ``alpha``, ``color``).
+    - ``mean_line_label`` (str): optional legend label for the mean line.
 
     If both ``style`` and direct keys are provided, direct keys win.
 
@@ -222,11 +255,34 @@ def plot_columns(
             showfliers = false
             color = "black"
             label = "bagging box"
+
+            # Group scalar y-values by concentration bins (after optional snapping)
+            [[plot_columns.series]]
+            xcolumn = "frconc_binary"
+            ycolumn = "energy_of_mixing"
+            binned = true
+            xtol = 1e-6
+            ymode = "marker"
+            aggregation = "mean"
+            marker = "o"
+            color = "tab:purple"
+            label = "binned mean"
+
+            # Overlay a sorted mean line on top of per-bin distributions
+            [[plot_columns.series]]
+            xcolumn = "frconc_binary"
+            ycolumn = "energy_of_mixing"
+            binned = true
+            xtol = 1e-6
+            ymode = "violin"
+            mean_line = true
+            mean_line_label = "binned mean trend"
+            [plot_columns.series.mean_line_style]
+            linewidth = 1.4
+            linestyle = "-"
+            alpha = 0.95
     """
     cmd_message("head")
-
-    if not source_filepath:
-        raise ValueError("source_filepath must be provided.")
 
     if series is None:
         raise ValueError(
@@ -235,6 +291,19 @@ def plot_columns(
 
     if not isinstance(series, list) or len(series) == 0:
         raise ValueError("series must be a non-empty list.")
+
+    if source_filepath is None:
+        missing_src = [
+            i
+            for i, item in enumerate(series)
+            if not isinstance(item, dict) or item.get("source_filepath") is None
+        ]
+        if missing_src:
+            raise ValueError(
+                "source_filepath must be provided at top level or inside every "
+                "series entry. Missing in series indices: "
+                + ", ".join(str(i) for i in missing_src)
+            )
 
     if colors is not None and not isinstance(colors, list):
         raise ValueError("colors must be a list when provided.")
@@ -270,39 +339,61 @@ def plot_columns(
             raise ValueError(f"series[{i}] must be a dictionary.")
 
         src = item.get("source_filepath", source_filepath)
-        xcolumn = item.get("xcolumn")
-        ycolumn = item.get("ycolumn")
+        xcolumn_s = item.get("xcolumn", xcolumn)
+        ycolumn_s = item.get("ycolumn", ycolumn)
         mask_name = item.get("mask_name")
 
-        if xcolumn is None or ycolumn is None:
-            raise ValueError(f"series[{i}] must define both 'xcolumn' and 'ycolumn'.")
+        if xcolumn_s is None or ycolumn_s is None:
+            raise ValueError(
+                f"series[{i}] must define both 'xcolumn' and 'ycolumn', either directly or via top-level defaults."
+            )
 
         if src not in dsg_cache:
             dsg_cache[src] = DSGenerator.from_file(src)
 
         dsg = dsg_cache[src]
 
-        if xcolumn == "frconc_binary" and xcolumn not in dsg.configurations.columns:
+        if xcolumn_s == "frconc_binary" and xcolumn_s not in dsg.configurations.columns:
             dsg.add_fractional_concentration_binary()
 
-        if xcolumn not in dsg.configurations.columns:
+        if xcolumn_s not in dsg.configurations.columns:
             raise ValueError(
-                f"Column '{xcolumn}' not found in DSGenerator configurations from '{src}'."
+                f"Column '{xcolumn_s}' not found in DSGenerator configurations from '{src}'."
             )
 
-        if ycolumn not in dsg.configurations.columns:
+        if ycolumn_s not in dsg.configurations.columns:
             raise ValueError(
-                f"Column '{ycolumn}' not found in DSGenerator configurations from '{src}'."
+                f"Column '{ycolumn_s}' not found in DSGenerator configurations from '{src}'."
             )
 
         df = dsg.get_configurations(mask_name=mask_name)
 
-        x = np.asarray(df[xcolumn].to_numpy(), dtype=float)
+        x = np.asarray(df[xcolumn_s].to_numpy(), dtype=float)
 
         # y can be scalar-valued or array-valued (e.g., bagging predictions)
-        y_cells = df[ycolumn].tolist()
+        y_cells = df[ycolumn_s].tolist()
         y_arrays = [_to_1d_float_array(v) for v in y_cells]
         is_array_valued = any(len(v) > 1 for v in y_arrays)
+
+        binned = bool(item.get("binned", False))
+        xtol = item.get("xtol", None)
+
+        if binned and not is_array_valued:
+            # Snap x to a regular grid when a tolerance is given, then group
+            # all scalar y values that fall in the same x bin into one array.
+            # The downstream ymode/aggregation logic then operates on these
+            # per-bin arrays exactly as it would on array-valued y columns.
+            if xtol is not None:
+                x_key = np.round(x / float(xtol)) * float(xtol)
+            else:
+                x_key = x.copy()
+            unique_x, inverse = np.unique(x_key, return_inverse=True)
+            y_arrays = [
+                np.concatenate([y_arrays[j] for j in np.where(inverse == k)[0]])
+                for k in range(len(unique_x))
+            ]
+            x = unique_x
+            is_array_valued = any(len(v) > 1 for v in y_arrays)
 
         scatter_kwargs = {}
 
@@ -367,10 +458,17 @@ def plot_columns(
         if aggregation not in ("mean", "median"):
             raise ValueError("aggregation must be 'mean' or 'median'.")
 
+        mean_line = bool(item.get("mean_line", False))
+        mean_line_label = item.get("mean_line_label")
+        mean_line_style = item.get("mean_line_style", {})
+        if not isinstance(mean_line_style, dict):
+            raise ValueError(f"series[{i}].mean_line_style must be a dictionary.")
+
         label = item.get("label", f"series_{i}")
 
         # Representative scalar y per x (used by marker mode and for exports)
         y_repr = np.asarray([_aggregate(v, aggregation) for v in y_arrays], dtype=float)
+        has_distribution_per_x = any(len(v) > 1 for v in y_arrays)
 
         if ymode == "marker":
             ax.scatter(x, y_repr, label=label, **scatter_kwargs)
@@ -407,7 +505,7 @@ def plot_columns(
                 body.set_facecolor(scatter_kwargs.get("facecolors", color))
                 body.set_edgecolor(scatter_kwargs.get("edgecolors", color))
                 body.set_linewidth(float(scatter_kwargs.get("linewidths", 0.8)))
-                body.set_alpha(float(scatter_kwargs.get("alpha", 0.4)))
+                body.set_alpha(float(scatter_kwargs.get("alpha", 0.3)))
             ax.plot([], [], color=color, label=label)
         else:  # boxplot / box
             width = float(item.get("width", _infer_box_violin_width(x)))
@@ -432,15 +530,40 @@ def plot_columns(
                 cap.set_color(color)
             ax.plot([], [], color=color, label=label)
 
+        if mean_line:
+            if not has_distribution_per_x:
+                warnings.warn(
+                    f"series[{i}] mean_line requested but no per-x distribution was found "
+                    "(each x has a single y value). Drawing the line anyway.",
+                    RuntimeWarning,
+                )
+
+            order = np.argsort(x)
+            line_kwargs = {
+                "color": color,
+                "linewidth": 1.2,
+                "linestyle": "-",
+            }
+            line_kwargs.update(mean_line_style)
+            line_kwargs["label"] = (
+                mean_line_label if mean_line_label is not None else "_nolegend_"
+            )
+            ax.plot(x[order], y_repr[order], **line_kwargs)
+
         plot_payload["series"].append(
             {
                 "source_filepath": src,
-                "xcolumn": xcolumn,
-                "ycolumn": ycolumn,
+                "xcolumn": xcolumn_s,
+                "ycolumn": ycolumn_s,
                 "mask_name": mask_name,
                 "label": label,
                 "ymode": ymode,
                 "aggregation": aggregation,
+                "binned": binned,
+                "xtol": xtol,
+                "mean_line": mean_line,
+                "mean_line_label": mean_line_label,
+                "mean_line_style": mean_line_style,
                 "color": color,
                 "marker": scatter_kwargs.get("marker"),
                 "size": scatter_kwargs.get("s"),
