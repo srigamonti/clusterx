@@ -406,6 +406,44 @@ class Model:
         self._site_clusters = site_clusters
         self.initialized_interactions = True
 
+    def predict_correlations_diff(
+        self,
+        structure: Structure,
+        index: int,
+        old_sigma: int,
+        new_sigma: int,
+        reduce_structure: bool = False,
+    ):
+        """Return difference in correlations when changing sigma from old_sigma
+        to new_sigma at index in structure.
+
+        For documentation on paremeters, see predict_flip."""
+        if not reduce_structure:  # default case
+            _structure = structure
+            _index = index
+            _scell = _structure.get_supercell()
+        else:
+            _structure, _index = structure.get_reduced_structure(index)
+            _scell = _structure.get_supercell()
+
+        if not self.initialized_interactions:
+            self._init_interaction_dict(_scell)
+
+        correlations_diff = cluster_correlations_flip(
+            structure=_structure,
+            ind=_index,
+            old_sigma=old_sigma,
+            new_sigma=new_sigma,
+            site_clusters=self._site_clusters,
+            cluster_orbits_array=self._cluster_orbits_array,
+            cluster_indices=self._cluster_indices,
+            basis_set_values=self.corrc.basis_set_values,
+            multiplicities=self._multiplicities,
+        )
+        correlations_diff /= self.scell_factor
+
+        return correlations_diff
+
     def predict_flip(
         self,
         structure: Structure,
@@ -432,29 +470,9 @@ class Model:
             If true, use reduced structure to predict flip energy, only works
             for diagonal supercell transformation.
         """
-        if not reduce_structure:  # default case
-            _structure = structure
-            _index = index
-            _scell = _structure.get_supercell()
-        else:
-            _structure, _index = structure.get_reduced_structure(index)
-            _scell = _structure.get_supercell()
-
-        if not self.initialized_interactions:
-            self._init_interaction_dict(_scell)
-
-        correlations_diff = cluster_correlations_flip(
-            structure=_structure,
-            ind=_index,
-            old_sigma=old_sigma,
-            new_sigma=new_sigma,
-            site_clusters=self._site_clusters,
-            cluster_orbits_array=self._cluster_orbits_array,
-            cluster_indices=self._cluster_indices,
-            basis_set_values=self.corrc.basis_set_values,
-            multiplicities=self._multiplicities,
+        correlations_diff = self.predict_correlations_diff(
+            structure, index, old_sigma, new_sigma, reduce_structure
         )
-        correlations_diff /= self.scell_factor
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
             try:

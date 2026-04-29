@@ -2,12 +2,13 @@
 
 import pytest
 from ase.build import bulk
-import numpy as np
+from ase.visualize import view
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
+from clusterx.cli.generate_sqs import generate_sqs, run_annealing
 
 
 @pytest.fixture
@@ -19,22 +20,24 @@ def plat():
 
 @pytest.fixture
 def cpool(plat):
-    return ClustersPool(plat, npoints=[1, 2, 3], radii=[0, 1.1, 1.1])
+    return ClustersPool(plat, npoints=[1, 2, 3], radii=[0, 2.1, 1.5])
 
 
 @pytest.fixture
 def corrc(plat, cpool):
+    cpool.print_info()
     return CorrelationsCalculator("trigonometric", plat, cpool)
 
 
-def test_sqs(plat, corrc):
+def test_sqs_correlation(plat, corrc):
     """Test generation of SQS."""
-    n = 10
+    n = 4
     p = [n, n, n]
     scell = SuperCell(plat, p)
-    for _ in range(10):
-        structure = scell.gen_random_structure(
-            nsubs=int(np.prod(scell.get_index()) / 2)
-        )
-        correlations = corrc.get_cluster_correlations(structure)
-        print(correlations)
+    n_atoms = scell.get_index()
+    structure = run_annealing(plat, corrc, p, n_atoms // 2)
+    view(structure.get_atoms())
+
+
+def test_cli():
+    generate_sqs()
