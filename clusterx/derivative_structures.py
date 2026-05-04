@@ -167,8 +167,16 @@ class DSGenerator:
         property_solver_kwargs=None,
         linear_reference=None,
         per_formula_unit=False,
+        store_ensemble_predictions=False,
     ):
-        """Compute properties"""
+        """Compute properties.
+
+        If ``cemodel`` is based on a bagging ensemble and
+        ``store_ensemble_predictions`` is True, then for each computed property an
+        additional column named ``<property>_ensemble_predictions`` is stored in
+        ``self.configurations``. Each entry of that column contains the array of
+        predictions from the individual ensemble members for that configuration.
+        """
         _filter_property_names(property_name, property_names)
         scell_cache = {}
 
@@ -181,6 +189,32 @@ class DSGenerator:
                 scell_cache[shape_id] = scell
 
             return scell.gen_structure(sigmas=row["sigma"])
+
+        def _is_bagging_estimator(estimator):
+            return hasattr(estimator, "estimators_") and isinstance(
+                getattr(estimator, "estimators_", None), list
+            )
+
+        def _get_ensemble_predictions_from_cemodel(struc):
+            """
+            Return the per-estimator predictions for a structure if cemodel.estimator
+            is a fitted bagging regressor. Otherwise return None.
+            """
+            if cemodel is None or not hasattr(cemodel, "estimator"):
+                return None
+
+            estimator = cemodel.estimator
+            if not _is_bagging_estimator(estimator):
+                return None
+
+            # Use the same representation as Model.predict(struc) is expected to use:
+            # correlations/features for a single structure.
+            x = cemodel.corrc.get_correlation_matrix([struc])
+
+            preds = np.array(
+                [base_est.predict(x)[0] for base_est in estimator.estimators_]
+            )
+            return preds
 
         if ase_calculator is not None:
 
@@ -237,6 +271,9 @@ class DSGenerator:
 
             _value_func = _subtract_linear_reference(_value_func)
 
+        # ------------------------------------------------------------
+        # Main property computation
+        # ------------------------------------------------------------
         if property_name:  # single property is computed
             self.set_property_values_iteratively(
                 property_name=property_name, value_func=_value_func
@@ -245,6 +282,43 @@ class DSGenerator:
             self.set_property_values_iteratively(
                 property_names=property_names, value_func=_value_func
             )
+
+        # ------------------------------------------------------------
+        # Optional storage of ensemble predictions
+        # ------------------------------------------------------------
+        if (
+            cemodel is not None
+            and store_ensemble_predictions
+            and hasattr(cemodel, "estimator")
+            and _is_bagging_estimator(cemodel.estimator)
+        ):
+            if property_name:
+                property_names_to_store = [property_name]
+            else:
+                property_names_to_store = list(property_names)
+
+            if per_formula_unit:
+                raise NotImplementedError(
+                    "store_ensemble_predictions=True is not yet implemented together "
+                    "with per_formula_unit=True."
+                )
+
+            if isinstance(linear_reference, list):
+                raise NotImplementedError(
+                    "store_ensemble_predictions=True is not yet implemented together "
+                    "with an explicit linear_reference list."
+                )
+
+            ensemble_preds_all = []
+            for _, row in self.configurations.iterrows():
+                struc = _get_structure_object(row)
+                preds = _get_ensemble_predictions_from_cemodel(struc)
+                ensemble_preds_all.append(preds)
+
+            for pname in property_names_to_store:
+                self.configurations[f"{pname}_ensemble_predictions"] = (
+                    ensemble_preds_all
+                )
 
         if linear_reference == "least-squares":
             # get linear reference from linear fit with y = a * conc + b
@@ -259,6 +333,7 @@ class DSGenerator:
                 )  # might raise warning if only one unique value
                 linref = a * concentrations + b
                 self.set_property_values_from_array(column, values - linref)
+
         elif linear_reference == "concentration-endpoints":
             # get linear reference from highest and lowest concentration points
             if property_name:

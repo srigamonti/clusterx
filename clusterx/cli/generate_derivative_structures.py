@@ -7,7 +7,7 @@ import os
 import pickle
 import sys
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional, Union
+from typing import Callable, Dict, Iterable, List, Optional, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -70,6 +70,13 @@ commands = ["generate_derivative_structures"]
         "dssfps",
         list,
     ),
+    merge_mask_names=(
+        "For task=merge_dsses: list of mask names, one per source in dss_filepaths. "
+        "Use None for a source to include all its configurations.",
+        "option",
+        "mmns",
+        list,
+    ),
     merged_dss_filepath=(
         "Filepath to serialize or retrieve merged derivative structures.",
         "option",
@@ -124,6 +131,12 @@ commands = ["generate_derivative_structures"]
     ymax=("Maximum y-value for the plot axis.", "option", None, float),
     show_plot=("If True, show the plot in a new window.", "option", "sp", bool),
     save_plot=("If True, save the plot to file.", "option", "svp", bool),
+    store_ensemble_predictions=(
+        "If True, for task compute_property_with_ce_model, and if the model in model_filepath is a bagging regressor.",
+        "option",
+        "sep",
+        bool,
+    ),
     plot_fname=("Filepath to save the plot at.", "option", "pf", str),
 )
 def generate_derivative_structures(
@@ -136,6 +149,7 @@ def generate_derivative_structures(
     plat_filepath: Optional[str] = None,
     dss_filepath: Optional[str] = "dss.pickle",
     dss_filepaths: Optional[List[str]] = None,
+    merge_mask_names: Optional[List[Optional[str]]] = None,
     merged_dss_filepath: Optional[str] = None,
     property_name: Optional[str] = None,
     property_names: Optional[List[str]] = None,
@@ -143,7 +157,7 @@ def generate_derivative_structures(
     sc_shape: Optional[Union[int, List[int], List[List[int]]]] = None,
     per_formula_unit: bool = False,
     linear_reference: Optional[Union[List[List[float]], List[dict], str]] = None,
-    mask_name: Optional[str] = None,
+    mask_name: Optional[Union[str, List[Optional[str]]]] = None,
     n_lowest: Optional[int] = 1,
     n_random: Optional[int] = 0,
     random_state: Optional[int] = None,
@@ -153,6 +167,7 @@ def generate_derivative_structures(
     ymax: Optional[float] = None,
     show_plot: bool = True,
     save_plot: bool = True,
+    store_ensemble_predictions: bool = False,
     plot_fname: str = "property_vs_concentration.png",
     colors=None,
     markers=None,
@@ -193,6 +208,12 @@ def generate_derivative_structures(
         Path to a serialized :class:`clusterx.parent_lattice.ParentLattice` (required by enumeration/random tasks).
     dss_filepath : str, default ``"dss.pickle"``
         Output/input pickle filepath for the :class:`clusterx.derivative_structures.DSGenerator`.
+    dss_filepaths : list[str], optional
+        Input filepaths for ``task="merge_dsses"``.
+    merge_mask_names : list[str | None], optional
+        For ``task="merge_dsses"``, mask names to apply per input source
+        (same length as ``dss_filepaths``). Use ``None`` to include all configurations
+        for that source.
     property_name : str, optional
         Single property name to compute/plot. Mutually exclusive with ``property_names``.
     property_names : list[str], optional
@@ -208,8 +229,10 @@ def generate_derivative_structures(
     linear_reference : list[list[float]] or list[dict] or str, optional
         Linear reference to correct the property. Accepts ``[[x, y], ...]`` or
         ``[{'x': x, 'y': y}, ...]``; strings are passed through unchanged.
-    mask_name : str, optional
-        Name of a mask to write/read within the serialized DSS object for downstream filtering.
+    mask_name : str or list[str | None], optional
+        Name of a mask to write/read within the serialized DSS object for downstream
+        filtering. For ``task=merge_dsses``, a single string applies the same mask to
+        all sources; a list is interpreted as per-source masks.
     n_lowest : int, default ``1``
         Count of lowest-value configurations per concentration to mark (used by
         ``"mark_lowest_property_per_concentration"`` / ``"mark_lowest_and_random_properties_per_concentration"``).
@@ -237,6 +260,8 @@ def generate_derivative_structures(
     - ``--mfp`` → ``model_filepath``
     - ``--plfp`` → ``plat_filepath``
     - ``--dssfp`` → ``dss_filepath``
+    - ``--dssfps`` → ``dss_filepaths``
+    - ``--mmns`` → ``merge_mask_names``
     - ``--plab`` → ``property_name``
     - ``--plabs`` → ``property_names``
     - ``--psol`` → ``property_solver``
@@ -317,6 +342,20 @@ def generate_derivative_structures(
         per_formula_unit = true
         linear_reference = [{x=0.0, y=-13.08516}, {x=1.0, y=-11.302472}]
 
+    **3) Merge multiple DSS files with optional per-source masks**
+
+    .. code-block:: toml
+
+        [generate_derivative_structures]
+        task = "merge_dsses"
+        dss_filepaths = ["a.pickle", "b.pickle", "c.pickle"]
+        merged_dss_filepath = "merged.pickle"
+        # One entry per source; None means include all configurations from that source
+        merge_mask_names = ["lowest", "candidate_pool", "none"]
+
+    You can also provide a single ``mask_name`` to apply the same mask to all
+    sources during merge.
+
     **Custom solver interface**
 
     .. code-block:: python
@@ -387,6 +426,7 @@ def generate_derivative_structures(
                 dss_filepath=dss_filepath,
                 per_formula_unit=per_formula_unit,
                 linear_reference=linear_reference,
+                store_ensemble_predictions=store_ensemble_predictions,
             )
 
         # Compute property using custom property solver
@@ -561,8 +601,19 @@ def generate_derivative_structures(
             sset.serialize(filepath=sset_filepath, overwrite=True)
 
         case "merge_dsses":
+            # Backward-compatible behavior:
+            # - merge_mask_names (preferred): list[str|None], one per source
+            # - mask_name as str: same mask used for all sources
+            # - mask_name as list: treated as merge_mask_names
+            masks_for_merge = merge_mask_names
+            if masks_for_merge is None and isinstance(mask_name, list):
+                masks_for_merge = mask_name
+            elif masks_for_merge is None:
+                masks_for_merge = mask_name
+
             merged = _do_merge_dss(
                 paths=dss_filepaths,
+                mask_names=masks_for_merge,
                 provenance_col="source_path",
                 make_ids_unique=True,
                 store_source_map=True,
@@ -700,6 +751,7 @@ def _do_compute_properties(
     property_names: str = None,
     dss_filepath: str = "dss.pickle",
     per_formula_unit: bool = False,
+    store_ensemble_predictions: bool = False,
     linear_reference: Optional[Union[List[List[float]], List[dict], str]] = None,
 ) -> None:
     linear_reference = process_linear_reference(linear_reference)
@@ -714,6 +766,7 @@ def _do_compute_properties(
             cemodel=cem,
             per_formula_unit=per_formula_unit,
             linear_reference=linear_reference,
+            store_ensemble_predictions=store_ensemble_predictions,
         )
     elif calculator is not None:
         dss.compute_properties(
@@ -815,6 +868,7 @@ def _do_plot_properties(
         show_plot=show_plot,
         save_plot=save_plot,
         fname=fname,
+        data_fname=fname + ".npz",
         site_type=site_type,
         yaxis_label=y_axis_label,
         sset_gss=sset_gss,
@@ -895,7 +949,7 @@ def _do_plot_properties3(dss_filepath, mask_name=None, property_names=[]):
 
 
 def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
-    from bokeh.models import ColumnDataSource, HoverTool
+    from bokeh.models import ColumnDataSource, CustomJSHover, HoverTool
     from bokeh.palettes import Category10
     from bokeh.plotting import figure, show
 
@@ -904,14 +958,52 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
 
     dsgen.add_fractional_concentration_binary()
 
-    configurations = dsgen.configurations
+    configurations = dsgen.configurations.copy()
     masks = dsgen.masks
+
+    use_jitter = True
+    jitter_width = 0.003
+    x_column = "frconc_binary"
+    plot_x_column = x_column
+
+    if use_jitter:
+        plot_x_column = "frconc_binary_jittered"
+        jitter = np.random.uniform(
+            -jitter_width, jitter_width, size=len(configurations)
+        )
+        configurations[plot_x_column] = configurations[x_column].to_numpy() + jitter
 
     # Prepare data sources
     source = ColumnDataSource(configurations)
-    mask1_source = ColumnDataSource(
-        configurations[configurations["config_id"].isin(masks[mask_name])]
+    mask1_source = None
+    if mask_name is not None:
+        mask1_source = ColumnDataSource(
+            configurations[configurations["config_id"].isin(masks[mask_name])]
+        )
+
+    # Build dynamic tooltips from all DataFrame columns (skip internal jitter column).
+    # Long values (e.g. ensemble-prediction arrays) are truncated by a JS formatter.
+    _skip_cols = {plot_x_column} if use_jitter else set()
+    _max_tooltip_chars = 80
+    _truncate_fmt = CustomJSHover(
+        code="""
+        var s = String(value);
+        if (s.length > """
+        + str(80)
+        + """) {
+            return s.slice(0, """
+        + str(80)
+        + """) + '...';
+        }
+        return s;
+    """
     )
+    _tooltip_cols = [col for col in configurations.columns if col not in _skip_cols]
+    # The {custom} placeholder in the format string triggers the CustomJSHover.
+    dynamic_tooltips = [(col, "@{" + col + "}{custom}") for col in _tooltip_cols]
+    _formatters: dict[str, str | CustomJSHover] = {
+        "@{" + col + "}": _truncate_fmt for col in _tooltip_cols
+    }
 
     # Create a Bokeh figure
     p = figure(
@@ -919,7 +1011,6 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
         x_axis_label="frconc_binary",
         y_axis_label=property_names[0],
         tools="pan,box_zoom,reset,save",
-        tooltips=[("Config ID", "@config_id"), ("frconc_binary", "@frconc_binary")],
     )
 
     # Assign colors and markers for the two properties
@@ -928,7 +1019,7 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
 
     # Plot property1 and property2 for all data
     p.scatter(
-        x="frconc_binary",
+        x=plot_x_column,
         y=property_names[0],
         source=source,
         color=colors[0],
@@ -938,7 +1029,7 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
     )
     if len(property_names) == 2:
         p.scatter(
-            x="frconc_binary",
+            x=plot_x_column,
             y=property_names[1],
             source=source,
             color=colors[1],
@@ -947,28 +1038,29 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
             size=8,
         )
 
-    # Highlight property1 for mask1
-    p.scatter(
-        x="frconc_binary",
-        y=property_names[0],
-        source=mask1_source,
-        color=colors[2],
-        marker=markers[2],
-        legend_label=property_names[0] + " (" + mask_name + ")",
-        size=10,
-        line_width=2,
-    )
+    # Highlight property1 for mask1, if requested
+    if mask_name is not None:
+        assert mask1_source is not None
+        p.scatter(
+            x=plot_x_column,
+            y=property_names[0],
+            source=mask1_source,
+            color=colors[2],
+            marker=markers[2],
+            legend_label=property_names[0] + " (" + mask_name + ")",
+            size=10,
+            line_width=2,
+        )
 
-    # Add hover tool to display config_id
-    hover = HoverTool(
-        tooltips=[("Config ID", "@config_id"), ("frconc_binary", "@frconc_binary")]
-    )
+    # Add hover tool to display all columns (values truncated to _max_tooltip_chars)
+    hover = HoverTool(tooltips=dynamic_tooltips, formatters=_formatters)  # type: ignore[arg-type]
     p.add_tools(hover)
 
     # Style the plot
-    p.legend.title = "Legend"
-    p.legend.location = "top_left"
-    p.legend.click_policy = "hide"  # Allow clicking to toggle visibility
+    if p.legend:
+        p.legend[0].title = "Legend"
+        p.legend[0].location = "top_left"
+        p.legend[0].click_policy = "hide"  # Allow clicking to toggle visibility
 
     # Show the plot
     show(p)
@@ -976,6 +1068,7 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
 
 def _do_merge_dss(
     paths: Iterable[str],
+    mask_names: Optional[Union[str, Iterable[Optional[str]]]] = None,
     provenance_col: str = "source_id",
     make_ids_unique: bool = True,
     store_source_map: bool = True,
@@ -988,6 +1081,10 @@ def _do_merge_dss(
     ----------
     paths:
         Iterable of file paths to serialized DSGenerator objects.
+    mask_names:
+        Either a single mask name applied to all sources, or an iterable with one
+        mask per source. A value of ``None`` for a source means include all data
+        from that source.
     provenance_col:
         Column name added to `configurations` to store an integer provenance id.
     make_ids_unique:
@@ -1007,6 +1104,30 @@ def _do_merge_dss(
     if not paths:
         raise ValueError("No paths provided.")
 
+    def _normalize_mask_token(token):
+        if token is None:
+            return None
+        if isinstance(token, str) and token.strip().lower() in ("", "none", "null"):
+            return None
+        if not isinstance(token, str):
+            raise ValueError(
+                f"Each mask name must be a string or None. Got {type(token).__name__}."
+            )
+        return token
+
+    npaths = len(paths)
+    if isinstance(mask_names, str) or mask_names is None:
+        masks_per_source: List[Optional[str]] = [
+            _normalize_mask_token(mask_names)
+        ] * npaths
+    else:
+        masks_per_source = [_normalize_mask_token(m) for m in list(mask_names)]
+        if len(masks_per_source) != npaths:
+            raise ValueError(
+                "mask_names must have the same length as paths "
+                f"({len(masks_per_source)} != {npaths})."
+            )
+
     # Load first to seed the merged object
     first_path = Path(paths[0])
     dss0 = DSGenerator.from_file(first_path)
@@ -1017,6 +1138,7 @@ def _do_merge_dss(
     # We'll build these and concat at the end (tree-reduction to avoid quadratic concat cost)
     conf_parts: List[pd.DataFrame] = []
     shape_parts: List[pd.DataFrame] = []
+    merged_masks_acc: Dict[str, List[int]] = {}
 
     source_map: Dict[int, str] = {}
 
@@ -1026,6 +1148,7 @@ def _do_merge_dss(
     for source_id, p in enumerate(paths):
         path = Path(p)
         dss = DSGenerator.from_file(path)
+        mask_name = masks_per_source[source_id]
 
         if check_parent_lattice:
             # Cheap-ish check. Replace with a stronger equality if you have one.
@@ -1036,9 +1159,23 @@ def _do_merge_dss(
 
         source_map[source_id] = str(path)
 
-        # --- Shapes ---
+        # --- Configurations ---
+        conf = dss.get_configurations(mask_name=mask_name)
+        if conf is None or len(conf) == 0:
+            # Still advance offsets consistently
+            if make_ids_unique:
+                # If empty, offsets unchanged
+                pass
+            continue
+
+        conf = conf.copy()
+        old_config_ids = conf["config_id"].astype("int64").to_numpy()
+
+        # --- Shapes (only those referenced by selected configurations) ---
         shapes = dss.scell_shapes
         if shapes is not None and len(shapes) > 0:
+            used_shape_ids = conf["shape_id"].astype("int64").unique()
+            shapes = shapes[shapes["shape_id"].astype("int64").isin(used_shape_ids)]
             shapes = shapes.copy()
 
             if make_ids_unique:
@@ -1049,23 +1186,22 @@ def _do_merge_dss(
 
             shape_parts.append(shapes)
 
-        # --- Configurations ---
-        conf = dss.configurations
-        if conf is None or len(conf) == 0:
-            # Still advance offsets consistently
-            if make_ids_unique:
-                # If empty, offsets unchanged
-                pass
-            continue
-
-        conf = conf.copy()
-
         # Add provenance column as small int
         conf[provenance_col] = pd.Series(source_id, index=conf.index, dtype="int32")
 
         if make_ids_unique:
             conf["config_id"] = conf["config_id"].astype("int64") + next_config_offset
             conf["shape_id"] = conf["shape_id"].astype("int64") + next_shape_offset
+
+        new_config_ids = conf["config_id"].astype("int64").to_numpy()
+        id_map = dict(zip(old_config_ids.tolist(), new_config_ids.tolist()))
+
+        # Keep/remap masks from source DSS, restricted to selected configurations.
+        for src_mask_name, src_mask_ids in getattr(dss, "masks", {}).items():
+            src_ids = np.asarray(src_mask_ids).ravel()
+            remapped_ids = [id_map[int(cid)] for cid in src_ids if int(cid) in id_map]
+            if remapped_ids:
+                merged_masks_acc.setdefault(str(src_mask_name), []).extend(remapped_ids)
 
         # Keep sigma as-is (tuple of ints => object dtype). No conversion needed.
         conf_parts.append(conf)
@@ -1099,7 +1235,13 @@ def _do_merge_dss(
     # Store provenance mapping
     if store_source_map:
         merged.metadata["source_paths"] = source_map
+        merged.metadata["source_masks"] = {
+            sid: masks_per_source[sid] for sid in range(len(masks_per_source))
+        }
 
-    merged.masks = {}
+    merged.masks = {
+        mname: np.asarray(mids, dtype="int64")
+        for mname, mids in merged_masks_acc.items()
+    }
 
     return merged
