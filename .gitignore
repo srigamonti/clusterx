@@ -9,4 +9,4 @@ build
 dist
 mypy.ini
 pyproject.toml
-
+cellconfig.json
