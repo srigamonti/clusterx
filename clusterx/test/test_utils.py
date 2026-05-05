@@ -14,6 +14,7 @@ from clusterx.utils import (
     normalize_shape_input,
     parent_lattice_to_atat,
     atat_to_cell,
+    list_integer_named_folders,
 )
 
 
@@ -104,6 +105,22 @@ def test_lattice_wrap_index():
         else:
             with pytest.raises(ValueError):
                 arr[lattice_wrap_index(idx, (4, 4))]
+
+
+def test_list_integer_named_folders_preserves_zero_padded_names(tmp_path):
+    for name in ["010", "001", "abc", "002", "0"]:
+        (tmp_path / name).mkdir()
+
+    assert list_integer_named_folders(tmp_path) == ["0", "001", "002", "010"]
+
+
+def test_list_integer_named_folders_preserves_zero_padded_names_with_affixes(tmp_path):
+    for name in ["run_010_done", "run_001_done", "run_old_done", "001_done"]:
+        (tmp_path / name).mkdir()
+
+    assert list_integer_named_folders(
+        tmp_path, prefix="run_", suffix="_done"
+    ) == ["run_001_done", "run_010_done"]
 
 
 def test_exponential():
