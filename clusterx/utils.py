@@ -1495,3 +1495,146 @@ def normalize_nsubs_list(
         ):
             return nsubs_list
     raise ValueError("Invalid format for nsubs_list")
+
+
+def rescale_by_first_nonzero(A):
+    """
+    Find the first nonzero element a_ij0 (row-major order) such that
+    closest_int_to(a_ij0) != 0, then compute
+
+        factor = a_ij0 / closest_int_to(a_ij0)
+
+    and return A scaled by 1/factor.
+
+    If no such element exists, raise an error.
+    """
+
+    A = np.asarray(A)
+    flat = A.ravel()
+
+    for val in flat:
+        if val == 0:
+            continue
+
+        closest_int = int(np.round(val))
+
+        # Skip if rounding gives zero
+        if closest_int == 0:
+            continue
+
+        factor = val / closest_int
+        return A / factor, factor
+
+    raise ValueError("No suitable element found (all nonzero elements round to zero).")
+
+
+def check_and_convert_integer_matrix(A, tol=1e-8):
+    """
+    Check whether all elements of a matrix are (numerically) integers,
+    and return (is_integer_matrix, integer_matrix).
+
+    Elements like 1.0 are considered integers.
+    A tolerance is used to handle floating point noise.
+
+    Parameters
+    ----------
+    A : np.ndarray
+        Input array (e.g., 3x3)
+    tol : float
+        Tolerance for checking integer closeness
+
+    Returns
+    -------
+    (bool, np.ndarray)
+        - True/False whether all elements are integers
+        - Matrix converted to integers (rounded)
+    """
+
+    A = np.asarray(A)
+
+    # Round to nearest integer
+    A_rounded = np.round(A)
+
+    # Check if all elements are close to their rounded values
+    is_integer = np.all(np.abs(A - A_rounded) < tol)
+
+    return is_integer, A_rounded.astype(int)
+
+
+def find_sc_shape(
+    scell,
+    pcell,
+    threshold_length=1e-8,
+    tol_int=1e-3,
+    n_atoms_scell=None,
+    n_atoms_pcell=None,
+):
+    """Determine the integer transformation matrix (shape) relating a supercell to a primitive cell.
+
+    Given lattice matrices ``scell`` and ``pcell``, the *shape* is defined as
+
+    .. math::
+
+        S = P_{\\text{sc}} \\cdot P_{\\text{pc}}^{-1}
+
+    where rows of each matrix are lattice vectors.
+    The raw shape ``S`` is then rescaled so that its first significant
+    element is closest to an integer, and finally checked for integer-valuedness.
+
+    Parameters
+    ----------
+    scell : np.ndarray, shape (3, 3)
+        Supercell lattice matrix.
+    pcell : np.ndarray, shape (3, 3)
+        Primitive cell lattice matrix.
+    threshold_length : float, optional
+        Matrix elements whose absolute value is below this threshold are
+        zeroed before the inversion.  Default is ``1e-8``.
+    tol_int : float, optional
+        Tolerance passed to ``check_and_convert_integer_matrix`` when
+        deciding whether the rescaled shape elements are integers.
+        Default is ``1e-3``.
+    n_atoms_scell : int, optional
+        Number of atoms in the supercell.  When both ``n_atoms_scell`` and
+        ``n_atoms_pcell`` are provided, the function checks that
+        ``n_atoms_scell / n_atoms_pcell`` agrees with
+        ``abs(det(shape_int))``.  A ``ValueError`` is raised if they
+        disagree.
+    n_atoms_pcell : int, optional
+        Number of atoms in the primitive cell.  See ``n_atoms_scell``.
+
+    Returns
+    -------
+    is_shape_int : bool
+        ``True`` if the rescaled shape matrix is integer-valued within
+        ``tol_int``.
+    shape_int : np.ndarray of int, shape (3, 3)
+        The rescaled shape matrix rounded to the nearest integers.
+    shape_rescaled : np.ndarray, shape (3, 3)
+        ``shape`` divided by the scale factor determined by
+        ``rescale_by_first_nonzero``.
+    shape : np.ndarray, shape (3, 3)
+        Raw floating-point result of ``scell @ inv(pcell)`` (after
+        threshold zeroing).
+    """
+    pcell[np.abs(pcell) < threshold_length] = 0.0
+    scell[np.abs(scell) < threshold_length] = 0.0
+
+    shape = scell @ np.linalg.inv(pcell)
+
+    shape_rescaled, factor = rescale_by_first_nonzero(shape)
+    is_shape_int, shape_int = check_and_convert_integer_matrix(
+        shape_rescaled, tol=tol_int
+    )
+
+    sc_index = abs(int(np.round(np.linalg.det(shape_int))))
+
+    if n_atoms_scell is not None and n_atoms_pcell is not None:
+        ratio = n_atoms_scell // n_atoms_pcell
+        if ratio != sc_index:
+            raise ValueError(
+                f"Atom-count ratio ({n_atoms_scell}/{n_atoms_pcell} = {ratio}) "
+                f"does not match |det(shape_int)| = {sc_index}."
+            )
+
+    return is_shape_int, shape_int, shape_rescaled, shape, sc_index
