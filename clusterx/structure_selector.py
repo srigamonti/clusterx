@@ -34,7 +34,7 @@ class StructureSelector:
         CorrelationsCalculator object with a trigonometric basis and the chosen
         cpool is used.
     ``regularization_strength``: float
-        The default is None, such that no regularization is applied to the
+        The default is 0.0, such that no regularization is applied to the
         Gram matrix X^T X.
         Regularization should be applied if the Gram matrix is not invertible,
         e.g. if number of structures in training set is smaller than
