@@ -1,0 +1,514 @@
+# Copyright (c) CELL Developers.
+# This work is licensed under the terms of the Apache 2.0 license
+# See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
+
+import json
+import os
+from typing import Any, Dict, List, Optional
+
+import matplotlib.pyplot as plt
+import numpy as np
+import plac
+
+from clusterx.cli.config_utils import cmd_message
+from clusterx.derivative_structures import DSGenerator
+
+commands = ["plot_columns"]
+
+
+def _to_1d_float_array(value: Any) -> np.ndarray:
+    """Convert scalar/array-like value to 1D float array."""
+    if isinstance(value, (list, tuple, np.ndarray)):
+        arr = np.asarray(value, dtype=float).ravel()
+    else:
+        arr = np.asarray([value], dtype=float)
+    return arr
+
+
+def _aggregate(values: np.ndarray, method: str) -> float:
+    if method == "median":
+        return float(np.median(values))
+    return float(np.mean(values))
+
+
+def _infer_box_violin_width(x: np.ndarray) -> float:
+    ux = np.unique(np.sort(np.asarray(x, dtype=float)))
+    if len(ux) > 1:
+        return 0.8 * float(np.min(np.diff(ux)))
+    return 0.05
+
+
+@plac.annotations(
+    source_filepath=(
+        "Path to file of serialized DSGenerator object.",
+        "positional",
+        None,
+        str,
+    ),
+    title=("Figure title.", "option", "t", str),
+    xlabel=("Label for the x-axis of the plot.", "option", "xl", str),
+    ylabel=("Label for the y-axis of the plot.", "option", "yl", str),
+    yrange=("Range for the y-axis of the plot (min,max).", "option", None, list),
+    xrange=("Range for the x-axis of the plot (min,max).", "option", None, list),
+    colors=(
+        "Optional list of default colors for series without explicit color.",
+        "option",
+        None,
+        list,
+    ),
+    show_yzero_axis=("Show horizontal reference line at y=0.", "option", None, bool),
+    legend=("Show legend if True.", "option", None, bool),
+    show_plot=("Display the plot window if True.", "option", None, bool),
+    savefig=(
+        "Filepath to save generated figure (e.g. plot.png).",
+        "option",
+        "sf",
+        str,
+    ),
+    figdata_fname=(
+        "Filepath to save plotted data. Supported extensions: .npz, .json, .txt, .dat.",
+        "option",
+        "fdn",
+        str,
+    ),
+    series=(
+        "List of series dictionaries from TOML. Per-series keys: xcolumn, ycolumn, "
+        "source_filepath (optional), mask_name (optional), label (optional), "
+        "color/marker/size/edgecolor/facecolor/linewidth/alpha (optional), "
+        "or style={...} for grouped styling. Also supports ymode in "
+        "{marker,cloud,violin,boxplot,auto} for array-valued y columns.",
+        "option",
+        None,
+        list,
+    ),
+)
+def plot_columns(
+    source_filepath: str,
+    title: Optional[str] = None,
+    xlabel: Optional[str] = None,
+    ylabel: Optional[str] = None,
+    yrange: Optional[list] = None,
+    xrange: Optional[list] = None,
+    colors: Optional[list] = None,
+    show_yzero_axis: bool = False,
+    legend: bool = True,
+    show_plot: bool = True,
+    savefig: Optional[str] = None,
+    figdata_fname: Optional[str] = None,
+    series: Optional[List[Dict[str, Any]]] = None,
+):
+    """Plot one or more columns from serialized DSGenerator objects.
+
+    This command is intended to be driven from TOML input using
+    ``[plot_columns]`` plus ``[[plot_columns.series]]`` blocks.
+
+    Top-level options
+    -----------------
+    - ``source_filepath`` (str): default DSGenerator pickle used by all series.
+    - ``title`` (str, optional): figure title.
+    - ``xlabel`` / ``ylabel`` (str, optional): axis labels.
+    - ``xrange`` / ``yrange`` (list[float, float], optional): axis limits.
+    - ``colors`` (list[str], optional): default color palette for series without
+        explicit ``color``.
+    - ``show_yzero_axis`` (bool): draw a horizontal line at ``y=0``.
+    - ``legend`` (bool): show legend.
+    - ``show_plot`` (bool): show interactive window.
+    - ``savefig`` (str, optional): output figure path (e.g. ``plot.png``).
+    - ``figdata_fname`` (str, optional): data export path
+        (``.json/.npz/.txt/.dat``).
+
+    Per-series options (``[[plot_columns.series]]``)
+    -------------------------------------------------
+    Required:
+    - ``xcolumn`` (str): x-axis column from ``dsg.configurations``.
+    - ``ycolumn`` (str): y-axis column from ``dsg.configurations``.
+
+    Optional:
+    - ``source_filepath`` (str): override top-level source for this series.
+    - ``mask_name`` (str): mask name in the DSGenerator.
+    - ``label`` (str): legend label.
+    - ``color`` (str): matplotlib color spec (e.g. ``"k"``, ``"#1f77b4"``,
+        ``"red"``).
+    - ``marker`` (str): matplotlib marker (e.g. ``"o"``, ``"s"``, ``"^"``, ``"."``).
+    - ``size`` (float): marker area passed as ``s`` to
+        ``matplotlib.pyplot.scatter``.
+    - ``edgecolor`` (str): marker edge color.
+    - ``facecolor`` (str): marker face color (e.g. ``"none"`` for hollow markers).
+    - ``linewidth`` (float): marker edge line width.
+    - ``alpha`` (float): marker transparency.
+    - ``style`` (dict): compact style dict with keys ``color``, ``marker``,
+        ``size``/``s``, ``edgecolor``/``edgecolors``,
+        ``facecolor``/``facecolors``, ``linewidth``/``linewidths``, ``alpha``.
+    - ``ymode`` (str): ``"marker"``, ``"cloud"``, ``"violin"``,
+        ``"boxplot"``, or ``"auto"``.
+    - ``aggregation`` (str): for ``ymode="marker"`` with array-valued y,
+        use ``"mean"`` (default) or ``"median"``.
+    - ``xjitter`` (float): optional x-jitter amplitude for ``ymode="cloud"``.
+    - ``width`` (float): width for ``violin``/``boxplot``.
+
+    If both ``style`` and direct keys are provided, direct keys win.
+
+    Color precedence
+    ----------------
+    1) Per-series ``color``
+    2) Top-level ``colors[i]``
+    3) Internal default palette (tab10-like)
+
+    Example
+    -------
+    .. code-block:: toml
+
+            [plot_columns]
+            source_filepath = "file1.pickle"
+            title = "Energy of mixing"
+            xlabel = "Concentration"
+            ylabel = "Energy"
+            colors = ["k", "r", "b"]
+            legend = true
+            show_plot = true
+            savefig = "plot.png"
+
+            [[plot_columns.series]]
+            xcolumn = "frconc_binary"
+            ycolumn = "energy_of_mixing"
+            marker = "o"
+            label = "file1"
+
+            [[plot_columns.series]]
+            xcolumn = "frconc_binary"
+            ycolumn = "energy_of_mixing"
+            color = "#2ca02c"
+            marker = "^"
+            mask_name = "lowest"
+            label = "file1 lowest"
+
+            [[plot_columns.series]]
+            xcolumn = "frconc_binary"
+            ycolumn = "energy_of_mixing"
+            label = "styled"
+            [plot_columns.series.style]
+            marker = "o"
+            edgecolor = "red"
+            facecolor = "none"
+            size = 20
+            linewidth = 0.85
+
+            # Bagging/ensemble predictions stored as arrays per row
+            [[plot_columns.series]]
+            xcolumn = "frconc_binary"
+            ycolumn = "energy_of_mixing_ensemble_predictions"
+            ymode = "cloud"
+            xjitter = 0.003
+            color = "tab:blue"
+            size = 8
+            alpha = 0.25
+            label = "bagging cloud"
+
+            [[plot_columns.series]]
+            xcolumn = "frconc_binary"
+            ycolumn = "energy_of_mixing_ensemble_predictions"
+            ymode = "violin"
+            width = 0.02
+            color = "tab:red"
+            facecolor = "none"
+            linewidth = 0.8
+            label = "bagging violin"
+
+            [[plot_columns.series]]
+            xcolumn = "frconc_binary"
+            ycolumn = "energy_of_mixing_ensemble_predictions"
+            ymode = "boxplot"
+            width = 0.02
+            showfliers = false
+            color = "black"
+            label = "bagging box"
+    """
+    cmd_message("head")
+
+    if not source_filepath:
+        raise ValueError("source_filepath must be provided.")
+
+    if series is None:
+        raise ValueError(
+            "series must be provided as a list of dictionaries (from [[plot_columns.series]])."
+        )
+
+    if not isinstance(series, list) or len(series) == 0:
+        raise ValueError("series must be a non-empty list.")
+
+    if colors is not None and not isinstance(colors, list):
+        raise ValueError("colors must be a list when provided.")
+
+    # Cache DSGenerator objects by filepath to avoid repeated I/O
+    dsg_cache: Dict[str, DSGenerator] = {}
+    plot_payload: Dict[str, Any] = {
+        "title": title,
+        "xlabel": xlabel,
+        "ylabel": ylabel,
+        "series": [],
+    }
+
+    fig, ax = plt.subplots(figsize=(6.0, 4.0))
+
+    # Color priority: series[i].color > colors[i] > matplotlib tab10 cycle
+    default_colors = [
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
+    ]
+    palette = colors if (colors is not None and len(colors) > 0) else default_colors
+
+    for i, item in enumerate(series):
+        if not isinstance(item, dict):
+            raise ValueError(f"series[{i}] must be a dictionary.")
+
+        src = item.get("source_filepath", source_filepath)
+        xcolumn = item.get("xcolumn")
+        ycolumn = item.get("ycolumn")
+        mask_name = item.get("mask_name")
+
+        if xcolumn is None or ycolumn is None:
+            raise ValueError(f"series[{i}] must define both 'xcolumn' and 'ycolumn'.")
+
+        if src not in dsg_cache:
+            dsg_cache[src] = DSGenerator.from_file(src)
+
+        dsg = dsg_cache[src]
+
+        if xcolumn == "frconc_binary" and xcolumn not in dsg.configurations.columns:
+            dsg.add_fractional_concentration_binary()
+
+        if xcolumn not in dsg.configurations.columns:
+            raise ValueError(
+                f"Column '{xcolumn}' not found in DSGenerator configurations from '{src}'."
+            )
+
+        if ycolumn not in dsg.configurations.columns:
+            raise ValueError(
+                f"Column '{ycolumn}' not found in DSGenerator configurations from '{src}'."
+            )
+
+        df = dsg.get_configurations(mask_name=mask_name)
+
+        x = np.asarray(df[xcolumn].to_numpy(), dtype=float)
+
+        # y can be scalar-valued or array-valued (e.g., bagging predictions)
+        y_cells = df[ycolumn].tolist()
+        y_arrays = [_to_1d_float_array(v) for v in y_cells]
+        is_array_valued = any(len(v) > 1 for v in y_arrays)
+
+        scatter_kwargs = {}
+
+        style = item.get("style")
+        if style is not None:
+            if not isinstance(style, dict):
+                raise ValueError(f"series[{i}].style must be a dictionary.")
+
+            # accept user-friendly keys in style dict
+            if "size" in style and "s" not in style:
+                scatter_kwargs["s"] = style["size"]
+            if "linewidth" in style and "linewidths" not in style:
+                scatter_kwargs["linewidths"] = style["linewidth"]
+            if "edgecolor" in style and "edgecolors" not in style:
+                scatter_kwargs["edgecolors"] = style["edgecolor"]
+            if "facecolor" in style and "facecolors" not in style:
+                scatter_kwargs["facecolors"] = style["facecolor"]
+
+            for k in (
+                "color",
+                "marker",
+                "s",
+                "edgecolors",
+                "facecolors",
+                "linewidths",
+                "alpha",
+            ):
+                if k in style:
+                    scatter_kwargs[k] = style[k]
+
+        # direct keys override style keys
+        if "color" in item:
+            color = item["color"]
+        elif "color" in scatter_kwargs:
+            color = scatter_kwargs["color"]
+        else:
+            color = palette[i % len(palette)]
+        scatter_kwargs["color"] = color
+
+        if "marker" in item:
+            scatter_kwargs["marker"] = item["marker"]
+        if "size" in item:
+            scatter_kwargs["s"] = item["size"]
+        if "edgecolor" in item:
+            scatter_kwargs["edgecolors"] = item["edgecolor"]
+        if "facecolor" in item:
+            scatter_kwargs["facecolors"] = item["facecolor"]
+        if "linewidth" in item:
+            scatter_kwargs["linewidths"] = item["linewidth"]
+        if "alpha" in item:
+            scatter_kwargs["alpha"] = item["alpha"]
+
+        ymode = str(item.get("ymode", "auto")).lower()
+        if ymode == "auto":
+            ymode = "cloud" if is_array_valued else "marker"
+        if ymode not in ("marker", "cloud", "violin", "boxplot", "box"):
+            raise ValueError(
+                f"series[{i}].ymode must be one of marker, cloud, violin, boxplot, auto."
+            )
+
+        aggregation = str(item.get("aggregation", "mean")).lower()
+        if aggregation not in ("mean", "median"):
+            raise ValueError("aggregation must be 'mean' or 'median'.")
+
+        label = item.get("label", f"series_{i}")
+
+        # Representative scalar y per x (used by marker mode and for exports)
+        y_repr = np.asarray([_aggregate(v, aggregation) for v in y_arrays], dtype=float)
+
+        if ymode == "marker":
+            ax.scatter(x, y_repr, label=label, **scatter_kwargs)
+        elif ymode == "cloud":
+            cloud_kwargs = scatter_kwargs.copy()
+            xjitter = float(item.get("xjitter", 0.0))
+            cloud_kwargs.setdefault("s", 8)
+            cloud_kwargs.setdefault("alpha", 0.35)
+
+            all_x = []
+            all_y = []
+            for xi, yi in zip(x, y_arrays):
+                if xjitter > 0:
+                    dx = np.random.uniform(-xjitter, xjitter, size=len(yi))
+                    xvals = xi + dx
+                else:
+                    xvals = np.full(len(yi), xi)
+                all_x.append(xvals)
+                all_y.append(yi)
+
+            ax.scatter(
+                np.concatenate(all_x),
+                np.concatenate(all_y),
+                label=label,
+                **cloud_kwargs,
+            )
+        elif ymode == "violin":
+            width = float(item.get("width", _infer_box_violin_width(x)))
+            v = ax.violinplot(y_arrays, positions=x, widths=width, showextrema=False)
+            vbodies = v.get("bodies", [])
+            if not isinstance(vbodies, list):
+                vbodies = [vbodies]
+            for body in vbodies:
+                body.set_facecolor(scatter_kwargs.get("facecolors", color))
+                body.set_edgecolor(scatter_kwargs.get("edgecolors", color))
+                body.set_linewidth(float(scatter_kwargs.get("linewidths", 0.8)))
+                body.set_alpha(float(scatter_kwargs.get("alpha", 0.4)))
+            ax.plot([], [], color=color, label=label)
+        else:  # boxplot / box
+            width = float(item.get("width", _infer_box_violin_width(x)))
+            bp = ax.boxplot(
+                y_arrays,
+                positions=x,
+                widths=width,
+                patch_artist=True,
+                showfliers=bool(item.get("showfliers", False)),
+                manage_ticks=False,
+            )
+            for patch in bp["boxes"]:
+                patch.set_facecolor(scatter_kwargs.get("facecolors", "none"))
+                patch.set_edgecolor(scatter_kwargs.get("edgecolors", color))
+                patch.set_linewidth(float(scatter_kwargs.get("linewidths", 0.8)))
+                patch.set_alpha(float(scatter_kwargs.get("alpha", 0.8)))
+            for med in bp["medians"]:
+                med.set_color(color)
+            for whisk in bp["whiskers"]:
+                whisk.set_color(color)
+            for cap in bp["caps"]:
+                cap.set_color(color)
+            ax.plot([], [], color=color, label=label)
+
+        plot_payload["series"].append(
+            {
+                "source_filepath": src,
+                "xcolumn": xcolumn,
+                "ycolumn": ycolumn,
+                "mask_name": mask_name,
+                "label": label,
+                "ymode": ymode,
+                "aggregation": aggregation,
+                "color": color,
+                "marker": scatter_kwargs.get("marker"),
+                "size": scatter_kwargs.get("s"),
+                "edgecolor": scatter_kwargs.get("edgecolors"),
+                "facecolor": scatter_kwargs.get("facecolors"),
+                "linewidth": scatter_kwargs.get("linewidths"),
+                "alpha": scatter_kwargs.get("alpha"),
+                "x": x.tolist(),
+                "y": y_repr.tolist(),
+                "y_samples": [v.tolist() for v in y_arrays],
+            }
+        )
+
+    ax.set_xlabel(xlabel if xlabel is not None else "x")
+    ax.set_ylabel(ylabel if ylabel is not None else "y")
+    if title is not None:
+        ax.set_title(title)
+
+    if xrange is not None:
+        if len(xrange) != 2:
+            raise ValueError("xrange must have exactly two values: [xmin, xmax].")
+        ax.set_xlim(float(xrange[0]), float(xrange[1]))
+
+    if yrange is not None:
+        if len(yrange) != 2:
+            raise ValueError("yrange must have exactly two values: [ymin, ymax].")
+        ax.set_ylim(float(yrange[0]), float(yrange[1]))
+
+    if show_yzero_axis:
+        ax.axhline(y=0, color="k", linewidth=0.5)
+
+    if legend:
+        ax.legend()
+
+    fig.tight_layout()
+
+    if savefig:
+        fig.savefig(savefig, dpi=300)
+
+    if figdata_fname is not None:
+        ext = os.path.splitext(figdata_fname)[1].lower()
+        if ext == ".json":
+            with open(figdata_fname, "w", encoding="utf-8") as f:
+                json.dump(plot_payload, f, indent=2)
+        elif ext == ".npz":
+            out = {}
+            for i, s in enumerate(plot_payload["series"]):
+                out[f"x_{i}"] = np.asarray(s["x"], dtype=float)
+                out[f"y_{i}"] = np.asarray(s["y"], dtype=float)
+                out[f"label_{i}"] = np.asarray([s["label"]], dtype=object)
+                out[f"source_filepath_{i}"] = np.asarray(
+                    [s["source_filepath"]], dtype=object
+                )
+            np.savez(figdata_fname, **out)
+        elif ext in (".txt", ".dat"):
+            rows = []
+            for i, s in enumerate(plot_payload["series"]):
+                for x, y in zip(s["x"], s["y"]):
+                    rows.append([i, x, y])
+            header = "series_index x y"
+            np.savetxt(figdata_fname, np.asarray(rows, dtype=float), header=header)
+        else:
+            raise ValueError(
+                f"Unsupported figdata_fname extension '{ext}'. "
+                "Expected .npz, .json, .txt, or .dat."
+            )
+
+    if show_plot:
+        plt.show()
+    else:
+        plt.close(fig)

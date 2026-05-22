@@ -15,7 +15,7 @@ marker_styles = {
         "marker": "o",
         "edgecolor": "none",
         "facecolor": "k",
-        "size": 10,
+        "size": 9,
         "linewidth": 0.65,
     },
     "Predicted-CV": {
@@ -28,16 +28,16 @@ marker_styles = {
     "Enumeration": {
         "marker": ".",
         "edgecolor": "none",
-        "facecolor": "gray",
+        "facecolor": "red",
         "size": 10,
         "linewidth": 0,
     },
     "Predicted-GS": {
         "marker": "o",
-        "edgecolor": "green",
+        "edgecolor": "red",
         "facecolor": "none",
-        "size": 6,
-        "linewidth": 0.65,
+        "size": 20,
+        "linewidth": 0.85,
     },
 }
 

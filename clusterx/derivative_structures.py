@@ -57,6 +57,8 @@ class DSGenerator:
 
         self.property_names = set()
 
+        self.metadata = {}
+
     def serialize(self, filepath):
         """
         Serialize the current instance to a binary file using pickle.
@@ -101,9 +103,9 @@ class DSGenerator:
     def get_configurations(self, mask_name=None):
         if mask_name is not None:
             return self.configurations[
-                self.configurations["config_id"] in self.get_mask(mask_name)
+                self.configurations["config_id"].isin(self.get_mask(mask_name))
             ]
-        return self.configurations
+        return self.configurations.copy()
 
     def get_property(self, config_id, property_name):
         """
@@ -165,8 +167,16 @@ class DSGenerator:
         property_solver_kwargs=None,
         linear_reference=None,
         per_formula_unit=False,
+        store_ensemble_predictions=False,
     ):
-        """Compute properties"""
+        """Compute properties.
+
+        If ``cemodel`` is based on a bagging ensemble and
+        ``store_ensemble_predictions`` is True, then for each computed property an
+        additional column named ``<property>_ensemble_predictions`` is stored in
+        ``self.configurations``. Each entry of that column contains the array of
+        predictions from the individual ensemble members for that configuration.
+        """
         _filter_property_names(property_name, property_names)
         scell_cache = {}
 
@@ -179,6 +189,32 @@ class DSGenerator:
                 scell_cache[shape_id] = scell
 
             return scell.gen_structure(sigmas=row["sigma"])
+
+        def _is_bagging_estimator(estimator):
+            return hasattr(estimator, "estimators_") and isinstance(
+                getattr(estimator, "estimators_", None), list
+            )
+
+        def _get_ensemble_predictions_from_cemodel(struc):
+            """
+            Return the per-estimator predictions for a structure if cemodel.estimator
+            is a fitted bagging regressor. Otherwise return None.
+            """
+            if cemodel is None or not hasattr(cemodel, "estimator"):
+                return None
+
+            estimator = cemodel.estimator
+            if not _is_bagging_estimator(estimator):
+                return None
+
+            # Use the same representation as Model.predict(struc) is expected to use:
+            # correlations/features for a single structure.
+            x = cemodel.corrc.get_correlation_matrix([struc])
+
+            preds = np.array(
+                [base_est.predict(x)[0] for base_est in estimator.estimators_]
+            )
+            return preds
 
         if ase_calculator is not None:
 
@@ -235,6 +271,9 @@ class DSGenerator:
 
             _value_func = _subtract_linear_reference(_value_func)
 
+        # ------------------------------------------------------------
+        # Main property computation
+        # ------------------------------------------------------------
         if property_name:  # single property is computed
             self.set_property_values_iteratively(
                 property_name=property_name, value_func=_value_func
@@ -243,6 +282,43 @@ class DSGenerator:
             self.set_property_values_iteratively(
                 property_names=property_names, value_func=_value_func
             )
+
+        # ------------------------------------------------------------
+        # Optional storage of ensemble predictions
+        # ------------------------------------------------------------
+        if (
+            cemodel is not None
+            and store_ensemble_predictions
+            and hasattr(cemodel, "estimator")
+            and _is_bagging_estimator(cemodel.estimator)
+        ):
+            if property_name:
+                property_names_to_store = [property_name]
+            else:
+                property_names_to_store = list(property_names)
+
+            if per_formula_unit:
+                raise NotImplementedError(
+                    "store_ensemble_predictions=True is not yet implemented together "
+                    "with per_formula_unit=True."
+                )
+
+            if isinstance(linear_reference, list):
+                raise NotImplementedError(
+                    "store_ensemble_predictions=True is not yet implemented together "
+                    "with an explicit linear_reference list."
+                )
+
+            ensemble_preds_all = []
+            for _, row in self.configurations.iterrows():
+                struc = _get_structure_object(row)
+                preds = _get_ensemble_predictions_from_cemodel(struc)
+                ensemble_preds_all.append(preds)
+
+            for pname in property_names_to_store:
+                self.configurations[f"{pname}_ensemble_predictions"] = (
+                    ensemble_preds_all
+                )
 
         if linear_reference == "least-squares":
             # get linear reference from linear fit with y = a * conc + b
@@ -257,6 +333,7 @@ class DSGenerator:
                 )  # might raise warning if only one unique value
                 linref = a * concentrations + b
                 self.set_property_values_from_array(column, values - linref)
+
         elif linear_reference == "concentration-endpoints":
             # get linear reference from highest and lowest concentration points
             if property_name:
@@ -699,11 +776,18 @@ class DSGenerator:
 
             if n_random is None:
                 if recursive:
+                    # Identify the binary sublattice
+                    binary_sublattice_id = None
+                    for i, (k, v) in enumerate(stypes_plat.items()):
+                        if len(v) == 2:  # Binary sublattice
+                            binary_sublattice_id = i
+                            break
+
                     n_max = int(partial_binom_sum(len(ssites), nsubs) / scindex)
                     with tqdm(total=n_max, desc="Finding unique sigmas") as pbar:
                         num_conf = self._generate_all_configurations_recursive(
                             ssites,
-                            {0: [nsubs]},
+                            {binary_sublattice_id: [nsubs]},
                             natoms,
                             shape_id,
                             symper_tuples,
@@ -1206,6 +1290,160 @@ class DSGenerator:
         """Update the set of unique configurations."""
         for sigmas_perm in [sigmas[np.ix_(per)] for per in symper]:
             full_list.add(tuple(sigmas_perm))
+
+    def add_binary_complements(
+        self,
+        mask_name=None,
+        mode="new",
+        skip_existing=True,
+        show_progress=True,
+    ):
+        """
+        Generate the binary complements of configurations (flip 0<->1 on substitutional sites).
+
+        Steps:
+        1) Check that parent lattice is binary (self.plat.is_nary(2)).
+        2) For each configuration, build/cached SuperCell for its shape_id.
+        3) Require exactly one substitutional sublattice:
+                len(scell.get_substitutional_tags()) == 1
+        4) Flip sigma entries at scell.get_substitutional_sites() (only those sites).
+        5) Either return a new DSGenerator with the complemented configurations (mode="new"),
+            or extend self by adding them (mode="extend").
+
+        Parameters
+        ----------
+        mask_name : str or None
+            If provided, only configurations in the mask are processed (uses get_configurations()).
+        mode : {"new", "extend"}
+            - "new": return a new DSGenerator with only complemented configs.
+            - "extend": add complemented configs to self and return self.
+        skip_existing : bool
+            If True, do not add complements that already exist (same sigma and shape_id).
+
+        Returns
+        -------
+        DSGenerator
+            The new generator (mode="new") or self (mode="extend").
+
+        Raises
+        ------
+        ValueError
+            If parent lattice is not binary, or if a configuration's supercell does not have
+            exactly one substitutional sublattice.
+        """
+
+        from clusterx.super_cell import SuperCell
+
+        if not self.plat.is_nary(2):
+            raise ValueError(
+                "add_binary_complements() requires a binary ParentLattice: self.plat.is_nary(2) must be True."
+            )
+
+        if mode not in {"new", "extend"}:
+            raise ValueError("mode must be 'new' or 'extend'.")
+
+        # Choose target container
+        if mode == "new":
+            out = self.__class__(self.plat)
+            out.scell_shapes = self.scell_shapes.copy(deep=True)
+            out.masks = dict(self.masks)
+            out.property_names = set(self.property_names)
+        else:
+            out = self
+
+        # Configs to process
+        configs_df = self.get_configurations(mask_name=mask_name)
+
+        # Cache per shape_id: {"sub_sites": [...]} (you can also store scell/tags if useful)
+        shape_cache = {}
+
+        # Existing membership structure
+        # Important: build membership *once* (not per row), and keep it cheap.
+        # We include shape_id in the key because the same sigma tuple can appear for different shapes.
+        if skip_existing:
+            existing = set(
+                (int(r.shape_id), tuple(r.sigma))
+                for r in out.configurations[["shape_id", "sigma"]].itertuples(
+                    index=False
+                )
+            )
+        else:
+            existing = None
+
+        # We will collect new rows in bulk
+        new_shape_ids = []
+        new_sigmas = []
+
+        # Fast iteration over rows: itertuples is much faster than iterrows
+        row_iter = configs_df[["shape_id", "sigma", "config_id"]].itertuples(
+            index=False
+        )
+
+        if show_progress:
+            row_iter = tqdm(
+                row_iter, total=len(configs_df), desc="Generating complements"
+            )
+
+        for r in row_iter:
+            shape_id = int(r.shape_id)
+            sigma = tuple(r.sigma)
+
+            cache_entry = shape_cache.get(shape_id)
+            if cache_entry is None:
+                scell = SuperCell(self.plat, p=self.get_scell_shape(shape_id))
+                tags = scell.get_substitutional_tags()
+                if len(tags) != 1:
+                    raise ValueError(
+                        f"Expected exactly one substitutional sublattice "
+                        f"(len(get_substitutional_tags())==1), but got {len(tags)} "
+                        f"for shape_id={shape_id}."
+                    )
+                sub_sites = list(scell.get_substitutional_sites())
+                cache_entry = {"sub_sites": sub_sites}
+                shape_cache[shape_id] = cache_entry
+
+            sub_sites = cache_entry["sub_sites"]
+
+            # Flip only substitutional sites
+            sigma_list = list(sigma)
+            for i in sub_sites:
+                v = sigma_list[i]
+                if v == 0:
+                    sigma_list[i] = 1
+                elif v == 1:
+                    sigma_list[i] = 0
+                else:
+                    raise ValueError(
+                        f"Non-binary occupation value {v} at sigma[{i}] "
+                        f"for config_id={r.config_id}, shape_id={shape_id}. "
+                        f"Expected only 0/1 on substitutional sites."
+                    )
+            flipped = tuple(sigma_list)
+
+            if skip_existing:
+                key = (shape_id, flipped)
+                if key in existing:
+                    continue
+                existing.add(key)
+
+            new_shape_ids.append(shape_id)
+            new_sigmas.append(flipped)
+
+        if not new_sigmas:
+            return out
+
+        # Add everything in ONE concat (critical for performance)
+        start_id = len(out.configurations)
+        new_df = pd.DataFrame(
+            {
+                "config_id": range(start_id, start_id + len(new_sigmas)),
+                "sigma": new_sigmas,
+                "shape_id": new_shape_ids,
+            }
+        )
+        out.configurations = pd.concat([out.configurations, new_df], ignore_index=True)
+
+        return out
 
 
 def _divisors(n):

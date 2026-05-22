@@ -48,12 +48,20 @@ commands = ["plot_property"]
         "mm",
         bool,
     ),
+    y_axis_label=(
+        "Label for the y-axis of the plot.",
+        "option",
+        "y",
+        str,
+    ),
     show_loo_predictions=(
         "Show Leave-One-Out cross-validation predictions.",
         "flag",
         "loo",
         bool,
     ),
+    ymin=("Minimum y-value for the plot axis.", "option", None, float),
+    ymax=("Maximum y-value for the plot axis.", "option", None, float),
 )
 def plot_property(
     sset_filepath: str,
@@ -64,7 +72,10 @@ def plot_property(
     fig_fname: Optional[str] = None,  # possible extensions: .npz, .json, .txt, .dat
     figdata_fname: Optional[str] = None,
     mark_min: bool = False,
+    y_axis_label: Optional[str] = None,
     show_loo_predictions: bool = False,
+    ymin: Optional[float] = None,
+    ymax: Optional[float] = None,
 ):
     """Make plot of property versus concentration"""
     cmd_message("head")
@@ -91,8 +102,13 @@ def plot_property(
         property_name,
         cemodel=model,
         show_plot=show_plot,
-        fig_fname=fig_fname,
+        fname=fig_fname,
+        site_type=1,
+        sigma=1,
         data_fname=figdata_fname,
         show_loo_predictions=show_loo_predictions,
         sset_gss=sset_gss,
+        yaxis_label=y_axis_label,
+        ymin=ymin,
+        ymax=ymax,
     )
