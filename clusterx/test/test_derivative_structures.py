@@ -125,6 +125,23 @@ def test_generate(
 
 
 @pytest.mark.parametrize("recursive", [False, True])
+def test_generate_degeneracy(ds_generator_empty, recursive):
+    p = np.diag([2, 2, 2])
+    ds_generator_empty.generate(
+        supercell_sizes=None,
+        num_subs_list=[[1], [2]],
+        sc_shape=p,
+        sc_shapes=None,
+        n_random=None,
+        random_state=42,
+        recursive=recursive,
+    )
+    for _, row in ds_generator_empty.configurations.iterrows():
+        print(row)
+        assert row["degeneracy"] != 0
+
+
+@pytest.mark.parametrize("recursive", [False, True])
 def test_generate_pure(ds_generator_empty, recursive):
     p = np.diag([2, 2, 2])
     ds_generator_empty.generate(

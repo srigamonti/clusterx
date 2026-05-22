@@ -525,21 +525,22 @@ class DSGenerator:
             return int(result.iloc[0]["size"])
         raise KeyError(f"Shape ID {shape_id} not found.")
 
-    def add_configuration(self, sigma, shape_id):
+    def add_configuration(self, sigma, shape_id, **kwargs):
         """
         Add a new configuration.
 
         Parameters:
         sigma (tuple): A tuple of integers representing the atomic configuration.
         shape_id (int): The shape_id linking the configuration to a cell shape.
+        **kwargs: Additional keyword arguments for the configuration.
         """
         new_id = len(self.configurations)
+        row_dict = {"config_id": new_id, "sigma": sigma, "shape_id": shape_id, **kwargs}
+        row_dict = {k: [v] for k, v in row_dict.items()}
         self.configurations = pd.concat(
             [
                 self.configurations,
-                pd.DataFrame(
-                    {"config_id": [new_id], "sigma": [sigma], "shape_id": [shape_id]}
-                ),
+                pd.DataFrame(row_dict),
             ],
             ignore_index=True,
         )
@@ -813,14 +814,14 @@ class DSGenerator:
                     if DSGenerator._validate_sigma(newsigma, nsubs, stypes):
                         children.add(newsigma)
 
-        unique_children = set()
+        unique_children = {}  # dict with child hash as key and degeneracy as value
         for child in children:
             if hash(child) not in seen:
                 all_hashes = {
                     hash(tuple(child[i] for i in per)) for per in symper_tuples
                 }
                 seen |= all_hashes
-                unique_children.add(child)
+                unique_children[child] = len(all_hashes)  # save degeneracy
 
         return unique_children, seen
 
@@ -838,6 +839,7 @@ class DSGenerator:
         current_nsubs=0,
         pbar=None,
         all_configs=None,
+        degeneracy=None,
     ):
         if sigma0 is None:
             sigma0 = (0,) * natoms
@@ -848,7 +850,11 @@ class DSGenerator:
         if all_configs is None:
             all_configs = set()
 
-        self.add_configuration(sigma=sigma0, shape_id=shape_id)
+        if degeneracy is None:
+            all_hashes = {hash(tuple(sigma0[i] for i in per)) for per in symper_tuples}
+            degeneracy = len(all_hashes)
+
+        self.add_configuration(sigma=sigma0, shape_id=shape_id, degeneracy=degeneracy)
         all_configs.add(hash(sigma0))
 
         if pbar:
@@ -864,9 +870,9 @@ class DSGenerator:
             pbar.set_postfix(
                 nseen=len(seen),
                 nchildren=len(children),
-                nsub=sum(1 for x in list(children)[0] if x != 0),
+                nsub=sum(1 for x in list(children.keys())[0] if x != 0),
             )
-        for child in children:
+        for child, degeneracy in children.items():
             self._generate_all_configurations_recursive(
                 ssites,
                 nsubs,
@@ -880,6 +886,7 @@ class DSGenerator:
                 current_nsubs=current_nsubs + 1,
                 pbar=pbar,
                 all_configs=all_configs,
+                degeneracy=degeneracy,
             )
 
         if DSGenerator._validate_sigma(sigma0, nsubs, stypes, exact=True):
@@ -941,18 +948,25 @@ class DSGenerator:
                         hash(tuple(sigma_trial[i] for i in per))
                         for per in self._symper_tuples
                     }
+                    degeneracy = len(all_hashes)
                     full_list |= all_hashes
-                    self.add_configuration(sigma=sigma_trial, shape_id=shape_id)
+                    self.add_configuration(
+                        sigma=sigma_trial, shape_id=shape_id, degeneracy=degeneracy
+                    )
 
             else:
                 # Slow path: only store the canonical hash
-                sigma_hash_canonical = min(
+                all_hashes = {
                     hash(tuple(sigma_trial[i] for i in per))
                     for per in self._symper_tuples
-                )
+                }
+                degeneracy = len(all_hashes)
+                sigma_hash_canonical = min(all_hashes)
                 if sigma_hash_canonical not in full_list:
                     full_list.add(sigma_hash_canonical)
-                    self.add_configuration(sigma=sigma_trial, shape_id=shape_id)
+                    self.add_configuration(
+                        sigma=sigma_trial, shape_id=shape_id, degeneracy=degeneracy
+                    )
 
             # Show memory usage in tqdm postfix
             pbar.set_postfix(
