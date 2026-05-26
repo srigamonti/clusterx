@@ -120,22 +120,21 @@ class StructureSelector:
         lower_conc_limit: float = 0.0,
         upper_conc_limit: float = 1.0
     ) -> float:
-        """Calculate the cluster expansions prediction variance of the structural property
-        averaged over all possible structures.
+        """Calculate mean property prediction variance over population.
 
         The input parameter 'domain_calculation_method'
-        defines with which method the domain matrix is calculated (see Mueller2010 PRB 82, 184107).
+        defines with which method the domain matrix is calculated.
+        (for an explanation of the different methods, see Mueller2010 PRB 82, 184107).
 
         The options for this input parameter are 'averagedConcentration', 'infiniteCrystalFiniteClusters',
         'byConcentration', 'vdWalleAndCeder'.
-        If 'byConcentration' is chosen, one needs to supply the routine with a second input parameter,
-        the 'concentration'. 'concentration' is limited to the range [0, 1] and means the concentration of one of the
-        binaries in the alloy.
-
+        If 'byConcentration' is chosen, one needs to supply the parameter 'concentration' in the range [0, 1].
         Parameters:
 
         domain_calculation_method: string
             Defines the method used to calculate the domain matrix.
+            Choose from: 'averagedConcentration', 'infiniteCrystalFiniteClusters','byConcentration',
+            'vdWalleAndCeder'.
         concentration: float
             Defines the concentration for which the domain matrix should be evaluated.
         lower_conc_limit: float
@@ -170,7 +169,7 @@ class StructureSelector:
         lower_conc_limit: float = 0.0,
         upper_conc_limit: float = 1.0,
     ) -> float:
-        """Select a structure to enter the training set
+        """Select a structure to add to the training set
 
         This method needs a candidate set. If no candidate set was passed to the class object,
         set it with set_candidate_set().
@@ -185,9 +184,11 @@ class StructureSelector:
         method: string
             Defines the method used to calculate the domain matrix. Options are
             'global_averagedConcentration', 'global_infiniteCrystalFiniteClusters', 'global_byConcentration',
-            'global_vdWalleAndCeder'
+            'global_vdWalleAndCeder' and 'greedy'.
         concentration: float
             Defines the concentration for which the domain matrix should be evaluated.
+            Provide a value in the range [0,1]. Must be provided if 'method' is 'global_byConcentration'.
+            Ignored in all other cases
         recompute_gram_matrix: bool
             Default is False, such that the correlation matrix of the training set
             is only computed once in the beginning.
@@ -310,7 +311,7 @@ class StructureSelector:
                 + str(method_list)
             )
 
-        # Calculate domain matrix from Mueller2010 paper PRB 82, 184107
+        # Calculate domain matrices with methods explained in Mueller2010 paper PRB 82, 184107
 
         npoints = self._cpool.get_all_npoints()
         number_clusters = len(npoints)
