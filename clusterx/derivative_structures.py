@@ -72,7 +72,11 @@ class DSGenerator:
     @classmethod
     def from_file(cls, filepath):
         """
-        Deserialize an instance of DSGenerator from a binary file using pickle.
+        Deserialize an instance of DSGenerator from a file.
+
+        The native format is a pickle file written by ``DSGenerator.serialize``.
+        As a convenience, this method also accepts database files written by
+        ``StructuresSet.serialize`` and converts them to a DSGenerator.
 
         Args:
             filepath (str): Path to the file from which the object will be loaded.
@@ -80,13 +84,73 @@ class DSGenerator:
         Returns:
             DSGenerator: An instance of the class loaded from the file.
         """
-        with open(filepath, "rb") as f:
-            dss = pickle.load(f)
+        pickle_error = None
+        try:
+            with open(filepath, "rb") as f:
+                dss = pickle.load(f)
+        except (pickle.UnpicklingError, EOFError) as err:
+            pickle_error = err
+        else:
+            if not isinstance(dss, cls):
+                raise TypeError(
+                    f"Expected object of type {cls.__name__}, but got {type(dss).__name__}"
+                )
 
-        if not isinstance(dss, cls):
+            return dss
+
+        try:
+            from clusterx.structures_set import StructuresSet
+
+            return cls.from_structures_set(StructuresSet(filepath=filepath))
+        except Exception as err:
+            raise ValueError(
+                f"Could not load '{filepath}' as a pickled {cls.__name__} "
+                "or as a serialized StructuresSet database. "
+                f"Pickle error: {pickle_error}. StructuresSet error: {err}"
+            ) from err
+
+    @classmethod
+    def from_structures_set(cls, structures_set):
+        """
+        Build a DSGenerator from a StructuresSet.
+
+        Each structure becomes one configuration. Unique supercell
+        transformations are stored in ``scell_shapes`` and all StructuresSet
+        properties are copied into configuration columns.
+        """
+        from clusterx.structures_set import StructuresSet
+
+        if not isinstance(structures_set, StructuresSet):
             raise TypeError(
-                f"Expected object of type {cls.__name__}, but got {type(dss).__name__}"
+                "Expected object of type StructuresSet, "
+                f"but got {type(structures_set).__name__}"
             )
+
+        dss = cls(structures_set.get_parent_lattice())
+        property_values = structures_set.get_property()
+        rows = []
+
+        for config_id, structure in enumerate(structures_set):
+            shape = np.asarray(structure.get_supercell().get_transformation())
+            shape_id = dss.add_scell_shape(shape)
+            sigma = tuple(int(value) for value in structure.get_sigmas())
+            row = {"config_id": config_id, "sigma": sigma, "shape_id": shape_id}
+
+            for property_name, values in property_values.items():
+                row[property_name] = (
+                    values[config_id] if config_id < len(values) else None
+                )
+
+            rows.append(row)
+
+        columns = ["config_id", "sigma", "shape_id"] + list(property_values)
+        dss.configurations = pd.DataFrame(rows, columns=columns)
+        dss.property_names = set(property_values)
+
+        if "mask" in property_values:
+            for config_id, mask_name in enumerate(property_values["mask"]):
+                if isinstance(mask_name, str):
+                    dss.masks.setdefault(mask_name, []).append(config_id)
 
         return dss
 

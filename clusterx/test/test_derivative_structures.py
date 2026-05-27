@@ -277,6 +277,54 @@ def test_serialize_load(ds_generator_full, tmp_path):
     )
 
 
+def test_from_file_loads_structures_set_db(ds_generator_full, tmp_path):
+    data = ds_generator_full.configurations.head(4).copy()
+    energies = [float(i) for i in range(len(data))]
+    masks = ["selected", "other", "selected", None]
+    sset = StructuresSet(ds_generator_full.plat)
+    scell_cache = {}
+
+    for _, row in data.iterrows():
+        shape_id = row["shape_id"]
+        if shape_id not in scell_cache:
+            scell_cache[shape_id] = SuperCell(
+                ds_generator_full.plat,
+                ds_generator_full.get_scell_shape(shape_id),
+            )
+
+        sset.add_structure(Structure(scell_cache[shape_id], sigmas=row["sigma"]))
+
+    sset.set_property_values(
+        property_name="energy", property_vals=energies, update_db=False
+    )
+    sset.set_property_values(property_name="mask", property_vals=masks, update_db=False)
+
+    filepath = tmp_path / "sset.db"
+    sset.serialize(filepath=str(filepath), ase_db_type="db", overwrite=True, rm_vac=False)
+
+    dss = DSGenerator.from_file(filepath)
+
+    assert dss.plat == ds_generator_full.plat
+    assert dss.property_names == {"energy", "mask"}
+    assert dss.masks == {"selected": [0, 2], "other": [1]}
+    assert dss.configurations["config_id"].tolist() == list(range(len(data)))
+    assert dss.configurations["sigma"].tolist() == [
+        tuple(row["sigma"]) for _, row in data.iterrows()
+    ]
+    np.testing.assert_array_equal(dss.configurations["energy"], energies)
+    loaded_masks = dss.configurations["mask"].tolist()
+    assert loaded_masks[:3] == masks[:3]
+    assert pd.isna(loaded_masks[3])
+
+    for loaded_shape_id, original_shape_id in zip(
+        dss.configurations["shape_id"], data["shape_id"]
+    ):
+        np.testing.assert_array_equal(
+            dss.get_scell_shape(loaded_shape_id),
+            ds_generator_full.get_scell_shape(original_shape_id),
+        )
+
+
 def test_concentration(ds_generator_full):
     assert "frconc_binary" not in ds_generator_full.configurations.columns
     ds_generator_full.add_fractional_concentration_binary()
