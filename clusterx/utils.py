@@ -1050,15 +1050,18 @@ def make_supercell(prim, P, wrap=True, tol=1e-5):
 def decorate_supercell(
     scell: SuperCell,
     atoms: Atoms,
-    tol: float = 1e-5,
+    tol: Optional[float] = 1e-5,
+    tols: Optional[List[float]] = None,
     wrap: bool = False,
+    wrap_eps: float = 0.05,
 ) -> Structure:
     """
     Create a clusterx.Structure by decorating a SuperCell with species taken
     from an ASE Atoms object.
 
     For each site in `scell`, this function finds a matching atom in `atoms`
-    whose Cartesian position is within `tol` (Euclidean distance).
+    whose Cartesian position is within a distance tolerance (Euclidean
+    distance).
     The corresponding atomic number is then used as the decoration.
 
     Parameters
@@ -1068,10 +1071,16 @@ def decorate_supercell(
     atoms : Atoms
         ASE Atoms instance containing the atomic positions and species.
     tol : float, optional
-        Distance tolerance for matching positions. Default is 1e-5.
+        Distance tolerance for matching positions. Used only when ``tols``
+        is ``None``. Default is 1e-5.
+    tols : list[float], optional
+        If provided, ``decorate_supercell`` ignores ``tol`` and tries each
+        tolerance in increasing order until a valid decoration is found.
     wrap : bool, optional
         Whether to wrap ASE atomic positions into the unit cell before matching.
         Passed directly to `atoms.get_positions(wrap=wrap)`.
+    wrap_eps : float, optional
+        ``eps`` argument forwarded to position wrapping.
 
     Returns
     -------
@@ -1081,50 +1090,76 @@ def decorate_supercell(
     Raises
     ------
     ValueError
-        If the number of matched sites does not equal the number of sites
-        in `scell`.
+        If no valid decoration is found for the tested tolerance(s).
     """
     from clusterx.structure import Structure
 
     # Pre-fetch positions and atomic numbers for efficiency
     sc_positions = np.asarray(scell.get_positions())
-    at_positions = np.asarray(atoms.get_positions(wrap=wrap))
+    at_positions = np.asarray(atoms.get_positions(wrap=wrap, eps=wrap_eps))
     at_numbers = np.asarray(atoms.get_atomic_numbers())
 
-    decorations = []
+    def _decorate_with_tol(tol_value: float) -> Structure:
+        decorations = []
 
-    for i_p_sc, p_sc in enumerate(sc_positions):
-        # Compute distances from this supercell site to all atoms
-        deltas = at_positions - p_sc
-        dists = np.linalg.norm(deltas, axis=1)
+        for i_p_sc, p_sc in enumerate(sc_positions):
+            # Compute distances from this supercell site to all atoms
+            deltas = at_positions - p_sc
+            dists = np.linalg.norm(deltas, axis=1)
 
-        # Find atoms within tolerance
-        candidates = np.where(dists < tol)[0]
+            # Find atoms within tolerance
+            candidates = np.where(dists < tol_value)[0]
 
-        if len(candidates) == 0:
-            mind = min(dists)
-            i_mind = np.where(dists == min(dists))[0][0]
+            if len(candidates) == 0:
+                mind = min(dists)
+                i_mind = np.where(dists == min(dists))[0][0]
+                raise ValueError(
+                    f"No matching atom found within tolerance {tol_value} "
+                    f"for:\n"
+                    f"supercell position {i_p_sc}: {p_sc}.\n"
+                    f"atoms position {i_mind}:     {at_positions[i_mind]}\n"
+                    f" Smallest distance "
+                    f"to this position is {mind}."
+                )
+
+            # If multiple atoms match, just take the first one
+            i_match = candidates[0]
+            decorations.append(int(at_numbers[i_match]))
+
+        if len(decorations) != len(scell):
             raise ValueError(
-                f"No matching atom found within tolerance {tol} "
-                f"for:\n"
-                f"supercell position {i_p_sc}: {p_sc}.\n"
-                f"atoms position {i_mind}:     {at_positions[i_mind]}\n"
-                f" Smallest distance "
-                f"to this position is {mind}."
+                f"Number of decorations ({len(decorations)}) does not match "
+                f"number of sites in supercell ({len(scell)}). You may need "
+                f"to increase tol (currently {tol_value})."
             )
 
-        # If multiple atoms match, just take the first one
-        i_match = candidates[0]
-        decorations.append(int(at_numbers[i_match]))
+        return Structure(scell, decorations)
 
-    if len(decorations) != len(scell):
+    if tols is not None:
+        if len(tols) == 0:
+            raise ValueError(
+                "Parameter 'tols' was provided but is empty. "
+                "Provide at least one tolerance value."
+            )
+
+        sorted_tols = sorted(tols)
+        last_error = None
+
+        for tol_value in sorted_tols:
+            try:
+                return _decorate_with_tol(tol_value)
+            except ValueError as err:
+                last_error = err
+
         raise ValueError(
-            f"Number of decorations ({len(decorations)}) does not match "
-            f"number of sites in supercell ({len(scell)}). You may need "
-            f"to increase tol (currently {tol})."
-        )
+            f"Could not decorate supercell with any tolerance in {sorted_tols}. "
+            f"Last error: {last_error}"
+        ) from last_error
 
-    return Structure(scell, decorations)
+    if tol is None:
+        raise ValueError("Parameter 'tol' cannot be None when 'tols' is not provided.")
+
+    return _decorate_with_tol(tol)
 
 
 def super_structure(struc0, d):
@@ -1564,8 +1599,9 @@ def check_and_convert_integer_matrix(A, tol=1e-8):
 def find_sc_shape(
     scell,
     pcell,
-    threshold_length=1e-8,
+    threshold_length=1e-5,
     tol_int=1e-3,
+    true_rescale=False,
     n_atoms_scell=None,
     n_atoms_pcell=None,
 ):
@@ -1622,7 +1658,9 @@ def find_sc_shape(
 
     shape = scell @ np.linalg.inv(pcell)
 
-    shape_rescaled, factor = rescale_by_first_nonzero(shape)
+    shape_rescaled, factor = (
+        rescale_by_first_nonzero(shape) if true_rescale else (shape.copy(), 1.0)
+    )
     is_shape_int, shape_int = check_and_convert_integer_matrix(
         shape_rescaled, tol=tol_int
     )
@@ -1632,9 +1670,42 @@ def find_sc_shape(
     if n_atoms_scell is not None and n_atoms_pcell is not None:
         ratio = n_atoms_scell // n_atoms_pcell
         if ratio != sc_index:
+            shape_str = np.array2string(
+                shape,
+                precision=10,
+                suppress_small=False,
+                separator=", ",
+            )
+            shape_rescaled_str = np.array2string(
+                shape_rescaled,
+                precision=10,
+                suppress_small=False,
+                separator=", ",
+            )
+            shape_int_str = np.array2string(
+                shape_int,
+                separator=", ",
+            )
+            pcell_str = np.array2string(
+                pcell,
+                precision=10,
+                suppress_small=False,
+                separator=", ",
+            )
+            scell_str = np.array2string(
+                scell,
+                precision=10,
+                suppress_small=False,
+                separator=", ",
+            )
             raise ValueError(
                 f"Atom-count ratio ({n_atoms_scell}/{n_atoms_pcell} = {ratio}) "
-                f"does not match |det(shape_int)| = {sc_index}."
+                f"does not match |det(shape_int)| = {sc_index}.\n"
+                f"shape =\n{shape_str}\n"
+                f"shape_rescaled =\n{shape_rescaled_str}\n"
+                f"shape_int =\n{shape_int_str}\n"
+                f"pcell =\n{pcell_str}\n"
+                f"scell =\n{scell_str}"
             )
 
     return is_shape_int, shape_int, shape_rescaled, shape, sc_index
