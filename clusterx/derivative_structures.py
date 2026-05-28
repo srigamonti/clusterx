@@ -1077,8 +1077,12 @@ class DSGenerator:
 
         for sigma in configurations:
             if tuple(sigma) not in full_list:
-                self.add_configuration(sigma=sigma, shape_id=shape_id)
-                self._update_full_list(sigma, symper, full_list)
+                unique_transformations = self._transformations_unique(sigma, symper)
+                degeneracy = len(unique_transformations)
+                full_list |= unique_transformations
+                self.add_configuration(
+                    sigma=sigma, shape_id=shape_id, degeneracy=degeneracy
+                )
 
         return len(self.configurations) - num_conf_start
 
@@ -1288,8 +1292,16 @@ class DSGenerator:
 
     def _update_full_list(self, sigmas, symper, full_list):
         """Update the set of unique configurations."""
+        # NOTE: usage of this should be replaced with _transformations_unique
         for sigmas_perm in [sigmas[np.ix_(per)] for per in symper]:
             full_list.add(tuple(sigmas_perm))
+
+    def _transformations_unique(
+        self, sigmas: np.ndarray, symper: List[np.ndarray]
+    ) -> Set[Tuple[int]]:
+        """Get unique (in terms of sigma permutation) transformations of a
+        sigma array, that are equivalent by symmetry."""
+        return {tuple(sigmas[np.ix_(per)]) for per in symper}
 
     def add_binary_complements(
         self,

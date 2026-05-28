@@ -1,5 +1,7 @@
 """Test the derivative structures module."""
 
+import math
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -27,6 +29,27 @@ def parent_lattice():
     sub = Atoms("Al2", positions=positions, cell=cell, pbc=pbc)
 
     plat = ParentLattice(pri, substitutions=[sub], pbc=pbc)
+    return plat
+
+
+@pytest.fixture
+def plat_perov():
+    """Perovskite multi-sublattice parent lattice"""
+    cell = [6, 6, 6]
+    positions = [
+        [0, 0, 0],
+        [3, 3, 3],
+        [0, 3, 3],
+        [3, 0, 3],
+        [3, 3, 0],
+    ]
+    pbc = [True, True, True]
+    pri = Atoms(["Cs", "Pb", "I", "I", "I"], positions=positions, cell=cell, pbc=pbc)
+    sub_Sn = Atoms(["Cs", "Sn", "I", "I", "I"], positions=positions, cell=cell, pbc=pbc)
+    sub_Br = Atoms(
+        ["Cs", "Pb", "Br", "Br", "Br"], positions=positions, cell=cell, pbc=pbc
+    )
+    plat = ParentLattice(pri, substitutions=[sub_Sn, sub_Br], pbc=pbc)
     return plat
 
 
@@ -89,6 +112,21 @@ def test_cemodel_calc(ds_generator_full, model_, request):
         dss.compute_properties(property_names=prop, cemodel=model)
         for prop_single in prop:
             assert prop_single in dss.configurations.columns
+
+
+def test_generate_perov(plat_perov):
+    ds_generator = DSGenerator(plat_perov)
+    plat_perov.print_sublattice_types()
+    p = [1, 1, 1]
+    max_Br = np.prod(p) * 3
+    max_Sn = np.prod(p)
+    ds_generator.generate(
+        num_subs_list=[{0: max_Br // 2, 2: max_Sn // 2}],
+        sc_shape=np.diag(p),
+        recursive=False,
+    )
+    assert ds_generator.configurations["degeneracy"].sum() > 0
+    assert len(ds_generator.configurations) > 0
 
 
 @pytest.mark.parametrize("recursive", [False, True])
