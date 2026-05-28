@@ -20,12 +20,34 @@ from ase.data import chemical_symbols as cs
 
 
 def grid_mapping(grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple):
-    """Map values from grid to reduced grid around grid index i_grid.
+    """Extract a periodic local window of ``grid`` around ``i_grid``.
 
-    **parameters**
-    ``grid``: ndarray, shape (pX, pY, pZ, ..., pd n)
-    ``i_grid``: ndarray, shape (d + 1,)
-    ``p_reduced``: tuple of int, shape (d,)
+    The input ``grid`` is interpreted as a ``d``-dimensional spatial lattice with
+    one trailing feature axis. The function builds a window of size
+    ``p_reduced`` centered at ``i_grid[:-1]`` in lattice coordinates. Spatial
+    indexing is periodic (wrap-around) in every lattice direction.
+
+    Parameters
+    ----------
+    grid : np.ndarray
+        Array with shape ``(n1, n2, ..., nd, n_features)``.
+    i_grid : np.ndarray
+        Center index with shape ``(d + 1,)``. The first ``d`` entries are the
+        spatial lattice coordinates, and the last entry is a platform/site index
+        that is carried over to the returned center index.
+    p_reduced : tuple[int, ...]
+        Window shape along spatial axes, length ``d``.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        ``(grid_reduced, i_grid_new)`` where:
+
+        - ``grid_reduced`` has shape ``(*p_reduced, n_features)`` and contains
+          the periodically wrapped local window.
+        - ``i_grid_new`` has shape ``(d + 1,)`` and equals
+          ``[p_reduced[k] // 2 for k in range(d)] + [i_grid[-1]]``, i.e. the
+          center of the reduced window plus the original platform/site index.
     """
     d = len(grid.shape) - 1
     plat_index = i_grid[-1]
@@ -241,9 +263,7 @@ def _is_integrable(s):
         return False
 
 
-def list_integer_named_folders(
-    root=".", prefix="", suffix="", containing_files=None, not_containing_files=None
-):
+def list_integer_named_folders(root=".", prefix="", suffix="", containing_files=None, not_containing_files=None):
     """Return integer-named folders or their original string names.
 
     Scans folders in `root` and detects those whose names match:
@@ -525,9 +545,7 @@ def atat_to_cell(
         for inr, nr in enumerate(species):
             nrs[inr] = int(nr[0])
 
-        plat = ParentLattice(
-            Atoms(positions=r, cell=cell, numbers=nrs, pbc=pbc), sites=species, pbc=pbc
-        )
+        plat = ParentLattice(Atoms(positions=r, cell=cell, numbers=nrs, pbc=pbc), sites=species, pbc=pbc)
         return plat
     if interpret_as == "super_cell":
         from clusterx.structure import Structure
@@ -605,9 +623,7 @@ def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
         sdistances = cdist(
             cl, sc, metric="euclidean"
         )  # Evaluate all (scaled) distances between cluster points to scell sites
-        idxs = np.argwhere(np.abs(sdistances) < tol)[
-            :, 1
-        ]  # Atom indexes of the transformed cluster
+        idxs = np.argwhere(np.abs(sdistances) < tol)[:, 1]  # Atom indexes of the transformed cluster
 
     return idxs
 
@@ -809,12 +825,7 @@ class PolynomialFunction:
     def print_polynomial(self):
         outstring = ""
         for exponential in self.exponentials:
-            outstring += (
-                str(exponential.coefficient)
-                + " *  x^"
-                + str(exponential.exponent)
-                + " + "
-            )
+            outstring += str(exponential.coefficient) + " *  x^" + str(exponential.exponent) + " + "
         outstring = outstring[:-3]
         print(outstring)
 
@@ -926,9 +937,7 @@ def sort_atoms(atoms, key=(2, 1, 0)):
         _nrs = np.delete(np.array(_pn), [0, 1, 2], 1).flatten()
         from ase import Atoms
 
-        return Atoms(
-            positions=_poss, numbers=_nrs, cell=atoms.get_cell(), pbc=atoms.get_pbc()
-        )
+        return Atoms(positions=_poss, numbers=_nrs, cell=atoms.get_cell(), pbc=atoms.get_pbc())
 
 
 def remove_vacancies(at):
@@ -1036,9 +1045,7 @@ def make_supercell(prim, P, wrap=True, tol=1e-5):
     # check number of atoms is correct
     n_target = np.abs(int(np.round(np.linalg.det(supercell_matrix) * len(prim))))
     if n_target != len(superatoms):
-        msg = "Number of atoms in supercell: {}, expected: {}".format(
-            n_target, len(superatoms)
-        )
+        msg = "Number of atoms in supercell: {}, expected: {}".format(n_target, len(superatoms))
         raise SupercellError(msg)
 
     if wrap:
@@ -1137,10 +1144,7 @@ def decorate_supercell(
 
     if tols is not None:
         if len(tols) == 0:
-            raise ValueError(
-                "Parameter 'tols' was provided but is empty. "
-                "Provide at least one tolerance value."
-            )
+            raise ValueError("Parameter 'tols' was provided but is empty. Provide at least one tolerance value.")
 
         sorted_tols = sorted(tols)
         last_error = None
@@ -1152,8 +1156,7 @@ def decorate_supercell(
                 last_error = err
 
         raise ValueError(
-            f"Could not decorate supercell with any tolerance in {sorted_tols}. "
-            f"Last error: {last_error}"
+            f"Could not decorate supercell with any tolerance in {sorted_tols}. Last error: {last_error}"
         ) from last_error
 
     if tol is None:
@@ -1274,9 +1277,7 @@ def sset_equivalence_check(
     elif comat is None:
         from clusterx.correlations import CorrelationsCalculator
 
-        ccalc = CorrelationsCalculator(
-            basis=basis, parent_lattice=sset.get_parent_lattice(), clusters_pool=cpool
-        )
+        ccalc = CorrelationsCalculator(basis=basis, parent_lattice=sset.get_parent_lattice(), clusters_pool=cpool)
         comat = ccalc.get_correlation_matrix(sset)
 
     nstr = len(sset)
@@ -1378,9 +1379,7 @@ def atoms_equivalence_check(atoms, to_primitive=True, pretty_print=False):
     return id_str_list
 
 
-def report_sset_equivalence_check(
-    sset, sset_equivalence_check_output, property_name=None, tol=0.0
-):
+def report_sset_equivalence_check(sset, sset_equivalence_check_output, property_name=None, tol=0.0):
     """Generate report of equivalent structures
 
     Writes to files: ``sset_unique_sym.json`` and ``sset_unique_gss.json``.
@@ -1524,10 +1523,7 @@ def normalize_nsubs_list(
     if isinstance(nsubs_list, list):
         if all(isinstance(i, int) for i in nsubs_list):
             return [nsubs_list]
-        if all(
-            isinstance(i, list) and all(isinstance(j, int) for j in i)
-            for i in nsubs_list
-        ):
+        if all(isinstance(i, list) and all(isinstance(j, int) for j in i) for i in nsubs_list):
             return nsubs_list
     raise ValueError("Invalid format for nsubs_list")
 
@@ -1658,12 +1654,8 @@ def find_sc_shape(
 
     shape = scell @ np.linalg.inv(pcell)
 
-    shape_rescaled, factor = (
-        rescale_by_first_nonzero(shape) if true_rescale else (shape.copy(), 1.0)
-    )
-    is_shape_int, shape_int = check_and_convert_integer_matrix(
-        shape_rescaled, tol=tol_int
-    )
+    shape_rescaled, factor = rescale_by_first_nonzero(shape) if true_rescale else (shape.copy(), 1.0)
+    is_shape_int, shape_int = check_and_convert_integer_matrix(shape_rescaled, tol=tol_int)
 
     sc_index = abs(int(np.round(np.linalg.det(shape_int))))
 
