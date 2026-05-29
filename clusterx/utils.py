@@ -1314,6 +1314,85 @@ def sset_equivalence_check(
     return id_str_list
 
 
+def ssets_equivalence_check(
+    sset1,
+    sset2=None,
+    to_primitive=True,
+    pretty_print=False,
+):
+    """Find equivalent structures within or between StructuresSet objects.
+
+    If only ``sset1`` is provided, structures are compared with other structures
+    in the same set and the return value follows ``sset_equivalence_check``:
+    each key is a representative index and each value contains all equivalent
+    indices from ``sset1``.
+
+    If ``sset2`` is provided, each structure in ``sset1`` is compared with all
+    structures in ``sset2``. In that case every key is an index from ``sset1``
+    and every value contains the matching indices from ``sset2``.
+
+    Structures are compared only when their
+    ``Atoms.get_chemical_formula(mode="hill", empirical=True)`` strings are
+    identical.
+    """
+    import numpy as np
+    from ase.utils.structure_comparator import SymmetryEquivalenceCheck
+
+    comp = SymmetryEquivalenceCheck(to_primitive=to_primitive)
+    compare_same_set = sset2 is None
+    if sset2 is None:
+        sset2 = sset1
+
+    atoms1 = [structure.get_atoms() for structure in sset1]
+    atoms2 = atoms1 if compare_same_set else [structure.get_atoms() for structure in sset2]
+    formulas1 = [
+        atoms.get_chemical_formula(mode="hill", empirical=True) for atoms in atoms1
+    ]
+    formulas2 = formulas1 if compare_same_set else [
+        atoms.get_chemical_formula(mode="hill", empirical=True) for atoms in atoms2
+    ]
+
+    id_str_list = {}
+
+    if compare_same_set:
+        crossedout = []
+        for i, atoms_i in enumerate(atoms1):
+            if i in crossedout:
+                continue
+
+            crossedout.append(i)
+            subset = [i]
+            formula_i = formulas1[i]
+
+            for j in range(i + 1, len(atoms1)):
+                if formulas1[j] != formula_i:
+                    continue
+
+                if comp.compare(atoms_i, atoms1[j]):
+                    crossedout.append(j)
+                    subset.append(j)
+
+            id_str_list[i] = np.array(subset, dtype="i4")
+    else:
+        for i, atoms_i in enumerate(atoms1):
+            subset = []
+            formula_i = formulas1[i]
+
+            for j, atoms_j in enumerate(atoms2):
+                if formulas2[j] != formula_i:
+                    continue
+
+                if comp.compare(atoms_i, atoms_j):
+                    subset.append(j)
+
+            id_str_list[i] = np.array(subset, dtype="i4")
+
+    if pretty_print:
+        print(id_str_list)
+
+    return id_str_list
+
+
 def atoms_equivalence_check(atoms, to_primitive=True, pretty_print=False):
     """Find equivalent structures in an array of Atoms objects
 
