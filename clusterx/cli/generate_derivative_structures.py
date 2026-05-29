@@ -554,49 +554,12 @@ def generate_derivative_structures(
         case "to_sset" | "convert_to_sset":
             # Requires
             # task = "convert_to_sset"
-            # plat_filepath
             # dss_filepath
             # mask_name (optional)
             # sset_filepath
 
-            plat = ParentLattice(filepath=plat_filepath)
-            sset = StructuresSet(parent_lattice=plat)
-            with open(dss_filepath, "rb") as f:
-                dss = pickle.load(f)
-
-            configurations = dss.configurations
-            masks = dss.masks
-            sc_shapes = dss.scell_shapes
-
-            data = (
-                configurations[configurations["config_id"].isin(masks[mask_name])]
-                if mask_name is not None
-                else configurations
-            )
-
-            nstruc = len(data)
-
-            print("Creating sset object")
-            scell_cache = {}
-            for i in range(nstruc):
-                sigma = data.iloc[i]["sigma"]
-                shape_id = data.iloc[i]["shape_id"]
-
-                if shape_id not in scell_cache:
-                    sc_shape = sc_shapes.loc[
-                        sc_shapes["shape_id"] == shape_id, "shape"
-                    ].iloc[0]
-                    scell_cache[shape_id] = SuperCell(plat, sc_shape)
-
-                scell = scell_cache[shape_id]
-                sset.add_structure(Structure(scell, sigmas=sigma), mask=mask_name)
-
-            for property_name in dss.get_property_names():
-                sset.set_property_values(
-                    property_name=property_name,
-                    property_vals=data[property_name].tolist(),
-                )
-
+            dss = DSGenerator.from_file(dss_filepath)
+            sset = dss.to_structures_set(mask_name=mask_name)
             print("serializing sset")
             sset.serialize(filepath=sset_filepath, overwrite=True)
 

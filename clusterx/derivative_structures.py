@@ -72,11 +72,7 @@ class DSGenerator:
     @classmethod
     def from_file(cls, filepath):
         """
-        Deserialize an instance of DSGenerator from a file.
-
-        The native format is a pickle file written by ``DSGenerator.serialize``.
-        As a convenience, this method also accepts database files written by
-        ``StructuresSet.serialize`` and converts them to a DSGenerator.
+        Deserialize an instance of DSGenerator from a native pickle file.
 
         Args:
             filepath (str): Path to the file from which the object will be loaded.
@@ -84,30 +80,24 @@ class DSGenerator:
         Returns:
             DSGenerator: An instance of the class loaded from the file.
         """
-        pickle_error = None
-        try:
-            with open(filepath, "rb") as f:
-                dss = pickle.load(f)
-        except (pickle.UnpicklingError, EOFError) as err:
-            pickle_error = err
-        else:
-            if not isinstance(dss, cls):
-                raise TypeError(
-                    f"Expected object of type {cls.__name__}, but got {type(dss).__name__}"
-                )
+        with open(filepath, "rb") as f:
+            dss = pickle.load(f)
 
-            return dss
+        if not isinstance(dss, cls):
+            raise TypeError(
+                f"Expected object of type {cls.__name__}, but got {type(dss).__name__}"
+            )
 
-        try:
-            from clusterx.structures_set import StructuresSet
+        return dss
 
-            return cls.from_structures_set(StructuresSet(filepath=filepath))
-        except Exception as err:
-            raise ValueError(
-                f"Could not load '{filepath}' as a pickled {cls.__name__} "
-                "or as a serialized StructuresSet database. "
-                f"Pickle error: {pickle_error}. StructuresSet error: {err}"
-            ) from err
+    @classmethod
+    def from_structures_set_file(cls, filepath, quick_parse=False):
+        """Build a DSGenerator from a serialized StructuresSet file."""
+        from clusterx.structures_set import StructuresSet
+
+        return cls.from_structures_set(
+            StructuresSet(filepath=filepath, quick_parse=quick_parse)
+        )
 
     @classmethod
     def from_structures_set(cls, structures_set):
@@ -153,6 +143,46 @@ class DSGenerator:
                     dss.masks.setdefault(mask_name, []).append(config_id)
 
         return dss
+
+    def to_structures_set(self, mask_name=None, include_properties=True):
+        """Build a StructuresSet from this DSGenerator.
+
+        If ``mask_name`` is provided, only configurations in that mask are
+        converted and the output StructuresSet receives a ``mask`` property with
+        that mask name.
+        """
+        from clusterx.structures_set import StructuresSet
+
+        sset = StructuresSet(parent_lattice=self.plat)
+        data = self.get_configurations(mask_name=mask_name)
+        scell_cache = {}
+
+        for _, row in data.iterrows():
+            shape_id = row["shape_id"]
+            if shape_id not in scell_cache:
+                scell_cache[shape_id] = SuperCell(
+                    self.plat,
+                    self.get_scell_shape(shape_id),
+                )
+
+            props = {}
+            if mask_name is not None:
+                props["mask"] = mask_name
+            sset.add_structure(
+                scell_cache[shape_id].gen_structure(sigmas=row["sigma"]),
+                **props,
+            )
+
+        if include_properties:
+            for property_name in self.get_property_names():
+                if property_name in data.columns:
+                    sset.set_property_values(
+                        property_name=property_name,
+                        property_vals=data[property_name].tolist(),
+                        update_db=False,
+                    )
+
+        return sset
 
     def add_mask(self, mask_name, config_id_list):
         self.masks[mask_name] = config_id_list
