@@ -16,9 +16,11 @@ from clusterx.super_cell import SuperCell
 from clusterx.model import Model, ModelBuilder
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
+from clusterx.derivative_structures import DSGenerator
 from clusterx.structures_set import StructuresSet
 from clusterx.calculators.emt import EMT2
 from clusterx.cli.build_model import build_model
+from clusterx.cli.compute_predictions import compute_predictions
 
 
 @pytest.fixture
@@ -120,6 +122,70 @@ def test_serialize_load(model, structure):
     prediction = model.predict(structure)
     prediction_loaded = model_loaded.predict(structure)
     np.testing.assert_allclose(prediction_loaded, prediction)
+
+
+def test_compute_predictions_cli_structures_set(dummy_ce_11, plat, scell, tmp_path, capsys):
+    sset_filepath = tmp_path / "sset.db"
+    model_filepath = tmp_path / "model.pickle"
+    plat_filepath = tmp_path / "plat.json"
+    property_name = "predicted_energy"
+    sigmas0 = np.zeros(scell.get_natoms(), dtype=int)
+    sigmas1 = sigmas0.copy()
+    sigmas1[0] = 1
+    structures_set = StructuresSet(plat)
+    structures_set.add_structure(scell.gen_structure(sigmas=sigmas0))
+    structures_set.add_structure(scell.gen_structure(sigmas=sigmas1))
+    expected = [dummy_ce_11.predict(structure) for structure in structures_set]
+
+    structures_set.serialize(
+        filepath=str(sset_filepath),
+        ase_db_type="db",
+        overwrite=True,
+        rm_vac=False,
+    )
+    dummy_ce_11.serialize(filepath=str(model_filepath))
+    plat.serialize(filepath=str(plat_filepath))
+
+    compute_predictions(
+        str(sset_filepath),
+        property_name,
+        str(model_filepath),
+        plat_filepath=str(plat_filepath),
+    )
+
+    out = capsys.readouterr().out
+    assert "CE model property_name is 'energy'" in out
+    sset_loaded = StructuresSet(filepath=str(sset_filepath))
+    np.testing.assert_allclose(
+        sset_loaded.get_property_values(property_name),
+        expected,
+    )
+
+
+def test_compute_predictions_cli_dsgenerator(dummy_ce_11, plat, tmp_path):
+    dss_filepath = tmp_path / "dss.pickle"
+    model_filepath = tmp_path / "model.pickle"
+    property_name = "predicted_energy"
+    shape = np.diag([2, 1, 1])
+    scell = SuperCell(plat, shape)
+    sigmas = [(1, 0), (0, 0)]
+    expected = [dummy_ce_11.predict(scell.gen_structure(sigmas=sigma)) for sigma in sigmas]
+
+    dss = DSGenerator(plat)
+    shape_id = dss.add_scell_shape(shape)
+    for sigma in sigmas:
+        dss.add_configuration(sigma=sigma, shape_id=shape_id)
+    dss.serialize(filepath=str(dss_filepath))
+    dummy_ce_11.serialize(filepath=str(model_filepath))
+
+    compute_predictions(str(dss_filepath), property_name, str(model_filepath))
+
+    dss_loaded = DSGenerator.from_file(dss_filepath)
+    assert property_name in dss_loaded.get_property_names()
+    np.testing.assert_allclose(
+        dss_loaded.configurations[property_name].to_numpy(),
+        expected,
+    )
 
 
 def test_ecis_estimator_init(model, model_estimator, structure):

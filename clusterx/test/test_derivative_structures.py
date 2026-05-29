@@ -7,6 +7,8 @@ from ase import Atoms
 from ase.data import atomic_numbers as an
 
 from clusterx.calculators.emt import EMT2
+from clusterx.cli.convert_dss_to_sset import convert_dss_to_sset
+from clusterx.cli.convert_sset_to_dss import convert_sset_to_dss
 from clusterx.derivative_structures import DSGenerator, get_HNFs, get_unique_supercells
 from clusterx.parent_lattice import ParentLattice
 from clusterx.structure import Structure
@@ -277,7 +279,7 @@ def test_serialize_load(ds_generator_full, tmp_path):
     )
 
 
-def test_from_file_loads_structures_set_db(ds_generator_full, tmp_path):
+def test_from_structures_set_file_loads_structures_set_db(ds_generator_full, tmp_path):
     data = ds_generator_full.configurations.head(4).copy()
     energies = [float(i) for i in range(len(data))]
     masks = ["selected", "other", "selected", None]
@@ -302,7 +304,10 @@ def test_from_file_loads_structures_set_db(ds_generator_full, tmp_path):
     filepath = tmp_path / "sset.db"
     sset.serialize(filepath=str(filepath), ase_db_type="db", overwrite=True, rm_vac=False)
 
-    dss = DSGenerator.from_file(filepath)
+    with pytest.raises(Exception):
+        DSGenerator.from_file(filepath)
+
+    dss = DSGenerator.from_structures_set_file(filepath)
 
     assert dss.plat == ds_generator_full.plat
     assert dss.property_names == {"energy", "mask"}
@@ -323,6 +328,68 @@ def test_from_file_loads_structures_set_db(ds_generator_full, tmp_path):
             dss.get_scell_shape(loaded_shape_id),
             ds_generator_full.get_scell_shape(original_shape_id),
         )
+
+    sset_selected = dss.to_structures_set(mask_name="selected")
+    assert len(sset_selected) == 2
+    assert sset_selected.get_property_values("mask").tolist() == [
+        "selected",
+        "selected",
+    ]
+    np.testing.assert_array_equal(
+        sset_selected.get_property_values("energy"),
+        [0.0, 2.0],
+    )
+
+
+def test_convert_sset_dss_cli_roundtrip(ds_generator_full, tmp_path):
+    data = ds_generator_full.configurations.head(3).copy()
+    sset = StructuresSet(ds_generator_full.plat)
+    scell_cache = {}
+
+    for _, row in data.iterrows():
+        shape_id = row["shape_id"]
+        if shape_id not in scell_cache:
+            scell_cache[shape_id] = SuperCell(
+                ds_generator_full.plat,
+                ds_generator_full.get_scell_shape(shape_id),
+            )
+
+        sset.add_structure(Structure(scell_cache[shape_id], sigmas=row["sigma"]))
+
+    sset.set_property_values(
+        property_name="energy",
+        property_vals=[1.0, 2.0, 3.0],
+        update_db=False,
+    )
+
+    sset_filepath = tmp_path / "sset.db"
+    dss_filepath = tmp_path / "dss.pickle"
+    sset_roundtrip_filepath = tmp_path / "sset_roundtrip.db"
+    sset.serialize(
+        filepath=str(sset_filepath),
+        ase_db_type="db",
+        overwrite=True,
+        rm_vac=False,
+    )
+
+    convert_sset_to_dss(str(sset_filepath), str(dss_filepath))
+    dss = DSGenerator.from_file(dss_filepath)
+    assert dss.configurations["sigma"].tolist() == [
+        tuple(row["sigma"]) for _, row in data.iterrows()
+    ]
+    np.testing.assert_array_equal(dss.configurations["energy"], [1.0, 2.0, 3.0])
+
+    convert_dss_to_sset(
+        str(dss_filepath),
+        str(sset_roundtrip_filepath),
+        ase_db_type="db",
+    )
+    sset_roundtrip = StructuresSet(filepath=str(sset_roundtrip_filepath))
+    assert len(sset_roundtrip) == 3
+    np.testing.assert_array_equal(
+        sset_roundtrip.get_property_values("energy"),
+        [1.0, 2.0, 3.0],
+    )
 
 
 def test_concentration(ds_generator_full):
