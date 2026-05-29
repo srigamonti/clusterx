@@ -1,10 +1,18 @@
 """Test utility functions for CELL."""
 
+import json
+
 import pytest
 import numpy as np
 from ase.build import bulk
 
 from clusterx.parent_lattice import ParentLattice
+from clusterx.cli.ssets_equivalence_check import (
+    ssets_equivalence_check as cli_ssets_equivalence_check,
+)
+from clusterx.cli.plot_columns import plot_columns
+from clusterx.structures_set import StructuresSet
+from clusterx.super_cell import SuperCell
 from clusterx.utils import (
     Exponential,
     PolynomialFunction,
@@ -15,6 +23,7 @@ from clusterx.utils import (
     parent_lattice_to_atat,
     atat_to_cell,
     list_integer_named_folders,
+    ssets_equivalence_check,
 )
 
 
@@ -121,6 +130,79 @@ def test_list_integer_named_folders_preserves_zero_padded_names_with_affixes(tmp
     assert list_integer_named_folders(
         tmp_path, prefix="run_", suffix="_done"
     ) == ["run_001_done", "run_010_done"]
+
+
+def _make_equivalence_sset(parent_lattice, sigmas_list):
+    scell = SuperCell(parent_lattice, np.diag([2, 1, 1]))
+    sset = StructuresSet(parent_lattice)
+    for sigmas in sigmas_list:
+        sset.add_structure(scell.gen_structure(sigmas=np.array(sigmas)))
+    return sset
+
+
+def test_ssets_equivalence_check_self(parent_lattice):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 1], [0, 0]])
+
+    equivalent = ssets_equivalence_check(sset)
+
+    assert {k: v.tolist() for k, v in equivalent.items()} == {
+        0: [0, 1],
+        2: [2],
+    }
+
+
+def test_ssets_equivalence_check_two_sets(parent_lattice):
+    sset1 = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset2 = _make_equivalence_sset(parent_lattice, [[0, 1], [0, 0], [1, 1]])
+
+    equivalent = ssets_equivalence_check(sset1, sset2)
+
+    assert {k: v.tolist() for k, v in equivalent.items()} == {
+        0: [0],
+        1: [1],
+    }
+
+
+def test_cli_ssets_equivalence_check_two_sets(parent_lattice, tmp_path, capsys):
+    sset1 = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset2 = _make_equivalence_sset(parent_lattice, [[0, 1], [0, 0], [1, 1]])
+    sset1_filepath = tmp_path / "sset1.db"
+    sset2_filepath = tmp_path / "sset2.db"
+    sset1.serialize(filepath=str(sset1_filepath), ase_db_type="db", overwrite=True)
+    sset2.serialize(filepath=str(sset2_filepath), ase_db_type="db", overwrite=True)
+
+    cli_ssets_equivalence_check(str(sset1_filepath), str(sset2_filepath))
+
+    assert "{0: [0], 1: [1]}" in capsys.readouterr().out
+
+
+def test_plot_columns_accepts_serialized_structures_set(parent_lattice, tmp_path):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[2.0, 3.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    figdata_filepath = tmp_path / "plot_data.json"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    plot_columns(
+        source_filepath=str(sset_filepath),
+        show_plot=False,
+        figdata_fname=str(figdata_filepath),
+        series=[{"xcolumn": "x", "ycolumn": "y"}],
+    )
+
+    with open(figdata_filepath, encoding="utf-8") as f:
+        plot_data = json.load(f)
+    assert plot_data["series"][0]["x"] == [0.0, 1.0]
+    assert plot_data["series"][0]["y"] == [2.0, 3.0]
 
 
 def test_exponential():
