@@ -35,11 +35,18 @@ commands = ["compute_predictions"]
     help="Optional path to a serialized ParentLattice object used for validation.",
     type=str,
 )
+@plac.opt(
+    "store_ensemble_predictions",
+    abbrev="sep",
+    help="Whether to store ensemble predictions. Only applicable if the model is an ensemble. Default: False.",
+    type=bool,
+)
 def compute_predictions(
     target_filepath: str,
     property_name: str,
     model_filepath: str,
     plat_filepath: Optional[str] = None,
+    store_ensemble_predictions: bool = False,
 ):
     """Compute CE-model predictions and store them in the serialized target."""
     cmd_message("head")
@@ -59,7 +66,9 @@ def compute_predictions(
         _validate_parent_lattice(plat_filepath, target_kind, target, model)
 
     if target_kind == "dsgenerator":
-        target.compute_properties(property_name=property_name, cemodel=model)
+        target.compute_properties(
+            property_name=property_name, cemodel=model, store_ensemble_predictions=store_ensemble_predictions
+        )
         target.serialize(filepath=target_filepath)
     elif target_kind == "structures_set":
         values = [_prediction_to_jsonable(model.predict(structure)) for structure in target]
@@ -127,16 +136,10 @@ def _validate_parent_lattice(plat_filepath: str, target_kind: str, target, model
         target_plat = target.get_parent_lattice()
 
     if target_plat != plat:
-        raise ValueError(
-            "Parent lattice from target file does not match "
-            f"'{plat_filepath}'."
-        )
+        raise ValueError(f"Parent lattice from target file does not match '{plat_filepath}'.")
 
     if model.get_parent_lattice() != plat:
-        raise ValueError(
-            "Parent lattice from CE model does not match "
-            f"'{plat_filepath}'."
-        )
+        raise ValueError(f"Parent lattice from CE model does not match '{plat_filepath}'.")
 
 
 def _target_count(target_kind: str, target):
