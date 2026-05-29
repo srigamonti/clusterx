@@ -90,7 +90,7 @@ def print_column_values(
 
     # Fixed-width terminal formatting (cropped + aligned)
     index_width = max(5, len(str(max(rows_to_print - 1, 0))))
-    col_width = 24
+    col_width = 120
 
     def _crop(text: str, width: int) -> str:
         if len(text) <= width:
