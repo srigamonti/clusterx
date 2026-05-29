@@ -39,6 +39,83 @@ def _infer_box_violin_width(x: np.ndarray) -> float:
     return 0.05
 
 
+def _validate_axis_range(axis_range: Optional[list], name: str) -> Optional[List[float]]:
+    if axis_range is None:
+        return None
+    if len(axis_range) != 2:
+        axis_label = name[0]
+        raise ValueError(
+            f"{name} must have exactly two values: [{axis_label}min, {axis_label}max]."
+        )
+    return [float(axis_range[0]), float(axis_range[1])]
+
+
+def _finite_values(arrays: List[np.ndarray]) -> np.ndarray:
+    if not arrays:
+        return np.asarray([], dtype=float)
+    values = np.concatenate([np.asarray(array, dtype=float).ravel() for array in arrays])
+    return values[np.isfinite(values)]
+
+
+def _require_positive(values: np.ndarray, context: str) -> None:
+    if len(values) == 0:
+        raise ValueError(f"Cannot use loglog=True without finite {context}.")
+    if np.any(values <= 0):
+        raise ValueError(
+            f"Cannot use loglog=True because {context} contains non-positive values. "
+            "Use symlog=True for signed data."
+        )
+
+
+def _infer_symlog_linthresh(values: np.ndarray) -> float:
+    nonzero_abs = np.abs(values[np.abs(values) > 0])
+    if len(nonzero_abs) == 0:
+        return 1.0
+    return 0.1 * float(np.min(nonzero_abs))
+
+
+def _shared_target_prediction_limits(
+    x_values: np.ndarray,
+    y_values: np.ndarray,
+    xrange_values: Optional[List[float]],
+    yrange_values: Optional[List[float]],
+    loglog: bool,
+) -> List[float]:
+    values_for_limits = [x_values, y_values]
+    explicit_range = xrange_values is not None or yrange_values is not None
+    if xrange_values is not None:
+        values_for_limits.append(np.asarray(xrange_values, dtype=float))
+    if yrange_values is not None:
+        values_for_limits.append(np.asarray(yrange_values, dtype=float))
+
+    values = _finite_values(values_for_limits)
+    if len(values) == 0:
+        raise ValueError("Cannot set target_vs_predictions limits without finite x/y data.")
+    if loglog:
+        _require_positive(values, "axis limits")
+
+    lower = float(np.min(values))
+    upper = float(np.max(values))
+
+    if loglog:
+        if np.isclose(lower, upper):
+            return [lower / np.sqrt(10.0), upper * np.sqrt(10.0)]
+        if explicit_range:
+            return [lower, upper]
+        log_lower = np.log10(lower)
+        log_upper = np.log10(upper)
+        pad = 0.05 * (log_upper - log_lower)
+        return [float(10 ** (log_lower - pad)), float(10 ** (log_upper + pad))]
+
+    if np.isclose(lower, upper):
+        pad = 0.5 if np.isclose(lower, 0.0) else 0.05 * abs(lower)
+        return [lower - pad, upper + pad]
+    if explicit_range:
+        return [lower, upper]
+    pad = 0.05 * (upper - lower)
+    return [lower - pad, upper + pad]
+
+
 @plac.annotations(
     source_filepath=(
         "Path to serialized DSGenerator or StructuresSet object.",
@@ -68,6 +145,44 @@ def _infer_box_violin_width(x: np.ndarray) -> float:
         "option",
         None,
         list,
+    ),
+    target_vs_predictions=(
+        "Enable target-vs-predictions parity mode: square axes, shared limits, and y=x line.",
+        "option",
+        None,
+        bool,
+    ),
+    loglog=("Use logarithmic scale on both x and y axes.", "option", None, bool),
+    symlog=(
+        "Use symmetric logarithmic scale on both axes; supports negative and zero values.",
+        "option",
+        None,
+        bool,
+    ),
+    symlog_linthresh=(
+        "Linear threshold around zero for symlog axes. Inferred from data when omitted.",
+        "option",
+        None,
+        float,
+    ),
+    grid=("Show plot grid lines.", "option", None, bool),
+    grid_which=(
+        "Grid lines to draw: major, minor, or both.",
+        "option",
+        None,
+        str,
+    ),
+    grid_axis=(
+        "Axis for grid lines: both, x, or y.",
+        "option",
+        None,
+        str,
+    ),
+    grid_style=(
+        "Optional matplotlib grid style dictionary, e.g. {linewidth=0.5, alpha=0.4}.",
+        "option",
+        None,
+        dict,
     ),
     show_yzero_axis=("Show horizontal reference line at y=0.", "option", None, bool),
     legend=("Show legend if True.", "option", None, bool),
@@ -106,6 +221,14 @@ def plot_columns(
     yrange: Optional[list] = None,
     xrange: Optional[list] = None,
     colors: Optional[list] = None,
+    target_vs_predictions: bool = False,
+    loglog: bool = False,
+    symlog: bool = False,
+    symlog_linthresh: Optional[float] = None,
+    grid: bool = False,
+    grid_which: str = "major",
+    grid_axis: str = "both",
+    grid_style: Optional[Dict[str, Any]] = None,
     show_yzero_axis: bool = False,
     legend: bool = True,
     show_plot: bool = True,
@@ -130,6 +253,21 @@ def plot_columns(
     - ``xrange`` / ``yrange`` (list[float, float], optional): axis limits.
     - ``colors`` (list[str], optional): default color palette for series without
         explicit ``color``.
+    - ``target_vs_predictions`` (bool): enable parity-plot mode for target values
+        on x versus predictions on y. This uses a square plot frame, shared x/y
+        limits, and a ``y=x`` reference line.
+    - ``loglog`` (bool): use logarithmic scale on both axes. All finite plotted
+        x/y values must be positive.
+    - ``symlog`` (bool): use symmetric logarithmic scale on both axes. This is
+        the signed-log option for data containing negative or zero values.
+    - ``symlog_linthresh`` (float, optional): half-width of the linear region
+        around zero for ``symlog``. If omitted, it is inferred from the smallest
+        nonzero plotted absolute value.
+    - ``grid`` (bool): draw plot grid lines.
+    - ``grid_which`` (str): ``"major"`` (default), ``"minor"``, or ``"both"``.
+    - ``grid_axis`` (str): ``"both"`` (default), ``"x"``, or ``"y"``.
+    - ``grid_style`` (dict, optional): matplotlib grid style passed to
+        ``Axes.grid`` (e.g. ``linewidth``, ``linestyle``, ``alpha``, ``color``).
     - ``show_yzero_axis`` (bool): draw a horizontal line at ``y=0``.
     - ``legend`` (bool): show legend.
     - ``show_plot`` (bool): show interactive window.
@@ -201,6 +339,12 @@ def plot_columns(
             legend = true
             show_plot = true
             savefig = "plot.png"
+            # target_vs_predictions = true  # Square parity plot with y=x
+            # loglog = true                 # Logarithmic x/y axes
+            # symlog = true                 # Signed-log x/y axes
+            # grid = true
+            # grid_which = "both"
+            # grid_axis = "both"
 
             [[plot_columns.series]]
             xcolumn = "frconc_binary"
@@ -282,6 +426,13 @@ def plot_columns(
             linewidth = 1.4
             linestyle = "-"
             alpha = 0.95
+
+            # Target-vs-predictions parity plot
+            [[plot_columns.series]]
+            xcolumn = "target_energy"
+            ycolumn = "predicted_energy"
+            marker = "o"
+            label = "fit"
     """
     cmd_message("head")
 
@@ -309,16 +460,43 @@ def plot_columns(
     if colors is not None and not isinstance(colors, list):
         raise ValueError("colors must be a list when provided.")
 
+    if loglog and symlog:
+        raise ValueError("Use only one of loglog=True or symlog=True.")
+
+    if symlog_linthresh is not None and symlog_linthresh <= 0:
+        raise ValueError("symlog_linthresh must be positive when provided.")
+
+    if grid_which not in ("major", "minor", "both"):
+        raise ValueError("grid_which must be one of 'major', 'minor', or 'both'.")
+
+    if grid_axis not in ("both", "x", "y"):
+        raise ValueError("grid_axis must be one of 'both', 'x', or 'y'.")
+
+    if grid_style is None:
+        grid_style = {}
+    elif not isinstance(grid_style, dict):
+        raise ValueError("grid_style must be a dictionary when provided.")
+
     # Cache DSGenerator objects by filepath to avoid repeated I/O
     dsg_cache: Dict[str, DSGenerator] = {}
     plot_payload: Dict[str, Any] = {
         "title": title,
         "xlabel": xlabel,
         "ylabel": ylabel,
+        "target_vs_predictions": target_vs_predictions,
+        "loglog": loglog,
+        "symlog": symlog,
+        "symlog_linthresh": symlog_linthresh,
+        "grid": grid,
+        "grid_which": grid_which,
+        "grid_axis": grid_axis,
+        "grid_style": grid_style,
         "series": [],
     }
 
-    fig, ax = plt.subplots(figsize=(6.0, 4.0))
+    fig, ax = plt.subplots(figsize=(6.0, 6.0) if target_vs_predictions else (6.0, 4.0))
+    plotted_x_values: List[np.ndarray] = []
+    plotted_y_values: List[np.ndarray] = []
 
     # Color priority: series[i].color > colors[i] > matplotlib tab10 cycle
     default_colors = [
@@ -470,6 +648,11 @@ def plot_columns(
         # Representative scalar y per x (used by marker mode and for exports)
         y_repr = np.asarray([_aggregate(v, aggregation) for v in y_arrays], dtype=float)
         has_distribution_per_x = any(len(v) > 1 for v in y_arrays)
+        plotted_x_values.append(x)
+        if ymode in ("cloud", "violin", "boxplot", "box"):
+            plotted_y_values.append(np.concatenate(y_arrays))
+        else:
+            plotted_y_values.append(y_repr)
 
         if ymode == "marker":
             ax.scatter(x, y_repr, label=label, **scatter_kwargs)
@@ -490,12 +673,11 @@ def plot_columns(
                 all_x.append(xvals)
                 all_y.append(yi)
 
-            ax.scatter(
-                np.concatenate(all_x),
-                np.concatenate(all_y),
-                label=label,
-                **cloud_kwargs,
-            )
+            cloud_x = np.concatenate(all_x)
+            cloud_y = np.concatenate(all_y)
+            plotted_x_values[-1] = cloud_x
+            plotted_y_values[-1] = cloud_y
+            ax.scatter(cloud_x, cloud_y, label=label, **cloud_kwargs)
         elif ymode == "violin":
             width = float(item.get("width", _infer_box_violin_width(x)))
             v = ax.violinplot(y_arrays, positions=x, widths=width, showextrema=False)
@@ -578,23 +760,91 @@ def plot_columns(
             }
         )
 
-    ax.set_xlabel(xlabel if xlabel is not None else "x")
-    ax.set_ylabel(ylabel if ylabel is not None else "y")
+    ax.set_xlabel(
+        xlabel if xlabel is not None else ("Target" if target_vs_predictions else "x")
+    )
+    ax.set_ylabel(
+        ylabel
+        if ylabel is not None
+        else ("Predictions" if target_vs_predictions else "y")
+    )
     if title is not None:
         ax.set_title(title)
 
-    if xrange is not None:
-        if len(xrange) != 2:
-            raise ValueError("xrange must have exactly two values: [xmin, xmax].")
-        ax.set_xlim(float(xrange[0]), float(xrange[1]))
+    xrange_values = _validate_axis_range(xrange, "xrange")
+    yrange_values = _validate_axis_range(yrange, "yrange")
+    finite_x_values = _finite_values(plotted_x_values)
+    finite_y_values = _finite_values(plotted_y_values)
 
-    if yrange is not None:
-        if len(yrange) != 2:
-            raise ValueError("yrange must have exactly two values: [ymin, ymax].")
-        ax.set_ylim(float(yrange[0]), float(yrange[1]))
+    if loglog:
+        _require_positive(finite_x_values, "x data")
+        _require_positive(finite_y_values, "y data")
+        if xrange_values is not None:
+            _require_positive(np.asarray(xrange_values, dtype=float), "xrange")
+        if yrange_values is not None:
+            _require_positive(np.asarray(yrange_values, dtype=float), "yrange")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+
+    if symlog:
+        symlog_values = _finite_values([finite_x_values, finite_y_values])
+        if xrange_values is not None:
+            symlog_values = _finite_values(
+                [symlog_values, np.asarray(xrange_values, dtype=float)]
+            )
+        if yrange_values is not None:
+            symlog_values = _finite_values(
+                [symlog_values, np.asarray(yrange_values, dtype=float)]
+            )
+        linthresh = (
+            float(symlog_linthresh)
+            if symlog_linthresh is not None
+            else _infer_symlog_linthresh(symlog_values)
+        )
+        ax.set_xscale("symlog", linthresh=linthresh)
+        ax.set_yscale("symlog", linthresh=linthresh)
+        plot_payload["symlog_linthresh"] = linthresh
+
+    if target_vs_predictions:
+        shared_limits = _shared_target_prediction_limits(
+            finite_x_values,
+            finite_y_values,
+            xrange_values,
+            yrange_values,
+            loglog,
+        )
+        ax.set_xlim(shared_limits)
+        ax.set_ylim(shared_limits)
+        ax.set_box_aspect(1)
+        ax.plot(
+            shared_limits,
+            shared_limits,
+            color="k",
+            linewidth=0.8,
+            linestyle="--",
+            label="y=x",
+            zorder=0,
+        )
+        plot_payload["axis_limits"] = shared_limits
+    else:
+        if xrange_values is not None:
+            ax.set_xlim(xrange_values)
+
+        if yrange_values is not None:
+            ax.set_ylim(yrange_values)
 
     if show_yzero_axis:
-        ax.axhline(y=0, color="k", linewidth=0.5)
+        if loglog:
+            warnings.warn(
+                "show_yzero_axis=True is ignored when loglog=True.",
+                RuntimeWarning,
+            )
+        else:
+            ax.axhline(y=0, color="k", linewidth=0.5)
+
+    if grid:
+        ax.set_axisbelow(True)
+        ax.grid(True, which=grid_which, axis=grid_axis, **grid_style)
 
     if legend:
         ax.legend()

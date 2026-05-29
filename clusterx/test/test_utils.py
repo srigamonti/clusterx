@@ -2,6 +2,7 @@
 
 import json
 
+import matplotlib.pyplot as plt
 import pytest
 import numpy as np
 from ase.build import bulk
@@ -203,6 +204,239 @@ def test_plot_columns_accepts_serialized_structures_set(parent_lattice, tmp_path
         plot_data = json.load(f)
     assert plot_data["series"][0]["x"] == [0.0, 1.0]
     assert plot_data["series"][0]["y"] == [2.0, 3.0]
+
+
+def test_plot_columns_grid_lines(parent_lattice, tmp_path, monkeypatch):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[2.0, 3.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    figdata_filepath = tmp_path / "plot_data.json"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    real_close = plt.close
+
+    def capture_close(fig=None):
+        captured["fig"] = fig if fig is not None else plt.gcf()
+
+    monkeypatch.setattr(plt, "close", capture_close)
+    try:
+        plot_columns(
+            source_filepath=str(sset_filepath),
+            grid=True,
+            grid_axis="x",
+            grid_style={"linestyle": ":", "linewidth": 0.7, "alpha": 0.4},
+            show_plot=False,
+            figdata_fname=str(figdata_filepath),
+            series=[{"xcolumn": "x", "ycolumn": "y"}],
+        )
+
+        fig = captured["fig"]
+        ax = fig.axes[0]
+        x_gridlines = [line for line in ax.xaxis.get_gridlines() if line.get_visible()]
+        y_gridlines = [line for line in ax.yaxis.get_gridlines() if line.get_visible()]
+        assert len(x_gridlines) > 0
+        assert len(y_gridlines) == 0
+        assert x_gridlines[0].get_linestyle() == ":"
+        assert x_gridlines[0].get_linewidth() == 0.7
+        assert x_gridlines[0].get_alpha() == 0.4
+
+        with open(figdata_filepath, encoding="utf-8") as f:
+            plot_data = json.load(f)
+        assert plot_data["grid"] is True
+        assert plot_data["grid_axis"] == "x"
+        assert plot_data["grid_which"] == "major"
+        assert plot_data["grid_style"] == {
+            "linestyle": ":",
+            "linewidth": 0.7,
+            "alpha": 0.4,
+        }
+    finally:
+        if "fig" in captured:
+            real_close(captured["fig"])
+
+
+def test_plot_columns_target_vs_predictions_loglog_axes(parent_lattice, tmp_path, monkeypatch):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="target",
+        property_vals=[1.0, 10.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="prediction",
+        property_vals=[2.0, 8.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    figdata_filepath = tmp_path / "plot_data.json"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    real_close = plt.close
+
+    def capture_close(fig=None):
+        captured["fig"] = fig if fig is not None else plt.gcf()
+
+    monkeypatch.setattr(plt, "close", capture_close)
+    try:
+        plot_columns(
+            source_filepath=str(sset_filepath),
+            target_vs_predictions=True,
+            loglog=True,
+            show_plot=False,
+            figdata_fname=str(figdata_filepath),
+            series=[{"xcolumn": "target", "ycolumn": "prediction"}],
+        )
+
+        fig = captured["fig"]
+        ax = fig.axes[0]
+        assert ax.get_xscale() == "log"
+        assert ax.get_yscale() == "log"
+        np.testing.assert_allclose(ax.get_xlim(), ax.get_ylim())
+        assert ax.get_box_aspect() == 1
+
+        parity_lines = [line for line in ax.lines if line.get_label() == "y=x"]
+        assert len(parity_lines) == 1
+        np.testing.assert_allclose(
+            parity_lines[0].get_xdata(),
+            parity_lines[0].get_ydata(),
+        )
+
+        with open(figdata_filepath, encoding="utf-8") as f:
+            plot_data = json.load(f)
+        assert plot_data["target_vs_predictions"] is True
+        assert plot_data["loglog"] is True
+        assert plot_data["axis_limits"][0] < 1.0
+        assert plot_data["axis_limits"][1] > 10.0
+    finally:
+        if "fig" in captured:
+            real_close(captured["fig"])
+
+
+def test_plot_columns_target_vs_predictions_symlog_axes(parent_lattice, tmp_path, monkeypatch):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="target",
+        property_vals=[-10.0, 0.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="prediction",
+        property_vals=[-8.0, -0.5],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    figdata_filepath = tmp_path / "plot_data.json"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    real_close = plt.close
+
+    def capture_close(fig=None):
+        captured["fig"] = fig if fig is not None else plt.gcf()
+
+    monkeypatch.setattr(plt, "close", capture_close)
+    try:
+        plot_columns(
+            source_filepath=str(sset_filepath),
+            target_vs_predictions=True,
+            symlog=True,
+            symlog_linthresh=0.2,
+            show_plot=False,
+            figdata_fname=str(figdata_filepath),
+            series=[{"xcolumn": "target", "ycolumn": "prediction"}],
+        )
+
+        fig = captured["fig"]
+        ax = fig.axes[0]
+        assert ax.get_xscale() == "symlog"
+        assert ax.get_yscale() == "symlog"
+        np.testing.assert_allclose(ax.get_xlim(), ax.get_ylim())
+        assert ax.get_box_aspect() == 1
+
+        parity_lines = [line for line in ax.lines if line.get_label() == "y=x"]
+        assert len(parity_lines) == 1
+        np.testing.assert_allclose(
+            parity_lines[0].get_xdata(),
+            parity_lines[0].get_ydata(),
+        )
+
+        with open(figdata_filepath, encoding="utf-8") as f:
+            plot_data = json.load(f)
+        assert plot_data["symlog"] is True
+        assert plot_data["symlog_linthresh"] == 0.2
+        assert plot_data["axis_limits"][0] < -10.0
+        assert plot_data["axis_limits"][1] > 0.0
+    finally:
+        if "fig" in captured:
+            real_close(captured["fig"])
+
+
+def test_plot_columns_loglog_rejects_non_positive_values(parent_lattice, tmp_path):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="target",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="prediction",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    try:
+        with pytest.raises(ValueError, match="non-positive"):
+            plot_columns(
+                source_filepath=str(sset_filepath),
+                target_vs_predictions=True,
+                loglog=True,
+                show_plot=False,
+                series=[{"xcolumn": "target", "ycolumn": "prediction"}],
+            )
+    finally:
+        plt.close("all")
+
+
+def test_plot_columns_rejects_loglog_and_symlog_together(parent_lattice, tmp_path):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="target",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="prediction",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    try:
+        with pytest.raises(ValueError, match="Use only one"):
+            plot_columns(
+                source_filepath=str(sset_filepath),
+                target_vs_predictions=True,
+                loglog=True,
+                symlog=True,
+                show_plot=False,
+                series=[{"xcolumn": "target", "ycolumn": "prediction"}],
+            )
+    finally:
+        plt.close("all")
 
 
 def test_exponential():
