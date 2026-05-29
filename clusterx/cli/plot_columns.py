@@ -41,7 +41,7 @@ def _infer_box_violin_width(x: np.ndarray) -> float:
 
 @plac.annotations(
     source_filepath=(
-        "Path to file of serialized DSGenerator object.",
+        "Path to serialized DSGenerator or StructuresSet object.",
         "positional",
         None,
         str,
@@ -113,15 +113,16 @@ def plot_columns(
     figdata_fname: Optional[str] = None,
     series: Optional[List[Dict[str, Any]]] = None,
 ):
-    """Plot one or more columns from serialized DSGenerator objects.
+    """Plot one or more columns from serialized DSGenerator or StructuresSet objects.
 
     This command is intended to be driven from TOML input using
     ``[plot_columns]`` plus ``[[plot_columns.series]]`` blocks.
 
     Top-level options
     -----------------
-    - ``source_filepath`` (str, optional): default DSGenerator pickle used by
-        all series that do not explicitly set ``source_filepath``.
+    - ``source_filepath`` (str, optional): default serialized DSGenerator or
+        StructuresSet file used by all series that do not explicitly set
+        ``source_filepath``.
     - ``xcolumn`` / ``ycolumn`` (str, optional): default x/y columns used by
         series that do not explicitly set them.
     - ``title`` (str, optional): figure title.
@@ -139,8 +140,8 @@ def plot_columns(
     Per-series options (``[[plot_columns.series]]``)
     -------------------------------------------------
     Required (directly or via top-level defaults):
-    - ``xcolumn`` (str): x-axis column from ``dsg.configurations``.
-    - ``ycolumn`` (str): y-axis column from ``dsg.configurations``.
+    - ``xcolumn`` (str): x-axis column from the loaded configurations table.
+    - ``ycolumn`` (str): y-axis column from the loaded configurations table.
 
     Optional:
     - ``source_filepath`` (str): override top-level source for this series.
@@ -349,7 +350,7 @@ def plot_columns(
             )
 
         if src not in dsg_cache:
-            dsg_cache[src] = DSGenerator.from_file(src)
+            dsg_cache[src] = _load_plot_source(src)
 
         dsg = dsg_cache[src]
 
@@ -358,12 +359,12 @@ def plot_columns(
 
         if xcolumn_s not in dsg.configurations.columns:
             raise ValueError(
-                f"Column '{xcolumn_s}' not found in DSGenerator configurations from '{src}'."
+                f"Column '{xcolumn_s}' not found in configurations from '{src}'."
             )
 
         if ycolumn_s not in dsg.configurations.columns:
             raise ValueError(
-                f"Column '{ycolumn_s}' not found in DSGenerator configurations from '{src}'."
+                f"Column '{ycolumn_s}' not found in configurations from '{src}'."
             )
 
         df = dsg.get_configurations(mask_name=mask_name)
@@ -635,3 +636,18 @@ def plot_columns(
         plt.show()
     else:
         plt.close(fig)
+
+
+def _load_plot_source(source_filepath):
+    try:
+        return DSGenerator.from_file(source_filepath)
+    except Exception as dss_error:
+        try:
+            return DSGenerator.from_structures_set_file(source_filepath)
+        except Exception as sset_error:
+            raise ValueError(
+                f"Could not load '{source_filepath}' as a serialized "
+                "DSGenerator or StructuresSet file. "
+                f"DSGenerator error: {dss_error}. "
+                f"StructuresSet error: {sset_error}"
+            ) from sset_error
