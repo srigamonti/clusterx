@@ -11,6 +11,12 @@ from clusterx.derivative_structures import DSGenerator
 commands = ["convert_dss_to_sset"]
 
 
+def load_dss_as_structures_set(dss_filepath: str, mask_name: Optional[str] = None):
+    """Load a serialized DSGenerator and convert it to a StructuresSet."""
+    dss = DSGenerator.from_file(dss_filepath)
+    return dss.to_structures_set(mask_name=mask_name)
+
+
 @plac.pos(
     "dss_filepath",
     help="Path to a serialized DSGenerator object.",
@@ -40,8 +46,7 @@ def convert_dss_to_sset(
     """Convert a serialized DSGenerator file to a serialized StructuresSet."""
     cmd_message("head")
 
-    dss = DSGenerator.from_file(dss_filepath)
-    sset = dss.to_structures_set(mask_name=mask_name)
+    sset = load_dss_as_structures_set(dss_filepath, mask_name=mask_name)
     sset.serialize(
         filepath=sset_filepath,
         ase_db_type=ase_db_type,

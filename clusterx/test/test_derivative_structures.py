@@ -7,6 +7,7 @@ from ase import Atoms
 from ase.data import atomic_numbers as an
 
 from clusterx.calculators.emt import EMT2
+from clusterx.cli.compute_comat import compute_comat
 from clusterx.cli.convert_dss_to_sset import convert_dss_to_sset
 from clusterx.cli.convert_sset_to_dss import convert_sset_to_dss
 from clusterx.derivative_structures import DSGenerator, get_HNFs, get_unique_supercells
@@ -390,6 +391,80 @@ def test_convert_sset_dss_cli_roundtrip(ds_generator_full, tmp_path):
         sset_roundtrip.get_property_values("energy"),
         [1.0, 2.0, 3.0],
     )
+
+
+def _add_energy_property(dss):
+    energies = np.arange(len(dss.configurations), dtype=float)
+    dss.configurations["energy"] = energies
+    dss.property_names.add("energy")
+    return energies
+
+
+def _write_ccalc(corrc, tmp_path):
+    ccalc_filepath = tmp_path / "ccalc.pickle"
+    corrc.serialize(filepath=str(ccalc_filepath), fmt="pickle")
+    return ccalc_filepath
+
+
+def test_compute_comat_combines_sset_filepaths(ds_generator_full, corrc, tmp_path):
+    energies = _add_energy_property(ds_generator_full)
+    sset = ds_generator_full.to_structures_set()
+    ccalc_filepath = _write_ccalc(corrc, tmp_path)
+    sset_filepath_a = tmp_path / "sset_a.db"
+    sset_filepath_b = tmp_path / "sset_b.db"
+    comat_filepath = tmp_path / "multi_sset_comat"
+
+    for sset_filepath in [sset_filepath_a, sset_filepath_b]:
+        sset.serialize(
+            filepath=str(sset_filepath),
+            ase_db_type="db",
+            overwrite=True,
+            rm_vac=False,
+        )
+
+    compute_comat(
+        ccalc_filepath=str(ccalc_filepath),
+        sset_filepaths=[str(sset_filepath_a), str(sset_filepath_b)],
+        comat_filepath=str(comat_filepath),
+        property_name="energy",
+    )
+
+    with np.load(f"{comat_filepath}.npz") as arrays:
+        comat = arrays["comat"]
+        pvals = arrays["property_energy"]
+
+    assert comat.shape[0] == 2 * len(sset)
+    np.testing.assert_array_equal(pvals, np.concatenate([energies, energies]))
+    np.testing.assert_allclose(np.loadtxt(f"{comat_filepath}.txt"), comat)
+
+
+def test_compute_comat_combines_dss_filepaths(ds_generator_full, corrc, tmp_path):
+    energies = _add_energy_property(ds_generator_full)
+    ccalc_filepath = _write_ccalc(corrc, tmp_path)
+    dss_filepath_a = tmp_path / "dss_a.pickle"
+    dss_filepath_b = tmp_path / "dss_b.pickle"
+    comat_filepath = tmp_path / "multi_dss_comat"
+    ds_generator_full.serialize(str(dss_filepath_a))
+    ds_generator_full.serialize(str(dss_filepath_b))
+
+    compute_comat(
+        ccalc_filepath=str(ccalc_filepath),
+        dss_filepaths=[str(dss_filepath_a), str(dss_filepath_b)],
+        comat_filepath=str(comat_filepath),
+        property_name="energy",
+    )
+
+    with np.load(f"{comat_filepath}.npz") as arrays:
+        comat = arrays["comat"]
+        pvals = arrays["property_energy"]
+
+    assert comat.shape[0] == 2 * len(ds_generator_full.configurations)
+    np.testing.assert_array_equal(pvals, np.concatenate([energies, energies]))
+
+
+def test_compute_comat_rejects_multiple_sources():
+    with pytest.raises(ValueError, match="Exactly one"):
+        compute_comat(sset_filepath="sset.db", dss_filepath="dss.pickle")
 
 
 def test_concentration(ds_generator_full):
