@@ -25,6 +25,8 @@ from clusterx.utils import (
     transformation_containing_sphere_diag,
     ListDict,
     RunningAverage,
+    list_integer_named_folders,
+    ssets_equivalence_check,
 )
 from clusterx.utils import take_tile
 
@@ -50,10 +52,11 @@ def test_ase_make_supercell_error():
     )
 
     _ = make_supercell(
-        prim, P=[[2, 2, -2], [2, -2, 2], [-2, 2, 2]], wrap=True, tol=1e-05
-        list_integer_named_folders,
-    ssets_equivalence_check,
-)
+        prim,
+        P=[[2, 2, -2], [2, -2, 2], [-2, 2, 2]],
+        wrap=True,
+        tol=1e-05,
+    )
 
 
 @pytest.fixture
@@ -114,9 +117,7 @@ def test_containing_supercell(r, cell, full_sphere, p):
 def test_take_tile(grid_shape, i_grid, p_reduced):
     grid = np.arange(np.prod(grid_shape)).reshape(grid_shape)
     grid_reduced, i_new = take_tile(grid, i_grid, p_reduced)
-    np.testing.assert_array_equal(
-        grid_reduced.shape, list(p_reduced) + [grid_shape[-1]]
-    )
+    np.testing.assert_array_equal(grid_reduced.shape, list(p_reduced) + [grid_shape[-1]])
     assert np.all(np.array(p_reduced) - i_new[:-1] > 0)
     assert np.all(i_new[-1] >= 0)
     val = grid[(*i_grid,)]
@@ -188,9 +189,7 @@ def test_list_integer_named_folders_preserves_zero_padded_names_with_affixes(tmp
     for name in ["run_010_done", "run_001_done", "run_old_done", "001_done"]:
         (tmp_path / name).mkdir()
 
-    assert list_integer_named_folders(
-        tmp_path, prefix="run_", suffix="_done"
-    ) == ["run_001_done", "run_010_done"]
+    assert list_integer_named_folders(tmp_path, prefix="run_", suffix="_done") == ["run_001_done", "run_010_done"]
 
 
 def _make_equivalence_sset(parent_lattice, sigmas_list):
