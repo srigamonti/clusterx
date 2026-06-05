@@ -83,9 +83,7 @@ class ListDict(object):
         return rng.choice(self.items)
 
 
-def transformation_containing_sphere_diag(
-    r: float, cell: np.ndarray | Cell, full_sphere: bool = False
-) -> np.ndarray:
+def transformation_containing_sphere_diag(r: float, cell: np.ndarray | Cell, full_sphere: bool = False) -> np.ndarray:
     """Return diagonal transformation p of `cell` that describe a supercell,
     such that a all pairs of points with distance `r` are contained in the
     supercell. Only valid for dim=3 (len(cell.shape)==3).
@@ -115,9 +113,7 @@ def take_tile(grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple):
     ``p_reduced``: tuple of int, shape (d,)
     """
     for axis, (d, p) in enumerate(zip(i_grid[:-1], p_reduced)):
-        grid = np.take(
-            grid, np.arange(d - p // 2, d + p // 2 + 1), axis=axis, mode="wrap"
-        )
+        grid = np.take(grid, np.arange(d - p // 2, d + p // 2 + 1), axis=axis, mode="wrap")
     i_grid_new = np.array((np.array(p_reduced) // 2).tolist() + [i_grid[-1]])
     return grid, i_grid_new
 
@@ -324,9 +320,7 @@ def _is_integrable(s):
         return False
 
 
-def list_integer_named_folders(
-    root=".", prefix="", suffix="", containing_files=None, not_containing_files=None
-):
+def list_integer_named_folders(root=".", prefix="", suffix="", containing_files=None, not_containing_files=None):
     """Return integer-named folders or their original string names.
 
     Scans folders in `root` and detects those whose names match:
@@ -608,9 +602,7 @@ def atat_to_cell(
         for inr, nr in enumerate(species):
             nrs[inr] = int(nr[0])
 
-        plat = ParentLattice(
-            Atoms(positions=r, cell=cell, numbers=nrs, pbc=pbc), sites=species, pbc=pbc
-        )
+        plat = ParentLattice(Atoms(positions=r, cell=cell, numbers=nrs, pbc=pbc), sites=species, pbc=pbc)
         return plat
     if interpret_as == "super_cell":
         from clusterx.structure import Structure
@@ -712,9 +704,7 @@ def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
         sdistances = cdist(
             cl, sc, metric="euclidean"
         )  # Evaluate all (scaled) distances between cluster points to scell sites
-        idxs = np.argwhere(np.abs(sdistances) < tol)[
-            :, 1
-        ]  # Atom indexes of the transformed cluster
+        idxs = np.argwhere(np.abs(sdistances) < tol)[:, 1]  # Atom indexes of the transformed cluster
 
     return idxs
 
@@ -916,12 +906,7 @@ class PolynomialFunction:
     def print_polynomial(self):
         outstring = ""
         for exponential in self.exponentials:
-            outstring += (
-                str(exponential.coefficient)
-                + " *  x^"
-                + str(exponential.exponent)
-                + " + "
-            )
+            outstring += str(exponential.coefficient) + " *  x^" + str(exponential.exponent) + " + "
         outstring = outstring[:-3]
         print(outstring)
 
@@ -1033,9 +1018,7 @@ def sort_atoms(atoms, key=(2, 1, 0)):
         _nrs = np.delete(np.array(_pn), [0, 1, 2], 1).flatten()
         from ase import Atoms
 
-        return Atoms(
-            positions=_poss, numbers=_nrs, cell=atoms.get_cell(), pbc=atoms.get_pbc()
-        )
+        return Atoms(positions=_poss, numbers=_nrs, cell=atoms.get_cell(), pbc=atoms.get_pbc())
 
 
 def remove_vacancies(at):
@@ -1143,9 +1126,7 @@ def make_supercell(prim, P, wrap=True, tol=1e-5):
     # check number of atoms is correct
     n_target = np.abs(int(np.round(np.linalg.det(supercell_matrix) * len(prim))))
     if n_target != len(superatoms):
-        msg = "Number of atoms in supercell: {}, expected: {}".format(
-            n_target, len(superatoms)
-        )
+        msg = "Number of atoms in supercell: {}, expected: {}".format(n_target, len(superatoms))
         raise SupercellError(msg)
 
     if wrap:
@@ -1157,15 +1138,18 @@ def make_supercell(prim, P, wrap=True, tol=1e-5):
 def decorate_supercell(
     scell: SuperCell,
     atoms: Atoms,
-    tol: float = 1e-5,
+    tol: Optional[float] = 1e-5,
+    tols: Optional[List[float]] = None,
     wrap: bool = False,
+    wrap_eps: float = 0.05,
 ) -> Structure:
     """
     Create a clusterx.Structure by decorating a SuperCell with species taken
     from an ASE Atoms object.
 
     For each site in `scell`, this function finds a matching atom in `atoms`
-    whose Cartesian position is within `tol` (Euclidean distance).
+    whose Cartesian position is within a distance tolerance (Euclidean
+    distance).
     The corresponding atomic number is then used as the decoration.
 
     Parameters
@@ -1175,10 +1159,16 @@ def decorate_supercell(
     atoms : Atoms
         ASE Atoms instance containing the atomic positions and species.
     tol : float, optional
-        Distance tolerance for matching positions. Default is 1e-5.
+        Distance tolerance for matching positions. Used only when ``tols``
+        is ``None``. Default is 1e-5.
+    tols : list[float], optional
+        If provided, ``decorate_supercell`` ignores ``tol`` and tries each
+        tolerance in increasing order until a valid decoration is found.
     wrap : bool, optional
         Whether to wrap ASE atomic positions into the unit cell before matching.
         Passed directly to `atoms.get_positions(wrap=wrap)`.
+    wrap_eps : float, optional
+        ``eps`` argument forwarded to position wrapping.
 
     Returns
     -------
@@ -1188,50 +1178,72 @@ def decorate_supercell(
     Raises
     ------
     ValueError
-        If the number of matched sites does not equal the number of sites
-        in `scell`.
+        If no valid decoration is found for the tested tolerance(s).
     """
     from clusterx.structure import Structure
 
     # Pre-fetch positions and atomic numbers for efficiency
     sc_positions = np.asarray(scell.get_positions())
-    at_positions = np.asarray(atoms.get_positions(wrap=wrap))
+    at_positions = np.asarray(atoms.get_positions(wrap=wrap, eps=wrap_eps))
     at_numbers = np.asarray(atoms.get_atomic_numbers())
 
-    decorations = []
+    def _decorate_with_tol(tol_value: float) -> Structure:
+        decorations = []
 
-    for i_p_sc, p_sc in enumerate(sc_positions):
-        # Compute distances from this supercell site to all atoms
-        deltas = at_positions - p_sc
-        dists = np.linalg.norm(deltas, axis=1)
+        for i_p_sc, p_sc in enumerate(sc_positions):
+            # Compute distances from this supercell site to all atoms
+            deltas = at_positions - p_sc
+            dists = np.linalg.norm(deltas, axis=1)
 
-        # Find atoms within tolerance
-        candidates = np.where(dists < tol)[0]
+            # Find atoms within tolerance
+            candidates = np.where(dists < tol_value)[0]
 
-        if len(candidates) == 0:
-            mind = min(dists)
-            i_mind = np.where(dists == min(dists))[0][0]
+            if len(candidates) == 0:
+                mind = min(dists)
+                i_mind = np.where(dists == min(dists))[0][0]
+                raise ValueError(
+                    f"No matching atom found within tolerance {tol_value} "
+                    f"for:\n"
+                    f"supercell position {i_p_sc}: {p_sc}.\n"
+                    f"atoms position {i_mind}:     {at_positions[i_mind]}\n"
+                    f" Smallest distance "
+                    f"to this position is {mind}."
+                )
+
+            # If multiple atoms match, just take the first one
+            i_match = candidates[0]
+            decorations.append(int(at_numbers[i_match]))
+
+        if len(decorations) != len(scell):
             raise ValueError(
-                f"No matching atom found within tolerance {tol} "
-                f"for:\n"
-                f"supercell position {i_p_sc}: {p_sc}.\n"
-                f"atoms position {i_mind}:     {at_positions[i_mind]}\n"
-                f" Smallest distance "
-                f"to this position is {mind}."
+                f"Number of decorations ({len(decorations)}) does not match "
+                f"number of sites in supercell ({len(scell)}). You may need "
+                f"to increase tol (currently {tol_value})."
             )
 
-        # If multiple atoms match, just take the first one
-        i_match = candidates[0]
-        decorations.append(int(at_numbers[i_match]))
+        return Structure(scell, decorations)
 
-    if len(decorations) != len(scell):
+    if tols is not None:
+        if len(tols) == 0:
+            raise ValueError("Parameter 'tols' was provided but is empty. Provide at least one tolerance value.")
+
+        sorted_tols = sorted(tols)
+        last_error = None
+
+        for tol_value in sorted_tols:
+            try:
+                return _decorate_with_tol(tol_value)
+            except ValueError as err:
+                last_error = err
+
         raise ValueError(
-            f"Number of decorations ({len(decorations)}) does not match "
-            f"number of sites in supercell ({len(scell)}). You may need "
-            f"to increase tol (currently {tol})."
-        )
+            f"Could not decorate supercell with any tolerance in {sorted_tols}. Last error: {last_error}"
+        ) from last_error
 
-    return Structure(scell, decorations)
+    if tol is None:
+        raise ValueError("Parameter 'tol' cannot be None when 'tols' is not provided.")
+
+    return _decorate_with_tol(tol)
 
 
 def super_structure(struc0, d):
@@ -1346,9 +1358,7 @@ def sset_equivalence_check(
     elif comat is None:
         from clusterx.correlations import CorrelationsCalculator
 
-        ccalc = CorrelationsCalculator(
-            basis=basis, parent_lattice=sset.get_parent_lattice(), clusters_pool=cpool
-        )
+        ccalc = CorrelationsCalculator(basis=basis, parent_lattice=sset.get_parent_lattice(), clusters_pool=cpool)
         comat = ccalc.get_correlation_matrix(sset)
 
     nstr = len(sset)
@@ -1375,6 +1385,83 @@ def sset_equivalence_check(
 
                 if check:
                     crossedout.append(j)
+                    subset.append(j)
+
+            id_str_list[i] = np.array(subset, dtype="i4")
+
+    if pretty_print:
+        print(id_str_list)
+
+    return id_str_list
+
+
+def ssets_equivalence_check(
+    sset1,
+    sset2=None,
+    to_primitive=True,
+    pretty_print=False,
+):
+    """Find equivalent structures within or between StructuresSet objects.
+
+    If only ``sset1`` is provided, structures are compared with other structures
+    in the same set and the return value follows ``sset_equivalence_check``:
+    each key is a representative index and each value contains all equivalent
+    indices from ``sset1``.
+
+    If ``sset2`` is provided, each structure in ``sset1`` is compared with all
+    structures in ``sset2``. In that case every key is an index from ``sset1``
+    and every value contains the matching indices from ``sset2``.
+
+    Structures are compared only when their
+    ``Atoms.get_chemical_formula(mode="hill", empirical=True)`` strings are
+    identical.
+    """
+    import numpy as np
+    from ase.utils.structure_comparator import SymmetryEquivalenceCheck
+
+    comp = SymmetryEquivalenceCheck(to_primitive=to_primitive)
+    compare_same_set = sset2 is None
+    if sset2 is None:
+        sset2 = sset1
+
+    atoms1 = [structure.get_atoms() for structure in sset1]
+    atoms2 = atoms1 if compare_same_set else [structure.get_atoms() for structure in sset2]
+    formulas1 = [atoms.get_chemical_formula(mode="hill", empirical=True) for atoms in atoms1]
+    formulas2 = (
+        formulas1 if compare_same_set else [atoms.get_chemical_formula(mode="hill", empirical=True) for atoms in atoms2]
+    )
+
+    id_str_list = {}
+
+    if compare_same_set:
+        crossedout = []
+        for i, atoms_i in enumerate(atoms1):
+            if i in crossedout:
+                continue
+
+            crossedout.append(i)
+            subset = [i]
+            formula_i = formulas1[i]
+
+            for j in range(i + 1, len(atoms1)):
+                if formulas1[j] != formula_i:
+                    continue
+
+                if comp.compare(atoms_i, atoms1[j]):
+                    crossedout.append(j)
+                    subset.append(j)
+
+            id_str_list[i] = np.array(subset, dtype="i4")
+    else:
+        for i, atoms_i in enumerate(atoms1):
+            subset = []
+            formula_i = formulas1[i]
+
+            for j, atoms_j in enumerate(atoms2):
+                if formulas2[j] != formula_i:
+                    continue
+
+                if comp.compare(atoms_i, atoms_j):
                     subset.append(j)
 
             id_str_list[i] = np.array(subset, dtype="i4")
@@ -1450,9 +1537,7 @@ def atoms_equivalence_check(atoms, to_primitive=True, pretty_print=False):
     return id_str_list
 
 
-def report_sset_equivalence_check(
-    sset, sset_equivalence_check_output, property_name=None, tol=0.0
-):
+def report_sset_equivalence_check(sset, sset_equivalence_check_output, property_name=None, tol=0.0):
     """Generate report of equivalent structures
 
     Writes to files: ``sset_unique_sym.json`` and ``sset_unique_gss.json``.
@@ -1596,9 +1681,181 @@ def normalize_nsubs_list(
     if isinstance(nsubs_list, list):
         if all(isinstance(i, int) for i in nsubs_list):
             return [nsubs_list]
-        if all(
-            isinstance(i, list) and all(isinstance(j, int) for j in i)
-            for i in nsubs_list
-        ):
+        if all(isinstance(i, list) and all(isinstance(j, int) for j in i) for i in nsubs_list):
             return nsubs_list
     raise ValueError("Invalid format for nsubs_list")
+
+
+def rescale_by_first_nonzero(A):
+    """
+    Find the first nonzero element a_ij0 (row-major order) such that
+    closest_int_to(a_ij0) != 0, then compute
+
+        factor = a_ij0 / closest_int_to(a_ij0)
+
+    and return A scaled by 1/factor.
+
+    If no such element exists, raise an error.
+    """
+
+    A = np.asarray(A)
+    flat = A.ravel()
+
+    for val in flat:
+        if val == 0:
+            continue
+
+        closest_int = int(np.round(val))
+
+        # Skip if rounding gives zero
+        if closest_int == 0:
+            continue
+
+        factor = val / closest_int
+        return A / factor, factor
+
+    raise ValueError("No suitable element found (all nonzero elements round to zero).")
+
+
+def check_and_convert_integer_matrix(A, tol=1e-8):
+    """
+    Check whether all elements of a matrix are (numerically) integers,
+    and return (is_integer_matrix, integer_matrix).
+
+    Elements like 1.0 are considered integers.
+    A tolerance is used to handle floating point noise.
+
+    Parameters
+    ----------
+    A : np.ndarray
+        Input array (e.g., 3x3)
+    tol : float
+        Tolerance for checking integer closeness
+
+    Returns
+    -------
+    (bool, np.ndarray)
+        - True/False whether all elements are integers
+        - Matrix converted to integers (rounded)
+    """
+
+    A = np.asarray(A)
+
+    # Round to nearest integer
+    A_rounded = np.round(A)
+
+    # Check if all elements are close to their rounded values
+    is_integer = np.all(np.abs(A - A_rounded) < tol)
+
+    return is_integer, A_rounded.astype(int)
+
+
+def find_sc_shape(
+    scell,
+    pcell,
+    threshold_length=1e-5,
+    tol_int=1e-3,
+    true_rescale=False,
+    n_atoms_scell=None,
+    n_atoms_pcell=None,
+):
+    """Determine the integer transformation matrix (shape) relating a supercell to a primitive cell.
+
+    Given lattice matrices ``scell`` and ``pcell``, the *shape* is defined as
+
+    .. math::
+
+        S = P_{\\text{sc}} \\cdot P_{\\text{pc}}^{-1}
+
+    where rows of each matrix are lattice vectors.
+    The raw shape ``S`` is then rescaled so that its first significant
+    element is closest to an integer, and finally checked for integer-valuedness.
+
+    Parameters
+    ----------
+    scell : np.ndarray, shape (3, 3)
+        Supercell lattice matrix.
+    pcell : np.ndarray, shape (3, 3)
+        Primitive cell lattice matrix.
+    threshold_length : float, optional
+        Matrix elements whose absolute value is below this threshold are
+        zeroed before the inversion.  Default is ``1e-8``.
+    tol_int : float, optional
+        Tolerance passed to ``check_and_convert_integer_matrix`` when
+        deciding whether the rescaled shape elements are integers.
+        Default is ``1e-3``.
+    n_atoms_scell : int, optional
+        Number of atoms in the supercell.  When both ``n_atoms_scell`` and
+        ``n_atoms_pcell`` are provided, the function checks that
+        ``n_atoms_scell / n_atoms_pcell`` agrees with
+        ``abs(det(shape_int))``.  A ``ValueError`` is raised if they
+        disagree.
+    n_atoms_pcell : int, optional
+        Number of atoms in the primitive cell.  See ``n_atoms_scell``.
+
+    Returns
+    -------
+    is_shape_int : bool
+        ``True`` if the rescaled shape matrix is integer-valued within
+        ``tol_int``.
+    shape_int : np.ndarray of int, shape (3, 3)
+        The rescaled shape matrix rounded to the nearest integers.
+    shape_rescaled : np.ndarray, shape (3, 3)
+        ``shape`` divided by the scale factor determined by
+        ``rescale_by_first_nonzero``.
+    shape : np.ndarray, shape (3, 3)
+        Raw floating-point result of ``scell @ inv(pcell)`` (after
+        threshold zeroing).
+    """
+    pcell[np.abs(pcell) < threshold_length] = 0.0
+    scell[np.abs(scell) < threshold_length] = 0.0
+
+    shape = scell @ np.linalg.inv(pcell)
+
+    shape_rescaled, factor = rescale_by_first_nonzero(shape) if true_rescale else (shape.copy(), 1.0)
+    is_shape_int, shape_int = check_and_convert_integer_matrix(shape_rescaled, tol=tol_int)
+
+    sc_index = abs(int(np.round(np.linalg.det(shape_int))))
+
+    if n_atoms_scell is not None and n_atoms_pcell is not None:
+        ratio = n_atoms_scell // n_atoms_pcell
+        if ratio != sc_index:
+            shape_str = np.array2string(
+                shape,
+                precision=10,
+                suppress_small=False,
+                separator=", ",
+            )
+            shape_rescaled_str = np.array2string(
+                shape_rescaled,
+                precision=10,
+                suppress_small=False,
+                separator=", ",
+            )
+            shape_int_str = np.array2string(
+                shape_int,
+                separator=", ",
+            )
+            pcell_str = np.array2string(
+                pcell,
+                precision=10,
+                suppress_small=False,
+                separator=", ",
+            )
+            scell_str = np.array2string(
+                scell,
+                precision=10,
+                suppress_small=False,
+                separator=", ",
+            )
+            raise ValueError(
+                f"Atom-count ratio ({n_atoms_scell}/{n_atoms_pcell} = {ratio}) "
+                f"does not match |det(shape_int)| = {sc_index}.\n"
+                f"shape =\n{shape_str}\n"
+                f"shape_rescaled =\n{shape_rescaled_str}\n"
+                f"shape_int =\n{shape_int_str}\n"
+                f"pcell =\n{pcell_str}\n"
+                f"scell =\n{scell_str}"
+            )
+
+    return is_shape_int, shape_int, shape_rescaled, shape, sc_index

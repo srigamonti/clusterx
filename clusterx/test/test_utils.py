@@ -1,10 +1,19 @@
 """Test utility functions for CELL."""
 
+import json
+
+import matplotlib.pyplot as plt
 import pytest
 import numpy as np
 from ase.build import bulk
 
 from clusterx.parent_lattice import ParentLattice
+from clusterx.cli.ssets_equivalence_check import (
+    ssets_equivalence_check as cli_ssets_equivalence_check,
+)
+from clusterx.cli.plot_columns import plot_columns
+from clusterx.structures_set import StructuresSet
+from clusterx.super_cell import SuperCell
 from clusterx.utils import (
     Exponential,
     PolynomialFunction,
@@ -42,7 +51,9 @@ def test_ase_make_supercell_error():
 
     _ = make_supercell(
         prim, P=[[2, 2, -2], [2, -2, 2], [-2, 2, 2]], wrap=True, tol=1e-05
-    )
+        list_integer_named_folders,
+    ssets_equivalence_check,
+)
 
 
 @pytest.fixture
@@ -164,6 +175,328 @@ def test_lattice_wrap_index():
         else:
             with pytest.raises(ValueError):
                 arr[lattice_wrap_index(idx, (4, 4))]
+
+
+def test_list_integer_named_folders_preserves_zero_padded_names(tmp_path):
+    for name in ["010", "001", "abc", "002", "0"]:
+        (tmp_path / name).mkdir()
+
+    assert list_integer_named_folders(tmp_path) == ["0", "001", "002", "010"]
+
+
+def test_list_integer_named_folders_preserves_zero_padded_names_with_affixes(tmp_path):
+    for name in ["run_010_done", "run_001_done", "run_old_done", "001_done"]:
+        (tmp_path / name).mkdir()
+
+    assert list_integer_named_folders(
+        tmp_path, prefix="run_", suffix="_done"
+    ) == ["run_001_done", "run_010_done"]
+
+
+def _make_equivalence_sset(parent_lattice, sigmas_list):
+    scell = SuperCell(parent_lattice, np.diag([2, 1, 1]))
+    sset = StructuresSet(parent_lattice)
+    for sigmas in sigmas_list:
+        sset.add_structure(scell.gen_structure(sigmas=np.array(sigmas)))
+    return sset
+
+
+def test_ssets_equivalence_check_self(parent_lattice):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 1], [0, 0]])
+
+    equivalent = ssets_equivalence_check(sset)
+
+    assert {k: v.tolist() for k, v in equivalent.items()} == {
+        0: [0, 1],
+        2: [2],
+    }
+
+
+def test_ssets_equivalence_check_two_sets(parent_lattice):
+    sset1 = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset2 = _make_equivalence_sset(parent_lattice, [[0, 1], [0, 0], [1, 1]])
+
+    equivalent = ssets_equivalence_check(sset1, sset2)
+
+    assert {k: v.tolist() for k, v in equivalent.items()} == {
+        0: [0],
+        1: [1],
+    }
+
+
+def test_cli_ssets_equivalence_check_two_sets(parent_lattice, tmp_path, capsys):
+    sset1 = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset2 = _make_equivalence_sset(parent_lattice, [[0, 1], [0, 0], [1, 1]])
+    sset1_filepath = tmp_path / "sset1.db"
+    sset2_filepath = tmp_path / "sset2.db"
+    sset1.serialize(filepath=str(sset1_filepath), ase_db_type="db", overwrite=True)
+    sset2.serialize(filepath=str(sset2_filepath), ase_db_type="db", overwrite=True)
+
+    cli_ssets_equivalence_check(str(sset1_filepath), str(sset2_filepath))
+
+    assert "{0: [0], 1: [1]}" in capsys.readouterr().out
+
+
+def test_plot_columns_accepts_serialized_structures_set(parent_lattice, tmp_path):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[2.0, 3.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    figdata_filepath = tmp_path / "plot_data.json"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    plot_columns(
+        source_filepath=str(sset_filepath),
+        show_plot=False,
+        figdata_fname=str(figdata_filepath),
+        series=[{"xcolumn": "x", "ycolumn": "y"}],
+    )
+
+    with open(figdata_filepath, encoding="utf-8") as f:
+        plot_data = json.load(f)
+    assert plot_data["series"][0]["x"] == [0.0, 1.0]
+    assert plot_data["series"][0]["y"] == [2.0, 3.0]
+
+
+def test_plot_columns_grid_lines(parent_lattice, tmp_path, monkeypatch):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[2.0, 3.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    figdata_filepath = tmp_path / "plot_data.json"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    real_close = plt.close
+
+    def capture_close(fig=None):
+        captured["fig"] = fig if fig is not None else plt.gcf()
+
+    monkeypatch.setattr(plt, "close", capture_close)
+    try:
+        plot_columns(
+            source_filepath=str(sset_filepath),
+            grid=True,
+            grid_axis="x",
+            grid_style={"linestyle": ":", "linewidth": 0.7, "alpha": 0.4},
+            show_plot=False,
+            figdata_fname=str(figdata_filepath),
+            series=[{"xcolumn": "x", "ycolumn": "y"}],
+        )
+
+        fig = captured["fig"]
+        ax = fig.axes[0]
+        x_gridlines = [line for line in ax.xaxis.get_gridlines() if line.get_visible()]
+        y_gridlines = [line for line in ax.yaxis.get_gridlines() if line.get_visible()]
+        assert len(x_gridlines) > 0
+        assert len(y_gridlines) == 0
+        assert x_gridlines[0].get_linestyle() == ":"
+        assert x_gridlines[0].get_linewidth() == 0.7
+        assert x_gridlines[0].get_alpha() == 0.4
+
+        with open(figdata_filepath, encoding="utf-8") as f:
+            plot_data = json.load(f)
+        assert plot_data["grid"] is True
+        assert plot_data["grid_axis"] == "x"
+        assert plot_data["grid_which"] == "major"
+        assert plot_data["grid_style"] == {
+            "linestyle": ":",
+            "linewidth": 0.7,
+            "alpha": 0.4,
+        }
+    finally:
+        if "fig" in captured:
+            real_close(captured["fig"])
+
+
+def test_plot_columns_target_vs_predictions_loglog_axes(parent_lattice, tmp_path, monkeypatch):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="target",
+        property_vals=[1.0, 10.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="prediction",
+        property_vals=[2.0, 8.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    figdata_filepath = tmp_path / "plot_data.json"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    real_close = plt.close
+
+    def capture_close(fig=None):
+        captured["fig"] = fig if fig is not None else plt.gcf()
+
+    monkeypatch.setattr(plt, "close", capture_close)
+    try:
+        plot_columns(
+            source_filepath=str(sset_filepath),
+            target_vs_predictions=True,
+            loglog=True,
+            show_plot=False,
+            figdata_fname=str(figdata_filepath),
+            series=[{"xcolumn": "target", "ycolumn": "prediction"}],
+        )
+
+        fig = captured["fig"]
+        ax = fig.axes[0]
+        assert ax.get_xscale() == "log"
+        assert ax.get_yscale() == "log"
+        np.testing.assert_allclose(ax.get_xlim(), ax.get_ylim())
+        assert ax.get_box_aspect() == 1
+
+        parity_lines = [line for line in ax.lines if line.get_label() == "y=x"]
+        assert len(parity_lines) == 1
+        np.testing.assert_allclose(
+            parity_lines[0].get_xdata(),
+            parity_lines[0].get_ydata(),
+        )
+
+        with open(figdata_filepath, encoding="utf-8") as f:
+            plot_data = json.load(f)
+        assert plot_data["target_vs_predictions"] is True
+        assert plot_data["loglog"] is True
+        assert plot_data["axis_limits"][0] < 1.0
+        assert plot_data["axis_limits"][1] > 10.0
+    finally:
+        if "fig" in captured:
+            real_close(captured["fig"])
+
+
+def test_plot_columns_target_vs_predictions_symlog_axes(parent_lattice, tmp_path, monkeypatch):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="target",
+        property_vals=[-10.0, 0.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="prediction",
+        property_vals=[-8.0, -0.5],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    figdata_filepath = tmp_path / "plot_data.json"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    real_close = plt.close
+
+    def capture_close(fig=None):
+        captured["fig"] = fig if fig is not None else plt.gcf()
+
+    monkeypatch.setattr(plt, "close", capture_close)
+    try:
+        plot_columns(
+            source_filepath=str(sset_filepath),
+            target_vs_predictions=True,
+            symlog=True,
+            symlog_linthresh=0.2,
+            show_plot=False,
+            figdata_fname=str(figdata_filepath),
+            series=[{"xcolumn": "target", "ycolumn": "prediction"}],
+        )
+
+        fig = captured["fig"]
+        ax = fig.axes[0]
+        assert ax.get_xscale() == "symlog"
+        assert ax.get_yscale() == "symlog"
+        np.testing.assert_allclose(ax.get_xlim(), ax.get_ylim())
+        assert ax.get_box_aspect() == 1
+
+        parity_lines = [line for line in ax.lines if line.get_label() == "y=x"]
+        assert len(parity_lines) == 1
+        np.testing.assert_allclose(
+            parity_lines[0].get_xdata(),
+            parity_lines[0].get_ydata(),
+        )
+
+        with open(figdata_filepath, encoding="utf-8") as f:
+            plot_data = json.load(f)
+        assert plot_data["symlog"] is True
+        assert plot_data["symlog_linthresh"] == 0.2
+        assert plot_data["axis_limits"][0] < -10.0
+        assert plot_data["axis_limits"][1] > 0.0
+    finally:
+        if "fig" in captured:
+            real_close(captured["fig"])
+
+
+def test_plot_columns_loglog_rejects_non_positive_values(parent_lattice, tmp_path):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="target",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="prediction",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    try:
+        with pytest.raises(ValueError, match="non-positive"):
+            plot_columns(
+                source_filepath=str(sset_filepath),
+                target_vs_predictions=True,
+                loglog=True,
+                show_plot=False,
+                series=[{"xcolumn": "target", "ycolumn": "prediction"}],
+            )
+    finally:
+        plt.close("all")
+
+
+def test_plot_columns_rejects_loglog_and_symlog_together(parent_lattice, tmp_path):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="target",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="prediction",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    try:
+        with pytest.raises(ValueError, match="Use only one"):
+            plot_columns(
+                source_filepath=str(sset_filepath),
+                target_vs_predictions=True,
+                loglog=True,
+                symlog=True,
+                show_plot=False,
+                series=[{"xcolumn": "target", "ycolumn": "prediction"}],
+            )
+    finally:
+        plt.close("all")
 
 
 def test_exponential():
