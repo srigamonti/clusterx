@@ -138,6 +138,12 @@ def _shared_target_prediction_limits(
     title=("Figure title.", "option", "t", str),
     xlabel=("Label for the x-axis of the plot.", "option", "xl", str),
     ylabel=("Label for the y-axis of the plot.", "option", "yl", str),
+    yfactor=(
+        "Multiplicative factor applied to y data before plotting/export.",
+        "option",
+        "yf",
+        float,
+    ),
     yrange=("Range for the y-axis of the plot (min,max).", "option", None, list),
     xrange=("Range for the x-axis of the plot (min,max).", "option", None, list),
     colors=(
@@ -202,7 +208,7 @@ def _shared_target_prediction_limits(
     series=(
         "List of series dictionaries from TOML. Per-series keys: xcolumn, ycolumn, "
         "source_filepath (optional), mask_name (optional), label (optional), "
-        "color/marker/size/edgecolor/facecolor/linewidth/alpha (optional), "
+        "yfactor (optional), color/marker/size/edgecolor/facecolor/linewidth/alpha (optional), "
         "or style={...} for grouped styling. Also supports ymode in "
         "{marker,cloud,violin,boxplot,auto} for array-valued y columns. "
         "Set binned=true to group scalar y values by unique x bin (with optional xtol snap).",
@@ -218,6 +224,7 @@ def plot_columns(
     title: Optional[str] = None,
     xlabel: Optional[str] = None,
     ylabel: Optional[str] = None,
+    yfactor: float = 1.0,
     yrange: Optional[list] = None,
     xrange: Optional[list] = None,
     colors: Optional[list] = None,
@@ -250,6 +257,8 @@ def plot_columns(
         series that do not explicitly set them.
     - ``title`` (str, optional): figure title.
     - ``xlabel`` / ``ylabel`` (str, optional): axis labels.
+    - ``yfactor`` (float): multiplicative factor applied to y data before
+        plotting and exporting data (default: ``1.0``).
     - ``xrange`` / ``yrange`` (list[float, float], optional): axis limits.
     - ``colors`` (list[str], optional): default color palette for series without
         explicit ``color``.
@@ -285,6 +294,8 @@ def plot_columns(
     - ``source_filepath`` (str): override top-level source for this series.
     - ``mask_name`` (str): mask name in the DSGenerator.
     - ``label`` (str): legend label.
+    - ``yfactor`` (float): override the top-level y scaling factor for this
+        series.
     - ``color`` (str): matplotlib color spec (e.g. ``"k"``, ``"#1f77b4"``,
         ``"red"``).
     - ``marker`` (str): matplotlib marker (e.g. ``"o"``, ``"s"``, ``"^"``, ``"."``).
@@ -335,6 +346,7 @@ def plot_columns(
             title = "Energy of mixing"
             xlabel = "Concentration"
             ylabel = "Energy"
+            yfactor = 1000.0
             colors = ["k", "r", "b"]
             legend = true
             show_plot = true
@@ -460,6 +472,8 @@ def plot_columns(
     if colors is not None and not isinstance(colors, list):
         raise ValueError("colors must be a list when provided.")
 
+    yfactor = float(yfactor)
+
     if loglog and symlog:
         raise ValueError("Use only one of loglog=True or symlog=True.")
 
@@ -483,6 +497,7 @@ def plot_columns(
         "title": title,
         "xlabel": xlabel,
         "ylabel": ylabel,
+        "yfactor": yfactor,
         "target_vs_predictions": target_vs_predictions,
         "loglog": loglog,
         "symlog": symlog,
@@ -520,6 +535,7 @@ def plot_columns(
         src = item.get("source_filepath", source_filepath)
         xcolumn_s = item.get("xcolumn", xcolumn)
         ycolumn_s = item.get("ycolumn", ycolumn)
+        yfactor_s = float(item.get("yfactor", yfactor))
         mask_name = item.get("mask_name")
 
         if xcolumn_s is None or ycolumn_s is None:
@@ -551,7 +567,7 @@ def plot_columns(
 
         # y can be scalar-valued or array-valued (e.g., bagging predictions)
         y_cells = df[ycolumn_s].tolist()
-        y_arrays = [_to_1d_float_array(v) for v in y_cells]
+        y_arrays = [_to_1d_float_array(v) * yfactor_s for v in y_cells]
         is_array_valued = any(len(v) > 1 for v in y_arrays)
 
         binned = bool(item.get("binned", False))
@@ -738,6 +754,7 @@ def plot_columns(
                 "source_filepath": src,
                 "xcolumn": xcolumn_s,
                 "ycolumn": ycolumn_s,
+                "yfactor": yfactor_s,
                 "mask_name": mask_name,
                 "label": label,
                 "ymode": ymode,
