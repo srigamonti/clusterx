@@ -18,7 +18,7 @@ from ase.io import write
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.utils import is_diagonal, grid_mapping
+from clusterx.utils import grid_mapping, is_diagonal
 
 
 class Structure(SuperCell):
@@ -100,14 +100,10 @@ class Structure(SuperCell):
 
             for idx, species in enumerate(decoration):
                 if species not in self.sites[idx]:
-                    raise AttributeError(
-                        "Error (Structure): decoration not compatible with parent lattice definition."
-                    )
+                    raise AttributeError("Error (Structure): decoration not compatible with parent lattice definition.")
 
             for idx, species in enumerate(decoration):
-                self.sigmas[idx] = np.argwhere(
-                    np.array(self.sites[idx], dtype=int) == species
-                )[0, 0]
+                self.sigmas[idx] = np.argwhere(np.array(self.sites[idx], dtype=int) == species)[0, 0]
                 self.ems[idx] = len(self.sites[idx])
         else:
             self.decor = np.zeros(len(sigmas), dtype=np.int8)
@@ -179,12 +175,8 @@ class Structure(SuperCell):
         self._comps = {}
 
         tags = self.get_tags()  # e.g. [0,0,0,1,1,2]
-        sublattices = (
-            self.get_sublattice_types()
-        )  # e.g. {0:[14,13], 1:[54,0,32], 2:[11]}
-        sigmas = (
-            self.get_sigmas()
-        )  # e.g. sigmas = [0,1,0,2,1,0] for  decor = [14,13,14,32,0,11]
+        sublattices = self.get_sublattice_types()  # e.g. {0:[14,13], 1:[54,0,32], 2:[11]}
+        sigmas = self.get_sigmas()  # e.g. sigmas = [0,1,0,2,1,0] for  decor = [14,13,14,32,0,11]
 
         for sublat_key, species_list in sublattices.items():
             idxs_per_species = []
@@ -244,8 +236,7 @@ class Structure(SuperCell):
         p = super_cell.get_transformation()
         if not is_diagonal(p):
             raise ValueError(
-                "Structure cannot be initialized from sigma grid "
-                "with non-diagonal super cell transformation."
+                "Structure cannot be initialized from sigma grid with non-diagonal super cell transformation."
             )
         return cls(super_cell=super_cell, sigmas=sigma_grid.ravel())
 
@@ -334,9 +325,7 @@ class Structure(SuperCell):
         """
 
         structure_dict = Structure._decode_ase_dict(structure_dict)
-        parent_lattice = ParentLattice.plat_from_dict(
-            structure_dict["metadata"]["parent_lattice"]
-        )
+        parent_lattice = ParentLattice.plat_from_dict(structure_dict["metadata"]["parent_lattice"])
         tmat = structure_dict[1]["data"]["tmat"]
         numbers = structure_dict[1]["numbers"]
 
@@ -404,10 +393,7 @@ class Structure(SuperCell):
         """Return the sigmas in the form of a 4-dim numpy array."""
         p = self.scell.get_transformation()
         if not is_diagonal(p):
-            raise ValueError(
-                "Sigma grid cannot be generated, super cell "
-                "transformation is not diagonal."
-            )
+            raise ValueError("Sigma grid cannot be generated, super cell transformation is not diagonal.")
         grid_shape = np.diag(p).tolist() + [len(self.get_parent_lattice())]
         sigmas = self.get_sigmas()
         return np.reshape(sigmas, grid_shape)
@@ -420,9 +406,7 @@ class Structure(SuperCell):
         sigma_grid_reduced, index_grid_reduced = grid_mapping(sigma_grid, index_grid, p)
         scell_reduced = SuperCell(self.scell.get_parent_lattice(), p)
         structure_reduced = Structure.from_sigma_grid(scell_reduced, sigma_grid_reduced)
-        index_reduced = int(
-            np.ravel_multi_index(index_grid_reduced, sigma_grid_reduced.shape)
-        )
+        index_reduced = int(np.ravel_multi_index(index_grid_reduced, sigma_grid_reduced.shape))
         return structure_reduced, index_reduced
 
     def get_supercell(self):
@@ -467,16 +451,13 @@ class Structure(SuperCell):
         """
         if fname is not None:
             warnings.warn(
-                "'fname' is deprecated and will be removed in a future version. "
-                "Please use 'filepath' instead.",
+                "'fname' is deprecated and will be removed in a future version. Please use 'filepath' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
             filepath = fname
 
-        file_ext = (
-            os.path.splitext(filepath)[1].lower().lstrip(".")
-        )  # remove leading dot
+        file_ext = os.path.splitext(filepath)[1].lower().lstrip(".")  # remove leading dot
         fmt = fmt or file_ext  # use file extension as format if fmt is not provided
 
         if fmt == "json":
@@ -559,14 +540,10 @@ class Structure(SuperCell):
 
             for idx, species in enumerate(decoration):
                 if species not in self.sites[idx]:
-                    raise AttributeError(
-                        "Error (Structure): decoration not compatible with parent lattice definition."
-                    )
+                    raise AttributeError("Error (Structure): decoration not compatible with parent lattice definition.")
 
             for idx, species in enumerate(decoration):
-                self.sigmas[idx] = np.argwhere(
-                    np.array(self.sites[idx], dtype=int) == species
-                )[0, 0]
+                self.sigmas[idx] = np.argwhere(np.array(self.sites[idx], dtype=int) == species)[0, 0]
 
         self.atoms.set_atomic_numbers(self.decor)
         self._build_index_maps()
@@ -713,9 +690,7 @@ class Structure(SuperCell):
 
         len_subs = len(self.idx_subs[site_type])
         if len_subs > 2:
-            sigma_swap = np.sort(
-                np.random.choice(np.arange(len_subs), 2, replace=False)
-            )
+            sigma_swap = np.sort(np.random.choice(np.arange(len_subs), 2, replace=False))
         else:
             sigma_swap = np.arange(len_subs)
 
@@ -794,11 +769,39 @@ class Structure(SuperCell):
         numbers = self.get_atomic_numbers()
 
         for site_type in substutitional_site_types:
-            concentration[site_type] = []
+            concentration[int(site_type)] = []
             nsites = nsites_per_type[site_type]
             atom_indices = self.get_atom_indices_for_site_type(site_type)
             for spnr in idx_subs[site_type]:
                 n = np.array(numbers[atom_indices]).tolist().count(spnr)
-                concentration[site_type].append(n / nsites)
+                concentration[int(site_type)].append(n / nsites)
 
         return concentration
+
+    def get_symbols_per_site_type(self):
+        r"""Get fractional concentration of each species on each sublattice
+
+        This function returns a dictionary. The keys of the dictionary, denoted
+        with :math:`t`, are the site types that admit substitution (i.e., those returned
+        by ``Structure.get_substitutional_tags()``). The values of the dictionary
+        are arrays of float, denoted with vectors :math:`\mathbf{c}_t`.
+        The coordinates of :math:`\mathbf{c}_t` (:math:`c_{\sigma t}`) are equal to
+        :math:`n_{\sigma t}/n_t`, where :math:`\sigma \in [ 0,m-1]`,
+        :math:`n_{\sigma t}` is the number of atoms of species :math:`\sigma`
+        occupying sites of type :math:`t`, and :math:`n_t` is the total number
+        of sites of type :math:`t`. The coordinates of :math:`\mathbf{c}_t` sum
+        up to :math:`1`.
+        """
+        from ase.data import chemical_symbols as cs
+
+        symbols_per_site_type = {}
+
+        substutitional_site_types = self.get_substitutional_tags()
+        idx_subs = self.get_idx_subs()
+
+        for site_type in substutitional_site_types:
+            symbols_per_site_type[int(site_type)] = []
+            for spnr in idx_subs[site_type]:
+                symbols_per_site_type[int(site_type)].append(cs[spnr])
+
+        return symbols_per_site_type
