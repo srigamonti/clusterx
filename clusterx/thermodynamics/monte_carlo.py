@@ -330,8 +330,7 @@ class MonteCarlo:
                             self._chemical_potentials[site_type][new_sigma]
                             - self._chemical_potentials[site_type][old_sigma]
                         )
-                    # WARNING: TODO: this might produce wrong energy differences
-                    # if the flip sites are too close
+                    structure.flip(i, old_sigma, new_sigma, site_type)
             else:
                 for i, new_sigma, old_sigma, site_type in flip_tuples:
                     structure.flip(i, old_sigma, new_sigma, site_type)
@@ -341,9 +340,6 @@ class MonteCarlo:
                             - self._chemical_potentials[site_type][old_sigma]
                         )
                 de = self._emodel.predict(structure) - e_last
-                # revert flips
-                for i, new_sigma, old_sigma, site_type in flip_tuples[::-1]:
-                    structure.flip(i, new_sigma, old_sigma, site_type)
 
             # handle multi-linear model, make sure that `de` is np.float64
             de = de if len(de.shape) == 0 else de[self._energy_prediction_index]
@@ -356,8 +352,6 @@ class MonteCarlo:
                 accept_step = False
 
             if accept_step:
-                for i, new_sigma, old_sigma, site_type in flip_tuples:
-                    structure.flip(i, old_sigma, new_sigma, site_type)
                 e_last += de
 
                 key_value_pairs = {}
@@ -371,6 +365,10 @@ class MonteCarlo:
                         new_sigmas=[new_sigma for _, new_sigma, _, _ in flip_tuples],
                         key_value_pairs=key_value_pairs,
                     )
+            else:
+                # revert flips
+                for i, new_sigma, old_sigma, site_type in flip_tuples[::-1]:
+                    structure.flip(i, new_sigma, old_sigma, site_type)
 
             rate = rave.update_and_get_average(1.0 * accept_step)
             if target_rate is not None:

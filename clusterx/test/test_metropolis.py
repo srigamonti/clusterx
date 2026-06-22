@@ -64,9 +64,7 @@ def plat_perov():
     pbc = [True, True, True]
     pri = Atoms(["Cs", "Pb", "I", "I", "I"], positions=positions, cell=cell, pbc=pbc)
     sub_Sn = Atoms(["Cs", "Sn", "I", "I", "I"], positions=positions, cell=cell, pbc=pbc)
-    sub_Br = Atoms(
-        ["Cs", "Pb", "Br", "Br", "Br"], positions=positions, cell=cell, pbc=pbc
-    )
+    sub_Br = Atoms(["Cs", "Pb", "Br", "Br", "Br"], positions=positions, cell=cell, pbc=pbc)
     plat = ParentLattice(pri, substitutions=[sub_Sn, sub_Br], pbc=pbc)
     return plat
 
@@ -173,9 +171,7 @@ def plat_binary(pristine_crystal, sub_Al):
 
 @pytest.fixture
 def plat_full_sub(pristine_crystal, sub_Al, sub_X, sub_Sr):
-    return ParentLattice(
-        atoms=pristine_crystal, substitutions=[sub_Al, sub_X, sub_Sr], pbc=(1, 1, 1)
-    )
+    return ParentLattice(atoms=pristine_crystal, substitutions=[sub_Al, sub_X, sub_Sr], pbc=(1, 1, 1))
 
 
 @pytest.fixture
@@ -373,21 +369,28 @@ def test_metropolis_perov(plat_perov):
     np.random.seed(42)
     ecis = np.random.normal(size=len(cpool))
     cemodel = Model(corrc, "energy", ecis=ecis)
+    scell = SuperCell(plat_perov, 2)
 
-    scell = SuperCell(plat_perov, 10)
-    mc = MonteCarlo(
-        cemodel,
-        scell,
-        nsubs=None,
-        predict_swap=True,
-        reduce_structure=True,
-        save_atoms_every=100,
-        atoms_filename="perov_mc.traj",
-        seed=42,
-    )
-    mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, serialize=False)
-    traj = Trajectory("perov_mc.traj")
-    assert len(traj) == 11
+    energies = []
+    for predict_swap, reduce in [(False, False), (True, False), (True, True)]:
+        mc = MonteCarlo(
+            cemodel,
+            scell,
+            nsubs=None,
+            predict_swap=predict_swap,
+            reduce_structure=reduce,
+            save_atoms_every=100,
+            atoms_filename="perov_mc.traj",
+            seed=42,
+        )
+        mctraj = mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, serialize=True)
+        traj = Trajectory("perov_mc.traj")
+        assert len(traj) == 11
+        energies.append(mctraj.get_energies())
+    energies[2] += energies[0][0]  # energies of reduce=True are offset
+    np.testing.assert_allclose(energies[0], energies[1])
+    np.testing.assert_allclose(energies[0], energies[2])
+    np.testing.assert_allclose(energies[1], energies[2])
 
 
 @pytest.mark.xfail(reason="MCLite will not be updated")
@@ -413,9 +416,7 @@ def test_mclite(plat, model_, request, tmp_path):
 def test_mclite_reduce(plat_bulk, model_bulk, tmp_path, reduce):
     scell = SuperCell(plat_bulk, 10)
     n_atoms = len(scell)
-    mc = MonteCarloLite(
-        model_bulk, scell, boltzmann_constant=1, reduce_structure=reduce
-    )
+    mc = MonteCarloLite(model_bulk, scell, boltzmann_constant=1, reduce_structure=reduce)
     mcrun = mc.metropolis(
         n_mc_steps=10,
         temperature=10,
