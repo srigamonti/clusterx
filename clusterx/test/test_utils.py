@@ -27,8 +27,9 @@ from clusterx.utils import (
     RunningAverage,
     list_integer_named_folders,
     ssets_equivalence_check,
+    decorate_supercell,
+    take_tile,
 )
-from clusterx.utils import take_tile
 
 
 def test_RunningAverage():
@@ -84,6 +85,19 @@ def test_ListDict():
     for i in range(n):
         assert i in list_dict  # __contains__
         list_dict.remove(i)
+
+
+def test_decorate_supercell(parent_lattice):
+    scell = SuperCell(parent_lattice, np.diag([2, 2, 2]))
+    structure = scell.gen_random_structure()
+    atoms = structure.get_atoms()
+    # slightly offset the positions, to check tolerance of the decoration
+    np.random.seed(42)
+    dpos = np.random.rand(*atoms.get_positions().shape) * 1e-6
+    atoms.positions += dpos
+    decorated = decorate_supercell(scell, atoms)
+    np.testing.assert_array_equal(decorated.get_cell(), scell.get_cell())
+    np.testing.assert_array_equal(decorated.sigmas, structure.sigmas)
 
 
 @pytest.mark.parametrize(
