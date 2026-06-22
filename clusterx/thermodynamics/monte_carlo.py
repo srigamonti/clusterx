@@ -69,14 +69,17 @@ class MonteCarlo:
         Defines the sublattices for the grand canonical sampling.
         Furthermore, it can be used to limit the canonical sampling
         to a reduced number of sublattices. E.g. in the case of nsubs = {0:[4,6], 1:[4]}. Here, sublattices 0 and 1
-        contain substitutional sites, but only a sampling in sublattice 0 is wanted. Then, put ``sublattice_indices`` = [0].
+        contain substitutional sites, but only a sampling in sublattice 0 is wanted.
+        Then, put ``sublattice_indices`` = [0].
 
     ``chemical_potentials``: dictionary (default: None)
         Define the chemical potentials used for samplings in the grand canonical ensemble.
 
         The format of the dictionary is as follows
 
-        {site_type1:[:math:`\Delta \mu_{11}`, :math:`\Delta \mu_{12}`,...], site_type2:[:math:`\Delta \mu_{21}`, :math:`\Delta \mu_{22}`,...],...}
+        {site_type1:[:math:`\Delta \mu_{11}`, :math:`\Delta \mu_{12}`,...],
+         site_type2:[:math:`\Delta \mu_{21}`, :math:`\Delta \mu_{22}`,...],
+         ...}
 
         Here, :math:`\Delta \mu_{\#i}` is the chemical potential difference of substitutional species i relative
         to the pristine species in sub-lattice with site_type#.
@@ -86,7 +89,8 @@ class MonteCarlo:
         calculated during the sampling and stored with their corresponding ``prop_name``
         to the dictionary ``key_value_pairs`` for each visited structure during the sampling.
 
-        Properties from Model obejects can also be calculated after the sampling by using the MonteCarloTrajectory class.
+        Properties from Model obejects can also be calculated after the
+        sampling by using the MonteCarloTrajectory class.
 
     ``predict_swap``: boolean (default: False)
        If set to **True**, this parameter makes the sampling faster by calculating the correlation difference of the
@@ -129,9 +133,7 @@ class MonteCarlo:
         seed: int | None = None,
     ):
         if (ensemble == "semigrand-canonical") and (chemical_potentials is None):
-            raise ValueError(
-                "`chemical_potentials` have to be given when ensemble is 'semigrand-canonical"
-            )
+            raise ValueError("`chemical_potentials` have to be given when ensemble is 'semigrand-canonical")
         self._emodel = energy_model
         self._emodel.reset_mc(mc=True)
         self._scell = scell
@@ -234,14 +236,10 @@ class MonteCarlo:
             Trajectory containing the complete information of the sampling trajectory.
 
         """
-        scale_factor = (
-            scale_factor if scale_factor is not None else [self._scell.get_index()]
-        )
+        scale_factor = scale_factor if scale_factor is not None else [self._scell.get_index()]
 
         if len(np.shape(temperature)) == 0:
-            beta = np.ones((no_of_sampling_steps,), dtype=float) / (
-                boltzmann_constant * temperature
-            )
+            beta = np.ones((no_of_sampling_steps,), dtype=float) / (boltzmann_constant * temperature)
         else:
             beta = 1 / (boltzmann_constant * temperature)
         scale_factor_product = np.prod(scale_factor)
@@ -257,11 +255,7 @@ class MonteCarlo:
             structure.init_reduced_structure(self._emodel.scell_reduced)
         else:
             e_last = self._emodel.predict(structure)
-            e_last = (
-                e_last
-                if len(e_last.shape) == 0
-                else e_last[self._energy_prediction_index]
-            )
+            e_last = e_last if len(e_last.shape) == 0 else e_last[self._energy_prediction_index]
             self._emodel._init_interaction_dict(self._scell)
 
         if filename is not None:
@@ -308,17 +302,13 @@ class MonteCarlo:
 
             if self._ensemble == "canonical":
                 for _ in range(n_clics):
-                    i, j, site_type = structure.get_random_swap(
-                        self._sublattice_indices, self._rng_std
-                    )
+                    i, j, site_type = structure.get_random_swap(self._sublattice_indices, self._rng_std)
                     flip_tuples.append((i, sigmas[j], sigmas[i], site_type))
                     flip_tuples.append((j, sigmas[i], sigmas[j], site_type))
             elif self._ensemble == "semigrand-canonical":
                 for _ in range(n_clics):
-                    i, sigma_initial, sigma_final, site_type = (
-                        structure.get_random_flip(
-                            self._sublattice_indices, rng=self._rng_std
-                        )
+                    i, sigma_initial, sigma_final, site_type = structure.get_random_flip(
+                        self._sublattice_indices, rng=self._rng_std
                     )
                     flip_tuples.append((i, sigma_final, sigma_initial, site_type))
             else:
@@ -340,6 +330,8 @@ class MonteCarlo:
                             self._chemical_potentials[site_type][new_sigma]
                             - self._chemical_potentials[site_type][old_sigma]
                         )
+                    # WARNING: TODO: this might produce wrong energy differences
+                    # if the flip sites are too close
             else:
                 for i, new_sigma, old_sigma, site_type in flip_tuples:
                     structure.flip(i, old_sigma, new_sigma, site_type)
@@ -358,9 +350,7 @@ class MonteCarlo:
 
             if de + dmu <= 0:
                 accept_step = True
-            elif self._rng_np.random() <= np.exp(
-                -beta[step - 1] * (de * scale_factor_product + dmu)
-            ):
+            elif self._rng_np.random() <= np.exp(-beta[step - 1] * (de * scale_factor_product + dmu)):
                 accept_step = True
             else:
                 accept_step = False
@@ -389,28 +379,20 @@ class MonteCarlo:
 
             if self._save_atoms_every > 0 and step % self._save_atoms_every == 0:
                 structure.set_arrays(sigmas)
-                atoms_traj.write(
-                    structure.get_atoms(ignore_observer_atoms=True), energy=de
-                )
+                atoms_traj.write(structure.get_atoms(ignore_observer_atoms=True), energy=de)
 
             if step % 1000 == 0 or no_of_sampling_steps < 1000:
                 # if updated too often, progress display might delay steps
-                progress.set_description(
-                    f"MMC sim. | Acc. rate: {rate:.4f} | delta_E: {de:.1e}"
-                )
+                progress.set_description(f"MMC sim. | Acc. rate: {rate:.4f} | delta_E: {de:.1e}")
 
         if serialize:
             traj.serialize()
 
         return traj
 
-    def initialize_structure(
-        self, initial_decoration: list[int] | None = None, nsubs: dict | None = None
-    ):
+    def initialize_structure(self, initial_decoration: list[int] | None = None, nsubs: dict | None = None):
         if initial_decoration is not None:
-            self.structure = Structure(
-                self._scell, initial_decoration, track_indices=True
-            )
+            self.structure = Structure(self._scell, initial_decoration, track_indices=True)
             conc = self.structure.get_fractional_concentrations()
             nsites = self.structure.get_nsites_per_type()
             check_dict = {}
@@ -426,20 +408,17 @@ class MonteCarlo:
 
             bol = dict_compare(check_dict, self._nsubs)
             if not bol:
-                raise ValueError(
-                    "Number of substitutents does not coincides with them from the inital decoration."
-                )
+                raise ValueError("Number of substitutents does not coincides with them from the inital decoration.")
         else:
-            self.structure = self._scell.gen_random_structure(
-                nsubs=self._nsubs, rng=self._rng_np, track_indices=True
-            )
+            self.structure = self._scell.gen_random_structure(nsubs=self._nsubs, rng=self._rng_np, track_indices=True)
 
     def propose_step(self):
         """Propose a new structure by performing a random flip or swap."""
         raise NotImplementedError("Stepwise sampling is not yet implemented.")
 
     def accept_step(self, de: float, dmu: float, beta: float) -> bool:
-        """Accept or reject the proposed step based on the energy difference, chemical potential difference, and beta."""
+        """Accept or reject the proposed step based on the energy difference,
+        chemical potential difference, and beta."""
         if de + dmu <= 0:
             return True
         elif self.rng.uniform(0, 1) <= np.exp(-beta * (de + dmu)):
@@ -705,7 +684,8 @@ class MonteCarloTrajectory:
         else:
             if prop not in [mo.property_name for mo in self._models]:
                 raise KeyError(
-                    f"Model for property '{prop}' is not defined. Found keys: {[mo.property_name for mo in self._models]}"
+                    f"Model for property '{prop}' is not defined. Found keys: "
+                    f"{[mo.property_name for mo in self._models]}"
                 )
             props = []
             for tr in self._trajectory:
@@ -733,7 +713,8 @@ class MonteCarloTrajectory:
 
            Alternatively, an external function ``average_func`` can be used to calculate the average of one property
            or several properties. The function ``average_func`` has as arguments an array containing the properties
-           used for the average at each sampling index, i.e. [[prob1_1,prop1_2,...,prop1_N], [prop2_1,prop2_2,...,prop2_N],...],
+           used for the average at each sampling index,
+           i.e. [[prob1_1,prop1_2,...,prop1_N], [prop2_1,prop2_2,...,prop2_N],...],
            and optional keyword arguments. With ``prop_list``, the property names of prob1, prop_2, ... are defined.
 
         **Parameters:**
@@ -820,9 +801,7 @@ class MonteCarloTrajectory:
                 for p in prop_array:
                     ediff += np.subtract(p, prop_average) * np.subtract(p, prop_average)
 
-                const = 1.0 * np.multiply(
-                    (self._temperature) ** 2, (self._boltzmann_constant) ** 2
-                )
+                const = 1.0 * np.multiply((self._temperature) ** 2, (self._boltzmann_constant) ** 2)
 
                 return np.divide(ediff, (const * len_prop * 1 / (1.0 * factor)))
 
@@ -878,9 +857,7 @@ class MonteCarloTrajectory:
             trajdic.update({str(j): dec})
 
         with open(self._filename, "w+", encoding="utf-8") as outfile:
-            json.dump(
-                trajdic, outfile, cls=NumpyEncoder, indent=2, separators=(",", ":")
-            )
+            json.dump(trajdic, outfile, cls=NumpyEncoder, indent=2, separators=(",", ":"))
 
     def read(self, filename=None, append=False):
         """Read trajectory from the Json file with name ``filename``. If ``filename`` is not defined, it uses
