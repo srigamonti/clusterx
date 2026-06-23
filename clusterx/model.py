@@ -82,9 +82,7 @@ class Model:
         self.property_name = property_name
 
         if ecis is not None and estimator is not None:
-            raise ValueError(
-                "Only one of 'ecis' or 'estimator' should be provided, not both."
-            )
+            raise ValueError("Only one of 'ecis' or 'estimator' should be provided, not both.")
 
         self.estimator = estimator
         self.ecis = ecis
@@ -195,7 +193,8 @@ class Model:
 
         ``filepath``: string
             Name of the file to store the Model instance. It can contain the relative or absolute path.
-            If not given, and if db_name (deprecated) is None, filepathh is set to "cemodel.pickle" and fmt is overriden (set to pickle).
+            If not given, and if db_name (deprecated) is None, filepathh is set
+            to "cemodel.pickle" and fmt is overriden (set to pickle).
         ``fmt``: string
             It can take the values ``"pickle"`` or ``"json"``.
             So far, object can only be re-initiated from a ``"pickle"`` file, therefore this is the preferred format.
@@ -332,9 +331,7 @@ class Model:
                 prediction += self.predict_partial(structure, i, True)
             return prediction
 
-    def predict_partial(
-        self, structure: Structure, index: int, divide_n_body: bool = False
-    ):
+    def predict_partial(self, structure: Structure, index: int, divide_n_body: bool = False):
         """Predict property using only the correlations around site `index`.
         This uses all correlations of all clusters that include this site.
         Note: only works for diagonal super cells.
@@ -359,20 +356,7 @@ class Model:
             correlations_partial /= self._n_body_list
 
         correlations_partial /= self.scell_factor
-        if self.estimator is not None:
-            # Intercept must be subctracted from computation of energy change.
-            try:
-                return (
-                    self.estimator.predict(correlations_partial.reshape(1, -1))[0]
-                    - self.estimator.intercept_
-                )
-            except AttributeError:
-                return (
-                    self.estimator.predict(correlations_partial.reshape(1, -1))[0]
-                    - self.estimator[-1].intercept_
-                )
-        else:
-            return np.dot(self.ecis, correlations_partial)
+        return self.predict_on_correlations(correlations_partial)
 
     def _init_interaction_dict(self, super_cell: SuperCell):
         """Construct list of which sites are contained in which orbit.
@@ -470,24 +454,18 @@ class Model:
             If true, use reduced structure to predict flip energy, only works
             for diagonal supercell transformation.
         """
-        correlations_diff = self.predict_correlations_diff(
-            structure, index, old_sigma, new_sigma, reduce_structure
-        )
+        correlations_diff = self.predict_correlations_diff(structure, index, old_sigma, new_sigma, reduce_structure)
+        return self.predict_on_correlations(correlations_diff)
+
+    def predict_on_correlations(self, correlations: np.array):
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
             try:
-                return (
-                    self.estimator.predict(correlations_diff.reshape(1, -1))[0]
-                    - self.estimator.intercept_
-                )
+                return self.estimator.predict(correlations.reshape(1, -1))[0] - self.estimator.intercept_
             except AttributeError:
-                return (
-                    self.estimator.predict(correlations_diff.reshape(1, -1))[0]
-                    - self.estimator[-1].intercept_
-                )
-
+                return self.estimator.predict(correlations.reshape(1, -1))[0] - self.estimator[-1].intercept_
         else:
-            return np.dot(self.ecis, correlations_diff)
+            return np.dot(self.ecis, correlations)
 
     def predict_swap(
         self,
@@ -527,11 +505,7 @@ class Model:
         ``sset``: StructuresSet object
             the scores are computed for the give structures set
         """
-        properties = (
-            self.property_name
-            if isinstance(self.property_name, list)
-            else [self.property_name]
-        )
+        properties = self.property_name if isinstance(self.property_name, list) else [self.property_name]
         for prop in properties:
             errfit = self.get_errors(sset, prop)
             errcv = self.get_cv_score(sset, prop)
@@ -544,9 +518,7 @@ class Model:
             print(f"|{'RMSE':^19}|{errfit['RMSE']:^19.5f}|{errcv['RMSE-CV']:^19.5f}|")
             print(f"|{'R2':^19}|{errfit['R2']:^19.5f}|{errcv['R2-CV']:^19.5f}|")
             print(f"|{'MAE':^19}|{errfit['MAE']:^19.5f}|{errcv['MAE-CV']:^19.5f}|")
-            print(
-                f"|{'MaxAE':^19}|{errfit['MaxAE']:^19.5f}|{errcv['MaxAE-CV']:^19.5f}|"
-            )
+            print(f"|{'MaxAE':^19}|{errfit['MaxAE']:^19.5f}|{errcv['MaxAE-CV']:^19.5f}|")
             print("+-----------------------------------------------------------+\n")
 
     def get_errors(self, sset, property_name_single):
@@ -634,9 +606,7 @@ class Model:
             cv=LeaveOneOut(),
             scoring="neg_mean_squared_error",
         )
-        pred_cv = cross_val_predict(
-            self.estimator, x_mat, y, params=params, cv=LeaveOneOut()
-        )
+        pred_cv = cross_val_predict(self.estimator, x_mat, y, params=params, cv=LeaveOneOut())
 
         absolute_errors = np.sqrt(-cvs)
         r2 = 1 - np.sum(absolute_errors**2) / np.sum((y - np.mean(y)) ** 2)
@@ -842,9 +812,7 @@ class ModelBuilder:
 
         # Select optimal clusters using the clusters_selector module
         if self.selector_type != "identity":
-            self.selector = ClustersSelector(
-                basis=self.basis, method=self.selector_type, **self.selector_opts
-            )
+            self.selector = ClustersSelector(basis=self.basis, method=self.selector_type, **self.selector_opts)
             self.opt_cpool = self.selector.select_clusters(
                 sset,
                 cpool,
@@ -858,9 +826,7 @@ class ModelBuilder:
 
         # Find out the ECIs using an estimator
         if not self.standardize:
-            self.opt_estimator = EstimatorFactory.create(
-                self.estimator_type, **self.estimator_opts
-            )
+            self.opt_estimator = EstimatorFactory.create(self.estimator_type, **self.estimator_opts)
         else:
             from sklearn.pipeline import make_pipeline
             from sklearn.preprocessing import StandardScaler

@@ -172,7 +172,8 @@ class MonteCarlo:
         target_rate: float | None = None,
         n_clics: int = 1,
         serialize: bool = False,
-        filename: str | None = None,
+        filename: str = "trajectory.json",
+        nonlinear: bool = False,
         **kwargs,
     ):
         r"""Perform Monte-Carlo Metropolis simulation
@@ -229,6 +230,11 @@ class MonteCarlo:
         ``filename``: string (default: ``trajectory.json``)
             Name of a Json file in which the trajectory is serialized after the sampling if ``serialize`` is **True**.
 
+        ``nonlinear``: boolean (default: False)
+            Whether or not the model is nonlinear with respect to cluster
+            correlations. If True, total cluster correlations have to be summed,
+            if False, model can be applied to difference of correlations.
+
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the MonteCarloTrajectory object that is initialized in this method.
 
@@ -236,6 +242,8 @@ class MonteCarlo:
             Trajectory containing the complete information of the sampling trajectory.
 
         """
+        if nonlinear and self._reduce_structure:
+            raise ValueError("Combination of nonlinear and reduce_structure currently not supported.")
         scale_factor = scale_factor if scale_factor is not None else [self._scell.get_index()]
 
         if len(np.shape(temperature)) == 0:
@@ -258,10 +266,8 @@ class MonteCarlo:
             e_last = e_last if len(e_last.shape) == 0 else e_last[self._energy_prediction_index]
             self._emodel._init_interaction_dict(self._scell)
 
-        if filename is not None:
-            self._filename = filename
-        else:
-            filename = self._filename
+        if nonlinear:
+            correlations = self._emodel.corrc.get_cluster_correlations(structure)
 
         if self._save_atoms_every > 0:
             atoms_traj = Trajectory(self._atoms_filename, mode="w")
@@ -315,31 +321,37 @@ class MonteCarlo:
                 raise NotImplementedError(f"Unknown ensemble: {self._ensemble}")
 
             de = 0.0
-            dmu = 0.0
             if self._predict_swap:
+                if nonlinear:
+                    correlations_diff = np.zeros_like(correlations)
                 for i, new_sigma, old_sigma, site_type in flip_tuples:
-                    de += self._emodel.predict_flip(
-                        structure=structure,
-                        index=i,
-                        old_sigma=old_sigma,
-                        new_sigma=new_sigma,
-                        reduce_structure=self._reduce_structure,
-                    )
-                    if self._ensemble == "semigrand-canonical":
-                        dmu += (
-                            self._chemical_potentials[site_type][new_sigma]
-                            - self._chemical_potentials[site_type][old_sigma]
+                    if nonlinear:
+                        correlations_diff += self._emodel.predict_correlations_diff(structure, i, old_sigma, new_sigma)
+                    else:
+                        de += self._emodel.predict_flip(
+                            structure=structure,
+                            index=i,
+                            old_sigma=old_sigma,
+                            new_sigma=new_sigma,
+                            reduce_structure=self._reduce_structure,
                         )
                     structure.flip(i, old_sigma, new_sigma, site_type)
+                if nonlinear:
+                    e_old = self._emodel.predict_on_correlations(correlations)
+                    e_new = self._emodel.predict_on_correlations(correlations + correlations_diff)
+                    de = e_new - e_old
             else:
                 for i, new_sigma, old_sigma, site_type in flip_tuples:
                     structure.flip(i, old_sigma, new_sigma, site_type)
-                    if self._ensemble == "semigrand-canonical":
-                        dmu += (
-                            self._chemical_potentials[site_type][new_sigma]
-                            - self._chemical_potentials[site_type][old_sigma]
-                        )
                 de = self._emodel.predict(structure) - e_last
+
+            dmu = 0.0  # sum up chemical potential change
+            if self._ensemble == "semigrand-canonical":
+                for i, new_sigma, old_sigma, site_type in flip_tuples:
+                    dmu += (
+                        self._chemical_potentials[site_type][new_sigma]
+                        - self._chemical_potentials[site_type][old_sigma]
+                    )
 
             # handle multi-linear model, make sure that `de` is np.float64
             de = de if len(de.shape) == 0 else de[self._energy_prediction_index]
@@ -353,6 +365,8 @@ class MonteCarlo:
 
             if accept_step:
                 e_last += de
+                if nonlinear and self._predict_swap:
+                    correlations += correlations_diff
 
                 key_value_pairs = {}
                 for m, mo in enumerate(self._models):
