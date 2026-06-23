@@ -199,9 +199,7 @@ def compute_thermodynamic_averages(temperatures, energy, log_cdos, filename=None
     return thavg
 
 
-def make_energy_windows(
-    inverse_overlap, n_windows, emin, emax, sought_energy_bin_width
-):
+def make_energy_windows(inverse_overlap, n_windows, emin, emax, sought_energy_bin_width):
     """Make energy windows for WL sampling
 
     **Description**
@@ -271,9 +269,7 @@ def make_energy_windows(
     energy_windows["windows"] = wins
 
     energy_windows["nbins_per_window_f"] = (wins[0, 1] - wins[0, 0]) / energy_bin_width
-    energy_windows["nbins_per_window_i"] = round(
-        (wins[0, 1] - wins[0, 0]) / energy_bin_width
-    )
+    energy_windows["nbins_per_window_i"] = round((wins[0, 1] - wins[0, 0]) / energy_bin_width)
 
     return energy_windows
 
@@ -328,10 +324,7 @@ def merge_windows(
         for j1, e1 in enumerate(cdoss[i - 1]["sampling_info"]["energy_bins"]):
             for j2, e2 in enumerate(cdoss[i]["sampling_info"]["energy_bins"]):
                 if np.abs(e1 - e2) < eps_energy:
-                    deltas.append(
-                        cdoss[i][wl_itrn[i]]["cdos"][j2]
-                        - cdoss[i - 1][wl_itrn[i - 1]]["cdos"][j1]
-                    )
+                    deltas.append(cdoss[i][wl_itrn[i]]["cdos"][j2] - cdoss[i - 1][wl_itrn[i - 1]]["cdos"][j1])
 
         if i == 0:
             matching_deltas.append(np.mean(deltas))
@@ -343,9 +336,7 @@ def merge_windows(
         hsum = np.sum(cdoss[i][wl_itrn[i]]["histogram"])
         nbins = len(cdoss[i][wl_itrn[i]]["histogram"])
         microcanonical_temp.append(
-            microcanonical_temperature(
-                cdoss[i]["sampling_info"]["energy_bins"], cdoss[i][wl_itrn[i]]["cdos"]
-            )
+            microcanonical_temperature(cdoss[i]["sampling_info"]["energy_bins"], cdoss[i][wl_itrn[i]]["cdos"])
         )
         energy_ranges.append(cdoss[i]["sampling_info"]["energy_bins"])
 
@@ -384,9 +375,7 @@ def merge_windows(
 
     if filename is not None:
         for i in range(n_cdos):
-            for e, g in zip(
-                cdoss[i]["sampling_info"]["energy_bins"], cdoss[i][wl_itrn[i]]["cdos"]
-            ):
+            for e, g in zip(cdoss[i]["sampling_info"]["energy_bins"], cdoss[i][wl_itrn[i]]["cdos"]):
                 energy_windows.append(e)
                 log_g_windows.append(g)
 
@@ -432,9 +421,7 @@ def merge_windows(
             np.array(log_g) - log_boltzmann,
             label="All data",
         )
-        plt.scatter(
-            energy_unique, log_g_unique - log_boltzmann_unique, label="Merged data"
-        )
+        plt.scatter(energy_unique, log_g_unique - log_boltzmann_unique, label="Merged data")
 
         if plot_microcanonical_temperature:
             temp = microcanonical_temperature(energy_unique, log_g_unique)
@@ -496,7 +483,8 @@ class WangLandau:
         Defines the sublattices for the grand canonical sampling.
         Furthermore, it can be used to limit the canonical sampling
         to a reduced number of sublattices. E.g. in the case of nsubs = {0:[4,6], 1:[4]}. Here, sublattices 0 and 1
-        contain substitutional sites, but only a sampling in sublattice 0 is wanted. Then, put ``sublattice_indices`` = [0].
+        contain substitutional sites, but only a sampling in sublattice 0 is wanted.
+        Then, put ``sublattice_indices`` = [0].
 
     ``energy_factor``: float (default: 1.0)
         Multiplicator factor (:math:`s`) applied to the predictions of ``energy_model``
@@ -525,7 +513,8 @@ class WangLandau:
         Incompatible with non-diagonal supercell shapes.
 
     ``error_reset``: integer (default: None)
-       If not **None**  and ``predict_swap`` equal to **True**, the correlations are calculated as usual (no differences) every n-th step.
+       If not **None**  and ``predict_swap`` equal to **True**,
+       the correlations are calculated as usual (no differences) every n-th step.
 
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
@@ -561,16 +550,12 @@ class WangLandau:
                             self._sublattice_indices.remove(key)
 
             except AttributeError:
-                raise AttributeError(
-                    "Index of sublattice is not properly assigned, look at the documentation."
-                )
+                raise AttributeError("Index of sublattice is not properly assigned, look at the documentation.")
         else:
             self._sublattice_indices = sublattice_indices
 
         if not self._sublattice_indices:
-            sys.exit(
-                "Indices of sublattice are not correctly assigned, look at the documatation."
-            )
+            sys.exit("Indices of sublattice are not correctly assigned, look at the documatation.")
         self._predict_swap = predict_swap
 
         self._ensemble = ensemble
@@ -583,9 +568,7 @@ class WangLandau:
         if self._error_reset is not None:
             self._error_steps = int(self._error_reset)
         else:
-            self._error_steps = np.iinfo(
-                np.int64
-            ).max  # maximum 64 bit integer in numpy
+            self._error_steps = np.iinfo(np.int64).max  # maximum 64 bit integer in numpy
         self._steps_since_reset = 1
 
     def _bring_structure_into_energy_window(
@@ -622,12 +605,7 @@ class WangLandau:
 
                 ind1, ind2, site_type = struc.get_random_swap(self._sublattice_indices)
 
-                de = (
-                    self._em.predict_swap(
-                        struc, i=ind1, j=ind2, reduce_structure=self._reduce_structure
-                    )
-                    * self._ef
-                )
+                de = self._em.predict_swap(struc, i=ind1, j=ind2, reduce_structure=self._reduce_structure) * self._ef
                 e1 = e + de
                 if e1 >= emin and e1 <= emax:
                     countsampling = True
@@ -643,9 +621,7 @@ class WangLandau:
 
                 if not cou % 1000:
                     f.flush()
-                    print(
-                        f"searching struc {cou}, {emin:2.9f} {e:2.9f} {de} {ind1:d} {ind2:d} {emax:2.9f}"
-                    )
+                    print(f"searching struc {cou}, {emin:2.9f} {e:2.9f} {de} {ind1:d} {ind2:d} {emax:2.9f}")
 
                 if accept_swap:
                     e = e1
@@ -653,7 +629,8 @@ class WangLandau:
             f.close()
             if cou >= itmax:
                 print(
-                    "WangLandau: maximum number of iterations for searching initial structure reached. Aborting simulation."
+                    "WangLandau: maximum number of iterations for searching initial structure reached."
+                    "Aborting simulation."
                 )
                 return struc
             return struc
@@ -669,18 +646,14 @@ class WangLandau:
             f = math.sqrt(cd._f)
             cd._update_method = update_method
         else:
-            raise ValueError(
-                "Different update method for f requested. Please see documentation"
-            )
+            raise ValueError("Different update method for f requested. Please see documentation")
 
         if f_range[1] < cd._f_range[1]:
             cd._f_range = f_range
         else:
             f_range = cd._f_range
 
-        checkf, indt = self.compare_flatness_conditions(
-            cd._flatness_conditions, flatness_conditions
-        )
+        checkf, indt = self.compare_flatness_conditions(cd._flatness_conditions, flatness_conditions)
 
         if not checkf:
             checkff, indtt = self.compare_flatness_conditions(flatness_conditions)
@@ -701,9 +674,7 @@ class WangLandau:
 
         return cdos, f, target_flatness, f_range, flatness_conditions, fi
 
-    def _init_from_scratch(
-        self, energy_range, energy_bin_width, flatness_conditions, f_range
-    ):
+    def _init_from_scratch(self, energy_range, energy_bin_width, flatness_conditions, f_range):
         cdos = []  # cdos[:] = [energy_bin, log(cdos), histogram]
         eb = energy_range[0]
         while eb < energy_range[1]:
@@ -734,18 +705,14 @@ class WangLandau:
         if update_method == "square_root":
             f = math.sqrt(f)
         else:
-            raise ValueError(
-                "Different update method for f requested. Please see documentation"
-            )
+            raise ValueError("Different update method for f requested. Please see documentation")
         return f
 
     def _plot_hist(self, figure, ax, cdos, energy_bin_width):
         from clusterx.visualization import _wls_normalize_histogram_for_plotting
 
         ener_arr = cdos[:, 0].copy()
-        cdos_arr = _wls_normalize_histogram_for_plotting(
-            cdos[:, 1], shift_y_first_nonzero=True
-        )
+        cdos_arr = _wls_normalize_histogram_for_plotting(cdos[:, 1], shift_y_first_nonzero=True)
         hist_arr = _wls_normalize_histogram_for_plotting(cdos[:, 2])
         ones_arr = np.ones(len(ener_arr))
 
@@ -808,8 +775,10 @@ class WangLandau:
             During the sampling, a new structure at step i is accepted with the probability given
             by :math:`\min[ 1, g(E_{i-1})/g(E_i) ]`
 
-            If a step is accepted, :math:`g(E_i)` of energy bin :math:`E_i` is updated with a modification factor :math:`f`.
-            If a step is rejected, :math:`g(E_{i-1})` of the previous energy bin :math:`E_{i-1}` with a modification factor :math:`f`.
+            If a step is accepted, :math:`g(E_i)` of energy bin :math:`E_i` is
+            updated with a modification factor :math:`f`. If a step is rejected,
+            :math:`g(E_{i-1})` of the previous energy bin :math:`E_{i-1}` with
+            a modification factor :math:`f`.
 
             The sampling procedure is a nested loop:
 
@@ -817,14 +786,18 @@ class WangLandau:
 
             - Outer loop: Gradual reduction of :math:`f` to increase the accuracy of :math:`g(E)`.
 
-            The initial modification factor is usually :math:`f=\exp(1)`. Since it is large, it ensures to reach all energy levels quickly.
-            In the standard procedure, the modification factor is reduced from :math:`f` to  :math:`\sqrt{f} ` for the next inner loop.
-            :math:`f` is a measure of the accuracy for :math:`g(E)`: The lower the value of :math:`f`, the higher the accuracy. The
-            sampling stops, if the next :math:`f` is below the threshold :math:`f_{final}`.
+            The initial modification factor is usually :math:`f=\exp(1)`.
+            Since it is large, it ensures to reach all energy levels quickly.
+            In the standard procedure, the modification factor is reduced from
+            :math:`f` to  :math:`\sqrt{f} ` for the next inner loop.
+            :math:`f` is a measure of the accuracy for :math:`g(E)`: The lower
+            the value of :math:`f`, the higher the accuracy. The sampling stops,
+            if the next :math:`f` is below the threshold :math:`f_{final}`.
 
             A histogram is considered as flat,
             if the lowest number of counts of all energy bins is above a given percentage of the mean value.
-            The percentage can be set for each :math:`f`. Usually, the lower :math:`f`, the larger the percentage can be set.
+            The percentage can be set for each :math:`f`.
+            Usually, the lower :math:`f`, the larger the percentage can be set.
 
         **Parameters**:
 
@@ -838,7 +811,8 @@ class WangLandau:
             I.e., energy bins [E_min, E_min+w, E_min+2*w, ..., E_min+n*w ], if E_min+(n+1)*w would be larger than E_max.
 
         ``f_range``: list of two floats (default: [2.71828182, 1.00010000])
-            List defines the initial modification factor :math:`f_1` and the threshold for the last modification factor :math:`f_{final}`.
+            List defines the initial modification factor :math:`f_1` and the
+            threshold for the last modification factor :math:`f_{final}`.
             I.e. [:math:`f_1`, :math:`f_{ final}`]
 
         ``update_method``: string (default: 'square_root')
@@ -847,9 +821,11 @@ class WangLandau:
         ``flatness_conditions``: list
             Defines the flatness condition via the percentage :math:`p` for each modification factor. I.e.
 
-            [[:math:`p_1`, :math:`f_1`], [:math:`p_2`, :math:`f_2`], [:math:`p_3`, :math:`f_3`], ... , [:math:`p_{final}`, :math:`f_{final}`]]
+            [[:math:`p_1`, :math:`f_1`], [:math:`p_2`, :math:`f_2`], [:math:`p_3`,
+            :math:`f_3`], ... , [:math:`p_{final}`, :math:`f_{final}`]]
 
-            That means, the percentage is :math:`p_1` for all f > :math:`f_1`. If :math:`f_1 \geq f > f_2`, the flatness condition is defined via
+            That means, the percentage is :math:`p_1` for all f > :math:`f_1`.
+            If :math:`f_1 \geq f > f_2`, the flatness condition is defined via
             :math:`p_2`, etc.
 
             The default usually produces reasonable results and is defined as:
@@ -867,13 +843,16 @@ class WangLandau:
             after the sampling if ``serialize`` is **True**.
 
         ``serialize_during_sampling``: boolean (default: False)
-            If **True**, the ConfigurationalDensityOfStates object is serialized every time after a flat histogramm is reached
-            (i.e. the inner loop is completed). This allows for studying the CDOS while the final :math:`f` is not yet reached.
+            If **True**, the ConfigurationalDensityOfStates object is
+            serialized every time after a flat histogramm is reached
+            (i.e. the inner loop is completed). This allows for studying the
+            CDOS while the final :math:`f` is not yet reached.
 
         ``acc_prob_init_structure``: float (default: 1e-3)
-            When searching for an initial structure inside a given energy window, this is the acceptance probability
-            for moves which whose energy difference with the upper window bound increases or for moves whose energy
-            difference with the lower window bound decreases.
+            When searching for an initial structure inside a given energy window,
+            this is the acceptance probability for moves which whose energy
+            difference with the upper window bound increases or for moves whose
+            energy difference with the lower window bound decreases.
 
         ``itmax_init_structure``: integer
             Maximum number of trials to search for initial structure inside given energy window.
@@ -890,8 +869,9 @@ class WangLandau:
             These arguments are added to the ConfigurationalDensityOfStates object that is initialized in this method.
 
         **Returns**: ConfigurationalDensityOfStates object
-            Object contains the configurational density of states (CDOS) obtained from the last outer loop plus the CDOSs obtained
-            from the previous outer loops.
+            Object contains the configurational density of states (CDOS)
+            obtained from the last outer loop plus the CDOSs obtained from the
+            previous outer loops.
 
         """
         # self._em.corrc.reset_mc(mc=True)
@@ -901,9 +881,7 @@ class WangLandau:
         if initial_decoration is not None:
             struc = Structure(self._scell, initial_decoration, track_indices=True)
         else:
-            struc = self._scell.gen_random_structure(
-                nsubs=self._nsubs, track_indices=True, rng=self.np_rng
-            )
+            struc = self._scell.gen_random_structure(nsubs=self._nsubs, track_indices=True, rng=self.np_rng)
 
         if self._reduce_structure:
             self._em.init_reduced_model(struc)
@@ -923,11 +901,9 @@ class WangLandau:
         )
 
         if restart_from_file:
-            cd = ConfigurationalDensityOfStates(
-                filename=filename, scell=self._scell, read=True, **kwargs
-            )
-            cdos, f, target_flatness, f_range, flatness_conditions, fi = (
-                self._init_from_file(cd, update_method, flatness_conditions)
+            cd = ConfigurationalDensityOfStates(filename=filename, scell=self._scell, read=True, **kwargs)
+            cdos, f, target_flatness, f_range, flatness_conditions, fi = self._init_from_file(
+                cd, update_method, flatness_conditions
             )
 
         else:
@@ -952,9 +928,7 @@ class WangLandau:
         e = self._em.predict(struc, self._reduce_structure) * self._ef
 
         energies = cdos[:, 0]
-        ibin, is_inside_range = self._locate_histogram_bin(
-            e, energies, energy_bin_width
-        )
+        ibin, is_inside_range = self._locate_histogram_bin(e, energies, energy_bin_width)
 
         cdos[ibin][1] += math.log(f)
         cdos[ibin][2] += 1
@@ -969,7 +943,9 @@ class WangLandau:
         print("----------------------------------------")
         print("Info (Wang-Landau): Running WL sampling.")
         print(
-            f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} | {'emin':11s} | {'emax':11s} "
+            f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} "
+            f"| {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} "
+            f"| {'emin':11s} | {'emax':11s} "
         )
         while f > f_range[1]:
             # print("----------------------------------------")
@@ -1061,28 +1037,27 @@ class WangLandau:
 
         # print("Building flat histogram.")
         # print(
-        #    f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} | {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
+        #    f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} "
+        #       "| {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
         # )
-        while (hist_min < target_flatness * hist_avg) or (
-            n_nonzero_bins < nonzero_bins_thresh
-        ):
+        while (hist_min < target_flatness * hist_avg) or (n_nonzero_bins < nonzero_bins_thresh):
             print(
-                f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min / hist_avg:8.3f} | {target_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
+                f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | "
+                f"{hist_min / hist_avg:8.3f} | {target_flatness:11.3f} |  "
+                f"{n_nonzero_bins:12d} | {niter:15d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
             )
 
-            struc, e, g, inde, cdos = self.dos_steps(
-                struc, e, g, inde, lnf, cdos, niter_per_sweep, energy_bin_width
-            )
+            struc, e, g, inde, cdos = self.dos_steps(struc, e, g, inde, lnf, cdos, niter_per_sweep, energy_bin_width)
             niter += niter_per_sweep
 
             hist_min, hist_avg, n_nonzero_bins = self._get_hist_min_and_avg(cdos[:, 2])
             if n_nonzero_bins < 10:
-                print(
-                    f"{inde:4d} | {cdos[0, 0]:11.3f} | {e:11.3f} | {cdos[-1, 0]:11.3f}"
-                )
+                print(f"{inde:4d} | {cdos[0, 0]:11.3f} | {e:11.3f} | {cdos[-1, 0]:11.3f}")
 
         print(
-            f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min / hist_avg:8.3f} | {target_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
+            f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min / hist_avg:8.3f} "
+            f"| {target_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d} "
+            f"| {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
         )
 
         return struc, e, g, inde, cdos, [hist_min, hist_avg], niter
@@ -1116,9 +1091,7 @@ class WangLandau:
             else:
                 e1 = self._em.predict(struc) * self._ef
 
-            ibin, is_outside_interval = self._locate_histogram_bin(
-                e1, energies, energy_bin_width
-            )
+            ibin, is_outside_interval = self._locate_histogram_bin(e1, energies, energy_bin_width)
 
             if is_outside_interval:
                 accept_swap = False
@@ -1329,9 +1302,7 @@ class ConfigurationalDensityOfStates:
             ln_g = self._cdos.copy()
         else:
             for gj, ln_gstored in enumerate(self._stored_cdos):
-                if isclose(
-                    modification_factor, ln_gstored["modification_factor"], rtol=1.0e-8
-                ):
+                if isclose(modification_factor, ln_gstored["modification_factor"], rtol=1.0e-8):
                     ln_g = ln_gstored["cdos"].copy()
 
         ln_mod_fac = math.log(modification_factor)
@@ -1351,11 +1322,11 @@ class ConfigurationalDensityOfStates:
 
                 elif normalization_type == 1:
                     # gsum = sum_E g(E)/g0
-                    ln_gsum = math.log(
-                        np.sum([math.exp(ln_ge - ln_g0) for ln_ge in ln_g])
-                    )
-                    # nsites_dict = {0:16, 1:3} there is in total 16 sites in sublattice 0 and 3 sites in sublattice 1.
-                    # self._nsubs = {0: [8], 1:[2]} there are 8 substituent atoms in sublattice 0 and 2 substituent atoms in sublattice 1.
+                    ln_gsum = math.log(np.sum([math.exp(ln_ge - ln_g0) for ln_ge in ln_g]))
+                    # nsites_dict = {0:16, 1:3} there is in total 16 sites in
+                    # sublattice 0 and 3 sites in sublattice 1.
+                    # self._nsubs = {0: [8], 1:[2]} there are 8 substituent
+                    # atoms in sublattice 0 and 2 substituent atoms in sublattice 1.
                     nsites_dict = self._scell.get_nsites_per_type()
                     sublattices = [int(k) for k in self._nsubs.keys()]
 
@@ -1374,9 +1345,7 @@ class ConfigurationalDensityOfStates:
 
                 elif normalization_type == 2:
                     # gsum = sum_E g(E)/g0
-                    ln_gsum = math.log(
-                        np.sum([math.exp(ln_ge - ln_g0) for ln_ge in ln_g])
-                    )
+                    ln_gsum = math.log(np.sum([math.exp(ln_ge - ln_g0) for ln_ge in ln_g]))
 
                     ln_norm_factor = set_normalization_ln - ln_g0 - ln_gsum
 
@@ -1421,9 +1390,7 @@ class ConfigurationalDensityOfStates:
                 else:
                     return self._energy_bins, ln_g
 
-    def calculate_thermodynamic_property(
-        self, temperatures, prop_name="U", modification_factor=None
-    ):
+    def calculate_thermodynamic_property(self, temperatures, prop_name="U", modification_factor=None):
         """Calculate the thermodynamic property with name ``prop_name`` for the temperature list given
         list ``temperatures``.
 
@@ -1527,9 +1494,7 @@ class ConfigurationalDensityOfStates:
                 thermoprop[i] = (u - f) / t_i
 
             else:
-                sys.exit(
-                    "Thermodynamic property name ``prop_name`` not correctly defined. See Documentation."
-                )
+                sys.exit("Thermodynamic property name ``prop_name`` not correctly defined. See Documentation.")
         return thermoprop
 
     def wang_landau_write_to_file(self, filename=None):
@@ -1571,9 +1536,7 @@ class ConfigurationalDensityOfStates:
         from clusterx.thermodynamics.monte_carlo import NumpyEncoder
 
         with open(self._filename, "w+", encoding="utf-8") as outfile:
-            json.dump(
-                cdosdict, outfile, cls=NumpyEncoder, indent=2, separators=(",", ":")
-            )
+            json.dump(cdosdict, outfile, cls=NumpyEncoder, indent=2, separators=(",", ":"))
 
     def read(self, filename=None):
         """Read ConfigurationalDensityOfStates object from Json file with name ``filename``.
@@ -1605,9 +1568,7 @@ class ConfigurationalDensityOfStates:
             superdict = cdos_info.pop("super_cell_definition", None)
             if self._scell is None:
                 if superdict is not None:
-                    nsp = sorted(
-                        [int(el) for el in set(superdict["parent_lattice"]["numbers"])]
-                    )
+                    nsp = sorted([int(el) for el in set(superdict["parent_lattice"]["numbers"])])
                     species = []
                     for n in nsp:
                         species.append(superdict["parent_lattice"]["numbers"][str(n)])
@@ -1630,7 +1591,8 @@ class ConfigurationalDensityOfStates:
                 _testc = dict_compare(_sdict, superdict)
                 if not _testc:
                     sys.exit(
-                        "SuperCell object given in the initialization is not equivalent to the SuperCell object stored in read file."
+                        "SuperCell object given in the initialization is not "
+                        "equivalent to the SuperCell object stored in read file."
                     )
             self._keyword_arguments = cdos_info
 
