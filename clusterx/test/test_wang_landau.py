@@ -50,6 +50,136 @@ def model(plat, cpool):
     return cemodel
 
 
+@pytest.fixture
+def plat_perov():
+    """Perovskite mult-sublattice parent lattice"""
+    cell = [6, 6, 6]
+    positions = [
+        [0, 0, 0],
+        [3, 3, 3],
+        [0, 3, 3],
+        [3, 0, 3],
+        [3, 3, 0],
+    ]
+    pbc = [True, True, True]
+    pri = Atoms(["Cs", "Pb", "I", "I", "I"], positions=positions, cell=cell, pbc=pbc)
+    sub_Sn = Atoms(["Cs", "Sn", "I", "I", "I"], positions=positions, cell=cell, pbc=pbc)
+    sub_Br = Atoms(["Cs", "Pb", "Br", "Br", "Br"], positions=positions, cell=cell, pbc=pbc)
+    plat = ParentLattice(pri, substitutions=[sub_Sn, sub_Br], pbc=pbc)
+    return plat
+
+
+@pytest.fixture
+def cpool_perov(plat_perov):
+    return ClustersPool(plat_perov, npoints=[1, 2], radii=[0, 6.1])
+
+
+@pytest.fixture
+def corrc_perov(plat_perov, cpool_perov):
+    return CorrelationsCalculator("trigonometric", plat_perov, cpool_perov)
+
+
+@pytest.fixture
+def model_perov(cpool_perov, corrc_perov):
+    ecis = np.array([0.49671415, -0.1382643, 0.64768854, 1.52302986, -0.23415337, -0.23413696, 1.57921282])
+    return Model(corrc_perov, "energy", ecis=ecis)
+
+
+def test_perov(plat_perov, model_perov):
+    p = [4, 4, 4]
+    plat_perov.print_sublattice_types()
+    scell = SuperCell(plat_perov, p)
+    nsubs = {0: [int(len(scell) / 5 * 3 / 2)], 2: [int(len(scell) / 5 / 2)]}
+
+    wl = WangLandau(
+        energy_model=model_perov,
+        scell=scell,
+        nsubs=nsubs,
+        predict_swap=True,
+    )
+    cdos = wl.wang_landau_sampling(
+        energy_range=[-2.0, 3.0],
+        energy_bin_width=0.2,
+        f_range=[4, 1.9],
+        flatness_conditions=[[0.5, 2], [0.5, 1]],
+        niter_per_sweep=1000,
+        nproc=0,
+        seed=1,
+    )
+    cdos_energies, cdos_weights = cdos.get_cdos(ln=True, normalization=False)
+    print(np.array(cdos_weights))
+
+
+def test_nonlinear(plat_perov, corrc_perov):
+    """Test that WL returns same CDOS with predict_swap False and True, using a
+    nonlinear model."""
+    from sklearn.pipeline import make_pipeline
+    from sklearn.linear_model import LinearRegression
+    from sklearn.preprocessing import PolynomialFeatures
+
+    pipeline = make_pipeline(PolynomialFeatures(2), LinearRegression())
+    n_corrs = len(corrc_perov.get_cpool())
+    np.random.seed(42)
+    X = np.random.uniform(low=-1, high=1, size=(100, n_corrs))
+    y = np.random.uniform(low=-1, high=1, size=(100,))
+    pipeline.fit(X, y)
+    model = Model(corrc_perov, "energy", estimator=pipeline)
+
+    p = [4, 4, 4]
+    scell = SuperCell(plat_perov, p)
+    nsubs = {0: [int(len(scell) / 5 * 3 / 2)], 2: [int(len(scell) / 5 / 2)]}
+
+    cdos_compare = []
+    for predict_swap in [False, True]:
+        wl = WangLandau(
+            energy_model=model,
+            scell=scell,
+            nsubs=nsubs,
+            predict_swap=predict_swap,
+        )
+        cdos = wl.wang_landau_sampling(
+            energy_range=[-0.1, 0.0],
+            energy_bin_width=0.01,
+            f_range=[4, 1.9],
+            flatness_conditions=[[0.5, 2], [0.5, 1]],
+            niter_per_sweep=10,
+            nproc=0,
+            seed=1,
+            nonlinear=True,
+        )
+        _, cdos_weights = cdos.get_cdos(ln=True, normalization=False)
+        cdos_compare.append(np.array(cdos_weights))
+    np.testing.assert_allclose(cdos_compare[0], cdos_compare[1])
+
+
+def test_swap(plat_perov, model_perov):
+    """Test that WL returns same CDOS with predict_swap False and True."""
+    p = [4, 4, 4]
+    scell = SuperCell(plat_perov, p)
+    nsubs = {0: [int(len(scell) / 5 * 3 / 2)], 2: [int(len(scell) / 5 / 2)]}
+
+    cdos_compare = []
+    for predict_swap in [False, True]:
+        wl = WangLandau(
+            energy_model=model_perov,
+            scell=scell,
+            nsubs=nsubs,
+            predict_swap=predict_swap,
+        )
+        cdos = wl.wang_landau_sampling(
+            energy_range=[-0.1, 0.0],
+            energy_bin_width=0.01,
+            f_range=[4, 1.9],
+            flatness_conditions=[[0.5, 2], [0.5, 1]],
+            niter_per_sweep=1000,
+            nproc=0,
+            seed=1,
+        )
+        _, cdos_weights = cdos.get_cdos(ln=True, normalization=False)
+        cdos_compare.append(np.array(cdos_weights))
+    np.testing.assert_allclose(cdos_compare[0], cdos_compare[1])
+
+
 @pytest.mark.parametrize("reduce_structure", [False, True])
 def test_reduced(plat, model, reduce_structure):
     p = [4, 4, 1]

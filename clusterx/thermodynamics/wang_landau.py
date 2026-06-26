@@ -593,6 +593,7 @@ class WangLandau:
         if e >= emin and e <= emax and nitsampling == 1:
             return struc
         else:
+            print(f"Trying to bring structure (E={e}) into energy window ({emin}, {emax})")
             cou = 0
             scou = 0
             countsampling = False
@@ -756,6 +757,7 @@ class WangLandau:
         niter_per_sweep=100000,
         nproc=0,
         seed=None,
+        nonlinear: bool = False,
         **kwargs,
     ):
         r"""Perform Wang Landau simulation
@@ -865,6 +867,11 @@ class WangLandau:
             If None, sequences are non-deterministic, if set with integer,
             sequences are deterministic, i.e. pseudo-random.
 
+        ``nonlinear``: boolean (default: False)
+            Whether or not the model is nonlinear with respect to cluster
+            correlations. If True, total cluster correlations have to be summed,
+            if False, model can be applied to difference of correlations.
+
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the ConfigurationalDensityOfStates object that is initialized in this method.
 
@@ -874,9 +881,13 @@ class WangLandau:
             previous outer loops.
 
         """
+        if nonlinear and self._reduce_structure:
+            raise ValueError("Combination of nonlinear and reduce_structure currently not supported.")
+        self.nonlinear = nonlinear
         # self._em.corrc.reset_mc(mc=True)
         self.np_rng = np.random.default_rng(seed)
         random.seed(seed)
+        # TODO: raise error or warning, if number of bins is too small
 
         if initial_decoration is not None:
             struc = Structure(self._scell, initial_decoration, track_indices=True)
@@ -925,7 +936,12 @@ class WangLandau:
                 energy_range, energy_bin_width, flatness_conditions, f_range
             )
 
-        e = self._em.predict(struc, self._reduce_structure) * self._ef
+        if self._reduce_structure:
+            self.correlations = None
+            e = self._em.predict(struc, self._reduce_structure) * self._ef
+        else:  # this is also the case if nonlinear == True
+            self.correlations = self._em.corrc.get_cluster_correlations(struc)
+            e = self._em.predict_on_correlations(self.correlations) * self._ef
 
         energies = cdos[:, 0]
         ibin, is_inside_range = self._locate_histogram_bin(e, energies, energy_bin_width)
@@ -943,8 +959,8 @@ class WangLandau:
         print("----------------------------------------")
         print("Info (Wang-Landau): Running WL sampling.")
         print(
-            f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} "
-            f"| {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} "
+            f" {'Mod. factor':12s} | {'Hist MIN':8s} | {'Hist AVG':10s} | {'Flatness':8s} "
+            f"| {'Tgt. Flat.':11s} |  {'# non 0 Bins':12s} | {'N iter.':15s} "
             f"| {'emin':11s} | {'emax':11s} "
         )
         while f > f_range[1]:
@@ -1052,7 +1068,10 @@ class WangLandau:
 
             hist_min, hist_avg, n_nonzero_bins = self._get_hist_min_and_avg(cdos[:, 2])
             if n_nonzero_bins < 10:
-                print(f"{inde:4d} | {cdos[0, 0]:11.3f} | {e:11.3f} | {cdos[-1, 0]:11.3f}")
+                print(
+                    f" (#nonzero bins<10) {'':36s} Current E: {e:11.3f},"
+                    f" Bin-index: {inde:4d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
+                )
 
         print(
             f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min / hist_avg:8.3f} "
@@ -1066,17 +1085,23 @@ class WangLandau:
         energies = cdos[:, 0]
         accept_swap = False
         for n in range(niter):
+            if self._steps_since_reset > self._error_steps:
+                self._steps_since_reset = 1
+                self.correlations = self._em.corrc.get_cluster_correlations(struc)
+                e = self._em.predict_on_correlations(self.correlations) * self._ef
+
             ind1, ind2, site_type = struc.get_random_swap(self._sublattice_indices)
             struc.swap(ind1, ind2, site_type)
 
             # Compute new energy
             e1 = None
+            correlations_diff = None
             if self._predict_swap:
-                if self._steps_since_reset > self._error_steps:
-                    self._steps_since_reset = 1
-                    e1 = self._em.predict(struc, self._reduce_structure) * self._ef
+                self._steps_since_reset += 1
+                if self.nonlinear:
+                    correlations_diff = self._em.predict_correlations_swap(struc, ind1, ind2)
+                    e1 = self._em.predict_on_correlations(self.correlations - correlations_diff)
                 else:
-                    self._steps_since_reset += 1
                     de = (
                         self._em.predict_swap(
                             struc,
@@ -1086,8 +1111,7 @@ class WangLandau:
                         )
                         * self._ef
                     )
-                    e1 = e + de
-
+                    e1 = e - de  # subtract, because we computed swap "backwards"
             else:
                 e1 = self._em.predict(struc) * self._ef
 
@@ -1110,6 +1134,8 @@ class WangLandau:
             if accept_swap:
                 e = e1
                 inde = ibin
+                if self.nonlinear and correlations_diff is not None:
+                    self.correlations -= correlations_diff
             else:
                 struc.swap(ind2, ind1, site_type=site_type)
 

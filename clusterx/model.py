@@ -316,15 +316,8 @@ class Model:
                    model.serialize(filepath="myfilepath.pickle")
         """
         if not reduce_structure:
-            # with _timed("Model.predict: Get cluster correlations"):
             corrs = self.corrc.get_cluster_correlations(structure, flag=flag)
-
-            if self.estimator is not None:
-                return self.estimator.predict(corrs.reshape(1, -1))[0]
-            else:
-                if self.standardize:
-                    corrs = self.stdscaler.transform(corrs)
-                return np.dot(self.ecis, corrs)
+            return self.predict_on_correlations(corrs)
         else:
             prediction = self.predict_partial(structure, 0, True)
             for i in range(1, len(structure.sigmas)):
@@ -428,6 +421,26 @@ class Model:
 
         return correlations_diff
 
+    def predict_correlations_swap(
+        self,
+        structure: Structure,
+        i: int,
+        j: int,
+        reduce_structure: bool = False,
+    ) -> np.typing.ArrayLike:
+        """Return difference in correlations when swapping sigmas at indices
+        i and j in structure.
+
+        For documentation on paremeters, see predict_swap."""
+        sigma_i = structure.sigmas[i]
+        sigma_j = structure.sigmas[j]
+
+        corrs_i = self.predict_correlations_diff(structure, i, sigma_i, sigma_j, reduce_structure)
+        structure.sigmas[i] = sigma_j
+        corrs_j = self.predict_correlations_diff(structure, j, sigma_j, sigma_i, reduce_structure)
+        structure.sigmas[i] = sigma_i  # restore original structure
+        return corrs_i + corrs_j
+
     def predict_flip(
         self,
         structure: Structure,
@@ -458,6 +471,7 @@ class Model:
         return self.predict_on_correlations(correlations_diff)
 
     def predict_on_correlations(self, correlations: np.array):
+        """Using calculated correlations, return a prediction."""
         if self.estimator is not None:
             # Intercept must be subctracted from computation of energy change.
             try:
