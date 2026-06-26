@@ -1034,7 +1034,7 @@ class WangLandau:
         struc,
         e,
         g,
-        inde,
+        ibin,
         f,
         cdos,
         target_flatness,
@@ -1063,14 +1063,14 @@ class WangLandau:
                 f"{n_nonzero_bins:12d} | {niter:15d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
             )
 
-            struc, e, g, inde, cdos = self.dos_steps(struc, e, g, inde, lnf, cdos, niter_per_sweep, energy_bin_width)
+            e, g, ibin, cdos = self.dos_steps(struc, e, g, ibin, lnf, cdos, niter_per_sweep, energy_bin_width)
             niter += niter_per_sweep
 
             hist_min, hist_avg, n_nonzero_bins = self._get_hist_min_and_avg(cdos[:, 2])
             if n_nonzero_bins < 10:
                 print(
                     f" (#nonzero bins<10) {'':36s} Current E: {e:11.3f},"
-                    f" Bin-index: {inde:4d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
+                    f" Bin-index: {ibin:4d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
                 )
 
         print(
@@ -1079,71 +1079,73 @@ class WangLandau:
             f"| {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
         )
 
-        return struc, e, g, inde, cdos, [hist_min, hist_avg], niter
+        return struc, e, g, ibin, cdos, [hist_min, hist_avg], niter
 
-    def dos_steps(self, struc, e, g, inde, lnf, cdos, niter, energy_bin_width):
+    def dos_steps(self, struc, e, g, ibin, lnf, cdos, niter, energy_bin_width):
+        for n in range(niter):
+            e, g, ibin, cdos = self.step(struc, e, g, ibin, lnf, cdos, energy_bin_width)
+        return e, g, ibin, cdos
+
+    def step(self, struc, e, g, ibin, lnf, cdos, energy_bin_width):
         energies = cdos[:, 0]
         accept_swap = False
-        for n in range(niter):
-            if self._steps_since_reset > self._error_steps:
-                self._steps_since_reset = 1
-                self.correlations = self._em.corrc.get_cluster_correlations(struc)
-                e = self._em.predict_on_correlations(self.correlations) * self._ef
 
-            ind1, ind2, site_type = struc.get_random_swap(self._sublattice_indices)
-            struc.swap(ind1, ind2, site_type)
+        if self._steps_since_reset > self._error_steps:
+            self._steps_since_reset = 1
+            self.correlations = self._em.corrc.get_cluster_correlations(struc)
+            e = self._em.predict_on_correlations(self.correlations) * self._ef
 
-            # Compute new energy
-            e1 = None
-            correlations_diff = None
-            if self._predict_swap:
-                self._steps_since_reset += 1
-                if self.nonlinear:
-                    correlations_diff = self._em.predict_correlations_swap(struc, ind1, ind2)
-                    e1 = self._em.predict_on_correlations(self.correlations - correlations_diff)
-                else:
-                    de = (
-                        self._em.predict_swap(
-                            struc,
-                            i=ind1,
-                            j=ind2,
-                            reduce_structure=self._reduce_structure,
-                        )
-                        * self._ef
-                    )
-                    e1 = e - de  # subtract, because we computed swap "backwards"
+        ind1, ind2, site_type = struc.get_random_swap(self._sublattice_indices)
+        struc.swap(ind1, ind2, site_type)
+
+        # Compute new energy
+        e_new = None
+        correlations_diff = None
+        if self._predict_swap:
+            self._steps_since_reset += 1
+            if self.nonlinear:
+                correlations_diff = self._em.predict_correlations_swap(struc, ind1, ind2)
+                e_new = self._em.predict_on_correlations(self.correlations - correlations_diff) * self._ef
             else:
-                e1 = self._em.predict(struc) * self._ef
+                de = self._em.predict_swap(
+                    struc,
+                    i=ind1,
+                    j=ind2,
+                    reduce_structure=self._reduce_structure,
+                )
+                e_new = e - de * self._ef  # subtract, because we computed swap "backwards"
+        else:
+            e_new = self._em.predict(struc) * self._ef
 
-            ibin, is_outside_interval = self._locate_histogram_bin(e1, energies, energy_bin_width)
+        ibin_new, is_outside_interval = self._locate_histogram_bin(e_new, energies, energy_bin_width)
 
-            if is_outside_interval:
-                accept_swap = False
+        if is_outside_interval:
+            accept_swap = False
+        else:
+            g_new = cdos[ibin_new][1]
+
+            if g >= g_new:
+                accept_swap = True
             else:
-                g1 = cdos[ibin][1]
-
-                if g >= g1:
+                trans_prob = math.exp(g - g_new)
+                if self.np_rng.uniform(0, 1) <= trans_prob:
                     accept_swap = True
                 else:
-                    trans_prob = math.exp(g - g1)
-                    if self.np_rng.uniform(0, 1) <= trans_prob:
-                        accept_swap = True
-                    else:
-                        accept_swap = False
+                    accept_swap = False
 
-            if accept_swap:
-                e = e1
-                inde = ibin
-                if self.nonlinear and correlations_diff is not None:
-                    self.correlations -= correlations_diff
-            else:
-                struc.swap(ind2, ind1, site_type=site_type)
+        if accept_swap:
+            e = e_new
+            ibin = ibin_new
+            if self.nonlinear and correlations_diff is not None:
+                self.correlations -= correlations_diff
+        else:
+            struc.swap(ind2, ind1, site_type=site_type)  # swap back to original
 
-            cdos[inde][1] += lnf
-            cdos[inde][2] += 1
-            g = cdos[inde][1]
+        cdos[ibin][1] += lnf
+        cdos[ibin][2] += 1
+        g = cdos[ibin][1]
 
-        return struc, e, g, inde, cdos
+        return e, g, ibin, cdos
 
     def compare_flatness_conditions(
         self,

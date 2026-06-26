@@ -136,6 +136,7 @@ def test_nonlinear(plat_perov, corrc_perov):
             scell=scell,
             nsubs=nsubs,
             predict_swap=predict_swap,
+            energy_factor=1.01,
         )
         cdos = wl.wang_landau_sampling(
             energy_range=[-0.1, 0.0],
@@ -165,6 +166,7 @@ def test_swap(plat_perov, model_perov):
             scell=scell,
             nsubs=nsubs,
             predict_swap=predict_swap,
+            energy_factor=1.01,
         )
         cdos = wl.wang_landau_sampling(
             energy_range=[-0.1, 0.0],
