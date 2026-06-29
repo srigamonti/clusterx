@@ -101,7 +101,7 @@ def test_perov(plat_perov, model_perov):
         energy_range=[-2.0, 3.0],
         energy_bin_width=0.2,
         f_range=[4, 1.9],
-        flatness_conditions=[[0.5, 2], [0.5, 1]],
+        flatness_conditions=[[0.5, 3], [0.7, 1]],
         niter_per_sweep=1000,
         nproc=0,
         seed=1,

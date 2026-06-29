@@ -8,6 +8,7 @@ import datetime
 import json
 import math
 import random
+import functools as ft
 
 import numpy as np
 import scipy
@@ -959,7 +960,7 @@ class WangLandau:
         print("----------------------------------------")
         print("Info (Wang-Landau): Running WL sampling.")
         print(
-            f" {'Mod. factor':12s} | {'Hist MIN':8s} | {'Hist AVG':10s} | {'Flatness':8s} "
+            f" {'Mod. factor':12s} | {'Histogram':20s} | {'Flatness':8s} "
             f"| {'Tgt. Flat.':11s} |  {'# non 0 Bins':12s} | {'N iter.':15s} "
             f"| {'emin':11s} | {'emax':11s} "
         )
@@ -1031,15 +1032,15 @@ class WangLandau:
 
     def flat_histogram(
         self,
-        struc,
-        e,
-        g,
-        ibin,
-        f,
-        cdos,
-        target_flatness,
-        energy_bin_width,
-        niter_per_sweep=100000,
+        struc: Structure,
+        e: float,
+        g: float,
+        ibin: int,
+        f: float,
+        cdos: np.array,
+        target_flatness: float,
+        energy_bin_width: float,
+        niter_per_sweep: int = 100000,
     ):
         hist_min = 0
         hist_avg = 1
@@ -1057,8 +1058,9 @@ class WangLandau:
         #       "| {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
         # )
         while (hist_min < target_flatness * hist_avg) or (n_nonzero_bins < nonzero_bins_thresh):
+            hist = hist_string(cdos[:, 2], max_length=22, zeros_as_blank=False)
             print(
-                f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | "
+                f" {f:12.9f} |" + hist + "| "
                 f"{hist_min / hist_avg:8.3f} | {target_flatness:11.3f} |  "
                 f"{n_nonzero_bins:12d} | {niter:15d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
             )
@@ -1067,16 +1069,16 @@ class WangLandau:
             niter += niter_per_sweep
 
             hist_min, hist_avg, n_nonzero_bins = self._get_hist_min_and_avg(cdos[:, 2])
-            if n_nonzero_bins < 10:
+            """if n_nonzero_bins < 10:
                 print(
                     f" (#nonzero bins<10) {'':36s} Current E: {e:11.3f},"
                     f" Bin-index: {ibin:4d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
-                )
-
+                )"""
+        hist = hist_string(cdos[:, 2], max_length=22, zeros_as_blank=False)
         print(
-            f" {f:12.9f} | {int(hist_min):8d} | {hist_avg:10.2f} | {hist_min / hist_avg:8.3f} "
-            f"| {target_flatness:11.3f} |  {n_nonzero_bins:12d} | {niter:15d} "
-            f"| {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
+            f" {f:12.9f} |" + hist + "| "
+            f"{hist_min / hist_avg:8.3f} | {target_flatness:11.3f} |  "
+            f"{n_nonzero_bins:12d} | {niter:15d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
         )
 
         return struc, e, g, ibin, cdos, [hist_min, hist_avg], niter
@@ -1641,3 +1643,74 @@ class ConfigurationalDensityOfStates:
         self._flatness_condition = _last_cdos_entry["flatness_condition"]
         self._histogram_minimum = _last_cdos_entry["histogram_minimum"]
         self._histogram_average = _last_cdos_entry["histogram_average"]
+
+
+def rebin_histogram(counts, new_nbins):
+    """
+    Rebin a histogram by proportionally distributing counts into a new number
+    of bins, assuming uniform density within each original bin.
+
+    Parameters
+    ----------
+    counts : array_like
+        Original bin counts (floats).
+    new_nbins : int
+        Number of bins in the rebinned histogram.
+
+    Returns
+    -------
+    ndarray
+        Rebinned counts.
+    """
+    counts = np.asarray(counts, dtype=float)
+    old_nbins = len(counts)
+
+    old_edges = np.linspace(0.0, 1.0, old_nbins + 1)
+    new_edges = np.linspace(0.0, 1.0, new_nbins + 1)
+
+    new_counts = np.zeros(new_nbins, dtype=float)
+
+    i = j = 0
+    while i < old_nbins and j < new_nbins:
+        left = max(old_edges[i], new_edges[j])
+        right = min(old_edges[i + 1], new_edges[j + 1])
+
+        overlap = right - left
+        if overlap > 0:
+            frac = overlap / (old_edges[i + 1] - old_edges[i])
+            new_counts[j] += counts[i] * frac
+
+        if old_edges[i + 1] <= new_edges[j + 1]:
+            i += 1
+        else:
+            j += 1
+
+    return new_counts
+
+
+def hist_string(counts, max_length=16, zeros_as_blank=False):
+    """Turn histogram counts into string representation with fixed length.
+    Re-binning the histogram might lead to unequal bin-widths.
+
+    Credit to: https://gist.github.com/mattmills49/44a50b23d3c7a8f71dfadadd0f876ac2
+    """
+    counts = rebin_histogram(counts, max_length)
+    # If too many bins, aggregate counts into max_length bins
+    counts_total = counts.shape[0]
+    pct_counts = counts / counts_total
+    ## scale the percentages by the max pct and 0, then convert to the index
+    ## of the appropriate unicode string in unicode_list
+    max_pct = np.max(pct_counts)
+    max_pct = 1 if max_pct == 0 else max_pct  # prevent divide by 0
+    bin_labels = np.floor(pct_counts * (8 - 1) / max_pct).astype("int")
+    # build unicode string
+    ## adjust zeros to blank space index
+    if zeros_as_blank:
+        zero_ind = pct_counts == 0.0
+        bin_labels[zero_ind] = 8
+
+    unicode_list = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588", " "]
+    unicode_labels = [unicode_list[label] for label in bin_labels]
+    unicode_str = ft.reduce(lambda x, y: x + y, unicode_labels)
+    unicode_str += " " * (max_length - len(unicode_str))
+    return unicode_str
