@@ -690,24 +690,28 @@ class WangLandau:
 
         return cdos, f, target_flatness, fi
 
-    def _locate_histogram_bin(self, e, energies, energy_bin_width):
+    def _locate_histogram_bin(self, e: float, energies: np.array, energy_bin_width: float):
+        """Locate the histogram bin index for a given energy value, assuming a uniform energy grid.
+
+        If the energy is outside the range of the histogram, it returns the
+        index of the closest bin and a flag indicating that the energy is out of bounds.
+        """
         emin = energies[0]
         emax = energies[-1] + energy_bin_width
 
         if e < emin:
-            return None, True
+            return 0, True
         elif e >= emax:
-            return None, True
+            return len(energies) - 1, True
         else:
-            for i in range(len(energies)):
-                if e >= energies[i] and e < energies[i] + energy_bin_width:
-                    return i, False
+            bin_index = int((e - emin) / energy_bin_width)  # rounds down to the nearest integer
+            return bin_index, False
 
     def _update_modification_factor(self, f, update_method):
         if update_method == "square_root":
             f = math.sqrt(f)
         else:
-            raise ValueError("Different update method for f requested. Please see documentation")
+            raise ValueError(f"Invalid update method: {update_method}. Supported methods: 'square_root'.")
         return f
 
     def _plot_hist(self, figure, ax, cdos, energy_bin_width):
@@ -735,29 +739,29 @@ class WangLandau:
 
     def wang_landau_sampling(
         self,
-        energy_range=[-2, 2],
-        energy_bin_width=0.2,
-        f_range=[math.exp(1), math.exp(1e-4)],
-        update_method="square_root",
-        flatness_conditions=[
+        energy_range: [float, float] = [-2.0, 2.0],
+        energy_bin_width: float = 0.2,
+        f_range: [float, float] = [math.exp(1), math.exp(1e-4)],
+        update_method: str = "square_root",
+        flatness_conditions: list[[float, float]] = [
             [0.5, math.exp(1e-1)],
             [0.80, math.exp(1e-3)],
             [0.90, math.exp(1e-5)],
             [0.95, math.exp(1e-7)],
             [0.98, math.exp(1e-8)],
         ],
-        initial_decoration=None,
-        serialize=False,
-        filename="cdos.json",
-        serialize_during_sampling=False,
-        restart_from_file=False,
-        plot_hist_real_time=False,
-        acc_prob_init_structure=1e-3,
-        acc_prob_dist_init_structure="gaussian",
-        itmax_init_structure=int(1e8),
-        niter_per_sweep=100000,
-        nproc=0,
-        seed=None,
+        initial_decoration: list[int] = None,
+        serialize: bool = False,
+        filename: str = "cdos.json",
+        serialize_during_sampling: bool = False,
+        restart_from_file: bool = False,
+        plot_hist_real_time: bool = False,
+        acc_prob_init_structure: float = 1e-3,
+        acc_prob_dist_init_structure: str = "gaussian",
+        itmax_init_structure: int = int(1e8),
+        niter_per_sweep: int = 100000,
+        nproc: int = 0,
+        seed: int = None,
         nonlinear: bool = False,
         **kwargs,
     ):
@@ -1014,20 +1018,11 @@ class WangLandau:
 
         return cd
 
-    def _get_hist_min_and_avg(self, hist):
-        hist_sum = 0
-        count_nonzero_bins = 0
-        for h in hist:
-            if float(h) > 0:
-                count_nonzero_bins += 1
-                hist_sum += h
-                if count_nonzero_bins == 1:
-                    hist_min = h
-                elif h < hist_min:
-                    hist_min = h
-        n_nonzero_bins = count_nonzero_bins
-        hist_avg = hist_sum / (1.0 * n_nonzero_bins)
-
+    def _get_hist_min_and_avg(self, hist: np.array):
+        nonzero_hist = hist[hist > 0]
+        n_nonzero_bins = len(nonzero_hist)
+        hist_avg = np.mean(nonzero_hist) if n_nonzero_bins > 0 else 0
+        hist_min = np.min(nonzero_hist) if n_nonzero_bins > 0 else 0
         return hist_min, hist_avg, n_nonzero_bins
 
     def flat_histogram(
@@ -1041,6 +1036,7 @@ class WangLandau:
         target_flatness: float,
         energy_bin_width: float,
         niter_per_sweep: int = 100000,
+        nonzero_bins_thresh: int = 5,
     ):
         hist_min = 0
         hist_avg = 1
@@ -1050,11 +1046,10 @@ class WangLandau:
         cdos[:, 2] = 0  # Initialize histogram
 
         niter = 0
-        nonzero_bins_thresh = 5
 
         # print("Building flat histogram.")
         # print(
-        #    f" {'Mod. factor':12s} | {'MIN':8s} | {'AVG':10s} | {'Flatness':8s} "
+        #    f" {'Mod. factor':12s} | {'Histogram':20s} | {'Flatness':8s} "
         #       "| {'Tgt. Flat.':11s} |  {'No. of Bins':12s} | {'N iter.':15s} |  {'emin':11s} |  {'emax':11s} "
         # )
         while (hist_min < target_flatness * hist_avg) or (n_nonzero_bins < nonzero_bins_thresh):
@@ -1065,15 +1060,12 @@ class WangLandau:
                 f"{n_nonzero_bins:12d} | {niter:15d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
             )
 
-            e, g, ibin, cdos = self.dos_steps(struc, e, g, ibin, lnf, cdos, niter_per_sweep, energy_bin_width)
+            for n in range(niter_per_sweep):
+                e, g, ibin, cdos = self.step(struc, e, g, ibin, lnf, cdos, energy_bin_width)
             niter += niter_per_sweep
 
             hist_min, hist_avg, n_nonzero_bins = self._get_hist_min_and_avg(cdos[:, 2])
-            """if n_nonzero_bins < 10:
-                print(
-                    f" (#nonzero bins<10) {'':36s} Current E: {e:11.3f},"
-                    f" Bin-index: {ibin:4d} | {cdos[0, 0]:11.3f} | {cdos[-1, 0]:11.3f}"
-                )"""
+
         hist = hist_string(cdos[:, 2], max_length=22, zeros_as_blank=False)
         print(
             f" {f:12.9f} |" + hist + "| "
@@ -1082,11 +1074,6 @@ class WangLandau:
         )
 
         return struc, e, g, ibin, cdos, [hist_min, hist_avg], niter
-
-    def dos_steps(self, struc, e, g, ibin, lnf, cdos, niter, energy_bin_width):
-        for n in range(niter):
-            e, g, ibin, cdos = self.step(struc, e, g, ibin, lnf, cdos, energy_bin_width)
-        return e, g, ibin, cdos
 
     def step(self, struc, e, g, ibin, lnf, cdos, energy_bin_width):
         energies = cdos[:, 0]
