@@ -66,17 +66,13 @@ def test_from_db(parent_lattice, super_cell, tmp_path):
 
     # serialize to db
     db_path = tmp_path / "sset.db"
-    sset1.serialize(
-        filepath=db_path.name, ase_db_type="db", overwrite=True, rm_vac=False
-    )
+    sset1.serialize(filepath=db_path.name, ase_db_type="db", overwrite=True, rm_vac=False)
 
     # load from db
     sset2 = StructuresSet(db_fname=db_path.name)
 
     assert len(sset1) == len(sset2)
-    np.testing.assert_array_equal(
-        sset1.get_property_values("tote"), sset2.get_property_values("tote")
-    )
+    np.testing.assert_array_equal(sset1.get_property_values("tote"), sset2.get_property_values("tote"))
 
 
 def test_write_input_files_defaults(structures_set):
@@ -110,12 +106,8 @@ def test_compute_property_values(structures_set):
         at.calc = EMT()
         return at.get_potential_energy() * 0.1 - 10
 
-    structures_set.compute_property_values(
-        property_name="a_prop0", property_calc=a_prop
-    )
-    structures_set.compute_property_values(
-        property_name="a_prop1", property_calc=a_prop
-    )
+    structures_set.compute_property_values(property_name="a_prop0", property_calc=a_prop)
+    structures_set.compute_property_values(property_name="a_prop1", property_calc=a_prop)
 
 
 def test_get_property_values(structures_set_prop):
@@ -135,12 +127,8 @@ def test_get_property_values(structures_set_prop):
 
 
 def test_set_property_values(structures_set):
-    structures_set.set_property_values(
-        property_name="set_prop", property_vals=[1.0] * len(structures_set)
-    )
-    np.testing.assert_array_equal(
-        structures_set.get_property_values("set_prop"), np.ones(len(structures_set))
-    )
+    structures_set.set_property_values(property_name="set_prop", property_vals=[1.0] * len(structures_set))
+    np.testing.assert_array_equal(structures_set.get_property_values("set_prop"), np.ones(len(structures_set)))
 
 
 def test_slicing_addition(structures_set):
@@ -160,12 +148,8 @@ def test_property_transfer_addition(parent_lattice, super_cell):
         sset1.add_structure(super_cell.gen_random_structure())
         sset2.add_structure(super_cell.gen_random_structure())
         sset3.add_structure(super_cell.gen_random_structure())
-    sset1.set_property_values(
-        property_name="set_prop", property_vals=[1.0] * n_structures
-    )
-    sset3.set_property_values(
-        property_name="set_prop", property_vals=[2.0] * n_structures
-    )
+    sset1.set_property_values(property_name="set_prop", property_vals=[1.0] * n_structures)
+    sset3.set_property_values(property_name="set_prop", property_vals=[2.0] * n_structures)
     sset4 = sset1 + sset2 + sset3
     assert isinstance(sset4, StructuresSet)
     assert len(sset4) == len(sset1) + len(sset2) + len(sset3)
@@ -175,32 +159,41 @@ def test_property_transfer_addition(parent_lattice, super_cell):
     )
 
 
-def test_serialize_load_json(structures_set):
-    structures_set.set_property_values(
-        property_name="set_prop", property_vals=[1.0] * len(structures_set)
-    )
-    structures_set.serialize(
-        filepath="sset.json", ase_db_type="json", overwrite=True, rm_vac=False
-    )
-    sset_loaded = StructuresSet(filepath="sset.json")
+def test_serialize_load_json(structures_set, tmp_path):
+    filepath = str(tmp_path / "sset.json")
+    structures_set.set_property_values(property_name="set_prop", property_vals=[1.0] * len(structures_set))
+    structures_set.serialize(filepath=filepath, ase_db_type="json", overwrite=True, rm_vac=False)
+    sset_loaded = StructuresSet(filepath=filepath)
     assert len(sset_loaded) == len(structures_set)
-    np.testing.assert_array_equal(
-        sset_loaded.get_property_values("set_prop"), [1.0] * len(structures_set)
-    )
+    np.testing.assert_array_equal(sset_loaded.get_property_values("set_prop"), [1.0] * len(structures_set))
 
 
-def test_serialize_load_sqlite(structures_set):
-    structures_set.set_property_values(
-        property_name="set_prop", property_vals=[1.0] * len(structures_set)
-    )
-    structures_set.serialize(
-        filepath="sset.db", ase_db_type="db", overwrite=True, rm_vac=False
-    )
-    sset_loaded = StructuresSet(filepath="sset.json")
+def test_serialize_load_sqlite(structures_set, tmp_path):
+    filepath = str(tmp_path / "sset.db")
+    structures_set.set_property_values(property_name="set_prop", property_vals=[1.0] * len(structures_set))
+    structures_set.serialize(filepath=filepath, ase_db_type="db", overwrite=True, rm_vac=False)
+    sset_loaded = StructuresSet(filepath=filepath)
     assert len(sset_loaded) == len(structures_set)
-    np.testing.assert_array_equal(
-        sset_loaded.get_property_values("set_prop"), [1.0] * len(structures_set)
-    )
+    np.testing.assert_array_equal(sset_loaded.get_property_values("set_prop"), [1.0] * len(structures_set))
+
+
+def test_serialize_load_xyz(structures_set, tmp_path):
+    # only a temporary test, to suggest how new code could use .extxyz
+    import time
+    from ase.io import write, read
+
+    filepath = str(tmp_path / "sset.xyz")
+    structures_set.set_property_values(property_name="set_prop", property_vals=[1.0] * len(structures_set))
+    images = structures_set.get_images()
+    print("serializing xyz...")
+    t = time.time()
+    write(filepath, images)
+    print(time.time() - t, " seconds")
+    print("loading...")
+    t = time.time()
+    images_loaded = read(filepath, ":")
+    print(time.time() - t, " seconds")
+    assert len(images_loaded) == len(structures_set)
 
 
 def test_property_calculation_with_ase_calculator(structures_set):
@@ -228,9 +221,7 @@ def test_property_calculation_with_custom_solver(structures_set):
         e = (i * par1 - par2) * len(structure)
         return e
 
-    structures_set.compute_property_values(
-        property_name="cprop", property_calc=custom_prop, par1=3, par2=5
-    )
+    structures_set.compute_property_values(property_name="cprop", property_calc=custom_prop, par1=3, par2=5)
 
     if compute_ref_value:
         custom_prop_list = []
@@ -240,6 +231,4 @@ def test_property_calculation_with_custom_solver(structures_set):
     else:
         custom_prop_list = [-135, -54, 27, 108, 189, 270, 351, 432, 513, 594]
 
-    np.testing.assert_array_equal(
-        structures_set.get_property_values("cprop"), custom_prop_list
-    )
+    np.testing.assert_array_equal(structures_set.get_property_values("cprop"), custom_prop_list)
