@@ -70,9 +70,7 @@ def test_random_swaps(structure_random: Structure):
 def test_large_index_map(parent_lattice):
     p = 200
     super_cell = SuperCell(parent_lattice, [p, p, 1])
-    structure = Structure(
-        super_cell, decoration=[1] * len(super_cell), track_indices=False
-    )
+    structure = Structure(super_cell, decoration=[1] * len(super_cell), track_indices=False)
     assert not structure._track_indices
     structure.track_indices()
     assert len(structure._index_maps) == 3
@@ -96,8 +94,19 @@ def test_init_scell(structure):
     assert structure.scell is not None
 
 
-def test_serialize_load(structure):
-    filepath = "structure.json"
+@pytest.mark.parametrize(
+    "p",
+    [
+        [(1, 0, 0), (0, 3, 0), (0, 0, 1)],
+        [3, 3, 1],
+        [100, 100, 1],
+    ],
+)
+def test_serialize_load(parent_lattice, p, tmp_path):
+    # ensure no bottleneck with large supercell size
+    super_cell = SuperCell(parent_lattice, p)
+    structure = Structure(super_cell, decoration=[1] * len(super_cell))
+    filepath = tmp_path / "structure.json"
     structure.serialize(filepath=filepath, fmt=None)
     structure_loaded = Structure.from_file(filepath)
     assert structure == structure_loaded
