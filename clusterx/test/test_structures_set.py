@@ -178,22 +178,13 @@ def test_serialize_load_sqlite(structures_set, tmp_path):
 
 
 def test_serialize_load_xyz(structures_set, tmp_path):
-    # only a temporary test, to suggest how new code could use .extxyz
-    import time
-    from ase.io import write, read
-
     filepath = str(tmp_path / "sset.xyz")
     structures_set.set_property_values(property_name="set_prop", property_vals=[1.0] * len(structures_set))
-    images = structures_set.get_images()
-    print("serializing xyz...")
-    t = time.time()
-    write(filepath, images)
-    print(time.time() - t, " seconds")
-    print("loading...")
-    t = time.time()
-    images_loaded = read(filepath, ":")
-    print(time.time() - t, " seconds")
-    assert len(images_loaded) == len(structures_set)
+    structures_set.serialize(filepath=filepath, overwrite=True, rm_vac=False)
+    sset_loaded = StructuresSet.from_file(filepath=filepath)
+    assert len(sset_loaded) == len(structures_set)
+    np.testing.assert_array_equal(sset_loaded.get_property_values("set_prop"), [1.0] * len(structures_set))
+
 
 
 def test_property_calculation_with_ase_calculator(structures_set):

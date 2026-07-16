@@ -219,6 +219,7 @@ class Structure(SuperCell):
         Supported formats:
         - `.pickle`: Full Python object serialization using `pickle`.
         - `.json`  : ASE-compatible JSON database file.
+        - `.xyz`   : extended xyz file.
 
         Parameters
         ----------
@@ -473,7 +474,7 @@ class Structure(SuperCell):
             pbc=self.scell.get_pbc(),
         )
         atoms.info["tmat"] = tmat
-        atoms.new_array("sigmas", self.sigmas[mask])
+        atoms.new_array("sigmas", self.sigmas[mask], dtype="i")
         return atoms
 
     def get_atomic_numbers(self) -> np.ndarray:
