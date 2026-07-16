@@ -42,6 +42,8 @@ def structure_random(super_cell: SuperCell):
 
 def test_get_atoms(structure):
     atoms = structure.get_atoms()
+    sigmas = atoms.arrays["sigmas"]
+    np.testing.assert_array_equal(sigmas, [0]*9)
     assert isinstance(atoms, Atoms)
     numbers = structure.get_atomic_numbers()
     assert len(numbers) == 9
@@ -49,6 +51,8 @@ def test_get_atoms(structure):
     assert len(symbols) == 9
     atoms = structure.get_atoms(ignore_observer_atoms=True)
     assert len(atoms) == 6
+    sigmas = atoms.arrays["sigmas"]
+    np.testing.assert_array_equal(sigmas, [0]*6)
 
 
 def test_random_flips(structure_random: Structure):
@@ -107,6 +111,16 @@ def test_serialize_load(parent_lattice, p, tmp_path):
     super_cell = SuperCell(parent_lattice, p)
     structure = Structure(super_cell, decoration=[1] * len(super_cell))
     filepath = tmp_path / "structure.json"
+    structure.serialize(filepath=filepath, fmt=None)
+    structure_loaded = Structure.from_file(filepath)
+    assert structure == structure_loaded
+
+
+def test_serialize_load_xyz(parent_lattice, tmp_path):
+    # ensure no bottleneck with large supercell size
+    super_cell = SuperCell(parent_lattice, (2, 2, 2))
+    structure = Structure(super_cell, decoration=[1] * len(super_cell))
+    filepath = tmp_path / "structure.xyz"
     structure.serialize(filepath=filepath, fmt=None)
     structure_loaded = Structure.from_file(filepath)
     assert structure == structure_loaded

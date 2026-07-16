@@ -16,7 +16,7 @@ from ase import Atoms
 from ase.cell import Cell
 from ase.data import atomic_numbers
 from ase.db import connect
-from ase.io import write
+from ase.io import read, write
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
@@ -240,6 +240,8 @@ class Structure(SuperCell):
             return cls._load_from_pickle(filepath)
         elif file_ext == ".json":
             return cls._load_from_json(filepath)
+        elif file_ext == ".xyz":
+            return cls._load_from_xyz(filepath)
         else:
             raise ValueError(f"Unsupported file format: {file_ext}")
 
@@ -268,6 +270,15 @@ class Structure(SuperCell):
         super_cell = SuperCell(parent_lattice=parent_lattice, p=tmat)
         numbers = db.get(id=1).toatoms().get_atomic_numbers()
 
+        return cls(super_cell=super_cell, decoration=numbers)
+
+    @classmethod
+    def _load_from_xyz(cls, filepath: str) -> Structure:
+        atoms = read(filepath, format="extxyz")
+        parent_lattice = ParentLattice.plat_from_dict(atoms.info["parent_lattice"])
+        tmat = atoms.info["tmat"]
+        super_cell = SuperCell(parent_lattice=parent_lattice, p=tmat)
+        numbers = atoms.get_atomic_numbers()
         return cls(super_cell=super_cell, decoration=numbers)
 
     @staticmethod
@@ -449,16 +460,21 @@ class Structure(SuperCell):
             sublattice_lengths = [len(val) for val in types.values()]
             tags = self.scell.get_tags()
             site_lens = np.array(sublattice_lengths, dtype=int)[tags]
+            mask = site_lens > 1
         else:
             tags = self.scell.get_tags()
-            site_lens = 2 * np.ones_like(tags, dtype=int)
-        return Atoms(
-            numbers=np.array(self.decor)[site_lens > 1],
-            positions=self.scell.get_positions()[site_lens > 1],
-            tags=tags[site_lens > 1],
+            mask = np.full_like(tags, True)
+        tmat = self.get_transformation()
+        atoms = Atoms(
+            numbers=np.array(self.decor)[mask],
+            positions=self.scell.get_positions()[mask],
+            tags=tags[mask],
             cell=self.scell.get_cell(),
             pbc=self.scell.get_pbc(),
         )
+        atoms.info["tmat"] = tmat
+        atoms.new_array("sigmas", self.sigmas[mask])
+        return atoms
 
     def get_atomic_numbers(self) -> np.ndarray:
         """Get decoration array"""
@@ -508,6 +524,10 @@ class Structure(SuperCell):
         elif fmt == "pickle":
             with open(filepath, "wb") as f:
                 pickle.dump(self, f)
+        elif fmt == "xyz":
+            atoms = self.get_atoms()
+            atoms.info["parent_lattice"] = self._plat.as_dict()
+            write(filepath, images=atoms, format="extxyz")
         else:
             write(filepath, images=self.get_atoms(), format=fmt)
 
