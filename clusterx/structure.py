@@ -464,7 +464,8 @@ class Structure(SuperCell):
             mask = site_lens > 1
         else:
             tags = self.scell.get_tags()
-            mask = np.full_like(tags, True)
+            site_lens = 2 * np.ones_like(tags, dtype=int)
+            mask = site_lens > 1
         tmat = self.get_transformation()
         atoms = Atoms(
             numbers=np.array(self.decor)[mask],

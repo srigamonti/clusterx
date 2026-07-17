@@ -36,7 +36,7 @@ def test_sqs_correlation(plat, corrc):
     scell = SuperCell(plat, p)
     n_atoms = scell.get_index()
     structure = run_annealing(plat, corrc, p, n_atoms // 2)
-    view(structure.get_atoms())
+    # view(structure.get_atoms())
 
 
 def test_cli():
