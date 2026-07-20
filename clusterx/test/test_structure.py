@@ -3,6 +3,7 @@
 import pytest
 from ase import Atoms
 from ase.data import chemical_symbols
+from ase.io import read
 import numpy as np
 
 from clusterx.parent_lattice import ParentLattice
@@ -44,7 +45,7 @@ def structure_random(super_cell: SuperCell):
 def test_get_atoms(structure):
     atoms = structure.get_atoms()
     sigmas = atoms.arrays["sigmas"]
-    np.testing.assert_array_equal(sigmas, [0]*9)
+    np.testing.assert_array_equal(sigmas, [0] * 9)
     assert isinstance(atoms, Atoms)
     numbers = structure.get_atomic_numbers()
     assert len(numbers) == 9
@@ -53,7 +54,7 @@ def test_get_atoms(structure):
     atoms = structure.get_atoms(ignore_observer_atoms=True)
     assert len(atoms) == 6
     sigmas = atoms.arrays["sigmas"]
-    np.testing.assert_array_equal(sigmas, [0]*6)
+    np.testing.assert_array_equal(sigmas, [0] * 6)
 
 
 def test_random_flips(structure_random: Structure):
@@ -125,6 +126,11 @@ def test_serialize_load_xyz(parent_lattice, tmp_path):
     structure.serialize(filepath=filepath, fmt=None)
     structure_loaded = Structure.from_file(filepath)
     assert structure == structure_loaded
+
+    atoms = read(filepath)
+    assert len(atoms) == len(structure)
+    np.testing.assert_array_equal(structure.sigmas, atoms.arrays["sigmas"])
+    np.testing.assert_array_equal(structure.get_transformation(), atoms.info["tmat"])
 
 
 def test_sigma_grid_pristine(super_cell):
@@ -241,9 +247,7 @@ def test_attributes():
             11: np.array([56, 2, 7]),
         },
     )
-    assert dict_compare(
-        s.get_idx_subs(), {0: np.array([1]), 1: np.array([1, 6]), 2: np.array([56, 2, 7])}
-    )
+    assert dict_compare(s.get_idx_subs(), {0: np.array([1]), 1: np.array([1, 6]), 2: np.array([56, 2, 7])})
     np.testing.assert_array_equal(s.get_atom_indices_for_site_type(0)[0], [2, 6, 10])
     np.testing.assert_array_equal(s.get_atom_indices_for_site_type(1)[0], [0, 4, 8])
     np.testing.assert_array_equal(s.get_atom_indices_for_site_type(2)[0], [1, 3, 5, 7, 9, 11])
