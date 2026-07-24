@@ -45,18 +45,20 @@ def scell(plat):
 def training_set(plat, scell):
     training_set = StructuresSet(plat)
     n_training = 14
-    np.random.seed(42)  # For reproducibility
-    for _ in range(n_training):
-        training_set.add_structure(scell.gen_random_structure(nsubs={0: [5]}))
+    rng = np.random.default_rng(seed=5) # For reproducibility
+    for i in range(n_training):
+        training_set.add_structure(scell.gen_random_structure(nsubs={0: [5]}, 
+                                                            rng=rng))
     return training_set
 
 @pytest.fixture
 def candidate_set(plat, scell):
     candidate_set = StructuresSet(plat)
     n_candidates = 6
-    np.random.seed(42)  # For reproducibility
-    for idx in range(n_candidates):
-        candidate_set.add_structure(scell.gen_random_structure(nsubs={0: [5]}))
+    rng = np.random.default_rng(seed=5) # For reproducibility
+    for i in range(n_candidates):
+        candidate_set.add_structure(scell.gen_random_structure(nsubs={0: [5]},
+                                                        rng=rng))
     return candidate_set
 
 
@@ -110,7 +112,6 @@ def test_tau_bounds(structure_selector, method):
     assert tau > 0, "tau is not positive"
 
 
-@pytest.mark.parametrize("seed", [42])
 @pytest.mark.parametrize(
     "method",
     [
@@ -121,7 +122,7 @@ def test_tau_bounds(structure_selector, method):
     ],
 )
 def test_structure_selection(
-    seed, method, plat, scell, cpool, structure_selector, training_set, candidate_set
+    method, plat, scell, cpool, structure_selector, training_set, candidate_set
 ):
     # TODO: test greedy method how?
     calculate_tau_method = method.replace("global_", "")
@@ -145,7 +146,7 @@ def test_structure_selection(
     structure_chosen = np.argmin(tau)
     assert structure_chosen == structure_idx, f"""structure selection failed.
         Criteria are not optimally reducing prediction variance according
-        to themselves. generated tau values: {tau}, seed {seed}"""
+        to themselves. generated tau values: {tau}"""
 
 
 @pytest.mark.parametrize(
@@ -191,7 +192,6 @@ def test_structure_selection_with_differing_concentration_limits(structure_selec
                                                         lower_conc_limit=0, upper_conc_limit=0.05)
     assert idx1 != idx2, "Same structure selected, even though settings should lead to different selected structures"
 
-@pytest.mark.parametrize("seed", [42])
 @pytest.mark.parametrize(
     "method",
     [
@@ -202,9 +202,7 @@ def test_structure_selection_with_differing_concentration_limits(structure_selec
     ],
 )
 def test_structure_object(
-            seed, method, plat, scell,
-            candidate_set,
-            structure_selector
+            method, plat, scell, candidate_set, structure_selector
 ):
     selected_structure_idx = structure_selector.select_structure(
         method=method, concentration=0.2)
