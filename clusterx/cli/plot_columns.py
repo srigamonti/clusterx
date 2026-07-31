@@ -724,17 +724,21 @@ def plot_columns(
                 showfliers=bool(item.get("showfliers", False)),
                 manage_ticks=False,
             )
+            alpha = float(scatter_kwargs.get("alpha", 0.8))
             for patch in bp["boxes"]:
                 patch.set_facecolor(scatter_kwargs.get("facecolors", "none"))
                 patch.set_edgecolor(scatter_kwargs.get("edgecolors", color))
                 patch.set_linewidth(float(scatter_kwargs.get("linewidths", 0.8)))
-                patch.set_alpha(float(scatter_kwargs.get("alpha", 0.8)))
+                patch.set_alpha(alpha)
             for med in bp["medians"]:
                 med.set_color(color)
+                med.set_alpha(alpha)
             for whisk in bp["whiskers"]:
                 whisk.set_color(color)
+                whisk.set_alpha(alpha)
             for cap in bp["caps"]:
                 cap.set_color(color)
+                cap.set_alpha(alpha)
             ax.plot([], [], color=color, label=label)
 
         if mean_line:

@@ -2,28 +2,29 @@
 
 import json
 
+import matplotlib.axes as axes_module
 import matplotlib.pyplot as plt
-import pytest
 import numpy as np
+import pytest
 from ase.build import bulk
 
-from clusterx.parent_lattice import ParentLattice
+from clusterx.cli.plot_columns import plot_columns
 from clusterx.cli.ssets_equivalence_check import (
     ssets_equivalence_check as cli_ssets_equivalence_check,
 )
-from clusterx.cli.plot_columns import plot_columns
+from clusterx.parent_lattice import ParentLattice
 from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
 from clusterx.utils import (
     Exponential,
-    PolynomialFunction,
     PolynomialBasis,
-    lattice_wrap_index,
+    PolynomialFunction,
+    atat_to_cell,
     grid_mapping,
+    lattice_wrap_index,
+    list_integer_named_folders,
     normalize_shape_input,
     parent_lattice_to_atat,
-    atat_to_cell,
-    list_integer_named_folders,
     ssets_equivalence_check,
 )
 
@@ -54,9 +55,7 @@ def test_atat(parent_lattice, tmp_path):
 def test_grid_mapping(grid_shape, i_grid, p_reduced):
     grid = np.arange(np.prod(grid_shape)).reshape(grid_shape)
     grid_reduced, i_new = grid_mapping(grid, i_grid, p_reduced)
-    np.testing.assert_array_equal(
-        grid_reduced.shape, list(p_reduced) + [grid_shape[-1]]
-    )
+    np.testing.assert_array_equal(grid_reduced.shape, list(p_reduced) + [grid_shape[-1]])
     assert np.all(np.array(p_reduced) - i_new[:-1] > 0)
     assert np.all(i_new[-1] >= 0)
     val = grid[(*i_grid,)]
@@ -128,9 +127,7 @@ def test_list_integer_named_folders_preserves_zero_padded_names_with_affixes(tmp
     for name in ["run_010_done", "run_001_done", "run_old_done", "001_done"]:
         (tmp_path / name).mkdir()
 
-    assert list_integer_named_folders(
-        tmp_path, prefix="run_", suffix="_done"
-    ) == ["run_001_done", "run_010_done"]
+    assert list_integer_named_folders(tmp_path, prefix="run_", suffix="_done") == ["run_001_done", "run_010_done"]
 
 
 def _make_equivalence_sset(parent_lattice, sigmas_list):
@@ -241,6 +238,44 @@ def test_plot_columns_applies_yfactor(parent_lattice, tmp_path):
     assert plot_data["series"][0]["y_samples"] == [[20.0], [30.0]]
     assert plot_data["series"][1]["yfactor"] == -1.0
     assert plot_data["series"][1]["y"] == [-2.0, -3.0]
+
+
+def test_plot_columns_boxplot_alpha_applies_to_whiskers_and_caps(parent_lattice, tmp_path, monkeypatch):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[1.0, 2.0, 3.0, 4.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    original_boxplot = axes_module.Axes.boxplot
+
+    def capture_boxplot(self, *args, **kwargs):
+        bp = original_boxplot(self, *args, **kwargs)
+        captured["bp"] = bp
+        return bp
+
+    monkeypatch.setattr(axes_module.Axes, "boxplot", capture_boxplot)
+
+    plot_columns(
+        source_filepath=str(sset_filepath),
+        show_plot=False,
+        series=[{"xcolumn": "x", "ycolumn": "y", "ymode": "boxplot", "alpha": 0.25}],
+    )
+
+    bp = captured["bp"]
+    assert bp["boxes"][0].get_alpha() == pytest.approx(0.25)
+    assert bp["whiskers"][0].get_alpha() == pytest.approx(0.25)
+    assert bp["caps"][0].get_alpha() == pytest.approx(0.25)
+    assert bp["medians"][0].get_alpha() == pytest.approx(0.25)
 
 
 def test_plot_columns_grid_lines(parent_lattice, tmp_path, monkeypatch):
