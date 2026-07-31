@@ -21,6 +21,8 @@ commands = ["find_lowest"]
         None,
         str,
     ),
+    site_type=("Site type used to compute concentrations.", "option", None, int),
+    sigma=("Sigma used to compute concentrations.", "option", None, int),
     sset_higher_filepath=(
         "Path to store StructuresSet with non-lowest structures.",
         "option",
@@ -37,6 +39,8 @@ commands = ["find_lowest"]
 def find_lowest(
     sset_filepath: str = "sset.json",
     property_name: Optional[str] = None,
+    site_type: int = 0,
+    sigma: int = 1,
     sset_higher_filepath: Optional[str] = None,
     sset_lowest_filepath: Optional[str] = None,
 ):
@@ -44,7 +48,7 @@ def find_lowest(
     cmd_message("head")
 
     sset = StructuresSet(filepath=sset_filepath)
-    conc = np.array(sset.get_concentrations(site_type=0, sigma=1))
+    conc = np.array(sset.get_concentrations(site_type=site_type, sigma=sigma))
     pvals = sset.get_property_values(property_name=property_name)
     sidxs = np.lexsort((conc, pvals))
     conc_unique_sorted = np.unique(conc)
