@@ -149,6 +149,8 @@ def _shared_target_prediction_limits(
         None,
         list,
     ),
+    width=("Figure width in inches.", "option", None, float),
+    height=("Figure height in inches.", "option", None, float),
     target_vs_predictions=(
         "Enable target-vs-predictions parity mode: square axes, shared limits, and y=x line.",
         "option",
@@ -226,6 +228,8 @@ def plot_columns(
     yrange: Optional[list] = None,
     xrange: Optional[list] = None,
     colors: Optional[list] = None,
+    width: Optional[float] = None,
+    height: Optional[float] = None,
     target_vs_predictions: bool = False,
     loglog: bool = False,
     symlog: bool = False,
@@ -260,6 +264,11 @@ def plot_columns(
     - ``xrange`` / ``yrange`` (list[float, float], optional): axis limits.
     - ``colors`` (list[str], optional): default color palette for series without
         explicit ``color``.
+    - ``width`` / ``height`` (float, optional): figure size in inches. Defaults
+        preserve existing behavior: ``6x4`` for regular plots and ``6x6`` for
+        ``target_vs_predictions``.
+    - For ``target_vs_predictions``, the figure is kept square. If ``width`` is
+        provided, the size becomes ``(width, width)`` (``height`` is ignored).
     - ``target_vs_predictions`` (bool): enable parity-plot mode for target values
         on x versus predictions on y. This uses a square plot frame, shared x/y
         limits, and a ``y=x`` reference line.
@@ -350,10 +359,13 @@ def plot_columns(
             ylabel = "Energy"
             yfactor = 1000.0
             colors = ["k", "r", "b"]
+            width = 7.0
+            height = 4.5
             legend = true
             show_plot = true
             savefig = "plot.png"
             # target_vs_predictions = true  # Square parity plot with y=x
+            # width = 7.5                   # In target_vs_predictions: uses (width, width)
             # loglog = true                 # Logarithmic x/y axes
             # symlog = true                 # Signed-log x/y axes
             # grid = true
@@ -469,6 +481,12 @@ def plot_columns(
     if colors is not None and not isinstance(colors, list):
         raise ValueError("colors must be a list when provided.")
 
+    if width is not None and float(width) <= 0:
+        raise ValueError("width must be positive when provided.")
+
+    if height is not None and float(height) <= 0:
+        raise ValueError("height must be positive when provided.")
+
     yfactor = float(yfactor)
 
     if loglog and symlog:
@@ -494,6 +512,8 @@ def plot_columns(
         "title": title,
         "xlabel": xlabel,
         "ylabel": ylabel,
+        "width": width,
+        "height": height,
         "yfactor": yfactor,
         "target_vs_predictions": target_vs_predictions,
         "loglog": loglog,
@@ -506,7 +526,14 @@ def plot_columns(
         "series": [],
     }
 
-    fig, ax = plt.subplots(figsize=(6.0, 6.0) if target_vs_predictions else (6.0, 4.0))
+    if target_vs_predictions:
+        fig_width = 6.0 if width is None else float(width)
+        fig_height = fig_width
+    else:
+        fig_width = 6.0 if width is None else float(width)
+        fig_height = 4.0 if height is None else float(height)
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     plotted_x_values: List[np.ndarray] = []
     plotted_y_values: List[np.ndarray] = []
 

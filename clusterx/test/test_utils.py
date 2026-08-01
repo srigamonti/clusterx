@@ -395,6 +395,45 @@ def test_plot_columns_target_vs_predictions_loglog_axes(parent_lattice, tmp_path
             real_close(captured["fig"])
 
 
+def test_plot_columns_target_vs_predictions_uses_width_for_square_figure(parent_lattice, tmp_path, monkeypatch):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="target",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="prediction",
+        property_vals=[1.1, 1.9],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    real_close = plt.close
+
+    def capture_close(fig=None):
+        captured["fig"] = fig if fig is not None else plt.gcf()
+
+    monkeypatch.setattr(plt, "close", capture_close)
+    try:
+        plot_columns(
+            source_filepath=str(sset_filepath),
+            target_vs_predictions=True,
+            width=7.25,
+            height=3.0,
+            show_plot=False,
+            series=[{"xcolumn": "target", "ycolumn": "prediction"}],
+        )
+
+        fig = captured["fig"]
+        np.testing.assert_allclose(fig.get_size_inches(), [7.25, 7.25])
+    finally:
+        if "fig" in captured:
+            real_close(captured["fig"])
+
+
 def test_plot_columns_target_vs_predictions_symlog_axes(parent_lattice, tmp_path, monkeypatch):
     sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
     sset.set_property_values(
