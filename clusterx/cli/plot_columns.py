@@ -221,6 +221,8 @@ def _shared_target_prediction_limits(
     show_ylabel=("Show y-axis name label.", "option", None, bool),
     show_xticklabels=("Show x-axis tick labels (numbers).", "option", None, bool),
     show_yticklabels=("Show y-axis tick labels (numbers).", "option", None, bool),
+    xticks=("Custom x-axis tick locations.", "option", None, list),
+    yticks=("Custom y-axis tick locations.", "option", None, list),
     legend=("Show legend if True.", "option", None, bool),
     show_legend_frame=("Show frame box around legend.", "option", None, bool),
     legend_location=("Legend position using Matplotlib names, e.g. upper left/best.", "option", None, str),
@@ -277,6 +279,8 @@ def plot_columns(
     show_ylabel: bool = True,
     show_xticklabels: bool = True,
     show_yticklabels: bool = True,
+    xticks: Optional[list] = None,
+    yticks: Optional[list] = None,
     legend: bool = True,
     show_legend_frame: bool = True,
     legend_location: str = "best",
@@ -329,6 +333,8 @@ def plot_columns(
     - ``show_xlabel`` / ``show_ylabel`` (bool): show/hide axis name labels.
     - ``show_xticklabels`` / ``show_yticklabels`` (bool): show/hide numeric
         tick labels on each axis.
+    - ``xticks`` / ``yticks`` (list[float], optional): explicit tick locations
+        to apply to the x/y axes via ``Axes.set_xticks`` and ``Axes.set_yticks``.
     - ``legend`` (bool): show legend.
     - ``show_legend_frame`` (bool): show/hide the legend frame box.
     - ``legend_location`` (str): legend position using Matplotlib ``loc``
@@ -562,6 +568,11 @@ def plot_columns(
     elif not isinstance(grid_style, dict):
         raise ValueError("grid_style must be a dictionary when provided.")
 
+    if xticks is not None and not isinstance(xticks, list):
+        raise ValueError("xticks must be a list when provided.")
+    if yticks is not None and not isinstance(yticks, list):
+        raise ValueError("yticks must be a list when provided.")
+
     legend_location_normalized = _normalize_legend_location(legend_location)
 
     # Cache DSGenerator objects by filepath to avoid repeated I/O
@@ -585,6 +596,8 @@ def plot_columns(
         "show_ylabel": show_ylabel,
         "show_xticklabels": show_xticklabels,
         "show_yticklabels": show_yticklabels,
+        "xticks": xticks,
+        "yticks": yticks,
         "show_legend_frame": show_legend_frame,
         "legend_location": legend_location_normalized,
         "dpi": float(dpi),
@@ -893,6 +906,11 @@ def plot_columns(
         ax.tick_params(axis="y", which="both", labelleft=False, labelright=False)
     if title is not None:
         ax.set_title(title)
+
+    if xticks is not None:
+        ax.set_xticks([float(value) for value in xticks])
+    if yticks is not None:
+        ax.set_yticks([float(value) for value in yticks])
 
     xrange_values = _validate_axis_range(xrange, "xrange")
     yrange_values = _validate_axis_range(yrange, "yrange")
