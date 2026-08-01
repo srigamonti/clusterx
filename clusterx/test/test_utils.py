@@ -434,6 +434,52 @@ def test_plot_columns_target_vs_predictions_uses_width_for_square_figure(parent_
             real_close(captured["fig"])
 
 
+def test_plot_columns_axis_name_and_ticklabel_visibility_toggles(parent_lattice, tmp_path, monkeypatch):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    real_close = plt.close
+
+    def capture_close(fig=None):
+        captured["fig"] = fig if fig is not None else plt.gcf()
+
+    monkeypatch.setattr(plt, "close", capture_close)
+    try:
+        plot_columns(
+            source_filepath=str(sset_filepath),
+            xlabel="X axis",
+            ylabel="Y axis",
+            show_xlabel=False,
+            show_ylabel=False,
+            show_xticklabels=False,
+            show_yticklabels=False,
+            show_plot=False,
+            series=[{"xcolumn": "x", "ycolumn": "y"}],
+        )
+
+        fig = captured["fig"]
+        ax = fig.axes[0]
+        assert ax.get_xlabel() == ""
+        assert ax.get_ylabel() == ""
+        assert all(not tick.get_visible() for tick in ax.get_xticklabels())
+        assert all(not tick.get_visible() for tick in ax.get_yticklabels())
+    finally:
+        if "fig" in captured:
+            real_close(captured["fig"])
+
+
 def test_plot_columns_target_vs_predictions_symlog_axes(parent_lattice, tmp_path, monkeypatch):
     sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
     sset.set_property_values(

@@ -190,6 +190,10 @@ def _shared_target_prediction_limits(
         dict,
     ),
     show_yzero_axis=("Show horizontal reference line at y=0.", "option", None, bool),
+    show_xlabel=("Show x-axis name label.", "option", None, bool),
+    show_ylabel=("Show y-axis name label.", "option", None, bool),
+    show_xticklabels=("Show x-axis tick labels (numbers).", "option", None, bool),
+    show_yticklabels=("Show y-axis tick labels (numbers).", "option", None, bool),
     legend=("Show legend if True.", "option", None, bool),
     show_plot=("Display the plot window if True.", "option", None, bool),
     savefig=(
@@ -239,6 +243,10 @@ def plot_columns(
     grid_axis: str = "both",
     grid_style: Optional[Dict[str, Any]] = None,
     show_yzero_axis: bool = False,
+    show_xlabel: bool = True,
+    show_ylabel: bool = True,
+    show_xticklabels: bool = True,
+    show_yticklabels: bool = True,
     legend: bool = True,
     show_plot: bool = True,
     savefig: Optional[str] = None,
@@ -285,6 +293,9 @@ def plot_columns(
     - ``grid_style`` (dict, optional): matplotlib grid style passed to
         ``Axes.grid`` (e.g. ``linewidth``, ``linestyle``, ``alpha``, ``color``).
     - ``show_yzero_axis`` (bool): draw a horizontal line at ``y=0``.
+    - ``show_xlabel`` / ``show_ylabel`` (bool): show/hide axis name labels.
+    - ``show_xticklabels`` / ``show_yticklabels`` (bool): show/hide numeric
+        tick labels on each axis.
     - ``legend`` (bool): show legend.
     - ``show_plot`` (bool): show interactive window.
     - ``savefig`` (str, optional): output figure path (e.g. ``plot.png``).
@@ -371,6 +382,8 @@ def plot_columns(
             # grid = true
             # grid_which = "both"
             # grid_axis = "both"
+            # show_xlabel = false
+            # show_xticklabels = false
 
             [[plot_columns.series]]
             xcolumn = "frconc_binary"
@@ -523,6 +536,10 @@ def plot_columns(
         "grid_which": grid_which,
         "grid_axis": grid_axis,
         "grid_style": grid_style,
+        "show_xlabel": show_xlabel,
+        "show_ylabel": show_ylabel,
+        "show_xticklabels": show_xticklabels,
+        "show_yticklabels": show_yticklabels,
         "series": [],
     }
 
@@ -818,6 +835,14 @@ def plot_columns(
 
     ax.set_xlabel(xlabel if xlabel is not None else ("Target" if target_vs_predictions else "x"))
     ax.set_ylabel(ylabel if ylabel is not None else ("Predictions" if target_vs_predictions else "y"))
+    if not show_xlabel:
+        ax.set_xlabel("")
+    if not show_ylabel:
+        ax.set_ylabel("")
+    if not show_xticklabels:
+        ax.tick_params(axis="x", which="both", labelbottom=False, labeltop=False)
+    if not show_yticklabels:
+        ax.tick_params(axis="y", which="both", labelleft=False, labelright=False)
     if title is not None:
         ax.set_title(title)
 
