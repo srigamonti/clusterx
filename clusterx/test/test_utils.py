@@ -3,6 +3,7 @@
 import json
 
 import matplotlib.axes as axes_module
+import matplotlib.figure as figure_module
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -478,6 +479,156 @@ def test_plot_columns_axis_name_and_ticklabel_visibility_toggles(parent_lattice,
     finally:
         if "fig" in captured:
             real_close(captured["fig"])
+
+
+def test_plot_columns_savefig_uses_configured_dpi(parent_lattice, tmp_path, monkeypatch):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    output_filepath = tmp_path / "plot.png"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    real_savefig = figure_module.Figure.savefig
+
+    def capture_savefig(self, fname, *args, **kwargs):
+        captured["fname"] = fname
+        captured["dpi"] = kwargs.get("dpi")
+        return real_savefig(self, fname, *args, **kwargs)
+
+    monkeypatch.setattr(figure_module.Figure, "savefig", capture_savefig)
+
+    plot_columns(
+        source_filepath=str(sset_filepath),
+        show_plot=False,
+        savefig=str(output_filepath),
+        dpi=180,
+        series=[{"xcolumn": "x", "ycolumn": "y"}],
+    )
+
+    assert captured["fname"] == str(output_filepath)
+    assert captured["dpi"] == 180.0
+    assert output_filepath.exists()
+
+
+@pytest.mark.parametrize("show_legend_frame", [True, False])
+def test_plot_columns_controls_legend_frame_visibility(parent_lattice, tmp_path, monkeypatch, show_legend_frame):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    real_close = plt.close
+
+    def capture_close(fig=None):
+        captured["fig"] = fig if fig is not None else plt.gcf()
+
+    monkeypatch.setattr(plt, "close", capture_close)
+    try:
+        plot_columns(
+            source_filepath=str(sset_filepath),
+            legend=True,
+            show_legend_frame=show_legend_frame,
+            show_plot=False,
+            series=[{"xcolumn": "x", "ycolumn": "y", "label": "fit"}],
+        )
+
+        fig = captured["fig"]
+        ax = fig.axes[0]
+        legend = ax.get_legend()
+        assert legend is not None
+        assert legend.get_frame_on() is show_legend_frame
+    finally:
+        if "fig" in captured:
+            real_close(captured["fig"])
+
+
+@pytest.mark.parametrize(
+    "legend_location,expected_loc",
+    [
+        ("upper left", "upper left"),
+        ("upper center", "upper center"),
+        ("upper right", "upper right"),
+        ("lower_center", "lower center"),
+    ],
+)
+def test_plot_columns_controls_legend_location(parent_lattice, tmp_path, monkeypatch, legend_location, expected_loc):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    original_legend = axes_module.Axes.legend
+
+    def capture_legend(self, *args, **kwargs):
+        captured["loc"] = kwargs.get("loc")
+        return original_legend(self, *args, **kwargs)
+
+    monkeypatch.setattr(axes_module.Axes, "legend", capture_legend)
+
+    plot_columns(
+        source_filepath=str(sset_filepath),
+        legend=True,
+        legend_location=legend_location,
+        show_plot=False,
+        series=[{"xcolumn": "x", "ycolumn": "y", "label": "fit"}],
+    )
+
+    assert captured["loc"] == expected_loc
+
+
+def test_plot_columns_rejects_invalid_legend_location(parent_lattice, tmp_path):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    with pytest.raises(ValueError, match="legend_location must be one of"):
+        plot_columns(
+            source_filepath=str(sset_filepath),
+            legend=True,
+            legend_location="top right",
+            show_plot=False,
+            series=[{"xcolumn": "x", "ycolumn": "y", "label": "fit"}],
+        )
 
 
 def test_plot_columns_target_vs_predictions_symlog_axes(parent_lattice, tmp_path, monkeypatch):

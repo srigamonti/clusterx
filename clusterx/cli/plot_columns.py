@@ -71,6 +71,33 @@ def _infer_symlog_linthresh(values: np.ndarray) -> float:
     return 0.1 * float(np.min(nonzero_abs))
 
 
+def _normalize_legend_location(value: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError("legend_location must be a string.")
+
+    key = value.strip().lower().replace("-", " ").replace("_", " ")
+    key = " ".join(key.split())
+
+    canonical = {
+        "best",
+        "upper right",
+        "upper left",
+        "lower left",
+        "lower right",
+        "right",
+        "center left",
+        "center right",
+        "lower center",
+        "upper center",
+        "center",
+    }
+    if key in canonical:
+        return key
+
+    valid = sorted(canonical)
+    raise ValueError("legend_location must be one of: " + ", ".join(valid))
+
+
 def _shared_target_prediction_limits(
     x_values: np.ndarray,
     y_values: np.ndarray,
@@ -195,6 +222,8 @@ def _shared_target_prediction_limits(
     show_xticklabels=("Show x-axis tick labels (numbers).", "option", None, bool),
     show_yticklabels=("Show y-axis tick labels (numbers).", "option", None, bool),
     legend=("Show legend if True.", "option", None, bool),
+    show_legend_frame=("Show frame box around legend.", "option", None, bool),
+    legend_location=("Legend position using Matplotlib names, e.g. upper left/best.", "option", None, str),
     show_plot=("Display the plot window if True.", "option", None, bool),
     savefig=(
         "Filepath to save generated figure (e.g. plot.png).",
@@ -202,6 +231,7 @@ def _shared_target_prediction_limits(
         "sf",
         str,
     ),
+    dpi=("Resolution in dots per inch used when saving figures.", "option", None, float),
     figdata_fname=(
         "Filepath to save plotted data. Supported extensions: .npz, .json, .txt, .dat.",
         "option",
@@ -248,8 +278,11 @@ def plot_columns(
     show_xticklabels: bool = True,
     show_yticklabels: bool = True,
     legend: bool = True,
+    show_legend_frame: bool = True,
+    legend_location: str = "best",
     show_plot: bool = True,
     savefig: Optional[str] = None,
+    dpi: float = 300.0,
     figdata_fname: Optional[str] = None,
     series: Optional[List[Dict[str, Any]]] = None,
 ):
@@ -297,8 +330,12 @@ def plot_columns(
     - ``show_xticklabels`` / ``show_yticklabels`` (bool): show/hide numeric
         tick labels on each axis.
     - ``legend`` (bool): show legend.
+    - ``show_legend_frame`` (bool): show/hide the legend frame box.
+    - ``legend_location`` (str): legend position using Matplotlib ``loc``
+        names (e.g. ``"best"``, ``"upper left"``, ``"lower center"``).
     - ``show_plot`` (bool): show interactive window.
     - ``savefig`` (str, optional): output figure path (e.g. ``plot.png``).
+    - ``dpi`` (float): resolution used for ``savefig`` (default: ``300``).
     - ``figdata_fname`` (str, optional): data export path
         (``.json/.npz/.txt/.dat``).
 
@@ -375,6 +412,7 @@ def plot_columns(
             legend = true
             show_plot = true
             savefig = "plot.png"
+            dpi = 300
             # target_vs_predictions = true  # Square parity plot with y=x
             # width = 7.5                   # In target_vs_predictions: uses (width, width)
             # loglog = true                 # Logarithmic x/y axes
@@ -384,6 +422,8 @@ def plot_columns(
             # grid_axis = "both"
             # show_xlabel = false
             # show_xticklabels = false
+            # show_legend_frame = false
+            # legend_location = "upper right"
 
             [[plot_columns.series]]
             xcolumn = "frconc_binary"
@@ -500,6 +540,9 @@ def plot_columns(
     if height is not None and float(height) <= 0:
         raise ValueError("height must be positive when provided.")
 
+    if float(dpi) <= 0:
+        raise ValueError("dpi must be positive.")
+
     yfactor = float(yfactor)
 
     if loglog and symlog:
@@ -518,6 +561,8 @@ def plot_columns(
         grid_style = {}
     elif not isinstance(grid_style, dict):
         raise ValueError("grid_style must be a dictionary when provided.")
+
+    legend_location_normalized = _normalize_legend_location(legend_location)
 
     # Cache DSGenerator objects by filepath to avoid repeated I/O
     dsg_cache: Dict[str, DSGenerator] = {}
@@ -540,6 +585,9 @@ def plot_columns(
         "show_ylabel": show_ylabel,
         "show_xticklabels": show_xticklabels,
         "show_yticklabels": show_yticklabels,
+        "show_legend_frame": show_legend_frame,
+        "legend_location": legend_location_normalized,
+        "dpi": float(dpi),
         "series": [],
     }
 
@@ -914,12 +962,12 @@ def plot_columns(
         ax.grid(True, which=grid_which, axis=grid_axis, **grid_style)
 
     if legend:
-        ax.legend()
+        ax.legend(frameon=show_legend_frame, loc=legend_location_normalized)
 
     fig.tight_layout()
 
     if savefig:
-        fig.savefig(savefig, dpi=300)
+        fig.savefig(savefig, dpi=float(dpi))
 
     if figdata_fname is not None:
         ext = os.path.splitext(figdata_fname)[1].lower()
