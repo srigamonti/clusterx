@@ -653,6 +653,76 @@ def test_plot_columns_controls_legend_location(parent_lattice, tmp_path, monkeyp
     assert captured["loc"] == expected_loc
 
 
+def test_plot_columns_controls_legend_handle_spacing(parent_lattice, tmp_path, monkeypatch):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    original_legend = axes_module.Axes.legend
+
+    def capture_legend(self, *args, **kwargs):
+        captured["handlelength"] = kwargs.get("handlelength")
+        captured["handletextpad"] = kwargs.get("handletextpad")
+        return original_legend(self, *args, **kwargs)
+
+    monkeypatch.setattr(axes_module.Axes, "legend", capture_legend)
+
+    plot_columns(
+        source_filepath=str(sset_filepath),
+        legend=True,
+        legend_handlelength=3.0,
+        legend_handletextpad=0.7,
+        show_plot=False,
+        series=[{"xcolumn": "x", "ycolumn": "y", "label": "fit"}],
+    )
+
+    assert captured["handlelength"] == 3.0
+    assert captured["handletextpad"] == 0.7
+
+
+def test_plot_columns_rejects_negative_legend_handle_spacing(parent_lattice, tmp_path):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    with pytest.raises(ValueError, match="legend_handlelength must be non-negative"):
+        plot_columns(
+            source_filepath=str(sset_filepath),
+            legend_handlelength=-0.1,
+            show_plot=False,
+            series=[{"xcolumn": "x", "ycolumn": "y", "label": "fit"}],
+        )
+
+    with pytest.raises(ValueError, match="legend_handletextpad must be non-negative"):
+        plot_columns(
+            source_filepath=str(sset_filepath),
+            legend_handletextpad=-0.1,
+            show_plot=False,
+            series=[{"xcolumn": "x", "ycolumn": "y", "label": "fit"}],
+        )
+
+
 def test_plot_columns_rejects_invalid_legend_location(parent_lattice, tmp_path):
     sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
     sset.set_property_values(

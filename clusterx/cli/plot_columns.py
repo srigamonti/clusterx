@@ -226,6 +226,8 @@ def _shared_target_prediction_limits(
     legend=("Show legend if True.", "option", None, bool),
     show_legend_frame=("Show frame box around legend.", "option", None, bool),
     legend_location=("Legend position using Matplotlib names, e.g. upper left/best.", "option", None, str),
+    legend_handlelength=("Legend handle length in font-size units.", "option", None, float),
+    legend_handletextpad=("Legend padding between handle and text in font-size units.", "option", None, float),
     show_plot=("Display the plot window if True.", "option", None, bool),
     savefig=(
         "Filepath to save generated figure (e.g. plot.png).",
@@ -284,6 +286,8 @@ def plot_columns(
     legend: bool = True,
     show_legend_frame: bool = True,
     legend_location: str = "best",
+    legend_handlelength: Optional[float] = None,
+    legend_handletextpad: Optional[float] = None,
     show_plot: bool = True,
     savefig: Optional[str] = None,
     dpi: float = 300.0,
@@ -339,6 +343,10 @@ def plot_columns(
     - ``show_legend_frame`` (bool): show/hide the legend frame box.
     - ``legend_location`` (str): legend position using Matplotlib ``loc``
         names (e.g. ``"best"``, ``"upper left"``, ``"lower center"``).
+    - ``legend_handlelength`` (float, optional): handle length passed to
+        Matplotlib ``legend(handlelength=...)``.
+    - ``legend_handletextpad`` (float, optional): spacing between legend
+        handles and labels passed to ``legend(handletextpad=...)``.
     - ``show_plot`` (bool): show interactive window.
     - ``savefig`` (str, optional): output figure path (e.g. ``plot.png``).
     - ``dpi`` (float): resolution used for ``savefig`` (default: ``300``).
@@ -573,6 +581,16 @@ def plot_columns(
     if yticks is not None and not isinstance(yticks, list):
         raise ValueError("yticks must be a list when provided.")
 
+    if legend_handlelength is not None:
+        legend_handlelength = float(legend_handlelength)
+        if legend_handlelength < 0:
+            raise ValueError("legend_handlelength must be non-negative when provided.")
+
+    if legend_handletextpad is not None:
+        legend_handletextpad = float(legend_handletextpad)
+        if legend_handletextpad < 0:
+            raise ValueError("legend_handletextpad must be non-negative when provided.")
+
     legend_location_normalized = _normalize_legend_location(legend_location)
 
     # Cache DSGenerator objects by filepath to avoid repeated I/O
@@ -600,6 +618,8 @@ def plot_columns(
         "yticks": yticks,
         "show_legend_frame": show_legend_frame,
         "legend_location": legend_location_normalized,
+        "legend_handlelength": legend_handlelength,
+        "legend_handletextpad": legend_handletextpad,
         "dpi": float(dpi),
         "series": [],
     }
@@ -980,7 +1000,15 @@ def plot_columns(
         ax.grid(True, which=grid_which, axis=grid_axis, **grid_style)
 
     if legend:
-        ax.legend(frameon=show_legend_frame, loc=legend_location_normalized)
+        legend_kwargs = {
+            "frameon": show_legend_frame,
+            "loc": legend_location_normalized,
+        }
+        if legend_handlelength is not None:
+            legend_kwargs["handlelength"] = legend_handlelength
+        if legend_handletextpad is not None:
+            legend_kwargs["handletextpad"] = legend_handletextpad
+        ax.legend(**legend_kwargs)
 
     fig.tight_layout()
 
