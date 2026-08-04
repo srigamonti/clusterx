@@ -321,7 +321,7 @@ class Model:
         else:
             prediction = self.predict_partial(structure, 0, True)
             for i in range(1, len(structure.sigmas)):
-                prediction += self.predict_partial(structure, i, True)
+                prediction += self.predict_partial(structure, i, True) - self.intercept
             return prediction
 
     def predict_partial(self, structure: Structure, index: int, divide_n_body: bool = False):
@@ -468,16 +468,12 @@ class Model:
             for diagonal supercell transformation.
         """
         correlations_diff = self.predict_correlations_diff(structure, index, old_sigma, new_sigma, reduce_structure)
-        return self.predict_on_correlations(correlations_diff)
+        return self.predict_on_correlations(correlations_diff) - self.intercept
 
     def predict_on_correlations(self, correlations: np.array):
         """Using calculated correlations, return a prediction."""
         if self.estimator is not None:
-            # Intercept must be subctracted from computation of energy change.
-            try:
-                return self.estimator.predict(correlations.reshape(1, -1))[0] - self.estimator.intercept_
-            except AttributeError:
-                return self.estimator.predict(correlations.reshape(1, -1))[0] - self.estimator[-1].intercept_
+            return self.estimator.predict(correlations.reshape(1, -1))[0]
         else:
             return np.dot(self.ecis, correlations)
 

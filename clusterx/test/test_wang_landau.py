@@ -124,6 +124,7 @@ def test_nonlinear(plat_perov, corrc_perov):
     y = np.random.uniform(low=-1, high=1, size=(100,))
     pipeline.fit(X, y)
     model = Model(corrc_perov, "energy", estimator=pipeline)
+    print("Intercept:", model.intercept)
 
     p = [4, 4, 4]
     scell = SuperCell(plat_perov, p)
@@ -139,7 +140,7 @@ def test_nonlinear(plat_perov, corrc_perov):
             energy_factor=1.01,
         )
         cdos = wl.wang_landau_sampling(
-            energy_range=[-0.1, 0.0],
+            energy_range=[0.3, 0.4],
             energy_bin_width=0.01,
             f_range=[4, 1.9],
             flatness_conditions=[[0.5, 2], [0.5, 1]],

@@ -51,7 +51,7 @@ def model_estimator(plat, cpool, corrc):
     mult = cpool.get_multiplicities()
     estimator = LinearRegression(fit_intercept=True)
     estimator.coef_ = np.array(mult)
-    estimator.intercept_ = 0.0
+    estimator.intercept_ = 1.0
 
     corrc = CorrelationsCalculator("trigonometric", plat, cpool)
     model = Model(corrc, "energy", estimator=estimator)
@@ -238,8 +238,6 @@ def test_metropolis(plat, model):
     )
     traj_full = mc_full.metropolis(temperature=100, no_of_sampling_steps=nsteps)
 
-    mc_swap = MonteCarlo(
-        energy_model=model, scell=scell, nsubs=nsubs, predict_swap=True, seed=seed
-    )
+    mc_swap = MonteCarlo(energy_model=model, scell=scell, nsubs=nsubs, predict_swap=True, seed=seed)
     traj_swap = mc_swap.metropolis(temperature=100, no_of_sampling_steps=nsteps)
     np.testing.assert_allclose(traj_swap.get_energies(), traj_full.get_energies())
