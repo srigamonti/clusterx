@@ -49,9 +49,7 @@ def scell(plat):
 @pytest.fixture
 def structure(plat, scell):
     rng = np.random.default_rng(42)
-    return scell.gen_random_structure(
-        nsubs=int(np.prod(scell.get_index()) / 2), rng=rng
-    )
+    return scell.gen_random_structure(nsubs=int(np.prod(scell.get_index()) / 2), rng=rng)
 
 
 @pytest.fixture
@@ -108,9 +106,21 @@ def model_estimator(cpool, corrc):
     mult = cpool.get_multiplicities()
     estimator = LinearRegression()
     estimator.coef_ = mult
-    estimator.intercept_ = 0.0
+    estimator.intercept_ = 1.0
     model = Model(corrc, "energy", estimator=estimator)
     return model
+
+
+def test_estimator_direct(corrc, model_estimator, structures_set, scell):
+    model = model_estimator
+    for structure in structures_set:
+        correlations = corrc.get_cluster_correlations(structure)
+        pred = model.estimator.predict(correlations.reshape(1, -1))
+        pred_direct = model.predict(structure)
+        structure.init_reduced_structure(scell)
+        pred_reduced = model.predict(structure, reduce_structure=True)
+        np.testing.assert_allclose(pred, pred_direct)
+        np.testing.assert_allclose(pred, pred_reduced)
 
 
 def test_raise_init(cpool, corrc):
@@ -192,21 +202,17 @@ def test_compute_predictions_cli_dsgenerator(dummy_ce_11, plat, tmp_path):
 
 
 def test_ecis_estimator_init(model, model_estimator, structure):
-    prediction = model.predict(structure)
+    prediction = model.predict(structure) + model_estimator.estimator.intercept_
     prediction_estimator = model_estimator.predict(structure)
     np.testing.assert_allclose(prediction_estimator, prediction)
 
 
-@pytest.mark.parametrize(
-    "prop,shape", [("dummy_ce_11", ()), (["dummy_ce_11", "dummy_ce_12"], (2,))]
-)
+@pytest.mark.parametrize("prop,shape", [("dummy_ce_11", ()), (["dummy_ce_11", "dummy_ce_12"], (2,))])
 @pytest.mark.parametrize(
     "selector_type,selector_opts",
     [("identity", {}), ("lasso_cv", {}), ("skl_lasso_cv", {})],
 )
-def test_model_builder(
-    structures_set, cpool, corrc, prop, shape, selector_type, selector_opts
-):
+def test_model_builder(structures_set, cpool, corrc, prop, shape, selector_type, selector_opts):
     mb = ModelBuilder(
         basis="trigonometric",
         selector_type=selector_type,
