@@ -9,11 +9,12 @@ from typing import List
 import numpy as np
 from ase.calculators.calculator import Calculator
 from ase.db import connect
+from ase.io import read, write
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.structure import Structure
 from clusterx.super_cell import SuperCell
-from clusterx.utils import calculate_trafo_matrix
+from clusterx.utils import calculate_trafo_matrix, SuperCellIndexSearcher
 
 
 class StructuresSet:
@@ -84,15 +85,47 @@ class StructuresSet:
         else:
             self._db = None
 
-    def _init_from_db(self, quick_parse=False):
-        from clusterx.utils import get_cl_idx_sc
+    @classmethod
+    def from_file(cls, filepath: str) -> Structure:
+        """
+        Load a StructuresSet object from a serialized file.
 
+        Supports both SQLite and JSON-based serialization formats. The file is expected
+        to have been created using the `Structure.serialize()` method.
+
+        Supported formats:
+        - `.db`.   : ASE-compatible SQLite database file.
+        - `.json`  : ASE-compatible JSON database file.
+        - `.xyz`   : extended xyz file.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the serialized file. The format is inferred from the file extension.
+
+        Returns
+        -------
+        StructuresSet
+            A reconstructed StructuresSet object based on the contents of the file.
+
+        Raises
+        ------
+        ValueError
+            If the file extension is not supported.
+        """
+        file_ext = os.path.splitext(filepath)[1].lower()
+        if file_ext == ".db" or file_ext == ".json":
+            return cls(filepath=filepath)
+        elif file_ext == ".xyz":
+            return cls._load_from_xyz(filepath)
+        else:
+            raise ValueError(f"Unsupported file format: {file_ext}")
+
+    def _init_from_db(self, quick_parse=False):
         self._db = connect(self._db_fname)
-        # _folders = self._db.metadata["folders"]
         _folders = []
         for row in self._db.select():
             _folders.append(row.folder)
-        # _folders = self._db.metadata.get("folders", [])
         _props = self._db.metadata.get("properties", {})
 
         plat_dict = self._db.metadata.get("parent_lattice")
@@ -123,12 +156,33 @@ class StructuresSet:
             if quick_parse:
                 s = Structure(scell, decoration=atoms.get_atomic_numbers())
             else:
-                idxs = get_cl_idx_sc(
-                    scell.get_positions(), atoms.get_positions(), method=1
-                )
+                searcher = SuperCellIndexSearcher(scell.get_positions())
+                idxs = searcher.get_cluster_indices(atoms.get_positions())
                 s = Structure(scell, decoration=atoms.get_atomic_numbers()[idxs])
 
             self.add_structure(s, folder=_folders[i], **props)
+
+    @classmethod
+    def _load_from_xyz(cls, filepath: str) -> Structure:
+        atoms_list = read(filepath, format="extxyz", index=":")
+        plat = None
+        for atoms in atoms_list:  # search for plat anywhere in file
+            if "parent_lattice" in atoms.info:
+                plat = ParentLattice.plat_from_dict(atoms.info["parent_lattice"])
+                break
+        if plat is None:
+            raise RuntimeError(
+                f"'parent_lattice' key not found in {filepath}, "
+                "cannot build StructuresSet."
+            )
+        sset = cls(parent_lattice=plat)
+        for atoms in atoms_list:
+            tmat = atoms.info.pop("tmat")
+            super_cell = SuperCell(parent_lattice=plat, p=tmat)
+            structure = Structure(super_cell, decoration=atoms.get_atomic_numbers())
+            atoms.info.pop("parent_lattice", None)
+            sset.add_structure(structure, **atoms.info)
+        return sset
 
     def __iter__(self):
         self._iter = 0
@@ -684,13 +738,6 @@ class StructuresSet:
                 future.
 
         """
-        if ase_db_type is None:
-            ase_db_type = "extract_from_name"
-
-        self._db_fname = filepath
-        nstr = self.get_nstr()
-        images = self.get_images(rm_vac=rm_vac)
-
         if not overwrite and os.path.isfile(filepath):
             warnings.warn(
                 f"File '{filepath}' already exists. "
@@ -698,12 +745,34 @@ class StructuresSet:
             )
             return  # Early exit if not overwriting
 
-        if nstr == 0:
+        if self.get_nstr() == 0:
             warnings.warn(
                 "The StructuresSet object does not contain any structure. Nothing was written."
             )
             return  # Early exit if sset is empty
 
+        file_ext = os.path.splitext(filepath)[1].lower()
+        if file_ext == ".db" or file_ext == ".json":
+            self._write_db(filepath, ase_db_type, rm_vac)
+        elif file_ext == ".xyz":
+            self._write_xyz(filepath, rm_vac)
+        else:
+            raise ValueError(f"Unsupported file format: {file_ext}")
+
+    def _write_xyz(self, filepath, rm_vac=False):
+        images = self.get_images(rm_vac=rm_vac)
+        images[0].info["parent_lattice"] = self._parent_lattice.as_dict()
+        for i in range(len(images)):
+            props = {k: v[i] for k, v in self._props.items()}
+            images[i].info.update(props)
+        write(filepath, images, format="extxyz")
+
+    def _write_db(self, filepath, ase_db_type=None, rm_vac=False):
+        self._db_fname = filepath
+        if ase_db_type is None:
+            ase_db_type = "extract_from_name"
+        images = self.get_images(rm_vac=rm_vac)
+        nstr = len(images)
         with connect(filepath, type=ase_db_type, append=False) as db:
             for i in range(nstr):
                 props = {k: v[i] for k, v in self._props.items()}

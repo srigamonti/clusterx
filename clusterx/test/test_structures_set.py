@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from ase.build import bulk
 from ase.calculators.emt import EMT
+from ase.io import read
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.structures_set import StructuresSet
@@ -18,6 +19,12 @@ from clusterx.super_cell import SuperCell
 def parent_lattice():
     cu = bulk("Cu")
     return ParentLattice(atoms=cu, symbols=[["Cu", "Au"]])
+
+
+@pytest.fixture
+def parent_lattice_vac():
+    cu = bulk("Cu")
+    return ParentLattice(atoms=cu, symbols=[["Cu", "X"]])
 
 
 @pytest.fixture
@@ -32,6 +39,17 @@ def structures_set_empty(parent_lattice):
 
 @pytest.fixture
 def structures_set(structures_set_empty, super_cell):
+    np.random.seed(10)
+    nstr1 = 10
+    for i in range(nstr1):
+        structures_set_empty.add_structure(super_cell.gen_random_structure())
+    return structures_set_empty
+
+
+@pytest.fixture
+def structures_set_vac(parent_lattice_vac, super_cell):
+    super_cell = SuperCell(parent_lattice_vac, 3)
+    structures_set_empty = StructuresSet(parent_lattice=parent_lattice_vac)
     np.random.seed(10)
     nstr1 = 10
     for i in range(nstr1):
@@ -177,23 +195,22 @@ def test_serialize_load_sqlite(structures_set, tmp_path):
     np.testing.assert_array_equal(sset_loaded.get_property_values("set_prop"), [1.0] * len(structures_set))
 
 
-def test_serialize_load_xyz(structures_set, tmp_path):
-    # only a temporary test, to suggest how new code could use .extxyz
-    import time
-    from ase.io import write, read
-
+def test_serialize_load_xyz(structures_set_vac, tmp_path):
+    structures_set = structures_set_vac
     filepath = str(tmp_path / "sset.xyz")
     structures_set.set_property_values(property_name="set_prop", property_vals=[1.0] * len(structures_set))
-    images = structures_set.get_images()
-    print("serializing xyz...")
-    t = time.time()
-    write(filepath, images)
-    print(time.time() - t, " seconds")
-    print("loading...")
-    t = time.time()
-    images_loaded = read(filepath, ":")
-    print(time.time() - t, " seconds")
-    assert len(images_loaded) == len(structures_set)
+    structures_set.serialize(filepath=filepath, overwrite=True, rm_vac=False)
+    sset_loaded = StructuresSet.from_file(filepath=filepath)
+    assert len(sset_loaded) == len(structures_set)
+    np.testing.assert_array_equal(sset_loaded.get_property_values("set_prop"), [1.0] * len(structures_set))
+
+    for structure, structure_loaded in zip(structures_set, sset_loaded):
+        assert structure == structure_loaded
+
+    atoms_list = read(filepath, ":")
+    assert len(atoms_list) == len(structures_set)
+    for atoms in atoms_list:
+        assert atoms.info["set_prop"] == 1.0
 
 
 def test_property_calculation_with_ase_calculator(structures_set):

@@ -3,11 +3,13 @@
 import pytest
 from ase import Atoms
 from ase.data import chemical_symbols
+from ase.io import read
 import numpy as np
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
+from clusterx.utils import dict_compare
 
 
 @pytest.fixture
@@ -42,6 +44,8 @@ def structure_random(super_cell: SuperCell):
 
 def test_get_atoms(structure):
     atoms = structure.get_atoms()
+    sigmas = atoms.arrays["sigmas"]
+    np.testing.assert_array_equal(sigmas, [0] * 9)
     assert isinstance(atoms, Atoms)
     numbers = structure.get_atomic_numbers()
     assert len(numbers) == 9
@@ -49,6 +53,8 @@ def test_get_atoms(structure):
     assert len(symbols) == 9
     atoms = structure.get_atoms(ignore_observer_atoms=True)
     assert len(atoms) == 6
+    sigmas = atoms.arrays["sigmas"]
+    np.testing.assert_array_equal(sigmas, [0] * 6)
 
 
 def test_random_flips(structure_random: Structure):
@@ -110,6 +116,21 @@ def test_serialize_load(parent_lattice, p, tmp_path):
     structure.serialize(filepath=filepath, fmt=None)
     structure_loaded = Structure.from_file(filepath)
     assert structure == structure_loaded
+
+
+def test_serialize_load_xyz(parent_lattice, tmp_path):
+    # ensure no bottleneck with large supercell size
+    super_cell = SuperCell(parent_lattice, (2, 2, 2))
+    structure = Structure(super_cell, decoration=[1] * len(super_cell))
+    filepath = tmp_path / "structure.xyz"
+    structure.serialize(filepath=filepath, fmt=None)
+    structure_loaded = Structure.from_file(filepath)
+    assert structure == structure_loaded
+
+    atoms = read(filepath)
+    assert len(atoms) == len(structure)
+    np.testing.assert_array_equal(structure.sigmas, atoms.arrays["sigmas"])
+    np.testing.assert_array_equal(structure.get_transformation(), atoms.info["tmat"])
 
 
 def test_sigma_grid_pristine(super_cell):
@@ -183,3 +204,54 @@ def test_sigma_grid_non_diag(parent_lattice):
     super_cell = SuperCell(parent_lattice, p)
     with pytest.raises(ValueError):
         Structure.from_sigma_grid(super_cell, [])
+
+
+def test_attributes():
+    cell = [[4, 0, 0], [0, 1, 0], [0, 0, 5]]
+    positions = [[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0]]
+    pbc = [True, True, False]
+
+    pri = Atoms(["H", "Ba", "H", "Ba"], positions=positions, cell=cell, pbc=pbc)
+    su1 = Atoms(["C", "Ba", "H", "Ba"], positions=positions, cell=cell, pbc=pbc)
+    su2 = Atoms(["H", "He", "H", "He"], positions=positions, cell=cell, pbc=pbc)
+    su3 = Atoms(["H", "N", "H", "N"], positions=positions, cell=cell, pbc=pbc)
+
+    plat = ParentLattice(pri, substitutions=[su1, su2, su3], pbc=pbc)
+
+    scell = SuperCell(plat, np.array([(1, 0, 0), (0, 3, 0), (0, 0, 1)]))
+    symbols = ["C", "He", "H", "Ba", "H", "He", "H", "N", "H", "Ba", "H", "He"]
+    s = Structure(scell, decoration_symbols=symbols)
+
+    np.testing.assert_array_equal(s.get_tags(), [1, 2, 0, 2, 1, 2, 0, 2, 1, 2, 0, 2])
+    assert s.get_natoms() == 12
+    assert s.get_n_sub_sites() == 2
+    np.testing.assert_array_equal(s.get_substitutional_sites(), [0, 1, 3, 4, 5, 7, 8, 9, 11])
+    np.testing.assert_array_equal(s.get_substitutional_tags(), [1, 2])
+    np.testing.assert_array_equal(s.get_spectator_sites(), [2, 6, 10])
+    np.testing.assert_array_equal(s.get_spectator_tags(), [0])
+    assert dict_compare(s.get_nsites_per_type(), {0: 3, 1: 3, 2: 6})
+    assert dict_compare(
+        s.get_sites(),
+        {
+            0: np.array([1, 6]),
+            1: np.array([56, 2, 7]),
+            2: np.array([1]),
+            3: np.array([56, 2, 7]),
+            4: np.array([1, 6]),
+            5: np.array([56, 2, 7]),
+            6: np.array([1]),
+            7: np.array([56, 2, 7]),
+            8: np.array([1, 6]),
+            9: np.array([56, 2, 7]),
+            10: np.array([1]),
+            11: np.array([56, 2, 7]),
+        },
+    )
+    assert dict_compare(s.get_idx_subs(), {0: np.array([1]), 1: np.array([1, 6]), 2: np.array([56, 2, 7])})
+    np.testing.assert_array_equal(s.get_atom_indices_for_site_type(0)[0], [2, 6, 10])
+    np.testing.assert_array_equal(s.get_atom_indices_for_site_type(1)[0], [0, 4, 8])
+    np.testing.assert_array_equal(s.get_atom_indices_for_site_type(2)[0], [1, 3, 5, 7, 9, 11])
+    assert s.get_index() == 3
+    np.testing.assert_array_equal(s.get_transformation(), [[1, 0, 0], [0, 3, 0], [0, 0, 1]])
+    np.testing.assert_array_equal(s.get_atomic_numbers(), [6, 2, 1, 56, 1, 2, 1, 7, 1, 56, 1, 2])
+    np.testing.assert_array_equal(s.get_sigmas(), [1, 1, 0, 0, 0, 1, 0, 2, 0, 0, 0, 1])
