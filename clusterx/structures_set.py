@@ -447,7 +447,8 @@ class StructuresSet:
 
            {"prop_name_1": [p10, p11, ...], "prop_name_2": [p20,p21, ..], ...}
 
-        where ``"prop_name_i"`` is the name of the property ``i``, and ``pij`` is the value of property ``i`` for structure ``j``.
+        where ``"prop_name_i"`` is the name of the property ``i``,
+        and ``pij`` is the value of property ``i`` for structure ``j``.
 
         This dictionary is returned by this method.
         """
@@ -512,7 +513,11 @@ class StructuresSet:
             keyword arguments directly passed to ``property_func`` function.
             You may call this method as::
 
-                sset_instance.calculate_property(property_name="my_prop", property_func="my_func", arg1=arg1, ..., argN=argN)
+                sset_instance.calculate_property(
+                    property_name="my_prop",
+                    property_func="my_func",
+                    arg1=arg1, ..., argN=argN
+                )
 
             where ``arg1`` to  ``argN`` are the keyword arguments passed to the
             ``my_func(i, structure, **kwargs)`` function.
@@ -705,7 +710,8 @@ class StructuresSet:
         ``ase_db_type``: string or None, default is None
             Accepted values for the ASE database type:
 
-            - ``'json'``: JSON format (saves to human readable json file. Serialization in this format can be extremely slow for medium to large sets)
+            - ``'json'``: JSON format (saves to human readable json file.
+                Serialization in this format can be extremely slow for medium to large sets)
             - ``'db'``: SQLite format (saves to a binary file)
             - ``'postgresql'``: PostgreSQL database (server based)
             - ``'mysql'``: MySQL database (server based)
@@ -773,7 +779,9 @@ class StructuresSet:
                 )
 
             db.metadata = {
-                "folders": self._folders,  # "folders" must be removed from the metadata, must stay only on the structures, as the properties
+                # "folders" must be removed from the metadata,
+                # must stay only on the structures, as the properties
+                "folders": self._folders,
                 "db_fname": self._db_fname,
                 "nstr": self.get_nstr(),
                 "parent_lattice": self._parent_lattice.as_dict(),
@@ -852,7 +860,8 @@ class StructuresSet:
         (i.e., that obtained from ``StructureSet.get_db_fname()``), under the
         key ``"data": {"properties": { ... }}`` dictionary for every structure. For instance::
 
-             "data": {"properties": {"formation_energy_per_site": -0.05788398131602701, "total_energy": -9824740.09590308}},
+             "data": {"properties": {"formation_energy_per_site": -0.05788398131602701,
+                                     "total_energy": -9824740.09590308}},
 
         where ``"formation_energy_per_site"`` and  ``"total_energy"`` here are the
         string value of the parameter ``property_name`` in the call to ``read_property_values()``.

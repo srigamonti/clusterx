@@ -28,10 +28,11 @@ class SuperCell(ParentLattice):
     A :class:`SuperCell <clusterx.super_cell.SuperCell>` object acts as a blue-print for the creation of structures
     with arbitrary decorations.
 
-    The :class:`SuperCell <clusterx.super_cell.SuperCell>` class inherits from the :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` class. Therefore,
-    all methods available to the :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` class are available to the
-    :class:`SuperCell <clusterx.super_cell.SuperCell>` class. Refer to the documentation of :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` for more
-    methods.
+    The :class:`SuperCell <clusterx.super_cell.SuperCell>` class inherits from
+    the :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` class. Therefore,
+    all methods available to the :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` class are available to
+    the :class:`SuperCell <clusterx.super_cell.SuperCell>` class. Refer to the documentation of
+    :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` for more methods.
 
     **Parameters:**
 
@@ -45,10 +46,9 @@ class SuperCell(ParentLattice):
         the matrix :math:`S` defined by :math:`S = PV` where the rows of
         :math:`V` are the cartesian coordinates of the lattice
         vectors of the ParentLattice object. That is, the value of
-        :py:meth:`ParentLattice.get_cell() <clusterx.parent_lattice.ParentLattice.get_cell()>`. The given matrix ``p`` must be compatible
-        with the periodic boundary conditions of the parent lattice, i.e. the
-        resulting super cell must not contain translations along the
-        non-periodic directions.
+        :py:meth:`ParentLattice.get_cell() <clusterx.parent_lattice.ParentLattice.get_cell()>`.
+        The given matrix ``p`` must be compatible with the periodic boundary conditions of the parent lattice,
+        i.e. the resulting super cell must not contain translations along the non-periodic directions.
     ``sort_key``: list of three integers, optional
         Create supercell object with sorted atomic coordinates
 
@@ -176,7 +176,8 @@ class SuperCell(ParentLattice):
         )  # Super-cell scaled positions
         spos = np.around(
             spos1, 6
-        )  # Wrapping in ASE doesn't always work. Here a hard external fix by rounding and then applying again ASE's style wrapping.
+        )  # Wrapping in ASE doesn't always work.
+        #Here a hard external fix by rounding and then applying again ASE's style wrapping.
 
         for i, periodic in enumerate(self.get_pbc()):
             if periodic:
@@ -205,7 +206,8 @@ class SuperCell(ParentLattice):
 
             _sp1 = np.around(
                 _sp1_, 5
-            )  # Wrapping in ASE doesn't always work. Here a hard external fix by rounding and then applying again ASE's style wrapping.
+            )  # Wrapping in ASE doesn't always work.
+            # Here a hard external fix by rounding and then applying again ASE's style wrapping.
 
             for i, periodic in enumerate(self.get_pbc()):
                 if periodic:
@@ -359,7 +361,8 @@ class SuperCell(ParentLattice):
 
         **Parameters:**
         ``nsubs``: None, int or dictionary (default: None)
-            If dictionary, the ``nsubs`` argument must have the format ``{site_type0:[nsub01,nsub02,...], site_type1: ...}``
+            If dictionary, the ``nsubs`` argument must have the format
+            ``{site_type0:[nsub01,nsub02,...], site_type1: ...}``
             where ``site_type#`` and ``nsub##`` are, respectively, an integer indicating
             the site type index and the number of substitutional species of each kind, as returned by
             ``SuperCell.get_sublattice_types()``.

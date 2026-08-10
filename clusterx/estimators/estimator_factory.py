@@ -10,7 +10,8 @@ class EstimatorFactory(object):
 
     @staticmethod
     def create(estimator_type, **estimator_opts):
-        """Create an estimator object from (or compatible with) the `scikit-learn <https://scikit-learn.org/stable/index.html>`_ library.
+        """Create an estimator object from (or compatible with) the
+        `scikit-learn <https://scikit-learn.org/stable/index.html>`_ library.
 
         **Parameters:**
 
@@ -26,11 +27,12 @@ class EstimatorFactory(object):
 
         **Examples:**
 
-        In both examples below, ``X`` is the input matrix, ``y`` is the vector of property values, and ``X0`` is the input
-        vector for a sample for which we want to predict the property value.
+        In both examples below, ``X`` is the input matrix, ``y`` is the vector of property values,
+        and ``X0`` is the input vector for a sample for which we want to predict the property value.
 
-        The precise meaning and the complete list of parameters in the ``estimator_opts`` dictionary is to be taken from the
-        documentation for the input parameters of the corresponding sklearn class (see example links below).
+        The precise meaning and the complete list of parameters in the ``estimator_opts``
+        dictionary is to be taken from the documentation for the input parameters
+        of the corresponding sklearn class (see example links below).
 
         Create a linear regression estimator object from the scikit-learn class
         `sklearn.linear_model.LinearRegression <https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html>`_::

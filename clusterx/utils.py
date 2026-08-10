@@ -838,7 +838,8 @@ def parent_lattice_to_atat(plat, out_fname="lat.in", for_str=False):
 
 
 class Exponential:
-    """Basic exponential object of type ``coefficient`` * ``x`` ^ ``exponent`` . Numerically evalueted using the method ``evaluate`` ( ``x`` ) .
+    """Basic exponential object of type ``coefficient`` * ``x`` ^ ``exponent``.
+    Numerically evaluated using the method ``evaluate`` ( ``x`` ) .
 
     **Parameters:**
 
@@ -1136,13 +1137,13 @@ def make_supercell(prim, P, wrap=True, tol=1e-5):
 
 
 def decorate_supercell(
-    scell: SuperCell,
+    scell,
     atoms: Atoms,
     tol: Optional[float] = 1e-5,
     tols: Optional[List[float]] = None,
     wrap: bool = False,
     wrap_eps: float = 0.05,
-) -> Structure:
+):
     """
     Create a clusterx.Structure by decorating a SuperCell with species taken
     from an ASE Atoms object.
@@ -1385,7 +1386,8 @@ def sset_equivalence_check(
     or *ii)* in terms of cluster basis representation (if a ClustersPool object
     or a correlation matrix is given).
 
-    In the first case, the `SymmetryEquivalenceCheck tool of ASE <https://wiki.fysik.dtu.dk/ase/ase/utils.html#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_ is used.
+    In the first case, the `SymmetryEquivalenceCheck` tool of ASE
+    <https://wiki.fysik.dtu.dk/ase/ase/utils.html#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_ is used.
 
     **Parameters:**
 
@@ -1560,7 +1562,8 @@ def atoms_equivalence_check(atoms, to_primitive=True, pretty_print=False):
 
     Equivalence is determined in terms of symmetry between structures
 
-    The `SymmetryEquivalenceCheck tool of ASE <https://wiki.fysik.dtu.dk/ase/ase/utils.html#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_ is used.
+    The `SymmetryEquivalenceCheck` tool of ASE
+    <https://wiki.fysik.dtu.dk/ase/ase/utils.html#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_ is used.
 
     **Parameters:**
 

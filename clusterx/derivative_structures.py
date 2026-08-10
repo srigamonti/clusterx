@@ -540,7 +540,8 @@ class DSGenerator:
         **Parameters:**
 
         value_func : callable
-            A function that takes a row of the DataFrame and optional keyword arguments, returning the value for the property.
+            A function that takes a row of the DataFrame and optional keyword arguments,
+            returning the value for the property.
         property_name : str
             The name of the property whose values are to be set.
             Either this or property_names must be provided.

@@ -175,9 +175,10 @@ class StructureSelector:
         set it with set_candidate_set().
 
         The routine takes each structure and adds it temporarily to the training set. With the enlarged training set
-        the population variance is computed. To compute the population variance, supply a 'method' parameter, and maybe a
-        'concentration' (see calculate_population_variance). Afterwards the structure is removed from the training set,
-        and the next structure is taken. The routine selects the structure that minimizes the population variance.
+        the population variance is computed. To compute the population variance,
+        supply a 'method' parameter, and maybe a 'concentration' (see calculate_population_variance).
+        Afterwards the structure is removed from the training set, and the next
+        structure is taken. The routine selects the structure that minimizes the population variance.
 
         Parameters:
 

@@ -177,7 +177,7 @@ class ClustersPool:
             sd = np.unique(np.around(np.sort(distances.flatten()), decimals=3))
             idmax2 = np.argwhere(np.abs(sd - dmax) < eps)
             dmax2 = sd[idmax2 + 1][0, 0]
-        except:
+        except IndexError:
             dmax2 = dmax
 
         if len(radii) > 0:
@@ -190,7 +190,8 @@ class ClustersPool:
         if len(radii) > 0:
             if np.amax(radii) > dmax2:
                 sys.exit(
-                    "Containing supercell is too small to find clusters pool. Read documentation for ClustersPool class."
+                    "Containing supercell is too small to find clusters pool."
+                    "Read documentation for ClustersPool class."
                 )
         else:
             radii = np.zeros(len(npoints), dtype=float)
@@ -961,7 +962,8 @@ class ClustersPool:
 
         if cluster_sites is not None and cluster_positions is not None:
             print(
-                "ERROR (clusterx.clusters.clusters_pool.gen_cluster_orbit): One of cluster_sites or cluster_positions must be None"
+                "ERROR (clusterx.clusters.clusters_pool.gen_cluster_orbit): "
+                "One of cluster_sites or cluster_positions must be None"
             )
 
         if cluster_sites is not None:
@@ -1099,13 +1101,13 @@ class ClustersPool:
             )
             info_str += "\n+-------------------------------------------------------------------------------+"
         else:
-            info_str += "\n+---------------------------------------------------------------------------------------------------+"
-            info_str += "\n|                                       Clusters Pool Info                                          |"
-            info_str += "\n+---------------------------------------------------------------------------------------------------+"
+            info_str += "\n+---------------------------------------------------------------------------------------------------+"  # noqa: E501
+            info_str += "\n|                                       Clusters Pool Info                                          |"  # noqa: E501
+            info_str += "\n+---------------------------------------------------------------------------------------------------+"  # noqa: E501
             info_str += "\n|{0:^19s}|{1:^19s}|{2:^19s}|{3:^19s}|{4:^19s}|".format(
                 "Index", "Nr. of points", "Radius", "Multiplicity", "ECI"
             )
-            info_str += "\n+---------------------------------------------------------------------------------------------------+"
+            info_str += "\n+---------------------------------------------------------------------------------------------------+"  # noqa: E501
         for i, cl in enumerate(self._cpool):
             if ecis is None:
                 info_str += "\n|{0:^19d}|{1:^19d}|{2:^19.3f}|{3:^19d}|".format(
@@ -1121,7 +1123,7 @@ class ClustersPool:
         if ecis is None:
             info_str += "\n+-------------------------------------------------------------------------------+\n"
         else:
-            info_str += "\n+---------------------------------------------------------------------------------------------------+\n"
+            info_str += "\n+---------------------------------------------------------------------------------------------------+\n"  # noqa: E501
 
         print(info_str)
         return info_str
@@ -1283,14 +1285,14 @@ class ClusterOrbit(ClustersPool):
             )  # Super-cell scaled positions
             sps_sc = np.around(
                 spos1, round_decimals
-            )  # Wrapping in ASE doesn't always work. Here a hard external fix by rounding and then applying again ASE's style wrapping.
+            )  # Wrapping in ASE doesn't always work. Here a hard external fix
+            # by rounding and then applying again ASE's style wrapping.
 
             for i, periodic in enumerate(super_cell.get_pbc()):
                 if periodic:
                     sps_sc[:, i] %= 1.0
                     sps_sc[:, i] %= 1.0
 
-            # sp0 = get_scaled_positions(p0, self._plat.get_cell(), pbc = super_cell.get_pbc(), wrap = False) # sp0: scaled cluster positions with respect to parent lattice
             sps_cl = np.around(
                 get_scaled_positions(
                     cluster_positions,
@@ -1458,7 +1460,8 @@ class ClusterOrbit(ClustersPool):
         )  # Super-cell scaled positions
         spos = np.around(
             spos1, 8
-        )  # Wrapping in ASE doesn't always work. Here a hard external fix by rounding and then applying again ASE's style wrapping.
+        )  # Wrapping in ASE doesn't always work. Here a hard external fix by
+        # rounding and then applying again ASE's style wrapping.
 
         for i, periodic in enumerate(pbc):
             if periodic:
@@ -1477,7 +1480,8 @@ class ClusterOrbit(ClustersPool):
 
         mult = len(
             orbit0
-        )  # Multiplicity of the cluster with respect to the point symmetries of the parent lattice (not the supercell). This is the standard cluster multiplicity used in literature.
+        )  # Multiplicity of the cluster with respect to the point symmetries
+        # of the parent lattice (not the supercell). This is the standard cluster multiplicity used in literature.
 
         reduced_orbit0 = []
 
@@ -1524,11 +1528,14 @@ class ClusterOrbit(ClustersPool):
         symmetries of the parent lattice.
 
         **Returns:**
-            2D array of shape (nc, np), where nc is the number of clusters of the small cluster orbit and np is the number of points of the cluster.
-            E.g. the element [i,:] will be a vector of length np contaning the scaled poisitions of the points of cluster i.
+            2D array of shape (nc, np), where nc is the number of clusters of
+            the small cluster orbit and np is the number of points of the cluster.
+            E.g. the element [i,:] will be a vector of length np contaning the
+            scaled poisitions of the points of cluster i.
 
         **Note:**
-           This operation does not rely on a supercell. It just uses information from the parent lattice and the cluster.
+           This operation does not rely on a supercell. It just uses
+           information from the parent lattice and the cluster.
         """
 
         sp0 = cluster_scaled_positions
@@ -1568,7 +1575,8 @@ class ClusterOrbit(ClustersPool):
     def _are_equivalent_clusters(
         self, scaled_positions1, scaled_positions2, species1, species2, tol=1e-3
     ):
-        """Check for symmetric equivalence with respect to unit cell translations. Takes into account positions and species."""
+        """Check for symmetric equivalence with respect to unit cell translations.
+        Takes into account positions and species."""
         from scipy.spatial import distance_matrix
 
         sp1 = scaled_positions1

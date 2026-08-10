@@ -26,7 +26,7 @@ class CellConfig:
             configstr = open(self.configpath, "r").read()
             self.config = json.loads(configstr)[0]
             print(self.config)
-        except:
+        except Exception:
             # print("No %s file present\n"%(self.filename))
             pass
 
