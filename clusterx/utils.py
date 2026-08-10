@@ -1150,7 +1150,10 @@ def decorate_supercell(
     For each site in `scell`, this function finds a matching atom in `atoms`
     whose Cartesian position is within a distance tolerance (Euclidean
     distance).
-    The corresponding atomic number is then used as the decoration.
+    The corresponding atomic number is then used as the decoration. If the
+    supercell has a substitutional sublattice that allows vacancies (species
+    number 0, chemical symbol ``X``), missing atoms on that sublattice are
+    decorated as vacancies.
 
     Parameters
     ----------
@@ -1184,11 +1187,72 @@ def decorate_supercell(
 
     # Pre-fetch positions and atomic numbers for efficiency
     sc_positions = np.asarray(scell.get_positions())
+    sc_tags = np.asarray(scell.get_tags(), dtype=int)
     at_positions = np.asarray(atoms.get_positions(wrap=wrap, eps=wrap_eps))
     at_numbers = np.asarray(atoms.get_atomic_numbers())
+    expected_vacancies = len(sc_positions) - len(at_positions)
+
+    if expected_vacancies < 0:
+        raise ValueError(
+            f"Atoms object contains more atoms ({len(at_positions)}) than "
+            f"supercell sites ({len(sc_positions)})."
+        )
+
+    sublattice_types = scell.get_sublattice_types()
+    substitutional_tags = {int(tag) for tag in scell.get_substitutional_tags()}
+    vacancy_tags = {
+        int(tag)
+        for tag, species in sublattice_types.items()
+        if int(tag) in substitutional_tags and 0 in np.asarray(species, dtype=int)
+    }
+
+    if expected_vacancies > 0 and not vacancy_tags:
+        raise ValueError(
+            f"Atoms object is missing {expected_vacancies} atom(s), but the "
+            "supercell has no substitutional sublattice allowing vacancies "
+            "(species number 0 / symbol X)."
+        )
+
+    n_vacancy_sites = sum(int(tag) in vacancy_tags for tag in sc_tags)
+    if expected_vacancies > n_vacancy_sites:
+        raise ValueError(
+            f"Atoms object is missing {expected_vacancies} atom(s), but the "
+            f"supercell has only {n_vacancy_sites} vacancy-capable site(s)."
+        )
+
+    def _format_no_match_error(
+        tol_value: float,
+        i_p_sc: int,
+        p_sc: np.ndarray,
+        dists: np.ndarray,
+        no_unused_match: bool = False,
+    ) -> str:
+        if len(dists) == 0:
+            return (
+                f"No matching atom found within tolerance {tol_value} "
+                f"for:\n"
+                f"supercell position {i_p_sc}: {p_sc}.\n"
+                "The atoms object is empty."
+            )
+
+        mind = min(dists)
+        i_mind = np.where(dists == min(dists))[0][0]
+        match_text = (
+            "No unused matching atom" if no_unused_match else "No matching atom"
+        )
+        return (
+            f"{match_text} found within tolerance {tol_value} "
+            f"for:\n"
+            f"supercell position {i_p_sc}: {p_sc}.\n"
+            f"atoms position {i_mind}:     {at_positions[i_mind]}\n"
+            f" Smallest distance "
+            f"to this position is {mind}."
+        )
 
     def _decorate_with_tol(tol_value: float) -> Structure:
         decorations = []
+        used_atoms = set()
+        vacancy_count = 0
 
         for i_p_sc, p_sc in enumerate(sc_positions):
             # Compute distances from this supercell site to all atoms
@@ -1197,28 +1261,47 @@ def decorate_supercell(
 
             # Find atoms within tolerance
             candidates = np.where(dists < tol_value)[0]
+            if len(candidates) > 1:
+                candidates = candidates[np.argsort(dists[candidates])]
 
-            if len(candidates) == 0:
-                mind = min(dists)
-                i_mind = np.where(dists == min(dists))[0][0]
+            i_match = None
+            for candidate in candidates:
+                candidate = int(candidate)
+                if candidate not in used_atoms:
+                    i_match = candidate
+                    break
+
+            if i_match is None:
+                if int(sc_tags[i_p_sc]) in vacancy_tags:
+                    decorations.append(0)
+                    vacancy_count += 1
+                    continue
+
                 raise ValueError(
-                    f"No matching atom found within tolerance {tol_value} "
-                    f"for:\n"
-                    f"supercell position {i_p_sc}: {p_sc}.\n"
-                    f"atoms position {i_mind}:     {at_positions[i_mind]}\n"
-                    f" Smallest distance "
-                    f"to this position is {mind}."
+                    _format_no_match_error(
+                        tol_value,
+                        i_p_sc,
+                        p_sc,
+                        dists,
+                        no_unused_match=len(candidates) > 0,
+                    )
                 )
 
-            # If multiple atoms match, just take the first one
-            i_match = candidates[0]
             decorations.append(int(at_numbers[i_match]))
+            used_atoms.add(i_match)
 
         if len(decorations) != len(scell):
             raise ValueError(
                 f"Number of decorations ({len(decorations)}) does not match "
                 f"number of sites in supercell ({len(scell)}). You may need "
                 f"to increase tol (currently {tol_value})."
+            )
+
+        if vacancy_count != expected_vacancies:
+            raise ValueError(
+                f"Detected {vacancy_count} vacancy site(s) at tolerance {tol_value}, "
+                f"but expected {expected_vacancies} from atom counts "
+                f"({len(sc_positions)} supercell sites, {len(at_positions)} atoms)."
             )
 
         return Structure(scell, decorations)

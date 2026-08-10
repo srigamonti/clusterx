@@ -44,9 +44,7 @@ def _validate_axis_range(axis_range: Optional[list], name: str) -> Optional[List
         return None
     if len(axis_range) != 2:
         axis_label = name[0]
-        raise ValueError(
-            f"{name} must have exactly two values: [{axis_label}min, {axis_label}max]."
-        )
+        raise ValueError(f"{name} must have exactly two values: [{axis_label}min, {axis_label}max].")
     return [float(axis_range[0]), float(axis_range[1])]
 
 
@@ -62,8 +60,7 @@ def _require_positive(values: np.ndarray, context: str) -> None:
         raise ValueError(f"Cannot use loglog=True without finite {context}.")
     if np.any(values <= 0):
         raise ValueError(
-            f"Cannot use loglog=True because {context} contains non-positive values. "
-            "Use symlog=True for signed data."
+            f"Cannot use loglog=True because {context} contains non-positive values. Use symlog=True for signed data."
         )
 
 
@@ -138,6 +135,12 @@ def _shared_target_prediction_limits(
     title=("Figure title.", "option", "t", str),
     xlabel=("Label for the x-axis of the plot.", "option", "xl", str),
     ylabel=("Label for the y-axis of the plot.", "option", "yl", str),
+    yfactor=(
+        "Multiplicative factor applied to y data before plotting/export.",
+        "option",
+        "yf",
+        float,
+    ),
     yrange=("Range for the y-axis of the plot (min,max).", "option", None, list),
     xrange=("Range for the x-axis of the plot (min,max).", "option", None, list),
     colors=(
@@ -202,7 +205,8 @@ def _shared_target_prediction_limits(
     series=(
         "List of series dictionaries from TOML. Per-series keys: xcolumn, ycolumn, "
         "source_filepath (optional), mask_name (optional), label (optional), "
-        "color/marker/size/edgecolor/facecolor/linewidth/alpha (optional), "
+        "filter_ycolumn/filter_value (optional), "
+        "yfactor (optional), color/marker/size/edgecolor/facecolor/linewidth/alpha (optional), "
         "or style={...} for grouped styling. Also supports ymode in "
         "{marker,cloud,violin,boxplot,auto} for array-valued y columns. "
         "Set binned=true to group scalar y values by unique x bin (with optional xtol snap).",
@@ -218,6 +222,7 @@ def plot_columns(
     title: Optional[str] = None,
     xlabel: Optional[str] = None,
     ylabel: Optional[str] = None,
+    yfactor: float = 1.0,
     yrange: Optional[list] = None,
     xrange: Optional[list] = None,
     colors: Optional[list] = None,
@@ -250,6 +255,8 @@ def plot_columns(
         series that do not explicitly set them.
     - ``title`` (str, optional): figure title.
     - ``xlabel`` / ``ylabel`` (str, optional): axis labels.
+    - ``yfactor`` (float): multiplicative factor applied to y data before
+        plotting and exporting data (default: ``1.0``).
     - ``xrange`` / ``yrange`` (list[float, float], optional): axis limits.
     - ``colors`` (list[str], optional): default color palette for series without
         explicit ``color``.
@@ -284,7 +291,13 @@ def plot_columns(
     Optional:
     - ``source_filepath`` (str): override top-level source for this series.
     - ``mask_name`` (str): mask name in the DSGenerator.
+    - ``filter_ycolumn`` (str): optional column name used to filter rows before
+        plotting.
+    - ``filter_value``: only rows where ``filter_ycolumn == filter_value`` are
+        kept.
     - ``label`` (str): legend label.
+    - ``yfactor`` (float): override the top-level y scaling factor for this
+        series.
     - ``color`` (str): matplotlib color spec (e.g. ``"k"``, ``"#1f77b4"``,
         ``"red"``).
     - ``marker`` (str): matplotlib marker (e.g. ``"o"``, ``"s"``, ``"^"``, ``"."``).
@@ -335,6 +348,7 @@ def plot_columns(
             title = "Energy of mixing"
             xlabel = "Concentration"
             ylabel = "Energy"
+            yfactor = 1000.0
             colors = ["k", "r", "b"]
             legend = true
             show_plot = true
@@ -437,28 +451,25 @@ def plot_columns(
     cmd_message("head")
 
     if series is None:
-        raise ValueError(
-            "series must be provided as a list of dictionaries (from [[plot_columns.series]])."
-        )
+        raise ValueError("series must be provided as a list of dictionaries (from [[plot_columns.series]]).")
 
     if not isinstance(series, list) or len(series) == 0:
         raise ValueError("series must be a non-empty list.")
 
     if source_filepath is None:
         missing_src = [
-            i
-            for i, item in enumerate(series)
-            if not isinstance(item, dict) or item.get("source_filepath") is None
+            i for i, item in enumerate(series) if not isinstance(item, dict) or item.get("source_filepath") is None
         ]
         if missing_src:
             raise ValueError(
                 "source_filepath must be provided at top level or inside every "
-                "series entry. Missing in series indices: "
-                + ", ".join(str(i) for i in missing_src)
+                "series entry. Missing in series indices: " + ", ".join(str(i) for i in missing_src)
             )
 
     if colors is not None and not isinstance(colors, list):
         raise ValueError("colors must be a list when provided.")
+
+    yfactor = float(yfactor)
 
     if loglog and symlog:
         raise ValueError("Use only one of loglog=True or symlog=True.")
@@ -483,6 +494,7 @@ def plot_columns(
         "title": title,
         "xlabel": xlabel,
         "ylabel": ylabel,
+        "yfactor": yfactor,
         "target_vs_predictions": target_vs_predictions,
         "loglog": loglog,
         "symlog": symlog,
@@ -520,12 +532,21 @@ def plot_columns(
         src = item.get("source_filepath", source_filepath)
         xcolumn_s = item.get("xcolumn", xcolumn)
         ycolumn_s = item.get("ycolumn", ycolumn)
+        yfactor_s = float(item.get("yfactor", yfactor))
         mask_name = item.get("mask_name")
+        filter_ycolumn = item.get("filter_ycolumn")
+        has_filter_value = "filter_value" in item
+        filter_value = item.get("filter_value")
 
         if xcolumn_s is None or ycolumn_s is None:
             raise ValueError(
                 f"series[{i}] must define both 'xcolumn' and 'ycolumn', either directly or via top-level defaults."
             )
+
+        if filter_ycolumn is not None and not has_filter_value:
+            raise ValueError(f"series[{i}] defines 'filter_ycolumn' but is missing 'filter_value'.")
+        if has_filter_value and filter_ycolumn is None:
+            raise ValueError(f"series[{i}] defines 'filter_value' but is missing 'filter_ycolumn'.")
 
         if src not in dsg_cache:
             dsg_cache[src] = _load_plot_source(src)
@@ -536,22 +557,30 @@ def plot_columns(
             dsg.add_fractional_concentration_binary()
 
         if xcolumn_s not in dsg.configurations.columns:
-            raise ValueError(
-                f"Column '{xcolumn_s}' not found in configurations from '{src}'."
-            )
+            raise ValueError(f"Column '{xcolumn_s}' not found in configurations from '{src}'.")
 
         if ycolumn_s not in dsg.configurations.columns:
-            raise ValueError(
-                f"Column '{ycolumn_s}' not found in configurations from '{src}'."
-            )
+            raise ValueError(f"Column '{ycolumn_s}' not found in configurations from '{src}'.")
 
         df = dsg.get_configurations(mask_name=mask_name)
+
+        if filter_ycolumn is not None:
+            if filter_ycolumn not in df.columns:
+                raise ValueError(f"Column '{filter_ycolumn}' not found in configurations from '{src}'.")
+            df = df[df[filter_ycolumn] == filter_value]
+
+        if len(df) == 0:
+            warnings.warn(
+                f"series[{i}] produced no rows after applying mask/filter; skipping series.",
+                RuntimeWarning,
+            )
+            continue
 
         x = np.asarray(df[xcolumn_s].to_numpy(), dtype=float)
 
         # y can be scalar-valued or array-valued (e.g., bagging predictions)
         y_cells = df[ycolumn_s].tolist()
-        y_arrays = [_to_1d_float_array(v) for v in y_cells]
+        y_arrays = [_to_1d_float_array(v) * yfactor_s for v in y_cells]
         is_array_valued = any(len(v) > 1 for v in y_arrays)
 
         binned = bool(item.get("binned", False))
@@ -567,10 +596,7 @@ def plot_columns(
             else:
                 x_key = x.copy()
             unique_x, inverse = np.unique(x_key, return_inverse=True)
-            y_arrays = [
-                np.concatenate([y_arrays[j] for j in np.where(inverse == k)[0]])
-                for k in range(len(unique_x))
-            ]
+            y_arrays = [np.concatenate([y_arrays[j] for j in np.where(inverse == k)[0]]) for k in range(len(unique_x))]
             x = unique_x
             is_array_valued = any(len(v) > 1 for v in y_arrays)
 
@@ -629,9 +655,7 @@ def plot_columns(
         if ymode == "auto":
             ymode = "cloud" if is_array_valued else "marker"
         if ymode not in ("marker", "cloud", "violin", "boxplot", "box"):
-            raise ValueError(
-                f"series[{i}].ymode must be one of marker, cloud, violin, boxplot, auto."
-            )
+            raise ValueError(f"series[{i}].ymode must be one of marker, cloud, violin, boxplot, auto.")
 
         aggregation = str(item.get("aggregation", "mean")).lower()
         if aggregation not in ("mean", "median"):
@@ -728,9 +752,7 @@ def plot_columns(
                 "linestyle": "-",
             }
             line_kwargs.update(mean_line_style)
-            line_kwargs["label"] = (
-                mean_line_label if mean_line_label is not None else "_nolegend_"
-            )
+            line_kwargs["label"] = mean_line_label if mean_line_label is not None else "_nolegend_"
             ax.plot(x[order], y_repr[order], **line_kwargs)
 
         plot_payload["series"].append(
@@ -738,7 +760,10 @@ def plot_columns(
                 "source_filepath": src,
                 "xcolumn": xcolumn_s,
                 "ycolumn": ycolumn_s,
+                "yfactor": yfactor_s,
                 "mask_name": mask_name,
+                "filter_ycolumn": filter_ycolumn,
+                "filter_value": filter_value if has_filter_value else None,
                 "label": label,
                 "ymode": ymode,
                 "aggregation": aggregation,
@@ -760,14 +785,8 @@ def plot_columns(
             }
         )
 
-    ax.set_xlabel(
-        xlabel if xlabel is not None else ("Target" if target_vs_predictions else "x")
-    )
-    ax.set_ylabel(
-        ylabel
-        if ylabel is not None
-        else ("Predictions" if target_vs_predictions else "y")
-    )
+    ax.set_xlabel(xlabel if xlabel is not None else ("Target" if target_vs_predictions else "x"))
+    ax.set_ylabel(ylabel if ylabel is not None else ("Predictions" if target_vs_predictions else "y"))
     if title is not None:
         ax.set_title(title)
 
@@ -789,18 +808,10 @@ def plot_columns(
     if symlog:
         symlog_values = _finite_values([finite_x_values, finite_y_values])
         if xrange_values is not None:
-            symlog_values = _finite_values(
-                [symlog_values, np.asarray(xrange_values, dtype=float)]
-            )
+            symlog_values = _finite_values([symlog_values, np.asarray(xrange_values, dtype=float)])
         if yrange_values is not None:
-            symlog_values = _finite_values(
-                [symlog_values, np.asarray(yrange_values, dtype=float)]
-            )
-        linthresh = (
-            float(symlog_linthresh)
-            if symlog_linthresh is not None
-            else _infer_symlog_linthresh(symlog_values)
-        )
+            symlog_values = _finite_values([symlog_values, np.asarray(yrange_values, dtype=float)])
+        linthresh = float(symlog_linthresh) if symlog_linthresh is not None else _infer_symlog_linthresh(symlog_values)
         ax.set_xscale("symlog", linthresh=linthresh)
         ax.set_yscale("symlog", linthresh=linthresh)
         plot_payload["symlog_linthresh"] = linthresh
@@ -865,9 +876,7 @@ def plot_columns(
                 out[f"x_{i}"] = np.asarray(s["x"], dtype=float)
                 out[f"y_{i}"] = np.asarray(s["y"], dtype=float)
                 out[f"label_{i}"] = np.asarray([s["label"]], dtype=object)
-                out[f"source_filepath_{i}"] = np.asarray(
-                    [s["source_filepath"]], dtype=object
-                )
+                out[f"source_filepath_{i}"] = np.asarray([s["source_filepath"]], dtype=object)
             np.savez(figdata_fname, **out)
         elif ext in (".txt", ".dat"):
             rows = []
@@ -877,10 +886,7 @@ def plot_columns(
             header = "series_index x y"
             np.savetxt(figdata_fname, np.asarray(rows, dtype=float), header=header)
         else:
-            raise ValueError(
-                f"Unsupported figdata_fname extension '{ext}'. "
-                "Expected .npz, .json, .txt, or .dat."
-            )
+            raise ValueError(f"Unsupported figdata_fname extension '{ext}'. Expected .npz, .json, .txt, or .dat.")
 
     if show_plot:
         plt.show()

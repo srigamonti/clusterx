@@ -132,18 +132,14 @@ class StructuresSet:
         if plat_dict is not None:
             self._parent_lattice = ParentLattice.plat_from_dict(plat_dict)
         else:
-            self._parent_lattice = ParentLattice.plat_from_dict_obsolete(
-                self._db.metadata
-            )
+            self._parent_lattice = ParentLattice.plat_from_dict_obsolete(self._db.metadata)
 
         for i, row in enumerate(self._db.select()):
             atoms = row.toatoms()
             atoms.wrap()
             tmat = row.get("data", {}).get("tmat")
             if tmat is None:
-                tmat = calculate_trafo_matrix(
-                    self._parent_lattice.get_cell(), atoms.get_cell()
-                )
+                tmat = calculate_trafo_matrix(self._parent_lattice.get_cell(), atoms.get_cell())
             scell = SuperCell(self._parent_lattice, tmat)
 
             props = {}
@@ -320,13 +316,9 @@ class StructuresSet:
                 atoms.wrap()
                 tmat = row.get("data", {}).get("tmat")
                 if tmat is None:
-                    tmat = calculate_trafo_matrix(
-                        self._parent_lattice.get_cell(), atoms.get_cell()
-                    )
+                    tmat = calculate_trafo_matrix(self._parent_lattice.get_cell(), atoms.get_cell())
                 scell = SuperCell(self._parent_lattice, tmat, sort_key=sort_key)
-                self.add_structure(
-                    Structure(scell, decoration=atoms.get_atomic_numbers())
-                )
+                self.add_structure(Structure(scell, decoration=atoms.get_atomic_numbers()))
 
         elif isinstance(structures, StructuresSet):
             for i, s in enumerate(structures):
@@ -680,14 +672,10 @@ class StructuresSet:
                 if overwrite or not os.path.isfile(path):
                     write(path, atoms, format)
 
-        db_path = os.path.join(
-            root, prefix + "0" + "-" + str(self.get_nstr() - 1) + suffix + ".json"
-        )
+        db_path = os.path.join(root, prefix + "0" + "-" + str(self.get_nstr() - 1) + suffix + ".json")
         self.serialize(filepath=db_path, overwrite=True)
 
-    def serialize(
-        self, filepath="sset.db", ase_db_type=None, overwrite=False, rm_vac=False
-    ):
+    def serialize(self, filepath="sset.db", ase_db_type=None, overwrite=False, rm_vac=False):
         """Serialize StructuresSet object
 
         The serialization creates an ASE database object, with added metadata needed by CELL.
@@ -739,10 +727,7 @@ class StructuresSet:
 
         """
         if not overwrite and os.path.isfile(filepath):
-            warnings.warn(
-                f"File '{filepath}' already exists. "
-                f"Set overwrite=True to overwrite it. Nothing was written."
-            )
+            warnings.warn(f"File '{filepath}' already exists. Set overwrite=True to overwrite it. Nothing was written.")
             return  # Early exit if not overwriting
 
         if self.get_nstr() == 0:
@@ -912,9 +897,7 @@ class StructuresSet:
             if root != "":
                 folder = os.path.join(root, os.path.relpath(folder))
             try:
-                pval = property_parser(
-                    i, folder, structure=self.get_structure(i), **kwargs
-                )
+                pval = property_parser(i, folder, structure=self.get_structure(i), **kwargs)
             except Exception:
                 print("Could not parse propery ", property_name, "from folder ", folder)
                 pval = None
@@ -956,9 +939,7 @@ class StructuresSet:
 
         db.metadata = {**db.metadata, "properties": self._props}
 
-    def set_property_values(
-        self, property_name="total_energy", property_vals=[], update_db=True
-    ):
+    def set_property_values(self, property_name="total_energy", property_vals=[], update_db=True):
         """Set property values
 
         Set the property values.
@@ -981,9 +962,7 @@ class StructuresSet:
         if update_db:
             self._update_properties_in_db()
 
-    def set_property_values_from_files(
-        self, property_name="property", property_file_name="property.dat", cwd="./"
-    ):
+    def set_property_values_from_files(self, property_name="property", property_file_name="property.dat", cwd="./"):
         """Set property values read from files
 
         Consider a ``StructuresSet`` oject named ``sset``.
