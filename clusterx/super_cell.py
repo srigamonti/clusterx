@@ -355,6 +355,7 @@ class SuperCell(ParentLattice):
         nsubs=None,
         rng: np.random.Generator = np.random.default_rng(),
         track_indices=False,
+        distribution="uniform",
     ):
         """
         Generate a random Structure with given number of substitutions.
@@ -380,12 +381,21 @@ class SuperCell(ParentLattice):
             internally keep track which sites are occupied with which species,
             enables faster generation of MonteCarlo steps.
 
-        **Notes:**
-
-        This function can be also called with the method ``gen_random``, with the same signature.
-        Use ``gen_random_structure``, since ``gen_random`` is deprecated.
+        ``distribution``: string (default: "binomial")
+            The distribution of concentrations. "uniform" means each nsubs is
+            equally likely. "binomial" means that for each site the substitution
+            is drawn randomly, resulting in a binomial distribution of concentrations.
         """
         from clusterx.structure import Structure  # to avoid circular import
+
+        if nsubs is None and distribution == "uniform":
+            sublattice_types = self.get_sublattice_types()
+            # e.g.  {0: [14,13], 1: [56,0,38], 2:[11]}
+            tags = self.get_tags()  # tags[atom_index] = site_type
+            nsubs = {}
+            for k, v in sublattice_types.items():
+                if len(v) != 1:
+                    nsubs[k] = [rng.integers(0, len(np.where(tags == k)[0]) + 1)]
 
         if nsubs is None:
             sublattice_types = self.get_sublattice_types()
@@ -395,7 +405,6 @@ class SuperCell(ParentLattice):
             )
             max_n_per_site = n_species_per_sublattice[tags]
             sigmas = rng.integers(max_n_per_site)
-
         elif isinstance(nsubs, int):
             if not self.is_nary(2):
                 raise ValueError(

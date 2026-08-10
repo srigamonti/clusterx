@@ -93,9 +93,17 @@ def test_methods(super_cell):
     assert super_cell.get_internal_translations() is not None
 
 
-def test_gen_random_structure(super_cell):
+@pytest.mark.parametrize("distribution", ["uniform", "binomial"])
+def test_gen_random_structure(super_cell, distribution):
     """Test the generation of a random structure."""
-    random_structure = super_cell.gen_random_structure()
+    rng = np.random.default_rng(seed=42)
+    random_structure = super_cell.gen_random_structure(nsubs=None, distribution=distribution, rng=rng)
+    # regression test
+    match distribution:
+        case "uniform":
+            assert np.sum(random_structure.sigmas) == 6
+        case "binomial":
+            assert np.sum(random_structure.sigmas) == 17
     assert isinstance(random_structure, Atoms)
     assert len(random_structure) == 24
     assert sum(random_structure.get_pbc()) == 2
