@@ -281,6 +281,17 @@ class StructuresSet:
                     self._props[k].append(None)
                 self._props[k].append(props[k])
 
+    def pop(self, index):
+        """Pop (remove) Structure at specified index.
+        Internal lists are updated, but lists with only Nones are not cleaned up."""
+        self._nstructures -= 1
+        structure = self._structures.pop(index)
+        self._folders.pop(index)
+        self._ids.pop(index)
+        for k in self._props.keys():
+            self._props[k].pop(index)
+        return structure
+
     def add_structures(self, structures=None, sort_key=None):
         """Add structures to the StructureSet object
 

@@ -73,6 +73,16 @@ def structures_set_prop(structures_set):
     return sset
 
 
+def test_pop(structures_set_prop):
+    sset = structures_set_prop
+    structure_0 = sset[0]
+    n_before = sset.get_nstr()
+    structure_popped = sset.pop(0)
+    n_after = sset.get_nstr()
+    assert structure_0 == structure_popped, "popped structures do not match"
+    assert n_after == n_before - 1, "structure count did not decrease"
+
+
 def test_from_db(parent_lattice, super_cell, tmp_path):
     np.random.seed(10)
     nstr1 = 5
