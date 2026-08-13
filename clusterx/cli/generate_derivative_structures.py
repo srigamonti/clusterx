@@ -522,7 +522,7 @@ def generate_derivative_structures(
                     "for full plot, see clusterx.visualization module"
                 )
             )
-            sset = StructuresSet(filepath=sset_filepath)
+            sset = StructuresSet.from_file(sset_filepath)
             cemodel = Model(filepath=model_filepath)
             plot_predictions_vs_target(
                 sset=sset,

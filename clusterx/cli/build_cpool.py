@@ -87,7 +87,7 @@ def build_cpool(
     cmd_message("head")
 
     if sset_filepath is not None:
-        sset = StructuresSet(filepath=sset_filepath)
+        sset = StructuresSet.from_file(sset_filepath)
         plat = sset.get_parent_lattice()
 
     if plat_filepath is not None:

@@ -86,7 +86,7 @@ class StructuresSet:
             self._db = None
 
     @classmethod
-    def from_file(cls, filepath: str) -> Structure:
+    def from_file(cls, filepath: str, quick_parse=False) -> Structure:
         """
         Load a StructuresSet object from a serialized file.
 
@@ -102,6 +102,7 @@ class StructuresSet:
         ----------
         filepath : str
             Path to the serialized file. The format is inferred from the file extension.
+        quick_parse: see __init__
 
         Returns
         -------
@@ -115,7 +116,7 @@ class StructuresSet:
         """
         file_ext = os.path.splitext(filepath)[1].lower()
         if file_ext == ".db" or file_ext == ".json":
-            return cls(filepath=filepath)
+            return cls(filepath=filepath, quick_parse=quick_parse)
         elif file_ext == ".xyz":
             return cls._load_from_xyz(filepath)
         else:

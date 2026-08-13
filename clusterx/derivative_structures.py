@@ -96,7 +96,7 @@ class DSGenerator:
         from clusterx.structures_set import StructuresSet
 
         return cls.from_structures_set(
-            StructuresSet(filepath=filepath, quick_parse=quick_parse)
+            StructuresSet.from_file(filepath=filepath, quick_parse=quick_parse)
         )
 
     @classmethod

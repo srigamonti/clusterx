@@ -46,7 +46,7 @@ def build_model(
 
     print(f"Info({get_command_name()}): Initialization")
     ccalc = CorrelationsCalculator(filepath=ccalc_filepath)
-    sset = StructuresSet(filepath=sset_filepath)
+    sset = StructuresSet.from_file(sset_filepath)
     cpool = ClustersPool(filepath=cpool_filepath)
 
     if weights_filepath is not None:

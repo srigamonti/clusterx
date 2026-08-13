@@ -7,6 +7,57 @@ import os
 import subprocess
 
 import pytest
+from ase import Atoms
+
+from clusterx.cli.build_cpool import build_cpool
+from clusterx.cli.compute_comat import compute_comat
+from clusterx.cli.compute_concentrations import compute_concentrations
+from clusterx.clusters.clusters_pool import ClustersPool
+from clusterx.correlations import CorrelationsCalculator
+from clusterx.parent_lattice import ParentLattice
+from clusterx.structure import Structure
+from clusterx.structures_set import StructuresSet
+from clusterx.super_cell import SuperCell
+
+@pytest.fixture
+def parent_lattice():
+    a = 1.0
+    positions = [(0, 0, 0), (a / 2, a / 2, a / 2)]
+    cell = [(a, 0, 0), (0, a, 0), (0, 0, a)]
+    pbc = (True, True, True)
+    pri = Atoms("Cu2", positions=positions, cell=cell, pbc=pbc)
+    sub = Atoms("Al2", positions=positions, cell=cell, pbc=pbc)
+
+    plat = ParentLattice(pri, substitutions=[sub], pbc=pbc)
+    return plat
+
+
+@pytest.fixture
+def cpool(parent_lattice):
+    # one-point clusters and nearest neighbor two-point clusters
+    return ClustersPool(parent_lattice, npoints=[1, 2], radii=[0, 0.9])
+
+
+@pytest.fixture
+def corrc(parent_lattice, cpool):
+    return CorrelationsCalculator("trigonometric", parent_lattice, cpool)
+
+
+@pytest.fixture
+def super_cell(parent_lattice):
+    return SuperCell(parent_lattice, p=1)
+
+
+@pytest.fixture
+def structure(super_cell):
+    return Structure(super_cell, sigmas=[0]*len(super_cell))
+
+
+@pytest.fixture
+def structures_set(parent_lattice, structure):
+    sset = StructuresSet(parent_lattice)
+    sset.add_structure(structure)
+    return sset
 
 
 def run_command(command):
@@ -52,3 +103,71 @@ def test_build(tmp_path):
 
     # Check if the files were created
     assert os.path.exists(tmp_path / "plat.json")
+
+
+def test_build_cpool_plat(tmp_path, parent_lattice):
+    plat_path = tmp_path / "plat.json"
+    cpool_path = tmp_path / "cpool.json"
+    parent_lattice.serialize(plat_path)
+    build_cpool(
+        npoints=[1, 2],  # List[int] or str
+        radii=[0, 1.1],  # List[float] or str
+        post_manual_select=None,  # Optional[List[int]]
+        sset_filepath=None,  # Optional[str]
+        plat_filepath=plat_path,  # Optional[str]
+        psc=None,  # Supercell definition
+        method=0,  # int
+        cpool_filepath=str(cpool_path),  # str
+        vacancy_atomic_number=0,  # int
+    )
+    assert os.path.exists(str(cpool_path))
+
+
+def test_build_cpool_sset(tmp_path, structures_set):
+    sset_path = tmp_path / "sset.xyz"
+    structures_set.serialize(sset_path)
+    cpool_path = tmp_path / "cpool.json"
+    build_cpool(
+        npoints=[1, 2],  # List[int] or str
+        radii=[0, 1.1],  # List[float] or str
+        post_manual_select=None,  # Optional[List[int]]
+        sset_filepath=sset_path,  # Optional[str]
+        plat_filepath=None,  # Optional[str]
+        psc=None,  # Supercell definition
+        method=0,  # int
+        cpool_filepath=str(cpool_path),  # str
+        vacancy_atomic_number=0,  # int
+    )
+    assert os.path.exists(str(cpool_path))
+
+
+def test_compute_comat(tmp_path, corrc, structures_set):
+    corrc_path = tmp_path / "corrc.pickle"
+    corrc.serialize(corrc_path)
+    sset_path = str(tmp_path / "sset.json")
+    structures_set.serialize(sset_path)
+    comat_path = tmp_path / "comat.npz"
+    compute_comat(
+        ccalc_filepath=corrc_path,
+        sset_filepath=sset_path,
+        sset_filepaths=None,
+        dss_filepath=None,
+        dss_filepaths=None,
+        comat_filepath=comat_path,
+        property_name=None,
+        update_ccalc=False,
+    )
+    assert os.path.exists(comat_path)
+
+
+def test_compute_concentrations(tmp_path, structures_set):
+    sset_path = str(tmp_path / "sset.json")
+    structures_set.serialize(sset_path)
+    conc_path = tmp_path / "conc.npz"
+    compute_concentrations(
+        sset_filepath=sset_path,
+        site_type=0,
+        sigma=1,
+        conc_filepath=conc_path,
+    )
+    assert os.path.exists(conc_path)

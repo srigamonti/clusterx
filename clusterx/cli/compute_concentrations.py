@@ -51,7 +51,7 @@ def compute_concentrations(
     """Compute concentrations"""
     cmd_message("head")
 
-    sset = StructuresSet(filepath=sset_filepath)
+    sset = StructuresSet.from_file(sset_filepath)
 
     frconc = sset.get_concentrations(site_type, sigma)
 

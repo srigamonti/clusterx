@@ -71,7 +71,7 @@ def _select_source_filepaths(
 
 def _load_structures_sets(source_name, filepaths):
     if source_name.startswith("sset_"):
-        return [StructuresSet(filepath=filepath) for filepath in filepaths]
+        return [StructuresSet.from_file(filepath) for filepath in filepaths]
 
     return [load_dss_as_structures_set(filepath) for filepath in filepaths]
 
