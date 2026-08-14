@@ -282,8 +282,6 @@ class ClustersSelector:
             opt = self._select_clusters_skl_omp(x, p)
 
         self.optimal_cluster_indices = opt
-        print("opt cluster index: ", opt)
-        print("ini_comat: ", self.ini_comat)
         self.optimal_comat = self.ini_comat[:, opt]
 
         self.optimal_clusters = self.cpool.get_subpool(opt)
