@@ -481,26 +481,7 @@ class StructureSelector:
                     recompute_correlation_matrix=True,
                 )
                 print(f"Structure {selected_index} is selected from the candidate set")
-                indices_remaining_candidates = [
-                    i for i in range(len(self._candidate_set)) if i != selected_index
-                ]
-                new_candidate_set = self._candidate_set.get_subset(
-                    indices_remaining_candidates
-                )
-                indices_train = list(range(len(self._training_set)))
-                new_training_set = self._training_set.get_subset(indices_train)
-                new_training_set.add_structure(self._candidate_set[selected_index])
-                self._training_set = new_training_set
-                self._candidate_set = new_candidate_set
-            indices_selected_candidates = list(
-                range(len_orig_training_set, len(new_training_set))
-            )
-            sset_selected_candidates = new_training_set.get_subset(
-                indices_selected_candidates
-            )
-
-            return sset_selected_candidates
-
+                self._update_train_and_candidates(selected_index)
         else:
             if nr_structures is None:
                 raise ValueError(
@@ -514,22 +495,21 @@ class StructureSelector:
                 print(
                     f"Step {j}: Structure {selected_index} is selected from the candidate set"
                 )
-                indices_remaining_candidates = [
-                    i for i in range(len(self._candidate_set)) if i != selected_index
-                ]
-                new_candidate_set = self._candidate_set.get_subset(
-                    indices_remaining_candidates
-                )
-                indices_train = list(range(len(self._training_set)))
-                new_training_set = self._training_set.get_subset(indices_train)
-                new_training_set.add_structure(self._candidate_set[selected_index])
-                self._training_set = new_training_set
-                self._candidate_set = new_candidate_set
-            indices_selected_candidates = list(
-                range(len_orig_training_set, len(new_training_set))
-            )
-            sset_selected_candidates = new_training_set.get_subset(
-                indices_selected_candidates
-            )
+                self._update_train_and_candidates(selected_index)
 
-            return sset_selected_candidates
+        indices_selected_candidates = list(
+            range(len_orig_training_set, len(self._training_set))
+        )
+        sset_selected_candidates = self._training_set.get_subset(
+            indices_selected_candidates
+        )
+        return sset_selected_candidates
+
+    def _update_train_and_candidates(self, index):
+        self._training_set.add_structure(self._candidate_set[index])
+        indices_remaining_candidates = list(range(len(self._candidate_set)))
+        indices_remaining_candidates.pop(index)
+        self._candidate_set = self._candidate_set.get_subset(
+            indices_remaining_candidates
+        )
+
