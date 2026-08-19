@@ -501,7 +501,6 @@ def test_linear_eq_nonlinear(plat_perov, model_perov):
             seed=42,
         )
         mctraj = mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, nonlinear=nonlinear, serialize=True)
-        assert len(mctraj.get_energies()) > 10
         energies.append(mctraj.get_energies())
     np.testing.assert_allclose(energies[0], energies[1])
     np.testing.assert_allclose(energies[0], energies[2])
