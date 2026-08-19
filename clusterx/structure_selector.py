@@ -81,17 +81,7 @@ class StructureSelector:
         correlation_matrix = self._correlations_calculator.get_correlation_matrix(
             self._training_set
         )
-        # Calculate covariance matrix of training set
-        if regularization_strength == 0:
-            self._covariance_matrix = np.linalg.inv(
-                np.dot(correlation_matrix.T, correlation_matrix)
-            )
-        else:
-            gram_matrix = np.dot(correlation_matrix.T, correlation_matrix)
-            regularized_covariance_matrix = np.linalg.inv(
-                gram_matrix + regularization_strength * np.eye(gram_matrix.shape[0])
-            )
-            self._covariance_matrix = regularized_covariance_matrix
+        self._calculate_covariance_matrix(correlation_matrix)
 
     def set_candidate_set(
         self,
@@ -168,6 +158,8 @@ class StructureSelector:
         recompute_correlation_matrix: bool = False,
         lower_conc_limit: float = 0.0,
         upper_conc_limit: float = 1.0,
+        candidate_correlations: np.ndarray | None = None,
+        training_correlations: np.ndarray | None = None,
     ) -> float:
         """Select a structure to add to the training set
 
@@ -220,23 +212,23 @@ class StructureSelector:
 
         global_or_greedy = method[:6]
 
-        if recompute_correlation_matrix is True:
-            correlation_matrix = self._correlations_calculator.get_correlation_matrix(
+        if training_correlations is None:
+            training_correlations = self._correlations_calculator.get_correlation_matrix(
                 self._training_set
             )
-            if self._regularization_strength == 0:
-                covariance_matrix = np.linalg.inv(
-                    np.dot(correlation_matrix.T, correlation_matrix)
+
+        if recompute_correlation_matrix is True:
+            self._calculate_covariance_matrix(training_correlations)
+
+        if candidate_correlations is None:
+            candidate_correlations = (
+                self._correlations_calculator.get_correlation_matrix(
+                    self._candidate_set
                 )
-            else:
-                gram_matrix = np.dot(correlation_matrix.T, correlation_matrix)
-                regularized_covariance_matrix = np.linalg.inv(
-                    gram_matrix
-                    + self._regularization_strength * np.eye(gram_matrix.shape[0])
-                )
-                covariance_matrix = regularized_covariance_matrix
-        else:
-            covariance_matrix = self._covariance_matrix
+            )
+        number_candidates, _ = candidate_correlations.shape
+        # score vector for each structure in selection
+        candidate_scores = np.zeros(number_candidates)
 
         if global_or_greedy == "global":
             domain_calculation_method = method.replace("global_", "")
@@ -245,51 +237,37 @@ class StructureSelector:
                 lower_conc_limit=lower_conc_limit,
                 upper_conc_limit=upper_conc_limit
             )
-
-            candidate_correlations = (
-                self._correlations_calculator.get_correlation_matrix(
-                    self._candidate_set
-                )
-            )
-
-            number_candidates, _ = candidate_correlations.shape
-
-            # score vector for each structure in selection
-            candidate_scores = np.zeros(number_candidates)
-
             for candidate_idx in range(number_candidates):
                 candidate_corr = candidate_correlations[candidate_idx, :]
-                scaled_correlation = np.dot(covariance_matrix, candidate_corr)
+                scaled_correlation = np.dot(self._covariance_matrix, candidate_corr)
                 denominator = 1 + np.dot(candidate_corr, scaled_correlation)
                 numerator = np.dot(
                     scaled_correlation, np.dot(domain_matrix, scaled_correlation)
                 )
                 candidate_scores[candidate_idx] = numerator / denominator
-
-            return np.argmax(candidate_scores)
-
         elif global_or_greedy == "greedy":
-            candidate_correlations = (
-                self._correlations_calculator.get_correlation_matrix(
-                    self._candidate_set
-                )
-            )
-
-            number_candidates, _ = candidate_correlations.shape
-
-            # score vector for each structure in selection
-            candidate_scores = np.zeros(number_candidates)
-
             for candidate_idx in range(number_candidates):
                 candidate_corr = candidate_correlations[candidate_idx, :]
                 candidate_scores[candidate_idx] = np.dot(
-                    candidate_corr, np.dot(covariance_matrix, candidate_corr)
+                    candidate_corr, np.dot(self._covariance_matrix, candidate_corr)
                 )
-
-            return np.argmax(candidate_scores)
-
         else:
             raise ValueError("No valid selector chosen.")
+
+        return np.argmax(candidate_scores)
+
+    def _calculate_covariance_matrix(self, correlation_matrix):
+        if self._regularization_strength == 0:
+            self._covariance_matrix = np.linalg.inv(
+                np.dot(correlation_matrix.T, correlation_matrix)
+            )
+        else:
+            gram_matrix = np.dot(correlation_matrix.T, correlation_matrix)
+            regularized_covariance_matrix = np.linalg.inv(
+                gram_matrix
+                + self._regularization_strength * np.eye(gram_matrix.shape[0])
+            )
+            self._covariance_matrix = regularized_covariance_matrix
 
     def _calculate_domain_matrix(
         self,
