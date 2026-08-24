@@ -481,6 +481,68 @@ def test_plot_columns_axis_name_and_ticklabel_visibility_toggles(parent_lattice,
             real_close(captured["fig"])
 
 
+def test_plot_columns_can_place_axes_on_top_and_right(parent_lattice, tmp_path, monkeypatch):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[1.0, 2.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    figdata_filepath = tmp_path / "plot_data.json"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    captured = {}
+    real_close = plt.close
+
+    def capture_close(fig=None):
+        captured["fig"] = fig if fig is not None else plt.gcf()
+
+    monkeypatch.setattr(plt, "close", capture_close)
+    try:
+        plot_columns(
+            source_filepath=str(sset_filepath),
+            xlabel="X axis",
+            ylabel="Y axis",
+            xaxis_top=True,
+            yaxis_right=True,
+            show_plot=False,
+            figdata_fname=str(figdata_filepath),
+            series=[{"xcolumn": "x", "ycolumn": "y"}],
+        )
+
+        fig = captured["fig"]
+        fig.canvas.draw()
+        ax = fig.axes[0]
+
+        assert ax.xaxis.get_label_position() == "top"
+        assert ax.yaxis.get_label_position() == "right"
+
+        x_tick = ax.xaxis.get_major_ticks()[0]
+        y_tick = ax.yaxis.get_major_ticks()[0]
+        assert x_tick.tick1line.get_visible() is False
+        assert x_tick.tick2line.get_visible() is True
+        assert x_tick.label1.get_visible() is False
+        assert x_tick.label2.get_visible() is True
+        assert y_tick.tick1line.get_visible() is False
+        assert y_tick.tick2line.get_visible() is True
+        assert y_tick.label1.get_visible() is False
+        assert y_tick.label2.get_visible() is True
+
+        with open(figdata_filepath, encoding="utf-8") as f:
+            plot_data = json.load(f)
+        assert plot_data["xaxis_top"] is True
+        assert plot_data["yaxis_right"] is True
+    finally:
+        if "fig" in captured:
+            real_close(captured["fig"])
+
+
 def test_plot_columns_sets_custom_axis_ticks(parent_lattice, tmp_path, monkeypatch):
     sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
     sset.set_property_values(
