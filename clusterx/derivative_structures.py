@@ -748,6 +748,9 @@ class DSGenerator:
             random.seed(random_state)
             np.random.seed(random_state)
 
+        scell_cache = {}
+        symper_cache = {}
+
         for i, num_subs in enumerate(num_subs_list):
             if sc_shape is None and sc_shapes is None:
                 sc_size = supercell_sizes[i]
@@ -780,7 +783,14 @@ class DSGenerator:
 
                 for nsubs in num_subs:
                     print("\n")
-                    self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs, n_random=n_random, recursive=recursive)
+                    self.generate_for_shape_nsubs(
+                        sc_shape=t,
+                        nsubs=nsubs,
+                        n_random=n_random,
+                        recursive=recursive,
+                        _scell_cache=scell_cache,
+                        _symper_cache=symper_cache,
+                    )
 
                 # if recursive:
                 #     self.generate_for_shape_nsubs(
@@ -798,6 +808,8 @@ class DSGenerator:
         nsubs: Optional[Union[int, dict]] = None,
         n_random: Optional[int] = None,
         recursive: bool = True,
+        _scell_cache=None,
+        _symper_cache=None,
     ):
         """
         Generate derivative structures.
@@ -819,23 +831,30 @@ class DSGenerator:
         self._validate_inputs(sc_shape, nsubs)
         shape_id = self.add_scell_shape(shape=sc_shape)
 
+        if _scell_cache is None:
+            _scell_cache = {}
+        if _symper_cache is None:
+            _symper_cache = {}
+
         logging.info(
             "Start enum for supercell size: %s, nsubs: %s",
             self.get_scell_size(shape_id),
             nsubs,
         )
 
-        scell = SuperCell(self.plat, sc_shape)
+        if shape_id not in _scell_cache:
+            _scell_cache[shape_id] = SuperCell(self.plat, self.get_scell_shape(shape_id))
+        scell = _scell_cache[shape_id]
         natoms = scell.get_natoms()
-        symper = scell.get_sym_perm()
+        if shape_id not in _symper_cache:
+            _symper_cache[shape_id] = [tuple(per) for per in scell.get_sym_perm()]
+        symper_tuples = _symper_cache[shape_id]
         nsites_per_type = scell.get_nsites_per_type()
         ems = scell.get_ems()
         ssites = scell.get_substitutional_sites()
         stypes = scell.get_tags()
         scindex = int(abs(scell.get_index()))
         stypes_plat = self.plat.get_sublattice_types()
-
-        symper_tuples = [tuple(per) for per in symper]
 
         def partial_binom_sum(N, n):
             if n < 0:
@@ -870,10 +889,12 @@ class DSGenerator:
                             pbar=pbar,
                         )
                 else:
-                    num_conf = self._generate_all_configurations(ssites, nsubs, natoms, shape_id, symper)
+                    num_conf = self._generate_all_configurations(ssites, nsubs, natoms, shape_id, symper_tuples)
 
             else:
-                num_conf = self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
+                num_conf = self._generate_random_configurations(
+                    ssites, nsubs, natoms, shape_id, symper_tuples, n_random
+                )
 
         elif isinstance(nsubs, dict):
             site_type_by_index = scell.get_tags()
@@ -904,7 +925,7 @@ class DSGenerator:
                         )
                 else:
                     num_conf = self._generate_all_configurations_multilattice(
-                        nsubs, natoms, shape_id, symper, site_type_by_index
+                        nsubs, natoms, shape_id, symper_tuples, site_type_by_index
                     )
 
             else:
