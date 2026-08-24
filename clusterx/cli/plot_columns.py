@@ -221,6 +221,8 @@ def _shared_target_prediction_limits(
     show_ylabel=("Show y-axis name label.", "option", None, bool),
     show_xticklabels=("Show x-axis tick labels (numbers).", "option", None, bool),
     show_yticklabels=("Show y-axis tick labels (numbers).", "option", None, bool),
+    xaxis_top=("Place x-axis label, tick marks, and tick labels on the top side.", "option", None, bool),
+    yaxis_right=("Place y-axis label, tick marks, and tick labels on the right side.", "option", None, bool),
     xticks=("Custom x-axis tick locations.", "option", None, list),
     yticks=("Custom y-axis tick locations.", "option", None, list),
     legend=("Show legend if True.", "option", None, bool),
@@ -281,6 +283,8 @@ def plot_columns(
     show_ylabel: bool = True,
     show_xticklabels: bool = True,
     show_yticklabels: bool = True,
+    xaxis_top: bool = False,
+    yaxis_right: bool = False,
     xticks: Optional[list] = None,
     yticks: Optional[list] = None,
     legend: bool = True,
@@ -337,6 +341,10 @@ def plot_columns(
     - ``show_xlabel`` / ``show_ylabel`` (bool): show/hide axis name labels.
     - ``show_xticklabels`` / ``show_yticklabels`` (bool): show/hide numeric
         tick labels on each axis.
+    - ``xaxis_top`` (bool): if ``True``, place x-axis label, tick marks, and
+        tick labels on the top side.
+    - ``yaxis_right`` (bool): if ``True``, place y-axis label, tick marks, and
+        tick labels on the right side.
     - ``xticks`` / ``yticks`` (list[float], optional): explicit tick locations
         to apply to the x/y axes via ``Axes.set_xticks`` and ``Axes.set_yticks``.
     - ``legend`` (bool): show legend.
@@ -614,6 +622,8 @@ def plot_columns(
         "show_ylabel": show_ylabel,
         "show_xticklabels": show_xticklabels,
         "show_yticklabels": show_yticklabels,
+        "xaxis_top": xaxis_top,
+        "yaxis_right": yaxis_right,
         "xticks": xticks,
         "yticks": yticks,
         "show_legend_frame": show_legend_frame,
@@ -916,6 +926,15 @@ def plot_columns(
 
     ax.set_xlabel(xlabel if xlabel is not None else ("Target" if target_vs_predictions else "x"))
     ax.set_ylabel(ylabel if ylabel is not None else ("Predictions" if target_vs_predictions else "y"))
+
+    if xaxis_top:
+        ax.xaxis.set_label_position("top")
+        ax.tick_params(axis="x", which="both", bottom=False, top=True, labelbottom=False, labeltop=True)
+
+    if yaxis_right:
+        ax.yaxis.set_label_position("right")
+        ax.tick_params(axis="y", which="both", left=False, right=True, labelleft=False, labelright=True)
+
     if not show_xlabel:
         ax.set_xlabel("")
     if not show_ylabel:
