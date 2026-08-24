@@ -234,6 +234,45 @@ class DSGenerator:
             return result.iloc[0][column_name]
         raise KeyError(f"Config ID {config_id} not found.")
 
+    def get_multiplicity(self, config_id):
+        """Retrieve the symmetry multiplicity of a configuration."""
+        result = self.configurations[self.configurations["config_id"] == config_id]
+        if result.empty:
+            raise KeyError(f"Config ID {config_id} not found.")
+
+        if "multiplicity" not in self.configurations.columns:
+            self.add_multiplicity()
+
+        result = self.configurations[self.configurations["config_id"] == config_id]
+        return int(result.iloc[0]["multiplicity"])
+
+    def add_multiplicity(self, recompute=False):
+        """Add the symmetry multiplicity for each configuration.
+
+        The multiplicity is the number of distinct symmetry-related sigma
+        configurations for the configuration's supercell shape.
+        """
+        if "multiplicity" in self.configurations.columns and not recompute:
+            return
+
+        symper_cache = {}
+
+        def _compute_multiplicity(row):
+            shape_id = row["shape_id"]
+            if shape_id not in symper_cache:
+                sc_shape = self.get_scell_shape(shape_id)
+                scell = SuperCell(self.plat, sc_shape)
+                symper_cache[shape_id] = [tuple(per) for per in scell.get_sym_perm()]
+
+            sigma = row["sigma"]
+            symmetry_hashes = {hash(tuple(sigma[i] for i in per)) for per in symper_cache[shape_id]}
+            return int(len(symmetry_hashes))
+
+        self.set_property_values_iteratively(
+            value_func=_compute_multiplicity,
+            property_name="multiplicity",
+        )
+
     def compute_properties(
         self,
         property_name=None,
