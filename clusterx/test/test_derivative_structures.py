@@ -8,6 +8,7 @@ from ase.data import atomic_numbers as an
 
 from clusterx.calculators.emt import EMT2
 from clusterx.cli.compute_comat import compute_comat
+from clusterx.cli.compute_multiplicities import compute_multiplicities
 from clusterx.cli.convert_dss_to_sset import convert_dss_to_sset
 from clusterx.cli.convert_sset_to_dss import convert_sset_to_dss
 from clusterx.derivative_structures import DSGenerator, get_HNFs, get_unique_supercells
@@ -278,6 +279,21 @@ def test_serialize_load(ds_generator_full, tmp_path):
     pd.testing.assert_frame_equal(
         ds_generator_full.configurations, ds_generator_loaded.configurations
     )
+
+
+def test_compute_multiplicities_cli_persists(ds_generator_full, tmp_path):
+    filepath = tmp_path / "dss.pickle"
+    ds_generator_full.serialize(filepath)
+
+    compute_multiplicities(str(filepath), quiet=True)
+
+    ds_generator_loaded = DSGenerator.from_file(filepath)
+    assert "multiplicity" in ds_generator_loaded.configurations.columns
+    assert "multiplicity" in ds_generator_loaded.get_property_names()
+    assert len(ds_generator_loaded.configurations["multiplicity"]) == len(
+        ds_generator_full.configurations
+    )
+    assert all(ds_generator_loaded.configurations["multiplicity"] > 0)
 
 
 def test_from_structures_set_file_loads_structures_set_db(ds_generator_full, tmp_path):
