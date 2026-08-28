@@ -246,11 +246,13 @@ class DSGenerator:
         result = self.configurations[self.configurations["config_id"] == config_id]
         return int(result.iloc[0]["multiplicity"])
 
-    def add_multiplicity(self, recompute=False):
+    def add_multiplicity(self, recompute=False, show_progress=True):
         """Add the symmetry multiplicity for each configuration.
 
         The multiplicity is the number of distinct symmetry-related sigma
         configurations for the configuration's supercell shape.
+
+        Set ``show_progress`` to False to disable the progress bar.
         """
         if "multiplicity" in self.configurations.columns and not recompute:
             return
@@ -271,6 +273,8 @@ class DSGenerator:
         self.set_property_values_iteratively(
             value_func=_compute_multiplicity,
             property_name="multiplicity",
+            show_progress=show_progress,
+            progress_description="Computing multiplicities",
         )
 
     def compute_properties(
@@ -535,6 +539,8 @@ class DSGenerator:
         property_name=None,
         property_names=None,
         create_if_missing=True,
+        show_progress=False,
+        progress_description="Computing property values",
         **kwargs,
     ):
         """
@@ -552,6 +558,10 @@ class DSGenerator:
             Either this or property_name must be provided.
         create_if_missing : bool, optional
             If True, creates the column if it does not exist. Defaults to True.
+        show_progress : bool, optional
+            If True, displays a tqdm progress bar. Defaults to False.
+        progress_description : str, optional
+            Description shown on the progress bar.
         kwargs : dict
             Additional keyword arguments to pass to the value_func.
 
@@ -583,7 +593,20 @@ class DSGenerator:
                 else:
                     raise ValueError(f"Column '{column_name}' does not exist in the configurations DataFrame.")
 
-        if len(column_names) == 1:
+        if show_progress:
+            values = [
+                value_func(row, **kwargs)
+                for _, row in tqdm(
+                    self.configurations.iterrows(),
+                    total=len(self.configurations),
+                    desc=progress_description,
+                )
+            ]
+            if len(column_names) == 1:
+                self.configurations[column_names[0]] = values
+            else:
+                self.configurations[column_names] = values
+        elif len(column_names) == 1:
             self.configurations[column_names[0]] = self.configurations.apply(
                 lambda row: value_func(row, **kwargs), axis=1
             )
