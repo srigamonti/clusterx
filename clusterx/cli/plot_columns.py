@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 import matplotlib.pyplot as plt
 import numpy as np
 import plac
+from scipy.stats import gaussian_kde
 
 from clusterx.cli.config_utils import cmd_message
 from clusterx.derivative_structures import DSGenerator
@@ -26,10 +27,63 @@ def _to_1d_float_array(value: Any) -> np.ndarray:
     return arr
 
 
-def _aggregate(values: np.ndarray, method: str) -> float:
+def _aggregate(values: np.ndarray, method: str, weights: Optional[np.ndarray] = None) -> float:
+    if weights is None:
+        weights = np.ones(len(values), dtype=float)
     if method == "median":
-        return float(np.median(values))
-    return float(np.mean(values))
+        order = np.argsort(values)
+        sorted_values = values[order]
+        sorted_weights = weights[order]
+        return float(sorted_values[np.searchsorted(np.cumsum(sorted_weights), np.sum(weights) / 2.0)])
+    return float(np.average(values, weights=weights))
+
+
+def _weighted_samples(values: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    """Repeat samples according to integer multiplicity weights."""
+    return np.repeat(values, weights.astype(int))
+
+
+def _weighted_violin(ax, values, weights, position, width, color, scatter_kwargs):
+    """Draw one violin from values and weights without expanding samples."""
+    finite = np.isfinite(values) & np.isfinite(weights) & (weights > 0)
+    values = np.asarray(values[finite], dtype=float)
+    weights = np.asarray(weights[finite], dtype=float)
+    if len(values) == 0:
+        return
+
+    lower = float(np.min(values))
+    upper = float(np.max(values))
+    if np.isclose(lower, upper):
+        # A singleton or zero-spread bin has no violin width to display.
+        return
+
+    grid = np.linspace(lower, upper, 100)
+    if len(np.unique(values)) > 1:
+        density = gaussian_kde(values, weights=weights)(grid)
+        density /= np.max(density)
+    else:
+        density = np.ones_like(grid)
+
+    half_width = 0.5 * width * density
+    facecolor = scatter_kwargs.get("facecolors", color)
+    edgecolor = scatter_kwargs.get("edgecolors", color)
+    body = ax.fill_betweenx(
+        grid,
+        position - half_width,
+        position + half_width,
+        facecolor=facecolor,
+        edgecolor=edgecolor,
+        linewidth=float(scatter_kwargs.get("linewidths", 0.8)),
+        alpha=float(scatter_kwargs.get("alpha", 0.3)),
+    )
+    return body
+
+
+def _validate_multiplicity_weights(values: Any, series_index: int) -> np.ndarray:
+    weights = np.asarray(values, dtype=float)
+    if np.any(~np.isfinite(weights)) or np.any(weights <= 0) or np.any(weights != weights.astype(int)):
+        raise ValueError(f"series[{series_index}] multiplicities must be positive integers.")
+    return weights
 
 
 def _infer_box_violin_width(x: np.ndarray) -> float:
@@ -251,7 +305,8 @@ def _shared_target_prediction_limits(
         "yfactor (optional), color/marker/size/edgecolor/facecolor/linewidth/alpha (optional), "
         "or style={...} for grouped styling. Also supports ymode in "
         "{marker,cloud,violin,boxplot,auto} for array-valued y columns. "
-        "Set binned=true to group scalar y values by unique x bin (with optional xtol snap).",
+        "Set binned=true to group scalar y values by unique x bin (with optional xtol snap). "
+        "Set weight_by_multiplicity=true to weight y values by DSGenerator multiplicity.",
         "option",
         None,
         list,
@@ -400,6 +455,10 @@ def plot_columns(
         per-bin y distribution (e.g. ``ymode="marker", aggregation="mean"``
         plots one mean per bin; ``ymode="violin"`` plots the full
         per-bin distribution). Ignored when y is already array-valued.
+    - ``weight_by_multiplicity`` (bool): if ``True``, weight each structure by
+        its derivative-structure multiplicity. Weighted means and medians are
+        used for aggregation, and integer-weighted samples are used for
+        cloud/violin/box distributions.
     - ``xtol`` (float): snap x values to a grid of this spacing before
         grouping (useful when concentrations differ only by floating-point
         noise, e.g. ``xtol=1e-6``).
@@ -697,6 +756,10 @@ def plot_columns(
         if ycolumn_s not in dsg.configurations.columns:
             raise ValueError(f"Column '{ycolumn_s}' not found in configurations from '{src}'.")
 
+        weight_by_multiplicity = bool(item.get("weight_by_multiplicity", False))
+        if weight_by_multiplicity and "multiplicity" not in dsg.configurations.columns:
+            dsg.add_multiplicity()
+
         df = dsg.get_configurations(mask_name=mask_name)
 
         if filter_ycolumn is not None:
@@ -717,21 +780,27 @@ def plot_columns(
         y_cells = df[ycolumn_s].tolist()
         y_arrays = [_to_1d_float_array(v) * yfactor_s for v in y_cells]
         is_array_valued = any(len(v) > 1 for v in y_arrays)
+        if weight_by_multiplicity:
+            row_weights = _validate_multiplicity_weights(df["multiplicity"].to_numpy(), i)
+        else:
+            row_weights = np.ones(len(y_arrays), dtype=float)
+        y_weights = [np.full(len(values), weight) for values, weight in zip(y_arrays, row_weights)]
 
         binned = bool(item.get("binned", False))
         xtol = item.get("xtol", None)
 
-        if binned and not is_array_valued:
+        if binned:
             # Snap x to a regular grid when a tolerance is given, then group
-            # all scalar y values that fall in the same x bin into one array.
-            # The downstream ymode/aggregation logic then operates on these
-            # per-bin arrays exactly as it would on array-valued y columns.
+            # all y samples that fall in the same x bin into one array.
             if xtol is not None:
                 x_key = np.round(x / float(xtol)) * float(xtol)
             else:
                 x_key = x.copy()
             unique_x, inverse = np.unique(x_key, return_inverse=True)
             y_arrays = [np.concatenate([y_arrays[j] for j in np.where(inverse == k)[0]]) for k in range(len(unique_x))]
+            y_weights = [
+                np.concatenate([y_weights[j] for j in np.where(inverse == k)[0]]) for k in range(len(unique_x))
+            ]
             x = unique_x
             is_array_valued = any(len(v) > 1 for v in y_arrays)
 
@@ -805,11 +874,14 @@ def plot_columns(
         label = item.get("label", f"series_{i}")
 
         # Representative scalar y per x (used by marker mode and for exports)
-        y_repr = np.asarray([_aggregate(v, aggregation) for v in y_arrays], dtype=float)
+        y_repr = np.asarray(
+            [_aggregate(v, aggregation, weights) for v, weights in zip(y_arrays, y_weights)],
+            dtype=float,
+        )
         has_distribution_per_x = any(len(v) > 1 for v in y_arrays)
         plotted_x_values.append(x)
         if ymode in ("cloud", "violin", "boxplot", "box"):
-            plotted_y_values.append(np.concatenate(y_arrays))
+            plotted_y_values.append(np.concatenate([values for values, weights in zip(y_arrays, y_weights)]))
         else:
             plotted_y_values.append(y_repr)
 
@@ -823,7 +895,9 @@ def plot_columns(
 
             all_x = []
             all_y = []
-            for xi, yi in zip(x, y_arrays):
+            for xi, yi, weights in zip(x, y_arrays, y_weights):
+                if weight_by_multiplicity:
+                    yi = _weighted_samples(yi, weights)
                 if xjitter > 0:
                     dx = np.random.uniform(-xjitter, xjitter, size=len(yi))
                     xvals = xi + dx
@@ -839,20 +913,28 @@ def plot_columns(
             ax.scatter(cloud_x, cloud_y, label=label, **cloud_kwargs)
         elif ymode == "violin":
             width = float(item.get("width", _infer_box_violin_width(x)))
-            v = ax.violinplot(y_arrays, positions=x, widths=width, showextrema=False)
-            vbodies = v.get("bodies", [])
-            if not isinstance(vbodies, list):
-                vbodies = [vbodies]
-            for body in vbodies:
-                body.set_facecolor(scatter_kwargs.get("facecolors", color))
-                body.set_edgecolor(scatter_kwargs.get("edgecolors", color))
-                body.set_linewidth(float(scatter_kwargs.get("linewidths", 0.8)))
-                body.set_alpha(float(scatter_kwargs.get("alpha", 0.3)))
+            if weight_by_multiplicity:
+                for position, values, weights in zip(x, y_arrays, y_weights):
+                    _weighted_violin(ax, values, weights, position, width, color, scatter_kwargs)
+            else:
+                v = ax.violinplot(y_arrays, positions=x, widths=width, showextrema=False)
+                vbodies = v.get("bodies", [])
+                if not isinstance(vbodies, list):
+                    vbodies = [vbodies]
+                for body in vbodies:
+                    body.set_facecolor(scatter_kwargs.get("facecolors", color))
+                    body.set_edgecolor(scatter_kwargs.get("edgecolors", color))
+                    body.set_linewidth(float(scatter_kwargs.get("linewidths", 0.8)))
+                    body.set_alpha(float(scatter_kwargs.get("alpha", 0.3)))
             ax.plot([], [], color=color, label=label)
         else:  # boxplot / box
             width = float(item.get("width", _infer_box_violin_width(x)))
+            box_arrays = [
+                _weighted_samples(values, weights) if weight_by_multiplicity else values
+                for values, weights in zip(y_arrays, y_weights)
+            ]
             bp = ax.boxplot(
-                y_arrays,
+                box_arrays,
                 positions=x,
                 widths=width,
                 patch_artist=True,
@@ -906,6 +988,7 @@ def plot_columns(
                 "label": label,
                 "ymode": ymode,
                 "aggregation": aggregation,
+                "weight_by_multiplicity": weight_by_multiplicity,
                 "binned": binned,
                 "xtol": xtol,
                 "mean_line": mean_line,
