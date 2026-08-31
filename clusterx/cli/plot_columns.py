@@ -750,6 +750,9 @@ def plot_columns(
         if xcolumn_s == "frconc_binary" and xcolumn_s not in dsg.configurations.columns:
             dsg.add_fractional_concentration_binary()
 
+        if filter_ycolumn == "frconc_binary" and filter_ycolumn not in dsg.configurations.columns:
+            dsg.add_fractional_concentration_binary()
+
         if xcolumn_s not in dsg.configurations.columns:
             raise ValueError(f"Column '{xcolumn_s}' not found in configurations from '{src}'.")
 
