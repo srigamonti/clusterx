@@ -2,11 +2,11 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-import plac
 import numpy as np
+import plac
+
+from clusterx.cli.config_utils import cmd_message, remove_trailing_extension
 from clusterx.structures_set import StructuresSet
-from clusterx.cli.config_utils import cmd_message
-from clusterx.cli.config_utils import remove_trailing_extension
 
 commands = ["compute_concentrations"]
 
@@ -17,29 +17,26 @@ commands = ["compute_concentrations"]
     help="""
         Path to a serialized StructuresSet object. All cluster correlations 
         of all structures in this object are computed and saved to a
-        "wo dimensional array.
+        two dimensional array.
     """,
 )
 @plac.opt(
     "site_type",
     abbrev="st",
     help="""
-        Path to store correlations matrix. Extension is removed. File is 
-        saved in formats txt and npz
+        Site type as output by command print_plat_info
     """,
 )
 @plac.opt(
     "sigma",
     abbrev="si",
-    help="Name of the property",
+    help="Integer, substitutional species. 0 pristine. 1 first substitutional species. 2 second substitutional species. etc.",
 )
 @plac.opt(
     "conc_filepath",
     abbrev="cof",
     help="""
-        Overwrite the file 'ccalc_filepath' to remember the cluster orbits of the 
-        supercells in contained in 'sset_filepath'. This leads to faster correlation 
-        evaluations on future calculator use.
+        Path to store the computed concentrations array. The file is saved in npz format.
     """,
 )
 def compute_concentrations(
