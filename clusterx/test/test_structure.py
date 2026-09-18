@@ -3,7 +3,7 @@
 import pytest
 from ase import Atoms
 from ase.data import chemical_symbols
-from ase.io import read
+from ase.io import read, write
 import numpy as np
 
 from clusterx.parent_lattice import ParentLattice
@@ -124,13 +124,23 @@ def test_serialize_load(parent_lattice, p, tmp_path):
     assert structure == structure_loaded
 
 
-def test_serialize_load_xyz(parent_lattice, tmp_path):
+@pytest.mark.parametrize(
+    "save_plat",
+    [True, False]
+)
+def test_serialize_load_xyz(parent_lattice, tmp_path, save_plat):
     # ensure no bottleneck with large supercell size
     super_cell = SuperCell(parent_lattice, (2, 2, 2))
     structure = Structure(super_cell, decoration=[1] * len(super_cell))
     filepath = tmp_path / "structure.xyz"
     structure.serialize(filepath=filepath, fmt=None)
-    structure_loaded = Structure.from_file(filepath)
+    if not save_plat:
+        atoms = read(filepath)
+        del atoms.info["parent_lattice"]
+        write(filepath, atoms)
+        structure_loaded = Structure.from_file(filepath, parent_lattice)
+    else:
+        structure_loaded = Structure.from_file(filepath)
     assert structure == structure_loaded
 
     atoms = read(filepath)

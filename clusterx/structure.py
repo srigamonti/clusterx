@@ -205,7 +205,11 @@ class Structure(SuperCell):
         self._build_index_maps()
 
     @classmethod
-    def from_file(cls, filepath: str) -> Structure:
+    def from_file(
+        cls,
+        filepath: str,
+        parent_lattice: ParentLattice | None = None
+    ) -> Structure:
         """
         Load a Structure object from a serialized file.
 
@@ -221,6 +225,9 @@ class Structure(SuperCell):
         ----------
         filepath : str
             Path to the serialized file. The format is inferred from the file extension.
+        parent_lattice: ParentLattice (optional):
+            Provide ParentLattice if it is missing in the .xyz structure file for
+            some reason. Overwrites ParentLattice from the structure file.
 
         Returns
         -------
@@ -238,7 +245,7 @@ class Structure(SuperCell):
         elif file_ext == ".json":
             return cls._load_from_json(filepath)
         elif file_ext == ".xyz":
-            return cls._load_from_xyz(filepath)
+            return cls._load_from_xyz(filepath, parent_lattice)
         else:
             raise ValueError(f"Unsupported file format: {file_ext}")
 
@@ -269,9 +276,14 @@ class Structure(SuperCell):
         return cls(super_cell=super_cell, decoration=numbers)
 
     @classmethod
-    def _load_from_xyz(cls, filepath: str) -> Structure:
+    def _load_from_xyz(
+        cls,
+        filepath: str,
+        parent_lattice: ParentLattice | None = None
+    ) -> Structure:
         atoms = read(filepath, format="extxyz")
-        parent_lattice = ParentLattice.plat_from_dict(atoms.info["parent_lattice"])
+        if parent_lattice is None:
+            parent_lattice = ParentLattice.plat_from_dict(atoms.info["parent_lattice"])
         tmat = atoms.info["tmat"]
         super_cell = SuperCell(parent_lattice=parent_lattice, p=tmat)
         numbers = atoms.get_atomic_numbers()
