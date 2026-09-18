@@ -425,6 +425,12 @@ class Structure(SuperCell):
         )
         self.p_reduced_diag = np.diagonal(self.structure_reduced.get_transformation())
 
+    def get_degeneracy(self) -> int:
+        """Calculate and return the degeneracy of the structure."""
+        sigmas = self.get_sigmas()
+        unique_transformations = {tuple(sigmas[np.ix_(per)]) for per in self.scell.get_sym_perm()}
+        return len(unique_transformations)
+
     def get_reduced_structure(self, index: int) -> Structure:
         """Return a reduced structure and reduced index.
         Given transformation p, around site index."""

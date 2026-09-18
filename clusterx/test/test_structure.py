@@ -42,6 +42,12 @@ def structure_random(super_cell: SuperCell):
     return super_cell.gen_random_structure(nsubs=nsubs, track_indices=True)
 
 
+def test_get_degeneracy(structure):
+    assert structure.get_degeneracy() == 1
+    structure.flip(0, 0, 1)
+    assert structure.get_degeneracy() == 3
+
+
 def test_get_atoms(structure):
     atoms = structure.get_atoms()
     sigmas = atoms.arrays["sigmas"]
