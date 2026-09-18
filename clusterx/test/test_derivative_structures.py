@@ -165,21 +165,23 @@ def test_generate(
     )
 
 
-@pytest.mark.parametrize("recursive", [False, True])
-def test_generate_degeneracy(ds_generator_empty, recursive):
+@pytest.mark.parametrize("nsubs", [0, 1, 2, 3])
+def test_degeneracy(ds_generator_empty, nsubs):
+    dss = ds_generator_empty
     p = np.diag([2, 2, 2])
-    ds_generator_empty.generate(
+    scell = SuperCell(dss.plat, p)
+    nsites = len(scell)
+    sum_expected = math.comb(nsites, nsubs)
+    dss.generate(
         supercell_sizes=None,
-        num_subs_list=[[1], [2]],
+        num_subs_list=[[nsubs]],
         sc_shape=p,
         sc_shapes=None,
         n_random=None,
         random_state=42,
-        recursive=recursive,
+        recursive=False,
     )
-    for _, row in ds_generator_empty.configurations.iterrows():
-        print(row)
-        assert row["degeneracy"] != 0
+    assert sum_expected == dss.configurations["degeneracy"].sum()
 
 
 @pytest.mark.parametrize("recursive", [False, True])
