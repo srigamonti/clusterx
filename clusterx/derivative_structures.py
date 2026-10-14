@@ -1110,13 +1110,14 @@ class DSGenerator:
         pbar = tqdm(
             combinations(ssites, nsubs), total=n_max, desc="Finding unique sigmas"
         )
-        full_list = set()
+        sigmas_hash_set = set()
 
         # Precompute permutations as index tuples
         self._symper_tuples = [tuple(per) for per in symper]
 
         mode = "fast"
         switched_mode = False
+        rows = [] # store sigma, shape_id, and degeneracy for batch insertion
 
         for con in pbar:
             current_mem, _ = tracemalloc.get_traced_memory()
@@ -1127,41 +1128,37 @@ class DSGenerator:
                 mode = "slow"
                 switched_mode = True
                 logging.info("Cache quota exceeded, switching to slow mode.")
-                full_list = set()
+                sigmas_hash_set = set()
                 for sigma in self.configurations["sigma"]:
-                    sigma_hash_canonical = min(
+                    trial_hash_canonical = min(
                         hash(tuple(sigma_trial[i] for i in per))
                         for per in self._symper_tuples
                     )
-                    full_list.add(sigma_hash_canonical)
+                    sigmas_hash_set.add(trial_hash_canonical)
 
             if mode == "fast":
                 sigma_hash = hash(tuple(sigma_trial))
 
-                if sigma_hash not in full_list:
-                    all_hashes = {
+                if sigma_hash not in sigmas_hash_set:
+                    all_trial_hashes = {
                         hash(tuple(sigma_trial[i] for i in per))
                         for per in self._symper_tuples
                     }
-                    degeneracy = len(all_hashes)
-                    full_list |= all_hashes
-                    self.add_configuration(
-                        sigma=sigma_trial, shape_id=shape_id, degeneracy=degeneracy
-                    )
+                    degeneracy = len(all_trial_hashes)
+                    sigmas_hash_set |= all_trial_hashes
+                    rows.append((sigma_trial, shape_id, degeneracy))
 
             else:
                 # Slow path: only store the canonical hash
-                all_hashes = {
+                all_trial_hashes = {
                     hash(tuple(sigma_trial[i] for i in per))
                     for per in self._symper_tuples
                 }
-                degeneracy = len(all_hashes)
-                sigma_hash_canonical = min(all_hashes)
-                if sigma_hash_canonical not in full_list:
-                    full_list.add(sigma_hash_canonical)
-                    self.add_configuration(
-                        sigma=sigma_trial, shape_id=shape_id, degeneracy=degeneracy
-                    )
+                degeneracy = len(all_trial_hashes)
+                trial_hash_canonical = min(all_trial_hashes)
+                if trial_hash_canonical not in sigmas_hash_set:
+                    sigmas_hash_set.add(trial_hash_canonical)
+                    rows.append((sigma_trial, shape_id, degeneracy))
 
             # Show memory usage in tqdm postfix
             pbar.set_postfix(
@@ -1171,6 +1168,14 @@ class DSGenerator:
             )
 
         tracemalloc.stop()
+
+        start_id = len(self.configurations)
+        new_configurations = pd.DataFrame(rows, columns=["sigma", "shape_id", "degeneracy"])
+        new_configurations["config_id"] = range(start_id, start_id + len(new_configurations))
+        self.configurations = pd.concat(
+            [self.configurations, new_configurations],
+            ignore_index=True,
+        )
 
         return len(self.configurations) - num_conf_start
 
