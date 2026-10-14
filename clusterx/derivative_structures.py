@@ -948,9 +948,9 @@ class DSGenerator:
         )
 
     @staticmethod
-    def _validate_sigma(sigma: Tuple[int], nsubs, stypes, exact=False):
-        isok = True
-
+    def _validate_sigma(sigma: Tuple[int], nsubs, stypes):
+        """Check if a given sigma configuration is valid based on the number of
+        substitutions and site types."""
         sigma_nsubs = {}
         for site_type in nsubs:
             sigma_nsubs[site_type] = []
@@ -964,24 +964,17 @@ class DSGenerator:
                     if sigma_j == i + 1 and stype_j == int(site_type):
                         n += 1
                         sigma_nsubs[site_type][int(i)] += 1
-                        if not exact and n > max_nsubs:
+                        if n > max_nsubs:
                             return False
-
-        if not exact:
-            return isok
-        else:
-            for site_type, max_nsubs_list in nsubs.items():
-                for i, j in zip(sigma_nsubs[site_type], nsubs[site_type]):
-                    if i != j:
-                        return False
+        return True
 
     def get_child_sigmas(
         self,
-        sigma: Tuple[int],
-        ssites: List[int],
-        symper_tuples: List[tuple],
-        ems: List[int],
-        seen,
+        sigma: tuple[int],
+        ssites: list[int],
+        symper_tuples: list[tuple],
+        ems: list[int],
+        seen_hashes: set[int],
         nsubs,
         stypes,
     ):
@@ -995,59 +988,61 @@ class DSGenerator:
 
         unique_children = {}  # dict with child hash as key and degeneracy as value
         for child in children:
-            if hash(child) not in seen:
+            if hash(child) not in seen_hashes:
                 all_hashes = {
                     hash(tuple(child[i] for i in per)) for per in symper_tuples
                 }
-                seen |= all_hashes
+                seen_hashes |= all_hashes
                 unique_children[child] = len(all_hashes)  # save degeneracy
 
-        return unique_children, seen
+        return unique_children, seen_hashes
 
     def _generate_all_configurations_recursive(
         self,
-        ssites,
-        nsubs,
-        natoms,
-        shape_id,
-        symper_tuples,
-        ems,
-        stypes,
-        sigma0=None,
-        seen=None,
-        current_nsubs=0,
-        pbar=None,
-        all_configs=None,
-        degeneracy=None,
+        ssites: list[int],
+        nsubs: dict[str, list[int]],
+        natoms: int,
+        shape_id: int,
+        symper_tuples: list[tuple],
+        ems: list[int],
+        stypes: np.ndarray[int],
+        sigma0: tuple[int] | None = None,
+        seen_hashes: set[int] | None = None,
+        current_nsubs: int = 0,
+        pbar: tqdm | None = None,
+        all_hashes: set[int] | None = None,
+        degeneracy: int | None = None,
+        all_sigmas: list[tuple[tuple[int], int]] | None = None,
     ):
+        is_root = all_sigmas is None
         if sigma0 is None:
             sigma0 = (0,) * natoms
 
-        if seen is None:
-            seen = set()
+        if seen_hashes is None:
+            seen_hashes = set()
 
-        if all_configs is None:
-            all_configs = set()
+        if all_hashes is None:
+            all_hashes = set()
+
+        if all_sigmas is None:
+            all_sigmas = []
 
         if degeneracy is None:
-            all_hashes = {hash(tuple(sigma0[i] for i in per)) for per in symper_tuples}
-            degeneracy = len(all_hashes)
+            hashes_sigma0 = {hash(tuple(sigma0[i] for i in per)) for per in symper_tuples}
+            degeneracy = len(hashes_sigma0)
 
-        self.add_configuration(sigma=sigma0, shape_id=shape_id, degeneracy=degeneracy)
-        all_configs.add(hash(sigma0))
+        all_sigmas.append((sigma0, degeneracy))
+        all_hashes.add(hash(sigma0))
 
         if pbar:
             pbar.update(1)
 
-        if DSGenerator._validate_sigma(sigma0, nsubs, stypes, exact=True):
-            return
-
-        children, seen = self.get_child_sigmas(
-            sigma0, ssites, symper_tuples, ems, seen, nsubs, stypes
+        children, seen_hashes = self.get_child_sigmas(
+            sigma0, ssites, symper_tuples, ems, seen_hashes, nsubs, stypes
         )
         if pbar and len(children) != 0:
             pbar.set_postfix(
-                nseen=len(seen),
+                nseen=len(seen_hashes),
                 nchildren=len(children),
                 nsub=sum(1 for x in list(children.keys())[0] if x != 0),
             )
@@ -1061,15 +1056,36 @@ class DSGenerator:
                 ems,
                 stypes,
                 sigma0=child,
-                seen=seen,
+                seen_hashes=seen_hashes,
                 current_nsubs=current_nsubs + 1,
                 pbar=pbar,
-                all_configs=all_configs,
+                all_hashes=all_hashes,
                 degeneracy=degeneracy,
+                all_sigmas=all_sigmas,
             )
 
-        if DSGenerator._validate_sigma(sigma0, nsubs, stypes, exact=True):
-            return len(all_configs)
+        # arrive here after all children have been processed,
+        # add all unique sigmas to the configurations DataFrame
+        if is_root:
+            start_id = len(self.configurations)
+            new_configurations = pd.DataFrame(
+                [
+                    {
+                        "config_id": new_id,
+                        "sigma": sigma,
+                        "shape_id": shape_id,
+                        "degeneracy": degeneracy
+                    }
+                    for new_id, (sigma, degeneracy) in zip(
+                        range(start_id, start_id + len(all_sigmas)), all_sigmas
+                    )
+                ]
+            )
+            self.configurations = pd.concat(
+                [self.configurations, new_configurations],
+                ignore_index=True,
+            )
+        return len(all_hashes)
 
     def _generate_all_configurations(
         self,
