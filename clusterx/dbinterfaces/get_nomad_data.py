@@ -307,6 +307,40 @@ class Dataset:
             energy_values_ev.append(total_energy_ev)
         return energy_values_ev
 
+    def get_band_gaps(self):
+        """
+        Returns a list of band gap values in eV
+        of the entries contained in the dataset
+        """
+        values = []
+        for entry in self.download_data():
+            archive = entry["archive"]
+            calculations = archive["run"][0]["calculation"]
+
+            def first_value(gaps):
+                if isinstance(gaps, dict):
+                    gaps = [gaps]
+                for gap in gaps or []:
+                    if gap.get("value") is not None:
+                        return gap["value"]
+                return None
+
+            band_gap = next(
+                (
+                    value
+                    for value in (first_value(c.get("band_gap")) for c in reversed(calculations))
+                    if value is not None
+                ),
+                None,
+            )
+            if band_gap is None:
+                result_band_gap = archive.get("results", {}).get("properties", {}).get("electronic", {}).get("band_gap")
+                band_gap = first_value(result_band_gap)
+            if band_gap is None:
+                raise ValueError("No band gap result found in the NOMAD entry.")
+            values.append(band_gap / electron_volt)
+        return values
+
     def get_structure_objects(self, filename="structure.json"):
         """
         Returns a list of structure objects for the entrys in the dataset.
