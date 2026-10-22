@@ -368,12 +368,13 @@ class Dataset:
         return list_of_atoms_objects
 
     def get_lattice_constants(self, normalize=False):
-        """"
-        Returns the lattice constants of the structures in the dataset as
-        three lists: one list for each lattice constant.
-        Setting normalize to True normalizes the lattice constants with respect
-        to the parent lattice and returns the smallest lattice constant first,
-        and the largest last.
+        """ "
+        Return lattice lengths and angles for the structures in the dataset.
+
+        Returns six lists: a, b, c (lengths), followed by alpha, beta, gamma
+        (angles in degrees). With ``normalize=True``, lattice vectors are
+        normalized to the parent lattice, and lengths are returned in
+        ascending order with the angles matched to that order.
 
         **Parameters:**
         ``normalize``: bool
@@ -384,47 +385,55 @@ class Dataset:
         lattice_constants_1 = []
         lattice_constants_2 = []
         lattice_constants_3 = []
+        lattice_angles_alpha = []
+        lattice_angles_beta = []
+        lattice_angles_gamma = []
         atoms_objects = self.get_atoms_objects()
+
+        def angle_degrees(vector_1, vector_2):
+            cosine = np.dot(vector_1, vector_2) / (
+                np.linalg.norm(vector_1) * np.linalg.norm(vector_2)
+            )
+            return np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0)))
+
         if not normalize:
             for atoms_object in atoms_objects:
-                cell = atoms_object.cell
-                lattice_constant_1 = np.sqrt(cell[0][0]**2
-                                            + cell[0][1]**2
-                                            + cell[0][2]**2)
-                lattice_constant_2 = np.sqrt(cell[1][0]**2
-                                            + cell[1][1]**2
-                                            + cell[1][2]**2)
-                lattice_constant_3 = np.sqrt(cell[2][0]**2
-                                            + cell[2][1]**2
-                                            + cell[2][2]**2)
+                cell = np.asarray(atoms_object.cell)
+                lattice_constant_1, lattice_constant_2, lattice_constant_3 = np.linalg.norm(
+                    cell, axis=1
+                )
                 # a, b, c = np.sort([lattice_constant_1, lattice_constant_2, lattice_constant_3])
                 lattice_constants_1.append(lattice_constant_1)
                 lattice_constants_2.append(lattice_constant_2)
                 lattice_constants_3.append(lattice_constant_3)
+                lattice_angles_alpha.append(angle_degrees(cell[1], cell[2]))
+                lattice_angles_beta.append(angle_degrees(cell[0], cell[2]))
+                lattice_angles_gamma.append(angle_degrees(cell[0], cell[1]))
         else:
             structures = self.get_structure_objects()
             # We need cell parameters from DFT calculation. This is contained in atoms object.
             # Also we need supercell transformation matrix; this is contained in structures object
             for structure, atoms_object in zip(structures, atoms_objects):
-                cell = atoms_object.cell
+                cell = np.asarray(atoms_object.cell)
                 # get transformation from parent lattice to super cell
                 transformation_matrix = structure.get_supercell().get_transformation()
                 # apply inverse transformation matrix to cell
                 normalized_cell = np.dot(np.linalg.inv(transformation_matrix), cell)
-                # obtain lattice constants normalized to parent lattice
-                lattice_constant_1 = np.sqrt(normalized_cell[0][0]**2
-                                            + normalized_cell[0][1]**2
-                                            + normalized_cell[0][2]**2)
-                lattice_constant_2 = np.sqrt(normalized_cell[1][0]**2
-                                            + normalized_cell[1][1]**2
-                                            + normalized_cell[1][2]**2)
-                lattice_constant_3 = np.sqrt(normalized_cell[2][0]**2
-                                            + normalized_cell[2][1]**2
-                                            + normalized_cell[2][2]**2)
-            # sort lattice constants such that smalles lattice constant is returned first,
-            # and largest last
-                a, b, c = np.sort([lattice_constant_1, lattice_constant_2, lattice_constant_3])
+                # Sort the lattice vectors together so angles match the returned a, b, c.
+                vector_order = np.argsort(np.linalg.norm(normalized_cell, axis=1))
+                sorted_cell = normalized_cell[vector_order]
+                a, b, c = np.linalg.norm(sorted_cell, axis=1)
                 lattice_constants_1.append(a)
                 lattice_constants_2.append(b)
                 lattice_constants_3.append(c)
-        return lattice_constants_1, lattice_constants_2, lattice_constants_3
+                lattice_angles_alpha.append(angle_degrees(sorted_cell[1], sorted_cell[2]))
+                lattice_angles_beta.append(angle_degrees(sorted_cell[0], sorted_cell[2]))
+                lattice_angles_gamma.append(angle_degrees(sorted_cell[0], sorted_cell[1]))
+        return (
+            lattice_constants_1,
+            lattice_constants_2,
+            lattice_constants_3,
+            lattice_angles_alpha,
+            lattice_angles_beta,
+            lattice_angles_gamma,
+        )
