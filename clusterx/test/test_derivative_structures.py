@@ -416,6 +416,15 @@ def _add_energy_property(dss):
     return energies
 
 
+def test_add_property_column_registers_property(ds_generator_full):
+    ds_generator_full.add_property_column("energy", default_value=0.0)
+
+    assert ds_generator_full.get_property_names() == {"energy"}
+    assert ds_generator_full.configurations["energy"].tolist() == [0.0] * len(
+        ds_generator_full.configurations
+    )
+
+
 def _write_ccalc(corrc, tmp_path):
     ccalc_filepath = tmp_path / "ccalc.pickle"
     corrc.serialize(filepath=str(ccalc_filepath), fmt="pickle")

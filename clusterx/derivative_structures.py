@@ -355,6 +355,7 @@ class DSGenerator:
                     struc,
                     self.get_scell_shape(row["shape_id"]),
                     conc,
+                    row=row,
                     **property_solver_kwargs,
                 )
 
@@ -532,6 +533,7 @@ class DSGenerator:
             raise ValueError(f"Column '{column_name}' already exists in the configurations DataFrame.")
 
         self.configurations[column_name] = default_value
+        self.property_names.add(column_name)
 
     def set_property_values_iteratively(
         self,

@@ -16,6 +16,7 @@ from clusterx.structures_set import StructuresSet
 
 commands = ["build_structures_set_from_nomad"]
 
+
 @plac.pos("dataset_id", help="NOMAD dataset ID from which to retrieve entries.")
 @plac.opt(
     "pagination_page_size",
@@ -78,7 +79,7 @@ commands = ["build_structures_set_from_nomad"]
     type=bool,
 )
 @plac.opt("include_oasis_entry_id", abbrev="oe", help="Add NOMAD entry IDs as the oasis_entry_id property.", type=bool)
-@plac.opt("include_total_energy_mev", abbrev="te", help="Add total energies as the total_energy_mev property.", type=bool)
+@plac.opt("include_total_energy_ev", abbrev="te", help="Add total energies as the total_energy_ev property.", type=bool)
 @plac.opt("include_band_gap_ev", abbrev="bg", help="Add band gaps as the band_gap_ev property.", type=bool)
 @plac.opt("include_a", abbrev="la", help="Add normalized a lattice constants as the a property.", type=bool)
 @plac.opt("include_b", abbrev="lb", help="Add normalized b lattice constants as the b property.", type=bool)
@@ -99,7 +100,7 @@ def build_structures_set_from_nomad(
     parent_lattice_filepath: str = "plat.json",
     save_parent_lattice: bool = False,
     include_oasis_entry_id: bool = False,
-    include_total_energy_mev: bool = False,
+    include_total_energy_ev: bool = False,
     include_band_gap_ev: bool = False,
     include_a: bool = False,
     include_b: bool = False,
@@ -129,7 +130,7 @@ def build_structures_set_from_nomad(
 
         [build_structures_set_from_nomad]
         dataset_id = "DATASET_ID"
-        include_total_energy_mev = true
+        include_total_energy_ev = true
         include_band_gap_ev = true
         include_oasis_entry_id = false
         save_atoms_db = true
@@ -162,15 +163,14 @@ def build_structures_set_from_nomad(
         atoms_objects = dataset.get_atoms_objects()
         if len(atoms_objects) != len(structures):
             raise ValueError(
-                f"NOMAD dataset '{dataset_id}' returned {len(atoms_objects)} atoms "
-                f"for {len(structures)} structures."
+                f"NOMAD dataset '{dataset_id}' returned {len(atoms_objects)} atoms for {len(structures)} structures."
             )
         write(filename=atoms_db_filepath, images=atoms_objects)
 
     sset = StructuresSet(parent_lattice)
     sset.add_structures(structures)
 
-    energies = dataset.get_total_energies() if include_total_energy_mev else None
+    energies = dataset.get_total_energies() if include_total_energy_ev else None
     band_gaps = dataset.get_band_gaps() if include_band_gap_ev else None
     entry_ids = dataset.get_entry_ids() if include_oasis_entry_id else None
 
@@ -198,7 +198,7 @@ def build_structures_set_from_nomad(
 
     property_values = {
         "oasis_entry_id": entry_ids,
-        "total_energy_mev": [energy * 10**3 for energy in energies] if energies is not None else None,
+        "total_energy_ev": [energy for energy in energies] if energies is not None else None,
         "band_gap_ev": band_gaps,
         "a": a_values if include_a else None,
         "b": b_values if include_b else None,
@@ -207,15 +207,9 @@ def build_structures_set_from_nomad(
         "beta": beta_values if include_beta else None,
         "gamma": gamma_values if include_gamma else None,
     }
-    properties = {
-        name: values for name, values in property_values.items() if values is not None
-    }
+    properties = {name: values for name, values in property_values.items() if values is not None}
     entry_count = len(structures)
-    mismatched_lengths = {
-        name: len(values)
-        for name, values in properties.items()
-        if len(values) != entry_count
-    }
+    mismatched_lengths = {name: len(values) for name, values in properties.items() if len(values) != entry_count}
     if mismatched_lengths:
         raise ValueError(
             f"NOMAD dataset '{dataset_id}' returned mismatched property counts "
