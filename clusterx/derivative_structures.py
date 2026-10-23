@@ -289,15 +289,108 @@ class DSGenerator:
         per_formula_unit=False,
         store_ensemble_predictions=False,
     ):
-        """Compute properties.
+        """Compute one or more properties for every configuration.
 
-        If ``cemodel`` is based on a bagging ensemble and
-        ``store_ensemble_predictions`` is True, then for each computed property an
-        additional column named ``<property>_ensemble_predictions`` is stored in
-        ``self.configurations``. Each entry of that column contains the array of
-        predictions from the individual ensemble members for that configuration.
+        Exactly one property-name argument must be supplied:
+
+        * Use ``property_name`` to compute one property. The selected computation
+          method must return one scalar value for each configuration.
+        * Use ``property_names`` to compute several properties. The selected
+          method must return a sequence with exactly one value per name, in the
+          same order. For example, with ``property_names=["p1", "p2"]``, return
+          ``(p1, p2)`` or ``[p1, p2]``.
+
+        For each row in ``self.configurations``, the configuration's structure is
+        generated and passed to the selected computation method. Pass one of
+        ``ase_calculator``, ``cemodel``, or ``property_solver``. If more than one
+        is provided, the first non-``None`` option in that order is used:
+
+        * ``ase_calculator`` is an ASE calculator. Its potential energy is
+          computed from the generated structure's atoms. This method produces a
+          single property.
+        * ``cemodel`` is a cluster expansion model. ``cemodel.predict`` is called
+          with the generated structure. Use a model that returns one value for a
+          single property, or one value per requested property for multiple
+          properties.
+        * ``property_solver`` is a callable invoked once per configuration as
+          ``property_solver(structure, shape, concentration, row=row, **kwargs)``.
+          Here, ``structure`` is the generated clusterx structure, ``shape`` is
+          the supercell shape, ``concentration`` is the binary fractional
+          concentration, and ``row`` is that configuration's pandas Series.
+          Extra keyword arguments come from ``property_solver_kwargs``. For one
+          property, return a scalar. For multiple properties, return a tuple,
+          list, or other sequence with one value per entry in ``property_names``.
+          For example, if the names are ``["p1", "p2"]``, return ``p1, p2`` or
+          ``[p1, p2]``.
+
+        **Parameters**
+
+        ``property_name`` : str, optional
+            Name of the single property column to compute. Use this or
+            ``property_names``, but not both.
+        ``property_names`` : sequence of str, optional
+            Names of multiple property columns to compute. The order determines
+            how the values returned by the selected method are assigned to
+            columns. Use this or ``property_name``, but not both.
+        ``ase_calculator`` : ASE Calculator, optional
+            Calculator used to compute potential energy from each generated
+            structure. This produces one property.
+        ``cemodel`` : Model, optional
+            Cluster expansion model used to predict the property or properties.
+        ``property_solver`` : callable, optional
+            Custom function for computing the property or properties. It receives
+            ``structure``, ``shape``, and ``concentration`` as positional
+            arguments, plus ``row`` as a keyword argument. It may return a
+            scalar for one property or an ordered sequence for multiple
+            properties.
+        ``property_solver_kwargs`` : dict, optional
+            Additional keyword arguments passed to ``property_solver``. Defaults
+            to an empty dictionary.
+        ``linear_reference`` : str or two-point sequence, optional
+            ``"least-squares"`` or ``"concentration-endpoints"`` fits a
+            concentration-dependent reference separately for each computed
+            property and subtracts it. Alternatively, provide two points as
+            ``[(x0, p0), (x1, p1)]``, where each point is a
+            ``(concentration, property_value)`` pair. Set to ``None`` to skip
+            reference subtraction. The explicit two-point form is intended for
+            scalar results, not tuple or list results from a multi-property
+            solver.
+        ``per_formula_unit`` : bool, default ``False``
+            If True, divide each computed result by its configuration's
+            supercell size. Use this with scalar results.
+        ``store_ensemble_predictions`` : bool, default ``False``
+            If True and ``cemodel`` uses a bagging ensemble, store each
+            configuration's array of individual-estimator predictions in an
+            additional ``<property>_ensemble_predictions`` column. This option
+            is not supported together with ``per_formula_unit=True`` or an
+            explicit two-point ``linear_reference``.
+
+        **Example: computing two values with a property solver**
+
+        The returned values are assigned positionally: the first goes to
+        ``"p1"`` and the second to ``"p2"``.
+
+        .. code-block:: python
+
+            def solve_properties(structure, shape, concentration, row, offset):
+                p1 = concentration + offset
+                p2 = len(row["sigma"])
+                return p1, p2  # A list, such as [p1, p2], works as well.
+
+            generator.compute_properties(
+                property_names=["p1", "p2"],
+                property_solver=solve_properties,
+                property_solver_kwargs={"offset": 0.1},
+            )
+
+        **Returns**
+
+        ``None``. The computed values are written to columns in
+        ``self.configurations``; missing columns are created automatically.
         """
         _filter_property_names(property_name, property_names)
+        if property_solver_kwargs is None:
+            property_solver_kwargs = {}
         scell_cache = {}
 
         def _get_structure_object(row):
@@ -551,12 +644,15 @@ class DSGenerator:
         **Parameters:**
 
         value_func : callable
-            A function that takes a row of the DataFrame and optional keyword arguments, returning the value for the property.
+            A function that takes a row of the DataFrame and optional keyword arguments. When setting one property,
+            it returns that property's value. When setting multiple properties, it returns a list, tuple, or other
+            sequence of values, with one value per name in ``property_names`` and in the same order.
         property_name : str
             The name of the property whose values are to be set.
             Either this or property_names must be provided.
         property_names : list(str)
-            The name of the properties whose values are to be set.
+            The names of the properties whose values are to be set. For multiple properties, ``value_func`` must
+            return one value for each name, in this order.
             Either this or property_name must be provided.
         create_if_missing : bool, optional
             If True, creates the column if it does not exist. Defaults to True.
@@ -573,10 +669,29 @@ class DSGenerator:
             return row["sigma"] * multiplier + offset
 
         generator.set_property_values_iteratively(
-            compute_value_with_args,
+            value_func=compute_value_with_args,
             property_name="example_property",
             multiplier=2,
             offset=5
+        )
+
+        def compute_two_values(row):
+            p1 = len(row["sigma"])
+            p2 = sum(row["sigma"])
+            return p1, p2
+
+        generator.set_property_values_iteratively(
+            value_func=compute_two_values,
+            property_names=["p1", "p2"],
+        )
+
+        # A list return works too; its values map to property_names in order.
+        def compute_two_values_as_list(row):
+            return [len(row["sigma"]), sum(row["sigma"])]
+
+        generator.set_property_values_iteratively(
+            value_func=compute_two_values_as_list,
+            property_names=["p1", "p2"],
         )
         ```
         """
