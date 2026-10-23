@@ -42,9 +42,12 @@ class FakeDataset:
         self.calls.append("entry_ids")
         return ["entry-id"]
 
-    def get_lattice_constants(self, normalize=False):
-        assert normalize
+    def get_lattice_constants(self):
         self.calls.append("lattice_constants")
+        return [4.0], [5.0], [6.0], [90.0], [91.0], [92.0]
+
+    def get_normalized_lattice_constants(self):
+        self.calls.append("normalized_lattice_constants")
         return [3.8], [3.9], [11.7], [90.0], [90.0], [90.0]
 
 
@@ -99,14 +102,10 @@ def test_build_structures_set_from_nomad(monkeypatch):
         parent_lattice_filepath="plat.json",
         save_parent_lattice=True,
         include_oasis_entry_id=True,
-        include_total_energy_mev=True,
+        include_total_energy_ev=True,
         include_band_gap_ev=True,
-        include_a=True,
-        include_b=True,
-        include_c=True,
-        include_alpha=True,
-        include_beta=True,
-        include_gamma=True,
+        include_lattice_params=True,
+        include_normalized_lattice_params=True,
     )
     fake_sset = structures_sets[0]
 
@@ -124,19 +123,26 @@ def test_build_structures_set_from_nomad(monkeypatch):
         "band_gaps",
         "entry_ids",
         "lattice_constants",
+        "normalized_lattice_constants",
     ]
     assert writes == [{"filename": "atoms.db", "images": ["relaxed atoms"]}]
     assert fake_sset.parent_lattice is fake_sset.structures[0].get_parent_lattice()
     assert fake_sset.properties == {
         "oasis_entry_id": ["entry-id"],
-        "total_energy_mev": [-1385771198.7808442],
+        "total_energy_ev": [-1385771.1987808442],
         "band_gap_ev": [0.4],
-        "a": [3.8],
-        "b": [3.9],
-        "c": [11.7],
+        "a": [4.0],
+        "b": [5.0],
+        "c": [6.0],
         "alpha": [90.0],
-        "beta": [90.0],
-        "gamma": [90.0],
+        "beta": [91.0],
+        "gamma": [92.0],
+        "a_norm": [3.8],
+        "b_norm": [3.9],
+        "c_norm": [11.7],
+        "alpha_norm": [90.0],
+        "beta_norm": [90.0],
+        "gamma_norm": [90.0],
     }
     assert fake_sset.serialization == {
         "filepath": "output.db",

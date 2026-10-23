@@ -81,12 +81,18 @@ commands = ["build_structures_set_from_nomad"]
 @plac.opt("include_oasis_entry_id", abbrev="oe", help="Add NOMAD entry IDs as the oasis_entry_id property.", type=bool)
 @plac.opt("include_total_energy_ev", abbrev="te", help="Add total energies as the total_energy_ev property.", type=bool)
 @plac.opt("include_band_gap_ev", abbrev="bg", help="Add band gaps as the band_gap_ev property.", type=bool)
-@plac.opt("include_a", abbrev="la", help="Add normalized a lattice constants as the a property.", type=bool)
-@plac.opt("include_b", abbrev="lb", help="Add normalized b lattice constants as the b property.", type=bool)
-@plac.opt("include_c", abbrev="lc", help="Add normalized c lattice constants as the c property.", type=bool)
-@plac.opt("include_alpha", abbrev="al", help="Add normalized alpha lattice angles as the alpha property.", type=bool)
-@plac.opt("include_beta", abbrev="be", help="Add normalized beta lattice angles as the beta property.", type=bool)
-@plac.opt("include_gamma", abbrev="ga", help="Add normalized gamma lattice angles as the gamma property.", type=bool)
+@plac.opt(
+    "include_lattice_params",
+    abbrev="lp",
+    help="Add raw a, b, c, alpha, beta, and gamma lattice parameters.",
+    type=bool,
+)
+@plac.opt(
+    "include_normalized_lattice_params",
+    abbrev="nlp",
+    help="Add normalized a_norm, b_norm, c_norm, alpha_norm, beta_norm, and gamma_norm properties.",
+    type=bool,
+)
 def build_structures_set_from_nomad(
     dataset_id: str,
     pagination_page_size: int = 100,
@@ -102,17 +108,16 @@ def build_structures_set_from_nomad(
     include_oasis_entry_id: bool = False,
     include_total_energy_ev: bool = False,
     include_band_gap_ev: bool = False,
-    include_a: bool = False,
-    include_b: bool = False,
-    include_c: bool = False,
-    include_alpha: bool = False,
-    include_beta: bool = False,
-    include_gamma: bool = False,
+    include_lattice_params: bool = False,
+    include_normalized_lattice_params: bool = False,
 ):
     """Build a StructuresSet and related files from a NOMAD dataset.
 
     Dataset properties are added only when their corresponding ``include_*``
     option is set to ``True``. All property options default to ``False``.
+    ``include_lattice_params`` adds the raw ``a``, ``b``, ``c``, ``alpha``,
+    ``beta``, and ``gamma`` values. ``include_normalized_lattice_params`` adds
+    the corresponding parent-lattice-normalized values with ``_norm`` suffixes.
 
     The parent lattice is serialized only when ``save_parent_lattice`` is
     ``True``. Relaxed atoms are written only when ``save_atoms_db`` is ``True``.
@@ -132,6 +137,8 @@ def build_structures_set_from_nomad(
         dataset_id = "DATASET_ID"
         include_total_energy_ev = true
         include_band_gap_ev = true
+        include_lattice_params = true
+        include_normalized_lattice_params = true
         include_oasis_entry_id = false
         save_atoms_db = true
         save_parent_lattice = true
@@ -174,39 +181,24 @@ def build_structures_set_from_nomad(
     band_gaps = dataset.get_band_gaps() if include_band_gap_ev else None
     entry_ids = dataset.get_entry_ids() if include_oasis_entry_id else None
 
-    include_lattice_constants = any(
-        (
-            include_a,
-            include_b,
-            include_c,
-            include_alpha,
-            include_beta,
-            include_gamma,
-        )
+    lattice_params = dataset.get_lattice_constants() if include_lattice_params else None
+    normalized_lattice_params = (
+        dataset.get_normalized_lattice_constants() if include_normalized_lattice_params else None
     )
-    if include_lattice_constants:
-        (
-            a_values,
-            b_values,
-            c_values,
-            alpha_values,
-            beta_values,
-            gamma_values,
-        ) = dataset.get_lattice_constants(normalize=True)
-    else:
-        a_values = b_values = c_values = alpha_values = beta_values = gamma_values = None
 
     property_values = {
         "oasis_entry_id": entry_ids,
         "total_energy_ev": [energy for energy in energies] if energies is not None else None,
         "band_gap_ev": band_gaps,
-        "a": a_values if include_a else None,
-        "b": b_values if include_b else None,
-        "c": c_values if include_c else None,
-        "alpha": alpha_values if include_alpha else None,
-        "beta": beta_values if include_beta else None,
-        "gamma": gamma_values if include_gamma else None,
     }
+    lattice_parameter_names = ("a", "b", "c", "alpha", "beta", "gamma")
+    if lattice_params is not None:
+        property_values.update(zip(lattice_parameter_names, lattice_params))
+    if normalized_lattice_params is not None:
+        property_values.update(
+            (f"{name}_norm", values)
+            for name, values in zip(lattice_parameter_names, normalized_lattice_params)
+        )
     properties = {name: values for name, values in property_values.items() if values is not None}
     entry_count = len(structures)
     mismatched_lengths = {name: len(values) for name, values in properties.items() if len(values) != entry_count}

@@ -15,7 +15,7 @@ class FakeStructure:
         return FakeSuperCell()
 
 
-def test_get_lattice_constants_returns_lengths_and_angles(monkeypatch):
+def test_get_normalized_lattice_constants_returns_lengths_and_angles(monkeypatch):
     cell = np.array(
         [
             [0.0, 4.0, 0.0],
@@ -27,7 +27,7 @@ def test_get_lattice_constants_returns_lengths_and_angles(monkeypatch):
     monkeypatch.setattr(dataset, "get_atoms_objects", lambda: [Atoms(cell=cell)])
     monkeypatch.setattr(dataset, "get_structure_objects", lambda: [FakeStructure()])
 
-    a, b, c, alpha, beta, gamma = dataset.get_lattice_constants(normalize=True)
+    a, b, c, alpha, beta, gamma = dataset.get_normalized_lattice_constants()
 
     assert a == pytest.approx([2.0])
     assert b == pytest.approx([4.0])
