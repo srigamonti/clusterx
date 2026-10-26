@@ -111,7 +111,7 @@ commands = ["generate_derivative_structures"]
     ),
     mask_name=("Name of the mask for applicable tasks.", "option", "mn", str),
     n_lowest=("Number of lowest-energy structures to include.", "option", None, int),
-    n_random=("Number of random structures to include.", "option", None, int),
+    n_random=("Task-dependent number of random structures.", "option", None, int),
     random_state=("Seed for random number generators.", "option", None, int),
     task=("Task to perform.", "option", "task", str),
     skip_existing=(
@@ -237,7 +237,14 @@ def generate_derivative_structures(
         Count of lowest-value configurations per concentration to mark (used by
         ``"mark_lowest_property_per_concentration"`` / ``"mark_lowest_and_random_properties_per_concentration"``).
     n_random : int, default ``0``
-        Number of random configurations per concentration to also mark (used by the combined marking task).
+        Task-dependent number of random configurations:
+
+        - For ``task="random"``, the number to generate for each
+          (supercell shape, substitution count) pair.
+        - For ``task="mark_lowest_and_random_properties_per_concentration"``,
+          the number to sample per concentration and add to the mask alongside
+          the ``n_lowest`` configurations. Duplicates are removed, so fewer
+          than ``n_random`` additional configurations may be marked.
     random_state : int, optional
         Seed for random selection/generation.
     task : str, default ``"do_full_enumeration"``
@@ -275,7 +282,8 @@ def generate_derivative_structures(
     Tasks
     -----
     ``"random"``
-        Randomly generate unique configurations under the given size/shape/substitution constraints.
+        Randomly generate up to ``n_random`` unique configurations per
+        (supercell shape, substitution count) under the given constraints.
         Writes the resulting DSS to ``dss_filepath``.
     ``"do_full_enumeration"`` or ``"find_derivative_structures"``
         Exhaustively enumerate derivative structures for the given lattice/sizes/shapes.
@@ -297,7 +305,8 @@ def generate_derivative_structures(
     ``"mark_lowest_property_per_concentration"``
         Create a mask with the configuration of minimal ``property_name`` for each concentration bin.
     ``"mark_lowest_and_random_properties_per_concentration"``
-        Create a mask with the ``n_lowest`` best plus ``n_random`` random configurations per concentration.
+        Create a mask with the ``n_lowest`` best plus up to ``n_random`` randomly
+        sampled configurations per concentration.
     ``"to_sset"`` / ``"convert_to_sset"``
         Convert the stored configurations (optionally filtered by ``mask_name``) into a
         :class:`clusterx.structures_set.StructuresSet` written to ``sset_filepath``.
