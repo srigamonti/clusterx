@@ -6,9 +6,34 @@ from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
-from clusterx.calculators.emt import EMT2
+from clusterx.calculators import EMT2, ToyEMText
 from ase import Atoms
+from ase.calculators.emt import parameters as emt_parameters
 import numpy as np
+
+
+def test_emt2_parameters_are_unique():
+    """Check that the added species have distinct parameter sets."""
+    extra_symbols = ("Fe", "Si", "Ge", "Sn", "Ba", "He", "Na", "Zn", "B", "X", "Cs", "I", "Br", "Pb")
+    builtin_symbols = ("Al", "Cu", "Ag", "Au", "Ni", "Pd", "Pt", "H", "C", "N", "O")
+    extra_parameters = [emt_parameters[symbol] for symbol in extra_symbols]
+    builtin_parameters = {emt_parameters[symbol] for symbol in builtin_symbols}
+
+    assert len(set(extra_parameters)) == len(extra_parameters)
+    assert all(parameters not in builtin_parameters for parameters in extra_parameters)
+
+
+def test_emt2_is_compatibility_alias():
+    """Check that the previous calculator name remains available."""
+    assert EMT2 is ToyEMText
+
+
+def test_toy_emt_ext_calculates_new_species():
+    """Check that the newly added species can be evaluated by ToyEMText."""
+    for symbol in ("Cs", "I", "Br", "Pb"):
+        atoms = Atoms([symbol, symbol], positions=[[0, 0, 0], [2.5, 0, 0]], cell=[12, 12, 12], pbc=True)
+        atoms.calc = ToyEMText()
+        assert np.isfinite(atoms.get_potential_energy())
 
 
 def test_emt2_calculator():
@@ -81,16 +106,16 @@ def test_emt2_calculator():
 
     np.testing.assert_allclose(
         [
-            420.02464215,
-            11.85279614,
-            200.11679975,
-            27.15487534,
-            162.41156144,
-            193.56777501,
-            11.85279614,
-            35.84803264,
-            585.51975722,
-            213.05311213,
+            18.87160014,
+            11.85277241,
+            32.19105935,
+            27.15487578,
+            41.57652786,
+            24.46212886,
+            11.85277241,
+            35.84806650,
+            15.81521831,
+            18.89778943,
         ],
         energies,
         atol=1e-5,
