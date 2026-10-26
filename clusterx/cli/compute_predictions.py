@@ -41,17 +41,26 @@ commands = ["compute_predictions"]
     help="Whether to store ensemble predictions. Only applicable if the model is an ensemble. Default: False.",
     type=bool,
 )
+@plac.opt(
+    "source_filepath",
+    abbrev="srf",
+    help="Optional source file. Defaults to target_filepath.",
+    type=str,
+)
 def compute_predictions(
     target_filepath: str,
     property_name: str,
     model_filepath: str,
     plat_filepath: Optional[str] = None,
     store_ensemble_predictions: bool = False,
+    source_filepath: Optional[str] = None,
 ):
     """Compute CE-model predictions and store them in the serialized target."""
     cmd_message("head")
 
-    target_kind, target = _load_target(target_filepath)
+    source_filepath = target_filepath if source_filepath is None else source_filepath
+    source_kind, target = _load_target(source_filepath)
+    _validate_target_kind(target_filepath, source_filepath, source_kind)
     model = _load_model(model_filepath)
 
     model_property_name = getattr(model, "property_name", None)
@@ -63,14 +72,14 @@ def compute_predictions(
         )
 
     if plat_filepath is not None:
-        _validate_parent_lattice(plat_filepath, target_kind, target, model)
+        _validate_parent_lattice(plat_filepath, source_kind, target, model)
 
-    if target_kind == "dsgenerator":
+    if source_kind == "dsgenerator":
         target.compute_properties(
             property_name=property_name, cemodel=model, store_ensemble_predictions=store_ensemble_predictions
         )
         target.serialize(filepath=target_filepath)
-    elif target_kind == "structures_set":
+    elif source_kind == "structures_set":
         values = [_prediction_to_jsonable(model.predict(structure)) for structure in target]
         target.set_property_values(
             property_name=property_name,
@@ -79,13 +88,30 @@ def compute_predictions(
         )
         target.serialize(filepath=target_filepath, overwrite=True)
     else:
-        raise ValueError(f"Unknown target kind: {target_kind}")
+        raise ValueError(f"Unknown source kind: {source_kind}")
 
     print(
         "Info(compute_predictions): stored predictions in "
-        f"'{property_name}' for {_target_count(target_kind, target)} "
+        f"'{property_name}' for {_target_count(source_kind, target)} "
         "structures/configurations."
     )
+
+
+def _validate_target_kind(
+    target_filepath: str, source_filepath: str, source_kind: str
+):
+    """Ensure an existing target has the same serialized object kind."""
+    if os.path.abspath(target_filepath) == os.path.abspath(source_filepath):
+        return
+    if not os.path.isfile(target_filepath):
+        return
+
+    target_kind, _ = _load_target(target_filepath)
+    if target_kind != source_kind:
+        raise ValueError(
+            f"Source file contains a {source_kind}, but target file contains a "
+            f"{target_kind}. Source and target kinds must match."
+        )
 
 
 def _load_target(filepath: str):

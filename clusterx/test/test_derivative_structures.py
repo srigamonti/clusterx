@@ -10,6 +10,7 @@ from ase.data import atomic_numbers as an
 
 from clusterx.calculators.emt import EMT2
 from clusterx.cli.compute_comat import compute_comat
+from clusterx.cli.compute_multiplicities import compute_multiplicities
 from clusterx.cli.convert_dss_to_sset import convert_dss_to_sset
 from clusterx.cli.convert_sset_to_dss import convert_sset_to_dss
 from clusterx.derivative_structures import DSGenerator, get_HNFs, get_unique_supercells
@@ -337,6 +338,21 @@ def test_serialize_load(ds_generator_full, tmp_path):
     )
 
 
+def test_compute_multiplicities_cli_persists(ds_generator_full, tmp_path):
+    filepath = tmp_path / "dss.pickle"
+    ds_generator_full.serialize(filepath)
+
+    compute_multiplicities(str(filepath), quiet=True)
+
+    ds_generator_loaded = DSGenerator.from_file(filepath)
+    assert "multiplicity" in ds_generator_loaded.configurations.columns
+    assert "multiplicity" in ds_generator_loaded.get_property_names()
+    assert len(ds_generator_loaded.configurations["multiplicity"]) == len(
+        ds_generator_full.configurations
+    )
+    assert all(ds_generator_loaded.configurations["multiplicity"] > 0)
+
+
 def test_from_structures_set_file_loads_structures_set_db(ds_generator_full, tmp_path):
     data = ds_generator_full.configurations.head(4).copy()
     energies = [float(i) for i in range(len(data))]
@@ -455,6 +471,15 @@ def _add_energy_property(dss):
     dss.configurations["energy"] = energies
     dss.property_names.add("energy")
     return energies
+
+
+def test_add_property_column_registers_property(ds_generator_full):
+    ds_generator_full.add_property_column("energy", default_value=0.0)
+
+    assert ds_generator_full.get_property_names() == {"energy"}
+    assert ds_generator_full.configurations["energy"].tolist() == [0.0] * len(
+        ds_generator_full.configurations
+    )
 
 
 def _write_ccalc(corrc, tmp_path):

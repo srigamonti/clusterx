@@ -1195,8 +1195,7 @@ def decorate_supercell(
 
     if expected_vacancies < 0:
         raise ValueError(
-            f"Atoms object contains more atoms ({len(at_positions)}) than "
-            f"supercell sites ({len(sc_positions)})."
+            f"Atoms object contains more atoms ({len(at_positions)}) than supercell sites ({len(sc_positions)})."
         )
 
     sublattice_types = scell.get_sublattice_types()
@@ -1238,9 +1237,7 @@ def decorate_supercell(
 
         mind = min(dists)
         i_mind = np.where(dists == min(dists))[0][0]
-        match_text = (
-            "No unused matching atom" if no_unused_match else "No matching atom"
-        )
+        match_text = "No unused matching atom" if no_unused_match else "No matching atom"
         return (
             f"{match_text} found within tolerance {tol_value} "
             f"for:\n"
@@ -1336,7 +1333,7 @@ def super_structure(struc0, d):
     This function takes a ``Structure`` instance (``struc0``) and creates a new structure
     which is obtained as the periodic repetition of the original structure
     along its unit cell vectors. The number of repetitions along each cell vector is given
-    by the three components of the input integer vector ``d``.
+    by ``d``. It can be an integer, a three-vector, or a 3x3 matrix of integers.
 
     **Parameters:**
 

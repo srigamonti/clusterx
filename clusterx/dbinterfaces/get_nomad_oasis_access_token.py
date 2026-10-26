@@ -2,15 +2,20 @@
 This module is designed to obtain the access token for a NOMAD OASIS database.
 """
 
+import getpass
 import os
+
 import requests
 from dotenv import load_dotenv
 
 
-def get_nomad_oasis_access_token(base_url: str = "https://nomad-lab.eu/prod/v1/staging/api/v1/",
-                                path_to_dotenv: str | None = None,
-                                username: str | None = None,
-                                userpassword: str | None = None):
+def get_nomad_oasis_access_token(
+    base_url: str = "https://nomad-lab.eu/prod/v1/staging/api/v1/",
+    path_to_dotenv: str | None = None,
+    username: str | None = None,
+    userpassword: str | None = None,
+    prompt: bool = False,
+):
     """
     This creates an access token to access data stored in NOMAD.
     The token is needed if you use a NOMAD OASIS that requires your login information
@@ -45,23 +50,38 @@ def get_nomad_oasis_access_token(base_url: str = "https://nomad-lab.eu/prod/v1/s
         The password of your NOMAD or NOMAD OASIS account.
         It is strongly advised to use environment variables
         instead of writing the password in the code visibly.
+
+    ``prompt``: *bool*
+        If True, prompts securely for username and/or password on the command line
+        if they are not provided via arguments or environment variables.
     """
+    myname = username
+    mypassword = userpassword
+
     if path_to_dotenv is not None:
         load_dotenv(path_to_dotenv)
-        myname = os.getenv("OASIS_USER_NAME")
-        mypassword = os.getenv("OASIS_PASSWORD")
-    else:
-        myname = username
-        mypassword = userpassword
+        myname = os.getenv("OASIS_USER_NAME", myname)
+        mypassword = os.getenv("OASIS_PASSWORD", mypassword)
 
+    if prompt:
+        if not myname:
+            myname = input("NOMAD OASIS Username: ")
+        if not mypassword:
+            mypassword = getpass.getpass("NOMAD OASIS Password: ")
+
+    if not myname or not mypassword:
+        raise ValueError("Username and password must be provided.")
+
+    url = f"{base_url.rstrip('/')}/auth/token"
     response = requests.post(
-    base_url + "auth/token",
-    data={
-        "username": myname,
-        "password": mypassword,
-        "grant_type": "password",
-    },
+        url,
+        data={
+            "username": myname,
+            "password": mypassword,
+            "grant_type": "password",
+        },
     )
+    response.raise_for_status()
     token = response.json()["access_token"]
 
     return token

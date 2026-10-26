@@ -20,18 +20,14 @@ from clusterx.super_cell import SuperCell
 from clusterx.utils import _is_integer_matrix
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 def _filter_property_names(property_name, property_names):
     if property_name and property_names:
         raise ValueError("Only one of property_name or property_names can be provided.")
     if not (property_name or property_names):
-        raise ValueError(
-            "At least one of property_name or property_names must be provided."
-        )
+        raise ValueError("At least one of property_name or property_names must be provided.")
 
 
 class DSGenerator:
@@ -84,9 +80,7 @@ class DSGenerator:
             dss = pickle.load(f)
 
         if not isinstance(dss, cls):
-            raise TypeError(
-                f"Expected object of type {cls.__name__}, but got {type(dss).__name__}"
-            )
+            raise TypeError(f"Expected object of type {cls.__name__}, but got {type(dss).__name__}")
 
         return dss
 
@@ -95,9 +89,7 @@ class DSGenerator:
         """Build a DSGenerator from a serialized StructuresSet file."""
         from clusterx.structures_set import StructuresSet
 
-        return cls.from_structures_set(
-            StructuresSet.from_file(filepath=filepath, quick_parse=quick_parse)
-        )
+        return cls.from_structures_set(StructuresSet.from_file(filepath=filepath, quick_parse=quick_parse))
 
     @classmethod
     def from_structures_set(cls, structures_set):
@@ -111,10 +103,7 @@ class DSGenerator:
         from clusterx.structures_set import StructuresSet
 
         if not isinstance(structures_set, StructuresSet):
-            raise TypeError(
-                "Expected object of type StructuresSet, "
-                f"but got {type(structures_set).__name__}"
-            )
+            raise TypeError(f"Expected object of type StructuresSet, but got {type(structures_set).__name__}")
 
         dss = cls(structures_set.get_parent_lattice())
         property_values = structures_set.get_property()
@@ -127,9 +116,7 @@ class DSGenerator:
             row = {"config_id": config_id, "sigma": sigma, "shape_id": shape_id}
 
             for property_name, values in property_values.items():
-                row[property_name] = (
-                    values[config_id] if config_id < len(values) else None
-                )
+                row[property_name] = values[config_id] if config_id < len(values) else None
 
             rows.append(row)
 
@@ -196,9 +183,7 @@ class DSGenerator:
 
     def get_configurations(self, mask_name=None):
         if mask_name is not None:
-            return self.configurations[
-                self.configurations["config_id"].isin(self.get_mask(mask_name))
-            ]
+            return self.configurations[self.configurations["config_id"].isin(self.get_mask(mask_name))]
         return self.configurations.copy()
 
     def get_property(self, config_id, property_name):
@@ -217,15 +202,13 @@ class DSGenerator:
         Raises:
         KeyError: If the config_id is not found.
         """
-        result = self.configurations[self.configuration["config_id"] == config_id]
+        result = self.configurations[self.configurations["config_id"] == config_id]
         if not result.empty:
             if property_name not in self.configurations.columns:
-                raise ValueError(
-                    f"Property '{property_name}' does not exist in the configurations DataFrame."
-                )
+                raise ValueError(f"Property '{property_name}' does not exist in the configurations DataFrame.")
 
             return result.iloc[0][property_name]
-        raise KeyError(f"Shape ID {config_id} not found.")
+        raise KeyError(f"Config ID {config_id} not found.")
 
     def get_fractional_concentration_binary(self, config_id):
         """
@@ -249,7 +232,50 @@ class DSGenerator:
 
             result = self.configurations[self.configurations["config_id"] == config_id]
             return result.iloc[0][column_name]
-        raise KeyError(f"Shape ID {config_id} not found.")
+        raise KeyError(f"Config ID {config_id} not found.")
+
+    def get_multiplicity(self, config_id):
+        """Retrieve the symmetry multiplicity of a configuration."""
+        result = self.configurations[self.configurations["config_id"] == config_id]
+        if result.empty:
+            raise KeyError(f"Config ID {config_id} not found.")
+
+        if "multiplicity" not in self.configurations.columns:
+            self.add_multiplicity()
+
+        result = self.configurations[self.configurations["config_id"] == config_id]
+        return int(result.iloc[0]["multiplicity"])
+
+    def add_multiplicity(self, recompute=False, show_progress=True):
+        """Add the symmetry multiplicity for each configuration.
+
+        The multiplicity is the number of distinct symmetry-related sigma
+        configurations for the configuration's supercell shape.
+
+        Set ``show_progress`` to False to disable the progress bar.
+        """
+        if "multiplicity" in self.configurations.columns and not recompute:
+            return
+
+        symper_cache = {}
+
+        def _compute_multiplicity(row):
+            shape_id = row["shape_id"]
+            if shape_id not in symper_cache:
+                sc_shape = self.get_scell_shape(shape_id)
+                scell = SuperCell(self.plat, sc_shape)
+                symper_cache[shape_id] = [tuple(per) for per in scell.get_sym_perm()]
+
+            sigma = row["sigma"]
+            symmetry_hashes = {hash(tuple(sigma[i] for i in per)) for per in symper_cache[shape_id]}
+            return int(len(symmetry_hashes))
+
+        self.set_property_values_iteratively(
+            value_func=_compute_multiplicity,
+            property_name="multiplicity",
+            show_progress=show_progress,
+            progress_description="Computing multiplicities",
+        )
 
     def compute_properties(
         self,
@@ -263,15 +289,108 @@ class DSGenerator:
         per_formula_unit=False,
         store_ensemble_predictions=False,
     ):
-        """Compute properties.
+        """Compute one or more properties for every configuration.
 
-        If ``cemodel`` is based on a bagging ensemble and
-        ``store_ensemble_predictions`` is True, then for each computed property an
-        additional column named ``<property>_ensemble_predictions`` is stored in
-        ``self.configurations``. Each entry of that column contains the array of
-        predictions from the individual ensemble members for that configuration.
+        Exactly one property-name argument must be supplied:
+
+        * Use ``property_name`` to compute one property. The selected computation
+          method must return one scalar value for each configuration.
+        * Use ``property_names`` to compute several properties. The selected
+          method must return a sequence with exactly one value per name, in the
+          same order. For example, with ``property_names=["p1", "p2"]``, return
+          ``(p1, p2)`` or ``[p1, p2]``.
+
+        For each row in ``self.configurations``, the configuration's structure is
+        generated and passed to the selected computation method. Pass one of
+        ``ase_calculator``, ``cemodel``, or ``property_solver``. If more than one
+        is provided, the first non-``None`` option in that order is used:
+
+        * ``ase_calculator`` is an ASE calculator. Its potential energy is
+          computed from the generated structure's atoms. This method produces a
+          single property.
+        * ``cemodel`` is a cluster expansion model. ``cemodel.predict`` is called
+          with the generated structure. Use a model that returns one value for a
+          single property, or one value per requested property for multiple
+          properties.
+        * ``property_solver`` is a callable invoked once per configuration as
+          ``property_solver(structure, shape, concentration, row=row, **kwargs)``.
+          Here, ``structure`` is the generated clusterx structure, ``shape`` is
+          the supercell shape, ``concentration`` is the binary fractional
+          concentration, and ``row`` is that configuration's pandas Series.
+          Extra keyword arguments come from ``property_solver_kwargs``. For one
+          property, return a scalar. For multiple properties, return a tuple,
+          list, or other sequence with one value per entry in ``property_names``.
+          For example, if the names are ``["p1", "p2"]``, return ``p1, p2`` or
+          ``[p1, p2]``.
+
+        **Parameters**
+
+        ``property_name`` : str, optional
+            Name of the single property column to compute. Use this or
+            ``property_names``, but not both.
+        ``property_names`` : sequence of str, optional
+            Names of multiple property columns to compute. The order determines
+            how the values returned by the selected method are assigned to
+            columns. Use this or ``property_name``, but not both.
+        ``ase_calculator`` : ASE Calculator, optional
+            Calculator used to compute potential energy from each generated
+            structure. This produces one property.
+        ``cemodel`` : Model, optional
+            Cluster expansion model used to predict the property or properties.
+        ``property_solver`` : callable, optional
+            Custom function for computing the property or properties. It receives
+            ``structure``, ``shape``, and ``concentration`` as positional
+            arguments, plus ``row`` as a keyword argument. It may return a
+            scalar for one property or an ordered sequence for multiple
+            properties.
+        ``property_solver_kwargs`` : dict, optional
+            Additional keyword arguments passed to ``property_solver``. Defaults
+            to an empty dictionary.
+        ``linear_reference`` : str or two-point sequence, optional
+            ``"least-squares"`` or ``"concentration-endpoints"`` fits a
+            concentration-dependent reference separately for each computed
+            property and subtracts it. Alternatively, provide two points as
+            ``[(x0, p0), (x1, p1)]``, where each point is a
+            ``(concentration, property_value)`` pair. Set to ``None`` to skip
+            reference subtraction. The explicit two-point form is intended for
+            scalar results, not tuple or list results from a multi-property
+            solver.
+        ``per_formula_unit`` : bool, default ``False``
+            If True, divide each computed result by its configuration's
+            supercell size. Use this with scalar results.
+        ``store_ensemble_predictions`` : bool, default ``False``
+            If True and ``cemodel`` uses a bagging ensemble, store each
+            configuration's array of individual-estimator predictions in an
+            additional ``<property>_ensemble_predictions`` column. This option
+            is not supported together with ``per_formula_unit=True`` or an
+            explicit two-point ``linear_reference``.
+
+        **Example: computing two values with a property solver**
+
+        The returned values are assigned positionally: the first goes to
+        ``"p1"`` and the second to ``"p2"``.
+
+        .. code-block:: python
+
+            def solve_properties(structure, shape, concentration, row, offset):
+                p1 = concentration + offset
+                p2 = len(row["sigma"])
+                return p1, p2  # A list, such as [p1, p2], works as well.
+
+            generator.compute_properties(
+                property_names=["p1", "p2"],
+                property_solver=solve_properties,
+                property_solver_kwargs={"offset": 0.1},
+            )
+
+        **Returns**
+
+        ``None``. The computed values are written to columns in
+        ``self.configurations``; missing columns are created automatically.
         """
         _filter_property_names(property_name, property_names)
+        if property_solver_kwargs is None:
+            property_solver_kwargs = {}
         scell_cache = {}
 
         def _get_structure_object(row):
@@ -285,9 +404,7 @@ class DSGenerator:
             return scell.gen_structure(sigmas=row["sigma"])
 
         def _is_bagging_estimator(estimator):
-            return hasattr(estimator, "estimators_") and isinstance(
-                getattr(estimator, "estimators_", None), list
-            )
+            return hasattr(estimator, "estimators_") and isinstance(getattr(estimator, "estimators_", None), list)
 
         def _get_ensemble_predictions_from_cemodel(struc):
             """
@@ -305,9 +422,7 @@ class DSGenerator:
             # correlations/features for a single structure.
             x = cemodel.corrc.get_correlation_matrix([struc])
 
-            preds = np.array(
-                [base_est.predict(x)[0] for base_est in estimator.estimators_]
-            )
+            preds = np.array([base_est.predict(x)[0] for base_est in estimator.estimators_])
             return preds
 
         if ase_calculator is not None:
@@ -333,6 +448,7 @@ class DSGenerator:
                     struc,
                     self.get_scell_shape(row["shape_id"]),
                     conc,
+                    row=row,
                     **property_solver_kwargs,
                 )
 
@@ -369,13 +485,9 @@ class DSGenerator:
         # Main property computation
         # ------------------------------------------------------------
         if property_name:  # single property is computed
-            self.set_property_values_iteratively(
-                property_name=property_name, value_func=_value_func
-            )
+            self.set_property_values_iteratively(property_name=property_name, value_func=_value_func)
         elif property_names:  # multiple properties are computed
-            self.set_property_values_iteratively(
-                property_names=property_names, value_func=_value_func
-            )
+            self.set_property_values_iteratively(property_names=property_names, value_func=_value_func)
 
         # ------------------------------------------------------------
         # Optional storage of ensemble predictions
@@ -393,8 +505,7 @@ class DSGenerator:
 
             if per_formula_unit:
                 raise NotImplementedError(
-                    "store_ensemble_predictions=True is not yet implemented together "
-                    "with per_formula_unit=True."
+                    "store_ensemble_predictions=True is not yet implemented together with per_formula_unit=True."
                 )
 
             if isinstance(linear_reference, list):
@@ -410,9 +521,7 @@ class DSGenerator:
                 ensemble_preds_all.append(preds)
 
             for pname in property_names_to_store:
-                self.configurations[f"{pname}_ensemble_predictions"] = (
-                    ensemble_preds_all
-                )
+                self.configurations[f"{pname}_ensemble_predictions"] = ensemble_preds_all
 
         if linear_reference == "least-squares":
             # get linear reference from linear fit with y = a * conc + b
@@ -422,9 +531,7 @@ class DSGenerator:
             concentrations = self.configurations["frconc_binary"]
             for column in property_names:
                 values = self.configurations[column]
-                a, b = np.polyfit(
-                    concentrations, values, deg=1
-                )  # might raise warning if only one unique value
+                a, b = np.polyfit(concentrations, values, deg=1)  # might raise warning if only one unique value
                 linref = a * concentrations + b
                 self.set_property_values_from_array(column, values - linref)
 
@@ -457,9 +564,7 @@ class DSGenerator:
         round_precision = 6
         # Check if the parent lattice corresponds to a binary compound
         if not self.plat.is_nary(2):
-            raise ValueError(
-                "The system should be a binary for this function to be used."
-            )
+            raise ValueError("The system should be a binary for this function to be used.")
 
         # Dictionary to cache fractional concentration values
         frconc_dict = {}
@@ -502,9 +607,7 @@ class DSGenerator:
             frconc_dict[key] = conc
             return conc
 
-        self.set_property_values_iteratively(
-            value_func=_compute_frcon, property_name="frconc_binary"
-        )
+        self.set_property_values_iteratively(value_func=_compute_frcon, property_name="frconc_binary")
 
     def add_property_column(self, property_name, default_value=None):
         """
@@ -520,11 +623,10 @@ class DSGenerator:
         column_name = property_name
 
         if column_name in self.configurations.columns:
-            raise ValueError(
-                f"Column '{column_name}' already exists in the configurations DataFrame."
-            )
+            raise ValueError(f"Column '{column_name}' already exists in the configurations DataFrame.")
 
         self.configurations[column_name] = default_value
+        self.property_names.add(column_name)
 
     def set_property_values_iteratively(
         self,
@@ -532,6 +634,8 @@ class DSGenerator:
         property_name=None,
         property_names=None,
         create_if_missing=True,
+        show_progress=False,
+        progress_description="Computing property values",
         **kwargs,
     ):
         """
@@ -540,16 +644,22 @@ class DSGenerator:
         **Parameters:**
 
         value_func : callable
-            A function that takes a row of the DataFrame and optional keyword arguments,
-            returning the value for the property.
+            A function that takes a row of the DataFrame and optional keyword arguments. When setting one property,
+            it returns that property's value. When setting multiple properties, it returns a list, tuple, or other
+            sequence of values, with one value per name in ``property_names`` and in the same order.
         property_name : str
             The name of the property whose values are to be set.
             Either this or property_names must be provided.
         property_names : list(str)
-            The name of the properties whose values are to be set.
+            The names of the properties whose values are to be set. For multiple properties, ``value_func`` must
+            return one value for each name, in this order.
             Either this or property_name must be provided.
         create_if_missing : bool, optional
             If True, creates the column if it does not exist. Defaults to True.
+        show_progress : bool, optional
+            If True, displays a tqdm progress bar. Defaults to False.
+        progress_description : str, optional
+            Description shown on the progress bar.
         kwargs : dict
             Additional keyword arguments to pass to the value_func.
 
@@ -559,10 +669,29 @@ class DSGenerator:
             return row["sigma"] * multiplier + offset
 
         generator.set_property_values_iteratively(
-            compute_value_with_args,
+            value_func=compute_value_with_args,
             property_name="example_property",
             multiplier=2,
             offset=5
+        )
+
+        def compute_two_values(row):
+            p1 = len(row["sigma"])
+            p2 = sum(row["sigma"])
+            return p1, p2
+
+        generator.set_property_values_iteratively(
+            value_func=compute_two_values,
+            property_names=["p1", "p2"],
+        )
+
+        # A list return works too; its values map to property_names in order.
+        def compute_two_values_as_list(row):
+            return [len(row["sigma"]), sum(row["sigma"])]
+
+        generator.set_property_values_iteratively(
+            value_func=compute_two_values_as_list,
+            property_names=["p1", "p2"],
         )
         ```
         """
@@ -577,15 +706,24 @@ class DSGenerator:
                 if create_if_missing:
                     self.configurations[column_name] = None
                     self.property_names.add(column_name)
-                    print(
-                        f"Created new column '{column_name}' in the configurations DataFrame."
-                    )
+                    print(f"Created new column '{column_name}' in the configurations DataFrame.")
                 else:
-                    raise ValueError(
-                        f"Column '{column_name}' does not exist in the configurations DataFrame."
-                    )
+                    raise ValueError(f"Column '{column_name}' does not exist in the configurations DataFrame.")
 
-        if len(column_names) == 1:
+        if show_progress:
+            values = [
+                value_func(row, **kwargs)
+                for _, row in tqdm(
+                    self.configurations.iterrows(),
+                    total=len(self.configurations),
+                    desc=progress_description,
+                )
+            ]
+            if len(column_names) == 1:
+                self.configurations[column_names[0]] = values
+            else:
+                self.configurations[column_names] = values
+        elif len(column_names) == 1:
             self.configurations[column_names[0]] = self.configurations.apply(
                 lambda row: value_func(row, **kwargs), axis=1
             )
@@ -594,9 +732,7 @@ class DSGenerator:
                 lambda row: value_func(row, **kwargs), axis=1, result_type="expand"
             )
 
-    def set_property_values_from_array(
-        self, property_name, values, create_if_missing=True
-    ):
+    def set_property_values_from_array(self, property_name, values, create_if_missing=True):
         """
         Sets property values using a provided array of values.
 
@@ -615,13 +751,9 @@ class DSGenerator:
             if create_if_missing:
                 self.configurations[column_name] = None
                 self.property_names.add(column_name)
-                print(
-                    f"Created new column '{column_name}' in the configurations DataFrame."
-                )
+                print(f"Created new column '{column_name}' in the configurations DataFrame.")
             else:
-                raise ValueError(
-                    f"Column '{column_name}' does not exist in the configurations DataFrame."
-                )
+                raise ValueError(f"Column '{column_name}' does not exist in the configurations DataFrame.")
 
         if len(values) != len(self.configurations):
             raise ValueError(
@@ -643,9 +775,7 @@ class DSGenerator:
 
         sc_size = int(abs(round(np.linalg.det(shape))))
 
-        match = self.scell_shapes[
-            self.scell_shapes["shape"].apply(lambda x: np.array_equal(x, shape))
-        ]
+        match = self.scell_shapes[self.scell_shapes["shape"].apply(lambda x: np.array_equal(x, shape))]
         if not match.empty:
             return match.iloc[0]["shape_id"]
 
@@ -653,9 +783,7 @@ class DSGenerator:
         self.scell_shapes = pd.concat(
             [
                 self.scell_shapes,
-                pd.DataFrame(
-                    {"shape_id": [new_id], "shape": [shape], "size": [sc_size]}
-                ),
+                pd.DataFrame({"shape_id": [new_id], "shape": [shape], "size": [sc_size]}),
             ],
             ignore_index=True,
         )
@@ -763,6 +891,9 @@ class DSGenerator:
             random.seed(random_state)
             np.random.seed(random_state)
 
+        scell_cache = {}
+        symper_cache = {}
+
         for i, num_subs in enumerate(num_subs_list):
             if sc_shape is None and sc_shapes is None:
                 sc_size = supercell_sizes[i]
@@ -796,7 +927,12 @@ class DSGenerator:
                 for nsubs in num_subs:
                     print("\n")
                     self.generate_for_shape_nsubs(
-                        sc_shape=t, nsubs=nsubs, n_random=n_random, recursive=recursive
+                        sc_shape=t,
+                        nsubs=nsubs,
+                        n_random=n_random,
+                        recursive=recursive,
+                        _scell_cache=scell_cache,
+                        _symper_cache=symper_cache,
                     )
 
                 # if recursive:
@@ -807,9 +943,7 @@ class DSGenerator:
                 #     for nsubs in num_subs:
                 #         self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs, n_random=n_random, recursive=recursive)
 
-        print(
-            f"\nEnumeration complete. Found {len(self.configurations)} unique configurations.\n"
-        )
+        print(f"\nEnumeration complete. Found {len(self.configurations)} unique configurations.\n")
 
     def generate_for_shape_nsubs(
         self,
@@ -817,6 +951,8 @@ class DSGenerator:
         nsubs: Optional[Union[int, dict]] = None,
         n_random: Optional[int] = None,
         recursive: bool = True,
+        _scell_cache=None,
+        _symper_cache=None,
     ):
         """
         Generate derivative structures.
@@ -838,23 +974,30 @@ class DSGenerator:
         self._validate_inputs(sc_shape, nsubs)
         shape_id = self.add_scell_shape(shape=sc_shape)
 
+        if _scell_cache is None:
+            _scell_cache = {}
+        if _symper_cache is None:
+            _symper_cache = {}
+
         logging.info(
             "Start enum for supercell size: %s, nsubs: %s",
             self.get_scell_size(shape_id),
             nsubs,
         )
 
-        scell = SuperCell(self.plat, sc_shape)
+        if shape_id not in _scell_cache:
+            _scell_cache[shape_id] = SuperCell(self.plat, self.get_scell_shape(shape_id))
+        scell = _scell_cache[shape_id]
         natoms = scell.get_natoms()
-        symper = scell.get_sym_perm()
+        if shape_id not in _symper_cache:
+            _symper_cache[shape_id] = [tuple(per) for per in scell.get_sym_perm()]
+        symper_tuples = _symper_cache[shape_id]
         nsites_per_type = scell.get_nsites_per_type()
         ems = scell.get_ems()
         ssites = scell.get_substitutional_sites()
         stypes = scell.get_tags()
         scindex = int(abs(scell.get_index()))
         stypes_plat = self.plat.get_sublattice_types()
-
-        symper_tuples = [tuple(per) for per in symper]
 
         def partial_binom_sum(N, n):
             if n < 0:
@@ -865,9 +1008,7 @@ class DSGenerator:
         if isinstance(nsubs, int):
             if nsubs > len(ssites):
                 logging.error("nsubs cannot exceed the number of substitutional sites.")
-                raise ValueError(
-                    "nsubs cannot exceed the number of substitutional sites."
-                )
+                raise ValueError("nsubs cannot exceed the number of substitutional sites.")
 
             if n_random is None:
                 if recursive:
@@ -891,13 +1032,11 @@ class DSGenerator:
                             pbar=pbar,
                         )
                 else:
-                    num_conf = self._generate_all_configurations(
-                        ssites, nsubs, natoms, shape_id, symper
-                    )
+                    num_conf = self._generate_all_configurations(ssites, nsubs, natoms, shape_id, symper_tuples)
 
             else:
                 num_conf = self._generate_random_configurations(
-                    ssites, nsubs, natoms, shape_id, symper, n_random
+                    ssites, nsubs, natoms, shape_id, symper_tuples, n_random
                 )
 
         elif isinstance(nsubs, dict):
@@ -908,9 +1047,7 @@ class DSGenerator:
                 nsubs_in_type = np.sum(nsubs.get(str(site_type), [0]))
                 if len(stypes_plat[site_type]) > 1:
                     if recursive:
-                        estimated_nconf *= partial_binom_sum(
-                            nsites_per_type[int(site_type)], nsubs_in_type
-                        )
+                        estimated_nconf *= partial_binom_sum(nsites_per_type[int(site_type)], nsubs_in_type)
                     else:
                         estimated_nconf *= scipy.special.binom(nsites, nsubs_in_type)
             estimated_nconf /= scindex
@@ -918,9 +1055,7 @@ class DSGenerator:
 
             if n_random is None:
                 if recursive:
-                    with tqdm(
-                        total=estimated_nconf, desc="Finding unique sigmas"
-                    ) as pbar:
+                    with tqdm(total=estimated_nconf, desc="Finding unique sigmas") as pbar:
                         num_conf = self._generate_all_configurations_recursive(
                             ssites,
                             nsubs,
@@ -933,7 +1068,7 @@ class DSGenerator:
                         )
                 else:
                     num_conf = self._generate_all_configurations_multilattice(
-                        nsubs, natoms, shape_id, symper, site_type_by_index
+                        nsubs, natoms, shape_id, symper_tuples, site_type_by_index
                     )
 
             else:
@@ -989,9 +1124,7 @@ class DSGenerator:
         unique_children = {}  # dict with child hash as key and degeneracy as value
         for child in children:
             if hash(child) not in seen_hashes:
-                all_hashes = {
-                    hash(tuple(child[i] for i in per)) for per in symper_tuples
-                }
+                all_hashes = {hash(tuple(child[i] for i in per)) for per in symper_tuples}
                 seen_hashes |= all_hashes
                 unique_children[child] = len(all_hashes)  # save degeneracy
 
@@ -1037,9 +1170,7 @@ class DSGenerator:
         if pbar:
             pbar.update(1)
 
-        children, seen_hashes = self.get_child_sigmas(
-            sigma0, ssites, symper_tuples, ems, seen_hashes, nsubs, stypes
-        )
+        children, seen_hashes = self.get_child_sigmas(sigma0, ssites, symper_tuples, ems, seen_hashes, nsubs, stypes)
         if pbar and len(children) != 0:
             pbar.set_postfix(
                 nseen=len(seen_hashes),
@@ -1070,15 +1201,8 @@ class DSGenerator:
             start_id = len(self.configurations)
             new_configurations = pd.DataFrame(
                 [
-                    {
-                        "config_id": new_id,
-                        "sigma": sigma,
-                        "shape_id": shape_id,
-                        "degeneracy": degeneracy
-                    }
-                    for new_id, (sigma, degeneracy) in zip(
-                        range(start_id, start_id + len(all_sigmas)), all_sigmas
-                    )
+                    {"config_id": new_id, "sigma": sigma, "shape_id": shape_id, "degeneracy": degeneracy}
+                    for new_id, (sigma, degeneracy) in zip(range(start_id, start_id + len(all_sigmas)), all_sigmas)
                 ]
             )
             self.configurations = pd.concat(
@@ -1107,9 +1231,7 @@ class DSGenerator:
         tracemalloc.start()
         num_conf_start = len(self.configurations)
 
-        pbar = tqdm(
-            combinations(ssites, nsubs), total=n_max, desc="Finding unique sigmas"
-        )
+        pbar = tqdm(combinations(ssites, nsubs), total=n_max, desc="Finding unique sigmas")
         sigmas_hash_set = set()
 
         # Precompute permutations as index tuples
@@ -1117,7 +1239,7 @@ class DSGenerator:
 
         mode = "fast"
         switched_mode = False
-        rows = [] # store sigma, shape_id, and degeneracy for batch insertion
+        rows = []  # store sigma, shape_id, and degeneracy for batch insertion
 
         for con in pbar:
             current_mem, _ = tracemalloc.get_traced_memory()
@@ -1130,30 +1252,21 @@ class DSGenerator:
                 logging.info("Cache quota exceeded, switching to slow mode.")
                 sigmas_hash_set = set()
                 for sigma in self.configurations["sigma"]:
-                    trial_hash_canonical = min(
-                        hash(tuple(sigma_trial[i] for i in per))
-                        for per in self._symper_tuples
-                    )
+                    trial_hash_canonical = min(hash(tuple(sigma_trial[i] for i in per)) for per in self._symper_tuples)
                     sigmas_hash_set.add(trial_hash_canonical)
 
             if mode == "fast":
                 sigma_hash = hash(tuple(sigma_trial))
 
                 if sigma_hash not in sigmas_hash_set:
-                    all_trial_hashes = {
-                        hash(tuple(sigma_trial[i] for i in per))
-                        for per in self._symper_tuples
-                    }
+                    all_trial_hashes = {hash(tuple(sigma_trial[i] for i in per)) for per in self._symper_tuples}
                     degeneracy = len(all_trial_hashes)
                     sigmas_hash_set |= all_trial_hashes
                     rows.append((sigma_trial, shape_id, degeneracy))
 
             else:
                 # Slow path: only store the canonical hash
-                all_trial_hashes = {
-                    hash(tuple(sigma_trial[i] for i in per))
-                    for per in self._symper_tuples
-                }
+                all_trial_hashes = {hash(tuple(sigma_trial[i] for i in per)) for per in self._symper_tuples}
                 degeneracy = len(all_trial_hashes)
                 trial_hash_canonical = min(all_trial_hashes)
                 if trial_hash_canonical not in sigmas_hash_set:
@@ -1179,26 +1292,20 @@ class DSGenerator:
 
         return len(self.configurations) - num_conf_start
 
-    def _generate_all_configurations_multilattice(
-        self, nsubs, natoms, shape_id, symper, site_type_by_index
-    ):
+    def _generate_all_configurations_multilattice(self, nsubs, natoms, shape_id, symper, site_type_by_index):
         full_list: Set[Tuple[int, ...]] = set()
         logging.info("Starting to find unique configurations...")
 
         num_conf_start = len(self.configurations)
 
-        configurations = DSGenerator._generate_multilattice_configurations(
-            natoms, site_type_by_index, nsubs
-        )
+        configurations = DSGenerator._generate_multilattice_configurations(natoms, site_type_by_index, nsubs)
 
         for sigma in configurations:
             if tuple(sigma) not in full_list:
                 unique_transformations = self._transformations_unique(sigma, symper)
                 degeneracy = len(unique_transformations)
                 full_list |= unique_transformations
-                self.add_configuration(
-                    sigma=sigma, shape_id=shape_id, degeneracy=degeneracy
-                )
+                self.add_configuration(sigma=sigma, shape_id=shape_id, degeneracy=degeneracy)
 
         return len(self.configurations) - num_conf_start
 
@@ -1207,10 +1314,7 @@ class DSGenerator:
         site_type_by_index = np.array(site_type_by_index)
 
         sublattice_positions = {
-            sublattice_type: list(
-                np.where(site_type_by_index == int(sublattice_type))[0]
-            )
-            for sublattice_type in nsubs
+            sublattice_type: list(np.where(site_type_by_index == int(sublattice_type))[0]) for sublattice_type in nsubs
         }
         # Create generators for each domain
 
@@ -1277,34 +1381,25 @@ class DSGenerator:
         else:
             return f"{size_bytes / 1024**3:.2f} GB"
 
-    def _generate_random_configurations(
-        self, ssites, nsubs, natoms, shape_id, symper, n_random
-    ):
+    def _generate_random_configurations(self, ssites, nsubs, natoms, shape_id, symper, n_random):
         full_list: Set[Tuple[int, ...]] = set()
         attempts = 0
         attempts_total = 0
         # max_attempts = n_random * 10  # Limit attempts to avoid infinite loops
         max_attempts = 1000  # Limit attempts to avoid infinite loops
 
-        logging.info(
-            "Starting to generate %s random unique configurations...", n_random
-        )
+        logging.info("Starting to generate %s random unique configurations...", n_random)
 
         num_conf_start = len(self.configurations)
 
         pbar = tqdm(total=n_random, desc="Generating configurations")
         tracemalloc.start()
 
-        while (
-            len(self.configurations) - num_conf_start < n_random
-            and attempts < max_attempts
-        ):
+        while len(self.configurations) - num_conf_start < n_random and attempts < max_attempts:
             con = tuple(sorted(sample(ssites, nsubs)))
             sigma = self._create_sigma_array(natoms, con)
 
-            is_new = not any(
-                tuple(sigma.take(per, axis=0)) in full_list for per in symper
-            )
+            is_new = not any(tuple(sigma.take(per, axis=0)) in full_list for per in symper)
 
             if is_new:
                 self.add_configuration(sigma=sigma, shape_id=shape_id)
@@ -1333,28 +1428,21 @@ class DSGenerator:
             )
         return num_conf
 
-    def _generate_random_configurations2(
-        self, ssites, nsubs, natoms, shape_id, symper, n_random
-    ):
+    def _generate_random_configurations2(self, ssites, nsubs, natoms, shape_id, symper, n_random):
         full_list: Set[Tuple[int, ...]] = set()
         attempts = 0
         attempts_total = 0
         # max_attempts = n_random * 10  # Limit attempts to avoid infinite loops
         max_attempts = 1000  # Limit attempts to avoid infinite loops
 
-        logging.info(
-            "Starting to generate %s random unique configurations...", n_random
-        )
+        logging.info("Starting to generate %s random unique configurations...", n_random)
 
         num_conf_start = len(self.configurations)
 
         pbar = tqdm(total=n_random, desc="Generating configurations")
         tracemalloc.start()
 
-        while (
-            len(self.configurations) - num_conf_start < n_random
-            and attempts < max_attempts
-        ):
+        while len(self.configurations) - num_conf_start < n_random and attempts < max_attempts:
             con = tuple(sorted(sample(ssites, nsubs)))
             sigma = self._create_sigma_array(natoms, con)
 
@@ -1387,9 +1475,7 @@ class DSGenerator:
 
     def _validate_inputs(self, sc_shape, nsubs):
         if not (
-            isinstance(sc_shape, (list, np.ndarray))
-            and len(sc_shape) == 3
-            and all(len(row) == 3 for row in sc_shape)
+            isinstance(sc_shape, (list, np.ndarray)) and len(sc_shape) == 3 and all(len(row) == 3 for row in sc_shape)
         ):
             raise ValueError("sc_shape must be a 3x3 list or array of integers.")
 
@@ -1412,9 +1498,7 @@ class DSGenerator:
         for sigmas_perm in [sigmas[np.ix_(per)] for per in symper]:
             full_list.add(tuple(sigmas_perm))
 
-    def _transformations_unique(
-        self, sigmas: np.ndarray, symper: List[np.ndarray]
-    ) -> Set[Tuple[int]]:
+    def _transformations_unique(self, sigmas: np.ndarray, symper: List[np.ndarray]) -> Set[Tuple[int]]:
         """Get unique (in terms of sigma permutation) transformations of a
         sigma array, that are equivalent by symmetry."""
         return {tuple(sigmas[np.ix_(per)]) for per in symper}
@@ -1491,9 +1575,7 @@ class DSGenerator:
         if skip_existing:
             existing = set(
                 (int(r.shape_id), tuple(r.sigma))
-                for r in out.configurations[["shape_id", "sigma"]].itertuples(
-                    index=False
-                )
+                for r in out.configurations[["shape_id", "sigma"]].itertuples(index=False)
             )
         else:
             existing = None
@@ -1503,14 +1585,10 @@ class DSGenerator:
         new_sigmas = []
 
         # Fast iteration over rows: itertuples is much faster than iterrows
-        row_iter = configs_df[["shape_id", "sigma", "config_id"]].itertuples(
-            index=False
-        )
+        row_iter = configs_df[["shape_id", "sigma", "config_id"]].itertuples(index=False)
 
         if show_progress:
-            row_iter = tqdm(
-                row_iter, total=len(configs_df), desc="Generating complements"
-            )
+            row_iter = tqdm(row_iter, total=len(configs_df), desc="Generating complements")
 
         for r in row_iter:
             shape_id = int(r.shape_id)
@@ -1873,6 +1951,4 @@ def get_unique_supercells_nearest_orthogonal(n, parent_lattice: object, elements
             harray,
         )
 
-    return [
-        SuperCell(parent_lattice, p) for p in small_angle_sc_shapes
-    ], small_angle_sc_shapes
+    return [SuperCell(parent_lattice, p) for p in small_angle_sc_shapes], small_angle_sc_shapes

@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 import matplotlib.pyplot as plt
 import numpy as np
 import plac
+from scipy.stats import gaussian_kde
 
 from clusterx.cli.config_utils import cmd_message
 from clusterx.derivative_structures import DSGenerator
@@ -26,10 +27,63 @@ def _to_1d_float_array(value: Any) -> np.ndarray:
     return arr
 
 
-def _aggregate(values: np.ndarray, method: str) -> float:
+def _aggregate(values: np.ndarray, method: str, weights: Optional[np.ndarray] = None) -> float:
+    if weights is None:
+        weights = np.ones(len(values), dtype=float)
     if method == "median":
-        return float(np.median(values))
-    return float(np.mean(values))
+        order = np.argsort(values)
+        sorted_values = values[order]
+        sorted_weights = weights[order]
+        return float(sorted_values[np.searchsorted(np.cumsum(sorted_weights), np.sum(weights) / 2.0)])
+    return float(np.average(values, weights=weights))
+
+
+def _weighted_samples(values: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    """Repeat samples according to integer multiplicity weights."""
+    return np.repeat(values, weights.astype(int))
+
+
+def _weighted_violin(ax, values, weights, position, width, color, scatter_kwargs):
+    """Draw one violin from values and weights without expanding samples."""
+    finite = np.isfinite(values) & np.isfinite(weights) & (weights > 0)
+    values = np.asarray(values[finite], dtype=float)
+    weights = np.asarray(weights[finite], dtype=float)
+    if len(values) == 0:
+        return
+
+    lower = float(np.min(values))
+    upper = float(np.max(values))
+    if np.isclose(lower, upper):
+        # A singleton or zero-spread bin has no violin width to display.
+        return
+
+    grid = np.linspace(lower, upper, 100)
+    if len(np.unique(values)) > 1:
+        density = gaussian_kde(values, weights=weights)(grid)
+        density /= np.max(density)
+    else:
+        density = np.ones_like(grid)
+
+    half_width = 0.5 * width * density
+    facecolor = scatter_kwargs.get("facecolors", color)
+    edgecolor = scatter_kwargs.get("edgecolors", color)
+    body = ax.fill_betweenx(
+        grid,
+        position - half_width,
+        position + half_width,
+        facecolor=facecolor,
+        edgecolor=edgecolor,
+        linewidth=float(scatter_kwargs.get("linewidths", 0.8)),
+        alpha=float(scatter_kwargs.get("alpha", 0.3)),
+    )
+    return body
+
+
+def _validate_multiplicity_weights(values: Any, series_index: int) -> np.ndarray:
+    weights = np.asarray(values, dtype=float)
+    if np.any(~np.isfinite(weights)) or np.any(weights <= 0) or np.any(weights != weights.astype(int)):
+        raise ValueError(f"series[{series_index}] multiplicities must be positive integers.")
+    return weights
 
 
 def _infer_box_violin_width(x: np.ndarray) -> float:
@@ -69,6 +123,33 @@ def _infer_symlog_linthresh(values: np.ndarray) -> float:
     if len(nonzero_abs) == 0:
         return 1.0
     return 0.1 * float(np.min(nonzero_abs))
+
+
+def _normalize_legend_location(value: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError("legend_location must be a string.")
+
+    key = value.strip().lower().replace("-", " ").replace("_", " ")
+    key = " ".join(key.split())
+
+    canonical = {
+        "best",
+        "upper right",
+        "upper left",
+        "lower left",
+        "lower right",
+        "right",
+        "center left",
+        "center right",
+        "lower center",
+        "upper center",
+        "center",
+    }
+    if key in canonical:
+        return key
+
+    valid = sorted(canonical)
+    raise ValueError("legend_location must be one of: " + ", ".join(valid))
 
 
 def _shared_target_prediction_limits(
@@ -149,6 +230,8 @@ def _shared_target_prediction_limits(
         None,
         list,
     ),
+    width=("Figure width in inches.", "option", None, float),
+    height=("Figure height in inches.", "option", None, float),
     target_vs_predictions=(
         "Enable target-vs-predictions parity mode: square axes, shared limits, and y=x line.",
         "option",
@@ -188,7 +271,19 @@ def _shared_target_prediction_limits(
         dict,
     ),
     show_yzero_axis=("Show horizontal reference line at y=0.", "option", None, bool),
+    show_xlabel=("Show x-axis name label.", "option", None, bool),
+    show_ylabel=("Show y-axis name label.", "option", None, bool),
+    show_xticklabels=("Show x-axis tick labels (numbers).", "option", None, bool),
+    show_yticklabels=("Show y-axis tick labels (numbers).", "option", None, bool),
+    xaxis_top=("Place x-axis label, tick marks, and tick labels on the top side.", "option", None, bool),
+    yaxis_right=("Place y-axis label, tick marks, and tick labels on the right side.", "option", None, bool),
+    xticks=("Custom x-axis tick locations.", "option", None, list),
+    yticks=("Custom y-axis tick locations.", "option", None, list),
     legend=("Show legend if True.", "option", None, bool),
+    show_legend_frame=("Show frame box around legend.", "option", None, bool),
+    legend_location=("Legend position using Matplotlib names, e.g. upper left/best.", "option", None, str),
+    legend_handlelength=("Legend handle length in font-size units.", "option", None, float),
+    legend_handletextpad=("Legend padding between handle and text in font-size units.", "option", None, float),
     show_plot=("Display the plot window if True.", "option", None, bool),
     savefig=(
         "Filepath to save generated figure (e.g. plot.png).",
@@ -196,6 +291,7 @@ def _shared_target_prediction_limits(
         "sf",
         str,
     ),
+    dpi=("Resolution in dots per inch used when saving figures.", "option", None, float),
     figdata_fname=(
         "Filepath to save plotted data. Supported extensions: .npz, .json, .txt, .dat.",
         "option",
@@ -209,7 +305,8 @@ def _shared_target_prediction_limits(
         "yfactor (optional), color/marker/size/edgecolor/facecolor/linewidth/alpha (optional), "
         "or style={...} for grouped styling. Also supports ymode in "
         "{marker,cloud,violin,boxplot,auto} for array-valued y columns. "
-        "Set binned=true to group scalar y values by unique x bin (with optional xtol snap).",
+        "Set binned=true to group scalar y values by unique x bin (with optional xtol snap). "
+        "Set weight_by_multiplicity=true to weight y values by DSGenerator multiplicity.",
         "option",
         None,
         list,
@@ -226,6 +323,8 @@ def plot_columns(
     yrange: Optional[list] = None,
     xrange: Optional[list] = None,
     colors: Optional[list] = None,
+    width: Optional[float] = None,
+    height: Optional[float] = None,
     target_vs_predictions: bool = False,
     loglog: bool = False,
     symlog: bool = False,
@@ -235,9 +334,22 @@ def plot_columns(
     grid_axis: str = "both",
     grid_style: Optional[Dict[str, Any]] = None,
     show_yzero_axis: bool = False,
+    show_xlabel: bool = True,
+    show_ylabel: bool = True,
+    show_xticklabels: bool = True,
+    show_yticklabels: bool = True,
+    xaxis_top: bool = False,
+    yaxis_right: bool = False,
+    xticks: Optional[list] = None,
+    yticks: Optional[list] = None,
     legend: bool = True,
+    show_legend_frame: bool = True,
+    legend_location: str = "best",
+    legend_handlelength: Optional[float] = None,
+    legend_handletextpad: Optional[float] = None,
     show_plot: bool = True,
     savefig: Optional[str] = None,
+    dpi: float = 300.0,
     figdata_fname: Optional[str] = None,
     series: Optional[List[Dict[str, Any]]] = None,
 ):
@@ -260,6 +372,11 @@ def plot_columns(
     - ``xrange`` / ``yrange`` (list[float, float], optional): axis limits.
     - ``colors`` (list[str], optional): default color palette for series without
         explicit ``color``.
+    - ``width`` / ``height`` (float, optional): figure size in inches. Defaults
+        preserve existing behavior: ``6x4`` for regular plots and ``6x6`` for
+        ``target_vs_predictions``.
+    - For ``target_vs_predictions``, the figure is kept square. If ``width`` is
+        provided, the size becomes ``(width, width)`` (``height`` is ignored).
     - ``target_vs_predictions`` (bool): enable parity-plot mode for target values
         on x versus predictions on y. This uses a square plot frame, shared x/y
         limits, and a ``y=x`` reference line.
@@ -276,9 +393,26 @@ def plot_columns(
     - ``grid_style`` (dict, optional): matplotlib grid style passed to
         ``Axes.grid`` (e.g. ``linewidth``, ``linestyle``, ``alpha``, ``color``).
     - ``show_yzero_axis`` (bool): draw a horizontal line at ``y=0``.
+    - ``show_xlabel`` / ``show_ylabel`` (bool): show/hide axis name labels.
+    - ``show_xticklabels`` / ``show_yticklabels`` (bool): show/hide numeric
+        tick labels on each axis.
+    - ``xaxis_top`` (bool): if ``True``, place x-axis label, tick marks, and
+        tick labels on the top side.
+    - ``yaxis_right`` (bool): if ``True``, place y-axis label, tick marks, and
+        tick labels on the right side.
+    - ``xticks`` / ``yticks`` (list[float], optional): explicit tick locations
+        to apply to the x/y axes via ``Axes.set_xticks`` and ``Axes.set_yticks``.
     - ``legend`` (bool): show legend.
+    - ``show_legend_frame`` (bool): show/hide the legend frame box.
+    - ``legend_location`` (str): legend position using Matplotlib ``loc``
+        names (e.g. ``"best"``, ``"upper left"``, ``"lower center"``).
+    - ``legend_handlelength`` (float, optional): handle length passed to
+        Matplotlib ``legend(handlelength=...)``.
+    - ``legend_handletextpad`` (float, optional): spacing between legend
+        handles and labels passed to ``legend(handletextpad=...)``.
     - ``show_plot`` (bool): show interactive window.
     - ``savefig`` (str, optional): output figure path (e.g. ``plot.png``).
+    - ``dpi`` (float): resolution used for ``savefig`` (default: ``300``).
     - ``figdata_fname`` (str, optional): data export path
         (``.json/.npz/.txt/.dat``).
 
@@ -321,6 +455,10 @@ def plot_columns(
         per-bin y distribution (e.g. ``ymode="marker", aggregation="mean"``
         plots one mean per bin; ``ymode="violin"`` plots the full
         per-bin distribution). Ignored when y is already array-valued.
+    - ``weight_by_multiplicity`` (bool): if ``True``, weight each structure by
+        its derivative-structure multiplicity. Weighted means and medians are
+        used for aggregation, and integer-weighted samples are used for
+        cloud/violin/box distributions.
     - ``xtol`` (float): snap x values to a grid of this spacing before
         grouping (useful when concentrations differ only by floating-point
         noise, e.g. ``xtol=1e-6``).
@@ -350,15 +488,23 @@ def plot_columns(
             ylabel = "Energy"
             yfactor = 1000.0
             colors = ["k", "r", "b"]
+            width = 7.0
+            height = 4.5
             legend = true
             show_plot = true
             savefig = "plot.png"
+            dpi = 300
             # target_vs_predictions = true  # Square parity plot with y=x
+            # width = 7.5                   # In target_vs_predictions: uses (width, width)
             # loglog = true                 # Logarithmic x/y axes
             # symlog = true                 # Signed-log x/y axes
             # grid = true
             # grid_which = "both"
             # grid_axis = "both"
+            # show_xlabel = false
+            # show_xticklabels = false
+            # show_legend_frame = false
+            # legend_location = "upper right"
 
             [[plot_columns.series]]
             xcolumn = "frconc_binary"
@@ -469,6 +615,15 @@ def plot_columns(
     if colors is not None and not isinstance(colors, list):
         raise ValueError("colors must be a list when provided.")
 
+    if width is not None and float(width) <= 0:
+        raise ValueError("width must be positive when provided.")
+
+    if height is not None and float(height) <= 0:
+        raise ValueError("height must be positive when provided.")
+
+    if float(dpi) <= 0:
+        raise ValueError("dpi must be positive.")
+
     yfactor = float(yfactor)
 
     if loglog and symlog:
@@ -488,12 +643,31 @@ def plot_columns(
     elif not isinstance(grid_style, dict):
         raise ValueError("grid_style must be a dictionary when provided.")
 
+    if xticks is not None and not isinstance(xticks, list):
+        raise ValueError("xticks must be a list when provided.")
+    if yticks is not None and not isinstance(yticks, list):
+        raise ValueError("yticks must be a list when provided.")
+
+    if legend_handlelength is not None:
+        legend_handlelength = float(legend_handlelength)
+        if legend_handlelength < 0:
+            raise ValueError("legend_handlelength must be non-negative when provided.")
+
+    if legend_handletextpad is not None:
+        legend_handletextpad = float(legend_handletextpad)
+        if legend_handletextpad < 0:
+            raise ValueError("legend_handletextpad must be non-negative when provided.")
+
+    legend_location_normalized = _normalize_legend_location(legend_location)
+
     # Cache DSGenerator objects by filepath to avoid repeated I/O
     dsg_cache: Dict[str, DSGenerator] = {}
     plot_payload: Dict[str, Any] = {
         "title": title,
         "xlabel": xlabel,
         "ylabel": ylabel,
+        "width": width,
+        "height": height,
         "yfactor": yfactor,
         "target_vs_predictions": target_vs_predictions,
         "loglog": loglog,
@@ -503,10 +677,30 @@ def plot_columns(
         "grid_which": grid_which,
         "grid_axis": grid_axis,
         "grid_style": grid_style,
+        "show_xlabel": show_xlabel,
+        "show_ylabel": show_ylabel,
+        "show_xticklabels": show_xticklabels,
+        "show_yticklabels": show_yticklabels,
+        "xaxis_top": xaxis_top,
+        "yaxis_right": yaxis_right,
+        "xticks": xticks,
+        "yticks": yticks,
+        "show_legend_frame": show_legend_frame,
+        "legend_location": legend_location_normalized,
+        "legend_handlelength": legend_handlelength,
+        "legend_handletextpad": legend_handletextpad,
+        "dpi": float(dpi),
         "series": [],
     }
 
-    fig, ax = plt.subplots(figsize=(6.0, 6.0) if target_vs_predictions else (6.0, 4.0))
+    if target_vs_predictions:
+        fig_width = 6.0 if width is None else float(width)
+        fig_height = fig_width
+    else:
+        fig_width = 6.0 if width is None else float(width)
+        fig_height = 4.0 if height is None else float(height)
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     plotted_x_values: List[np.ndarray] = []
     plotted_y_values: List[np.ndarray] = []
 
@@ -556,11 +750,18 @@ def plot_columns(
         if xcolumn_s == "frconc_binary" and xcolumn_s not in dsg.configurations.columns:
             dsg.add_fractional_concentration_binary()
 
+        if filter_ycolumn == "frconc_binary" and filter_ycolumn not in dsg.configurations.columns:
+            dsg.add_fractional_concentration_binary()
+
         if xcolumn_s not in dsg.configurations.columns:
             raise ValueError(f"Column '{xcolumn_s}' not found in configurations from '{src}'.")
 
         if ycolumn_s not in dsg.configurations.columns:
             raise ValueError(f"Column '{ycolumn_s}' not found in configurations from '{src}'.")
+
+        weight_by_multiplicity = bool(item.get("weight_by_multiplicity", False))
+        if weight_by_multiplicity and "multiplicity" not in dsg.configurations.columns:
+            dsg.add_multiplicity()
 
         df = dsg.get_configurations(mask_name=mask_name)
 
@@ -582,21 +783,27 @@ def plot_columns(
         y_cells = df[ycolumn_s].tolist()
         y_arrays = [_to_1d_float_array(v) * yfactor_s for v in y_cells]
         is_array_valued = any(len(v) > 1 for v in y_arrays)
+        if weight_by_multiplicity:
+            row_weights = _validate_multiplicity_weights(df["multiplicity"].to_numpy(), i)
+        else:
+            row_weights = np.ones(len(y_arrays), dtype=float)
+        y_weights = [np.full(len(values), weight) for values, weight in zip(y_arrays, row_weights)]
 
         binned = bool(item.get("binned", False))
         xtol = item.get("xtol", None)
 
-        if binned and not is_array_valued:
+        if binned:
             # Snap x to a regular grid when a tolerance is given, then group
-            # all scalar y values that fall in the same x bin into one array.
-            # The downstream ymode/aggregation logic then operates on these
-            # per-bin arrays exactly as it would on array-valued y columns.
+            # all y samples that fall in the same x bin into one array.
             if xtol is not None:
                 x_key = np.round(x / float(xtol)) * float(xtol)
             else:
                 x_key = x.copy()
             unique_x, inverse = np.unique(x_key, return_inverse=True)
             y_arrays = [np.concatenate([y_arrays[j] for j in np.where(inverse == k)[0]]) for k in range(len(unique_x))]
+            y_weights = [
+                np.concatenate([y_weights[j] for j in np.where(inverse == k)[0]]) for k in range(len(unique_x))
+            ]
             x = unique_x
             is_array_valued = any(len(v) > 1 for v in y_arrays)
 
@@ -670,11 +877,14 @@ def plot_columns(
         label = item.get("label", f"series_{i}")
 
         # Representative scalar y per x (used by marker mode and for exports)
-        y_repr = np.asarray([_aggregate(v, aggregation) for v in y_arrays], dtype=float)
+        y_repr = np.asarray(
+            [_aggregate(v, aggregation, weights) for v, weights in zip(y_arrays, y_weights)],
+            dtype=float,
+        )
         has_distribution_per_x = any(len(v) > 1 for v in y_arrays)
         plotted_x_values.append(x)
         if ymode in ("cloud", "violin", "boxplot", "box"):
-            plotted_y_values.append(np.concatenate(y_arrays))
+            plotted_y_values.append(np.concatenate([values for values, weights in zip(y_arrays, y_weights)]))
         else:
             plotted_y_values.append(y_repr)
 
@@ -688,7 +898,9 @@ def plot_columns(
 
             all_x = []
             all_y = []
-            for xi, yi in zip(x, y_arrays):
+            for xi, yi, weights in zip(x, y_arrays, y_weights):
+                if weight_by_multiplicity:
+                    yi = _weighted_samples(yi, weights)
                 if xjitter > 0:
                     dx = np.random.uniform(-xjitter, xjitter, size=len(yi))
                     xvals = xi + dx
@@ -704,37 +916,49 @@ def plot_columns(
             ax.scatter(cloud_x, cloud_y, label=label, **cloud_kwargs)
         elif ymode == "violin":
             width = float(item.get("width", _infer_box_violin_width(x)))
-            v = ax.violinplot(y_arrays, positions=x, widths=width, showextrema=False)
-            vbodies = v.get("bodies", [])
-            if not isinstance(vbodies, list):
-                vbodies = [vbodies]
-            for body in vbodies:
-                body.set_facecolor(scatter_kwargs.get("facecolors", color))
-                body.set_edgecolor(scatter_kwargs.get("edgecolors", color))
-                body.set_linewidth(float(scatter_kwargs.get("linewidths", 0.8)))
-                body.set_alpha(float(scatter_kwargs.get("alpha", 0.3)))
+            if weight_by_multiplicity:
+                for position, values, weights in zip(x, y_arrays, y_weights):
+                    _weighted_violin(ax, values, weights, position, width, color, scatter_kwargs)
+            else:
+                v = ax.violinplot(y_arrays, positions=x, widths=width, showextrema=False)
+                vbodies = v.get("bodies", [])
+                if not isinstance(vbodies, list):
+                    vbodies = [vbodies]
+                for body in vbodies:
+                    body.set_facecolor(scatter_kwargs.get("facecolors", color))
+                    body.set_edgecolor(scatter_kwargs.get("edgecolors", color))
+                    body.set_linewidth(float(scatter_kwargs.get("linewidths", 0.8)))
+                    body.set_alpha(float(scatter_kwargs.get("alpha", 0.3)))
             ax.plot([], [], color=color, label=label)
         else:  # boxplot / box
             width = float(item.get("width", _infer_box_violin_width(x)))
+            box_arrays = [
+                _weighted_samples(values, weights) if weight_by_multiplicity else values
+                for values, weights in zip(y_arrays, y_weights)
+            ]
             bp = ax.boxplot(
-                y_arrays,
+                box_arrays,
                 positions=x,
                 widths=width,
                 patch_artist=True,
                 showfliers=bool(item.get("showfliers", False)),
                 manage_ticks=False,
             )
+            alpha = float(scatter_kwargs.get("alpha", 0.8))
             for patch in bp["boxes"]:
                 patch.set_facecolor(scatter_kwargs.get("facecolors", "none"))
                 patch.set_edgecolor(scatter_kwargs.get("edgecolors", color))
                 patch.set_linewidth(float(scatter_kwargs.get("linewidths", 0.8)))
-                patch.set_alpha(float(scatter_kwargs.get("alpha", 0.8)))
+                patch.set_alpha(alpha)
             for med in bp["medians"]:
                 med.set_color(color)
+                med.set_alpha(alpha)
             for whisk in bp["whiskers"]:
                 whisk.set_color(color)
+                whisk.set_alpha(alpha)
             for cap in bp["caps"]:
                 cap.set_color(color)
+                cap.set_alpha(alpha)
             ax.plot([], [], color=color, label=label)
 
         if mean_line:
@@ -767,6 +991,7 @@ def plot_columns(
                 "label": label,
                 "ymode": ymode,
                 "aggregation": aggregation,
+                "weight_by_multiplicity": weight_by_multiplicity,
                 "binned": binned,
                 "xtol": xtol,
                 "mean_line": mean_line,
@@ -787,8 +1012,30 @@ def plot_columns(
 
     ax.set_xlabel(xlabel if xlabel is not None else ("Target" if target_vs_predictions else "x"))
     ax.set_ylabel(ylabel if ylabel is not None else ("Predictions" if target_vs_predictions else "y"))
+
+    if xaxis_top:
+        ax.xaxis.set_label_position("top")
+        ax.tick_params(axis="x", which="both", bottom=False, top=True, labelbottom=False, labeltop=True)
+
+    if yaxis_right:
+        ax.yaxis.set_label_position("right")
+        ax.tick_params(axis="y", which="both", left=False, right=True, labelleft=False, labelright=True)
+
+    if not show_xlabel:
+        ax.set_xlabel("")
+    if not show_ylabel:
+        ax.set_ylabel("")
+    if not show_xticklabels:
+        ax.tick_params(axis="x", which="both", labelbottom=False, labeltop=False)
+    if not show_yticklabels:
+        ax.tick_params(axis="y", which="both", labelleft=False, labelright=False)
     if title is not None:
         ax.set_title(title)
+
+    if xticks is not None:
+        ax.set_xticks([float(value) for value in xticks])
+    if yticks is not None:
+        ax.set_yticks([float(value) for value in yticks])
 
     xrange_values = _validate_axis_range(xrange, "xrange")
     yrange_values = _validate_axis_range(yrange, "yrange")
@@ -858,12 +1105,20 @@ def plot_columns(
         ax.grid(True, which=grid_which, axis=grid_axis, **grid_style)
 
     if legend:
-        ax.legend()
+        legend_kwargs = {
+            "frameon": show_legend_frame,
+            "loc": legend_location_normalized,
+        }
+        if legend_handlelength is not None:
+            legend_kwargs["handlelength"] = legend_handlelength
+        if legend_handletextpad is not None:
+            legend_kwargs["handletextpad"] = legend_handletextpad
+        ax.legend(**legend_kwargs)
 
     fig.tight_layout()
 
     if savefig:
-        fig.savefig(savefig, dpi=300)
+        fig.savefig(savefig, dpi=float(dpi))
 
     if figdata_fname is not None:
         ext = os.path.splitext(figdata_fname)[1].lower()

@@ -81,16 +81,22 @@ def print_column_values(
                 "Use --n-output-values (or -n) to limit output rows, "
                 "e.g. -n 50."
             )
-            confirmation = (
-                input("Type 'yes' to continue printing all rows: ").strip().lower()
-            )
+            confirmation = input("Type 'yes' to continue printing all rows: ").strip().lower()
             if confirmation != "yes":
                 print("Printing cancelled.")
                 return
 
-    # Fixed-width terminal formatting (cropped + aligned)
+    # Size each column to its widest displayed value, up to the existing cap.
     index_width = max(5, len(str(max(rows_to_print - 1, 0))))
-    col_width = 120
+    max_col_width = 30
+    displayed_configurations = configurations[cols_list].head(rows_to_print)
+    col_widths = {
+        col: min(
+            max_col_width,
+            max(len(str(col)), *(len(str(value)) for value in displayed_configurations[col])),
+        )
+        for col in cols_list
+    }
 
     def _crop(text: str, width: int) -> str:
         if len(text) <= width:
@@ -108,22 +114,17 @@ def print_column_values(
     header = []
     if show_index:
         header.append(_fmt_right("Index", index_width))
-    header.extend(_fmt_left(str(col), col_width) for col in cols_list)
+    header.extend(_fmt_left(str(col), col_widths[col]) for col in cols_list)
     header_line = " | ".join(header)
     print(header_line)
     print("-" * len(header_line))
 
-    for idx, (_, row_data) in enumerate(
-        configurations[cols_list].head(rows_to_print).iterrows()
-    ):
+    for idx, (_, row_data) in enumerate(displayed_configurations.iterrows()):
         row = []
         if show_index:
             row.append(_fmt_right(str(idx), index_width))
-        row.extend(_fmt_left(str(row_data[col]), col_width) for col in cols_list)
+        row.extend(_fmt_left(str(row_data[col]), col_widths[col]) for col in cols_list)
         print(" | ".join(row))
 
     if rows_to_print < total_rows:
-        print(
-            f"Printed {rows_to_print} of {total_rows} rows. "
-            "Use --n-output-values to control this limit."
-        )
+        print(f"Printed {rows_to_print} of {total_rows} rows. Use --n-output-values to control this limit.")

@@ -20,6 +20,35 @@ from clusterx.structure import Structure
 BASE_URL_NOMAD = "http://nomad-lab.eu/prod/v1/api/v1/"
 
 
+def _get_lattice_parameters(cell, sort_by_length=False):
+    """Return cell lengths and angles, optionally ordering vectors by length."""
+    cell = np.asarray(cell)
+    if sort_by_length:
+        cell = cell[np.argsort(np.linalg.norm(cell, axis=1))]
+
+    a, b, c = np.linalg.norm(cell, axis=1)
+
+    def angle(vector_1, vector_2):
+        cosine = np.dot(vector_1, vector_2) / (
+            np.linalg.norm(vector_1) * np.linalg.norm(vector_2)
+        )
+        return np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0)))
+
+    alpha = angle(cell[1], cell[2])
+    beta = angle(cell[0], cell[2])
+    gamma = angle(cell[0], cell[1])
+    return a, b, c, alpha, beta, gamma
+
+
+def _collect_lattice_parameters(cells, sort_by_length=False):
+    """Collect cell parameters into six lists, one for each lattice property."""
+    parameters = [[] for _ in range(6)]
+    for cell in cells:
+        for values, value in zip(parameters, _get_lattice_parameters(cell, sort_by_length)):
+            values.append(value)
+    return tuple(parameters)
+
+
 class SingleEntry:
     """ "
     This class is applicable for single entries in NOMAD.
@@ -307,6 +336,40 @@ class Dataset:
             energy_values_ev.append(total_energy_ev)
         return energy_values_ev
 
+    def get_band_gaps(self):
+        """
+        Returns a list of band gap values in eV
+        of the entries contained in the dataset
+        """
+        values = []
+        for entry in self.download_data():
+            archive = entry["archive"]
+            calculations = archive["run"][0]["calculation"]
+
+            def first_value(gaps):
+                if isinstance(gaps, dict):
+                    gaps = [gaps]
+                for gap in gaps or []:
+                    if gap.get("value") is not None:
+                        return gap["value"]
+                return None
+
+            band_gap = next(
+                (
+                    value
+                    for value in (first_value(c.get("band_gap")) for c in reversed(calculations))
+                    if value is not None
+                ),
+                None,
+            )
+            if band_gap is None:
+                result_band_gap = archive.get("results", {}).get("properties", {}).get("electronic", {}).get("band_gap")
+                band_gap = first_value(result_band_gap)
+            if band_gap is None:
+                raise ValueError("No band gap result found in the NOMAD entry.")
+            values.append(band_gap / electron_volt)
+        return values
+
     def get_structure_objects(self, filename="structure.json"):
         """
         Returns a list of structure objects for the entrys in the dataset.
@@ -367,64 +430,32 @@ class Dataset:
             list_of_atoms_objects.append(atoms)
         return list_of_atoms_objects
 
-    def get_lattice_constants(self, normalize=False):
-        """"
-        Returns the lattice constants of the structures in the dataset as
-        three lists: one list for each lattice constant.
-        Setting normalize to True normalizes the lattice constants with respect
-        to the parent lattice and returns the smallest lattice constant first,
-        and the largest last.
+    def get_lattice_constants(self):
+        """Return raw cell lengths and angles for the dataset's structures.
 
-        **Parameters:**
-        ``normalize``: bool
-            Default:False
-            If set to True the lattice constants are normalized to the
-            parent lattice.
+        Returns six lists in this order: ``a``, ``b``, ``c`` (lengths in
+        Angstrom), then ``alpha``, ``beta``, ``gamma`` (angles in degrees).
+        The lengths and angles follow the cell-vector order in each atoms
+        object. To get lattice parameters normalized to the parent lattice,
+        use :meth:`get_normalized_lattice_constants`.
         """
-        lattice_constants_1 = []
-        lattice_constants_2 = []
-        lattice_constants_3 = []
         atoms_objects = self.get_atoms_objects()
-        if not normalize:
-            for atoms_object in atoms_objects:
-                cell = atoms_object.cell
-                lattice_constant_1 = np.sqrt(cell[0][0]**2
-                                            + cell[0][1]**2
-                                            + cell[0][2]**2)
-                lattice_constant_2 = np.sqrt(cell[1][0]**2
-                                            + cell[1][1]**2
-                                            + cell[1][2]**2)
-                lattice_constant_3 = np.sqrt(cell[2][0]**2
-                                            + cell[2][1]**2
-                                            + cell[2][2]**2)
-                # a, b, c = np.sort([lattice_constant_1, lattice_constant_2, lattice_constant_3])
-                lattice_constants_1.append(lattice_constant_1)
-                lattice_constants_2.append(lattice_constant_2)
-                lattice_constants_3.append(lattice_constant_3)
-        else:
-            structures = self.get_structure_objects()
-            # We need cell parameters from DFT calculation. This is contained in atoms object.
-            # Also we need supercell transformation matrix; this is contained in structures object
-            for structure, atoms_object in zip(structures, atoms_objects):
-                cell = atoms_object.cell
-                # get transformation from parent lattice to super cell
-                transformation_matrix = structure.get_supercell().get_transformation()
-                # apply inverse transformation matrix to cell
-                normalized_cell = np.dot(np.linalg.inv(transformation_matrix), cell)
-                # obtain lattice constants normalized to parent lattice
-                lattice_constant_1 = np.sqrt(normalized_cell[0][0]**2
-                                            + normalized_cell[0][1]**2
-                                            + normalized_cell[0][2]**2)
-                lattice_constant_2 = np.sqrt(normalized_cell[1][0]**2
-                                            + normalized_cell[1][1]**2
-                                            + normalized_cell[1][2]**2)
-                lattice_constant_3 = np.sqrt(normalized_cell[2][0]**2
-                                            + normalized_cell[2][1]**2
-                                            + normalized_cell[2][2]**2)
-            # sort lattice constants such that smalles lattice constant is returned first,
-            # and largest last
-                a, b, c = np.sort([lattice_constant_1, lattice_constant_2, lattice_constant_3])
-                lattice_constants_1.append(a)
-                lattice_constants_2.append(b)
-                lattice_constants_3.append(c)
-        return lattice_constants_1, lattice_constants_2, lattice_constants_3
+        return _collect_lattice_parameters(atoms.cell for atoms in atoms_objects)
+
+    def get_normalized_lattice_constants(self):
+        """Return lattice lengths and angles normalized to the parent lattice.
+
+        Returns six lists in this order: ``a``, ``b``, ``c`` (lengths in
+        Angstrom), then ``alpha``, ``beta``, ``gamma`` (angles in degrees).
+        For each structure, its supercell transformation is inverted and
+        applied to the cell from the corresponding atoms object. The resulting
+        vectors are ordered by ascending length, with the angles calculated
+        from the correspondingly ordered vectors.
+        """
+        structures = self.get_structure_objects()
+        atoms_objects = self.get_atoms_objects()
+        normalized_cells = []
+        for structure, atoms in zip(structures, atoms_objects):
+            transformation = structure.get_supercell().get_transformation()
+            normalized_cells.append(np.linalg.inv(transformation) @ np.asarray(atoms.cell))
+        return _collect_lattice_parameters(normalized_cells, sort_by_length=True)
