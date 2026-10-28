@@ -18,9 +18,7 @@ from ase.calculators.calculator import Calculator
 from clusterx.derivative_structures import DSGenerator
 from clusterx.model import Model
 from clusterx.parent_lattice import ParentLattice
-from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
-from clusterx.super_cell import SuperCell
 from clusterx.utils import normalize_nsubs_list, normalize_shape_input
 from clusterx.visualization import (
     plot_predictions_vs_target,
@@ -219,16 +217,32 @@ def generate_derivative_structures(
     property_names : list[str], optional
         Multiple property names to compute/plot. Mutually exclusive with ``property_name``.
     property_solver : dict, optional
-        Parameters for a custom property solver. Expected keys:
-        ``filename`` (module path), ``classname`` (class with ``compute_property``),
-        and optional ``kwargs`` forwarded to the solver.
+        Configuration for the custom solver used by
+        ``task="compute_property_with_custom_solver"``. Provide ``filename``
+        (path to a Python module) and exactly one of:
+
+        - ``function``: name of a module-level function to call.
+        - ``classname``: name of a solver class. Optionally provide ``method``
+          (defaults to ``"compute_property"``) to select a method on its
+          instance.
+
+        Optionally provide ``kwargs`` (a dictionary passed to the selected
+        callable).
     sc_shape : int or list[int] or list[list[int]], optional
         Supercell shape specification. May be a scalar multiplier or an explicit 3×3 integer matrix.
     per_formula_unit : bool, default ``False``
         If ``True``, compute/scale properties per formula unit.
     linear_reference : list[list[float]] or list[dict] or str, optional
-        Linear reference to correct the property. Accepts ``[[x, y], ...]`` or
-        ``[{'x': x, 'y': y}, ...]``; strings are passed through unchanged.
+        Linear-reference definition, active for
+        ``task="compute_property_with_ce_model"`` (or ``"compute_property_ce"``)
+        and ``task="compute_property_with_custom_solver"``. The linear reference
+        is subtracted to the computed property.
+        Pass two concentration/property points as ``[[x0, p0], [x1, p1]]`` or
+        ``[{'x': x0, 'y': p0}, {'x': x1, 'y': p1}]``, or use
+        ``"least-squares"`` / ``"concentration-endpoints"`` to define a reference by fitting
+        the computed values. ``None`` disables the linear-reference.
+        The behavior and constraints are documented in
+        :meth:`clusterx.derivative_structures.DSGenerator.compute_properties`.
     mask_name : str or list[str | None], optional
         Name of a mask to write/read within the serialized DSS object for downstream
         filtering. For ``task=merge_dsses``, a single string applies the same mask to
@@ -292,8 +306,17 @@ def generate_derivative_structures(
         Compute ``property_name`` (or ``property_names``) for all configurations in ``dss_filepath``
         using the CE model from ``model_filepath``. Supports ``per_formula_unit`` and ``linear_reference``.
     ``"compute_property_with_custom_solver"``
-        Load the solver class from ``property_solver['filename']`` and call its
-        ``compute_property(structure, shape, concentration, **kwargs)`` on every configuration.
+        Load and call the module-level function or class method selected by
+        ``property_solver`` for every configuration via
+        :meth:`clusterx.derivative_structures.DSGenerator.compute_properties`.
+        The selected callable receives the generated clusterX structure, its
+        3×3 supercell shape, the binary fractional concentration, and the
+        configuration's pandas Series as ``row``; optional
+        ``property_solver["kwargs"]`` are forwarded as keyword arguments.
+        Return one scalar when ``property_name`` is set, or an ordered sequence
+        with one value per entry in ``property_names``. The CLI passes these
+        arguments through to ``compute_properties``; see its docstring for
+        details on return values, ``per_formula_unit``, and ``linear_reference``.
     ``"plot_property_vs_concentration"`` / ``"plot_property"``
         Scatter plot property vs fractional concentration. If ``sset_filepath`` and
         ``model_filepath`` are given, overlays CE predictions.
@@ -336,22 +359,62 @@ def generate_derivative_structures(
         random_state = 1
         dss_filepath = "random_structures.pickle"
 
-    **2) Compute a property with a custom solver and store values inside the DSS**
+    **2) Define a custom solver function**
+
+    Save a module-level function in a Python file, for example
+    ``my_custom_solvers.py``. Functions follow the callable interface
+    documented by :meth:`clusterx.derivative_structures.DSGenerator.compute_properties`:
+
+    .. code-block:: python
+
+        def compute_energy(structure, shape, concentration, row, scale=1.0):
+            # Replace this example calculation with the desired property.
+            return scale * concentration
+
+    **3) Run a custom solver function**
 
     .. code-block:: toml
 
         [generate_derivative_structures]
         task = "compute_property_with_custom_solver"
-        plat_filepath = "plat.json"
-        property_solver = { filename = "path/to/my_custom_solver_module.py",
-                            classname = "MySolver",
-                            kwargs = { arg1 = 5.724589, arg2 = 6.016160 } }
-        dss_filepath = "dss_scsize1-2_new.pickle"
-        property_name = "total_energy_mace_vegards"
-        per_formula_unit = true
-        linear_reference = [{x=0.0, y=-13.08516}, {x=1.0, y=-11.302472}]
+        property_solver = { filename = "path/to/my_custom_solvers.py",
+                            function = "compute_energy",
+                            kwargs = { scale = 2.0 } }
+        dss_filepath = "random_structures.pickle"
+        property_name = "energy"
 
-    **3) Merge multiple DSS files with optional per-source masks**
+    **4) Select a method from a solver class**
+
+    Use a class when you want to group related solvers or share instance state.
+    The class is instantiated without arguments. The ``method`` key selects
+    which instance method is called; if omitted, it defaults to
+    ``"compute_property"``.
+
+    .. code-block:: python
+
+        class MySolvers:
+            def compute_property_1(
+                self, structure, shape, concentration, row, scale=1.0, offset=0.0
+            ):
+                return scale * concentration + offset
+
+            def compute_property_2(
+                self, structure, shape, concentration, row, normal=3.0, parity=2.0
+            ):
+                return row["property"] * concentration / normal + parity
+
+    .. code-block:: toml
+
+        [generate_derivative_structures]
+        task = "compute_property_with_custom_solver"
+        property_solver = { filename = "path/to/my_custom_solvers.py",
+                            classname = "MySolvers",
+                            method = "compute_property_2",
+                            kwargs = { normal = 3.0, parity = 2.0 } }
+        dss_filepath = "random_structures.pickle"
+        property_name = "property_2"
+
+    **5) Merge multiple DSS files with optional per-source masks**
 
     .. code-block:: toml
 
@@ -365,17 +428,8 @@ def generate_derivative_structures(
     You can also provide a single ``mask_name`` to apply the same mask to all
     sources during merge.
 
-    **Custom solver interface**
-
-    .. code-block:: python
-
-        class MySolver:
-            def __init__(self):
-                pass
-
-            def compute_property(self, struc, shape, conc, **kwargs) -> float:
-                # return a scalar property value
-                return 0.0
+    For the custom solver callable contract, including multi-property return
+    values, see :meth:`clusterx.derivative_structures.DSGenerator.compute_properties`.
     """
 
     match task:
@@ -425,9 +479,7 @@ def generate_derivative_structures(
 
         # Compute property with CE model
         case "compute_property_with_ce_model" | "compute_property_ce":
-            model = (
-                Model(filepath=model_filepath) if model_filepath is not None else None
-            )
+            model = Model(filepath=model_filepath) if model_filepath is not None else None
             _do_compute_properties(
                 cem=model,
                 property_name=property_name,
@@ -440,21 +492,11 @@ def generate_derivative_structures(
 
         # Compute property using custom property solver
         case "compute_property_with_custom_solver":
-            module_path = os.path.join(os.getcwd(), property_solver["filename"])
-            spec = importlib.util.spec_from_file_location(
-                "custom_property_solver", module_path
-            )
-            module = importlib.util.module_from_spec(spec)
-            sys.modules["custom_property_solver"] = module
-            spec.loader.exec_module(module)
-
-            property_solver_class = getattr(module, property_solver["classname"])
-
-            property_solver_instance = property_solver_class()
+            solver_callable, solver_kwargs = _load_property_solver(property_solver)
 
             _do_compute_properties(
-                property_solver=property_solver_instance.compute_property,
-                property_solver_kwargs=property_solver.get("kwargs", {}),
+                property_solver=solver_callable,
+                property_solver_kwargs=solver_kwargs,
                 property_name=property_name,
                 property_names=property_names,
                 dss_filepath=dss_filepath,
@@ -483,11 +525,7 @@ def generate_derivative_structures(
                     sset_gss = StructuresSet(filepath=sset_gss_filepath)
                 else:
                     sset_gss = None
-                model = (
-                    Model(filepath=model_filepath)
-                    if model_filepath is not None
-                    else None
-                )
+                model = Model(filepath=model_filepath) if model_filepath is not None else None
                 _do_plot_properties(
                     dss_filepath,
                     property_name=property_name,
@@ -506,9 +544,7 @@ def generate_derivative_structures(
                 x = dsgen.configurations["frconc_binary"].to_numpy()
 
                 if property_name is not None and property_names is not None:
-                    raise ValueError(
-                        "Only one of 'property_name' or 'property_names' should be provided, not both."
-                    )
+                    raise ValueError("Only one of 'property_name' or 'property_names' should be provided, not both.")
 
                 if property_name is not None:
                     property_names = [property_name]
@@ -517,9 +553,7 @@ def generate_derivative_structures(
                 for property_name in property_names:
                     ys.append(dsgen.configurations[property_name].to_numpy())
 
-                _plot_multiple_scatter(
-                    x, ys, colors, markers, sizes, save_filepath=plot_fname
-                )
+                _plot_multiple_scatter(x, ys, colors, markers, sizes, save_filepath=plot_fname)
 
         case "plot_predictions_vs_target":
             assert sset_filepath is not None, "sset_filepath needs to be provided"
@@ -545,20 +579,14 @@ def generate_derivative_structures(
                 fname=plot_fname,
             )
         case "plot_property_vs_concentration2":
-            _do_plot_properties2(
-                dss_filepath, mask_name=mask_name, property_names=[property_name]
-            )
+            _do_plot_properties2(dss_filepath, mask_name=mask_name, property_names=[property_name])
         case "plot_property_vs_concentration3":
-            _do_plot_properties3(
-                dss_filepath, mask_name=mask_name, property_names=[property_name]
-            )
+            _do_plot_properties3(dss_filepath, mask_name=mask_name, property_names=[property_name])
         case "mark_lowest_property_per_concentration":
             _do_mark_lowest(property_name, mask_name, dss_filepath)
 
         case "mark_lowest_and_random_properties_per_concentration":
-            _do_mark_lowest_and_random(
-                property_name, mask_name, dss_filepath, n_lowest, n_random
-            )
+            _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest, n_random)
 
         case "to_sset" | "convert_to_sset":
             # Requires
@@ -594,9 +622,7 @@ def generate_derivative_structures(
             merged.serialize(filepath=merged_dss_filepath)
 
         case 100:
-            model = (
-                Model(filepath=model_filepath) if model_filepath is not None else None
-            )
+            model = Model(filepath=model_filepath) if model_filepath is not None else None
             plat = ParentLattice(filepath=plat_filepath)
             sset = StructuresSet(filepath=sset_filepath)
 
@@ -630,9 +656,7 @@ def _do_mark_lowest(property_name, mask_name, dss_filepath):
         pickle.dump(dss, f)
 
 
-def _do_mark_lowest_and_random(
-    property_name, mask_name, dss_filepath, n_lowest, n_random
-):
+def _do_mark_lowest_and_random(property_name, mask_name, dss_filepath, n_lowest, n_random):
     """
     Group by fractional concentration;
     then mark the n_lowest configurations with lowest properties per concentration and
@@ -657,9 +681,7 @@ def _do_mark_lowest_and_random(
     marked_ids = sorted_groups.groupby("frconc_binary").head(n_lowest)["config_id"]
     # sample selects n_random random configurations; If for a specific concentration there is less than
     # n_random configurations the number of available configurations is chosen for n
-    marked_ids2 = sorted_groups.groupby("frconc_binary").apply(
-        lambda x: x.sample(n=min(n_random, len(x)))
-    )["config_id"]
+    marked_ids2 = sorted_groups.groupby("frconc_binary").apply(lambda x: x.sample(n=min(n_random, len(x))))["config_id"]
     # concatenate the marked ids and exclude duplicates
     combined_ids = pd.concat([marked_ids, marked_ids2]).drop_duplicates()
 
@@ -702,9 +724,7 @@ def process_linear_reference(
         return linear_reference
 
     # If it's a list of dicts, convert to list of [x, y]
-    if isinstance(linear_reference, list) and all(
-        isinstance(item, dict) for item in linear_reference
-    ):
+    if isinstance(linear_reference, list) and all(isinstance(item, dict) for item in linear_reference):
         try:
             return [[item["x"], item["y"]] for item in linear_reference]
         except KeyError as e:
@@ -712,6 +732,52 @@ def process_linear_reference(
 
     # If already list of lists, or string, return as is
     return linear_reference
+
+
+def _load_property_solver(property_solver: dict) -> tuple[Callable[..., object], dict]:
+    if not isinstance(property_solver, dict):
+        raise TypeError("property_solver must be a dictionary.")
+
+    filename = property_solver.get("filename")
+    if not isinstance(filename, str) or not filename:
+        raise ValueError("property_solver must include a non-empty 'filename'.")
+
+    has_function = "function" in property_solver
+    has_class = "classname" in property_solver
+    if has_function == has_class:
+        raise ValueError("property_solver must specify exactly one of 'function' or 'classname'.")
+
+    solver_kwargs = property_solver.get("kwargs", {})
+    if not isinstance(solver_kwargs, dict):
+        raise TypeError("property_solver['kwargs'] must be a dictionary.")
+
+    module_path = os.path.join(os.getcwd(), filename)
+    spec = importlib.util.spec_from_file_location("custom_property_solver", module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Unable to load custom property solver module: {module_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    if has_function:
+        function_name = property_solver["function"]
+        solver_callable = getattr(module, function_name, None)
+        if not callable(solver_callable):
+            raise TypeError(f"Custom solver function {function_name!r} is missing or not callable in {module_path}.")
+    else:
+        class_name = property_solver["classname"]
+        solver_class = getattr(module, class_name, None)
+        if not callable(solver_class):
+            raise TypeError(f"Custom solver class {class_name!r} is missing or not callable in {module_path}.")
+
+        solver_instance = solver_class()
+        method_name = property_solver.get("method", "compute_property")
+        solver_callable = getattr(solver_instance, method_name, None)
+        if not callable(solver_callable):
+            raise TypeError(f"Custom solver method {method_name!r} is missing or not callable on {class_name!r}.")
+
+    return solver_callable, solver_kwargs
 
 
 def _do_compute_properties(
@@ -940,18 +1006,14 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
 
     if use_jitter:
         plot_x_column = "frconc_binary_jittered"
-        jitter = np.random.uniform(
-            -jitter_width, jitter_width, size=len(configurations)
-        )
+        jitter = np.random.uniform(-jitter_width, jitter_width, size=len(configurations))
         configurations[plot_x_column] = configurations[x_column].to_numpy() + jitter
 
     # Prepare data sources
     source = ColumnDataSource(configurations)
     mask1_source = None
     if mask_name is not None:
-        mask1_source = ColumnDataSource(
-            configurations[configurations["config_id"].isin(masks[mask_name])]
-        )
+        mask1_source = ColumnDataSource(configurations[configurations["config_id"].isin(masks[mask_name])])
 
     # Build dynamic tooltips from all DataFrame columns (skip internal jitter column).
     # Long values (e.g. ensemble-prediction arrays) are truncated by a JS formatter.
@@ -973,9 +1035,7 @@ def _do_plot_properties2(dss_filepath, mask_name=None, property_names=[]):
     _tooltip_cols = [col for col in configurations.columns if col not in _skip_cols]
     # The {custom} placeholder in the format string triggers the CustomJSHover.
     dynamic_tooltips = [(col, "@{" + col + "}{custom}") for col in _tooltip_cols]
-    _formatters: dict[str, str | CustomJSHover] = {
-        "@{" + col + "}": _truncate_fmt for col in _tooltip_cols
-    }
+    _formatters: dict[str, str | CustomJSHover] = {"@{" + col + "}": _truncate_fmt for col in _tooltip_cols}
 
     # Create a Bokeh figure
     p = figure(
@@ -1082,23 +1142,16 @@ def _do_merge_dss(
         if isinstance(token, str) and token.strip().lower() in ("", "none", "null"):
             return None
         if not isinstance(token, str):
-            raise ValueError(
-                f"Each mask name must be a string or None. Got {type(token).__name__}."
-            )
+            raise ValueError(f"Each mask name must be a string or None. Got {type(token).__name__}.")
         return token
 
     npaths = len(paths)
     if isinstance(mask_names, str) or mask_names is None:
-        masks_per_source: List[Optional[str]] = [
-            _normalize_mask_token(mask_names)
-        ] * npaths
+        masks_per_source: List[Optional[str]] = [_normalize_mask_token(mask_names)] * npaths
     else:
         masks_per_source = [_normalize_mask_token(m) for m in list(mask_names)]
         if len(masks_per_source) != npaths:
-            raise ValueError(
-                "mask_names must have the same length as paths "
-                f"({len(masks_per_source)} != {npaths})."
-            )
+            raise ValueError(f"mask_names must have the same length as paths ({len(masks_per_source)} != {npaths}).")
 
     # Load first to seed the merged object
     first_path = Path(paths[0])
@@ -1152,9 +1205,7 @@ def _do_merge_dss(
 
             if make_ids_unique:
                 # Ensure unique shape_id across sources
-                shapes["shape_id"] = (
-                    shapes["shape_id"].astype("int64") + next_shape_offset
-                )
+                shapes["shape_id"] = shapes["shape_id"].astype("int64") + next_shape_offset
 
             shape_parts.append(shapes)
 
@@ -1187,9 +1238,7 @@ def _do_merge_dss(
             else:
                 # If there were no shapes in this dss, still offset shape ids
                 # based on the config's max shape_id to avoid collisions
-                next_shape_offset = max(
-                    next_shape_offset, int(conf["shape_id"].max()) + 1
-                )
+                next_shape_offset = max(next_shape_offset, int(conf["shape_id"].max()) + 1)
 
     # Final concatenation (single concat each => efficient)
     if shape_parts:
@@ -1200,20 +1249,13 @@ def _do_merge_dss(
     if conf_parts:
         merged.configurations = pd.concat(conf_parts, ignore_index=True, copy=False)
     else:
-        merged.configurations = pd.DataFrame(
-            columns=["config_id", "sigma", "shape_id", provenance_col]
-        )
+        merged.configurations = pd.DataFrame(columns=["config_id", "sigma", "shape_id", provenance_col])
 
     # Store provenance mapping
     if store_source_map:
         merged.metadata["source_paths"] = source_map
-        merged.metadata["source_masks"] = {
-            sid: masks_per_source[sid] for sid in range(len(masks_per_source))
-        }
+        merged.metadata["source_masks"] = {sid: masks_per_source[sid] for sid in range(len(masks_per_source))}
 
-    merged.masks = {
-        mname: np.asarray(mids, dtype="int64")
-        for mname, mids in merged_masks_acc.items()
-    }
+    merged.masks = {mname: np.asarray(mids, dtype="int64") for mname, mids in merged_masks_acc.items()}
 
     return merged
