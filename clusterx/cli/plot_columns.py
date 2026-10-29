@@ -355,8 +355,11 @@ def plot_columns(
 ):
     """Plot one or more columns from serialized DSGenerator or StructuresSet objects.
 
-    This command is intended to be driven from TOML input using
-    ``[plot_columns]`` plus ``[[plot_columns.series]]`` blocks.
+    This command can be driven from TOML using ``[plot_columns]`` and optional
+    ``[[plot_columns.series]]`` blocks. If ``series`` is omitted or empty,
+    one series is plotted using the top-level ``source_filepath``, ``xcolumn``,
+    and ``ycolumn``. Options available only per series use their built-in
+    defaults.
 
     Top-level options
     -----------------
@@ -597,10 +600,11 @@ def plot_columns(
     cmd_message("head")
 
     if series is None:
-        raise ValueError("series must be provided as a list of dictionaries (from [[plot_columns.series]]).")
-
-    if not isinstance(series, list) or len(series) == 0:
-        raise ValueError("series must be a non-empty list.")
+        series = []
+    elif not isinstance(series, list):
+        raise ValueError("series must be a list of dictionaries.")
+    if not series:
+        series = [{}]
 
     if source_filepath is None:
         missing_src = [

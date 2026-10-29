@@ -281,6 +281,39 @@ def test_plot_columns_accepts_serialized_structures_set(parent_lattice, tmp_path
     assert plot_data["series"][0]["y"] == [2.0, 3.0]
 
 
+def test_plot_columns_uses_top_level_defaults_without_series(parent_lattice, tmp_path):
+    sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
+    sset.set_property_values(
+        property_name="x",
+        property_vals=[0.0, 1.0],
+        update_db=False,
+    )
+    sset.set_property_values(
+        property_name="y",
+        property_vals=[2.0, 3.0],
+        update_db=False,
+    )
+    sset_filepath = tmp_path / "sset.db"
+    figdata_filepath = tmp_path / "plot_data.json"
+    sset.serialize(filepath=str(sset_filepath), ase_db_type="db", overwrite=True)
+
+    plot_columns(
+        source_filepath=str(sset_filepath),
+        xcolumn="x",
+        ycolumn="y",
+        show_plot=False,
+        figdata_fname=str(figdata_filepath),
+    )
+
+    with open(figdata_filepath, encoding="utf-8") as f:
+        plot_data = json.load(f)
+    assert len(plot_data["series"]) == 1
+    assert plot_data["series"][0]["xcolumn"] == "x"
+    assert plot_data["series"][0]["ycolumn"] == "y"
+    assert plot_data["series"][0]["x"] == [0.0, 1.0]
+    assert plot_data["series"][0]["y"] == [2.0, 3.0]
+
+
 def test_plot_columns_applies_yfactor(parent_lattice, tmp_path):
     sset = _make_equivalence_sset(parent_lattice, [[1, 0], [0, 0]])
     sset.set_property_values(
