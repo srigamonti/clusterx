@@ -20,6 +20,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from clusterx.cli.config_utils import cmd_message, get_command_name
+from clusterx.cli.report_utils import MarkdownReport
 from clusterx.correlations import CorrelationsCalculator
 from clusterx.model import Model
 
@@ -217,6 +218,61 @@ def build_nonlinear_model(
                 f"weights has length {len(weights)}, but pvals has length {len(pvals)}."
             )
 
+    fit = fit_nonlinear_pipeline(
+        comat,
+        pvals,
+        weights=weights,
+        regression_model=regression_model,
+        selection_model=selection_model,
+        selection_threshold=selection_threshold,
+        selection_must_include=selection_must_include,
+        nonlinear_transformation=nonlinear_transformation,
+        standardize=standardize,
+        test_size=test_size,
+        random_state=random_state,
+        shuffle=shuffle,
+        report=MarkdownReport(),
+    )
+
+    print(f"Info({get_command_name()}): Building and serializing Model object")
+
+    nlmodel = Model(corrc=ccalc, property_name=property_name, estimator=fit["pipeline"])
+    nlmodel.serialize(model_filepath)
+    print(f"Info({get_command_name()}): Model serialized to '{model_filepath}'")
+
+
+def fit_nonlinear_pipeline(
+    comat,
+    pvals,
+    weights=None,
+    regression_model: Optional[dict] = None,
+    selection_model: Optional[dict] = None,
+    selection_threshold: Optional[float] = None,
+    selection_must_include: list[int] = [],
+    nonlinear_transformation: Optional[dict] = None,
+    standardize: bool = False,
+    test_size: Optional[float] = None,
+    random_state: int = 42,
+    shuffle: bool = False,
+    report: Optional[MarkdownReport] = None,
+):
+    """
+    Fit and evaluate the pipeline built by `_build_pipeline` on a correlations matrix.
+
+    Applies the same defaults as `build_nonlinear_model`, performs the optional
+    train/test split, fits the pipeline, and writes metrics and model summaries
+    to ``report``.
+
+    Returns
+    -------
+    dict
+        Keys: ``pipeline`` (fitted), ``used_columns`` (indices of the columns of
+        ``comat`` that influence predictions), ``x_train``, ``y_train``,
+        ``w_train``, ``x_test``, ``y_test``, ``w_test``, ``metrics``.
+    """
+    if report is None:
+        report = MarkdownReport(echo=False)
+
     default_regression_model = {
         "module": "sklearn.linear_model",
         "class": "LinearRegression",
@@ -253,9 +309,12 @@ def build_nonlinear_model(
                 f"test_size must be between 0 and 1 (exclusive), got {test_size}."
             )
 
-        print(f"Info({get_command_name()}): Splitting data into train/test sets")
-        print(
-            f"  test_size = {test_size}, random_state = {random_state}, shuffle = {shuffle}"
+        report.section("Data split")
+        report.bullets(
+            [
+                f"test_size = {test_size}, random_state = {random_state}, shuffle = {shuffle}",
+                f"Total samples: {len(pvals)}",
+            ]
         )
 
         if weights is not None:
@@ -285,9 +344,7 @@ def build_nonlinear_model(
             w_train = None
             w_test = None
 
-        print(f"  Total samples: {len(pvals)}")
-        print(f"  Train samples: {len(y_train)}")
-        print(f"  Test samples : {len(y_test)}")
+        report.bullets([f"Train samples: {len(y_train)}", f"Test samples: {len(y_test)}"])
     else:
         x_train = comat
         y_train = pvals
@@ -296,10 +353,18 @@ def build_nonlinear_model(
         w_train = weights
         w_test = None
 
-        print(f"Info({get_command_name()}): No train/test split requested")
-        print(f"  Total samples used for training: {len(y_train)}")
+        report.section("Data split")
+        report.text(f"No train/test split requested. Training samples: {len(y_train)}")
 
-    print(f"Info({get_command_name()}): Computing model")
+    report.section("Model training")
+    report.code(
+        f"regression_model         : {regression_model}\n"
+        f"selection_model          : {selection_model}\n"
+        f"selection_threshold      : {selection_threshold}\n"
+        f"selection_must_include   : {selection_must_include}\n"
+        f"nonlinear_transformation : {nonlinear_transformation}\n"
+        f"standardize              : {standardize}"
+    )
 
     reg = _build_pipeline(
         regression_model,
@@ -323,140 +388,199 @@ def build_nonlinear_model(
     # Training metrics
     # ------------------------------------------------------------------
 
+    metrics = {}
     train_preds = reg.predict(x_train)
-    train_rmse = np.sqrt(mean_squared_error(y_train, train_preds))
-    train_mae = mean_absolute_error(y_train, train_preds)
-    train_r2 = r2_score(y_train, train_preds)
-    train_maxae = np.max(np.abs(y_train - train_preds))
+    metrics["train"] = _regression_metrics(y_train, train_preds, w_train)
 
-    print("\n" + "=" * 72)
-    print("Training-set performance")
-    print("=" * 72)
-    print(f"Train RMSE : {train_rmse:.8f}")
-    print(f"Train MAE  : {train_mae:.8f}")
-    print(f"Train MaxAE: {train_maxae:.8f}")
-    print(f"Train R^2  : {train_r2:.8f}")
-
-    if w_train is not None:
-        train_wrmse = np.sqrt(
-            mean_squared_error(y_train, train_preds, sample_weight=w_train)
-        )
-        print(f"Train wRMSE: {train_wrmse:.8f}")
+    report.section("Training-set performance")
+    report.table(["metric", "value"], _metrics_rows(metrics["train"]))
 
     # ------------------------------------------------------------------
     # Hold-out test metrics
     # ------------------------------------------------------------------
     if x_test is not None:
         test_preds = reg.predict(x_test)
-        test_rmse = np.sqrt(mean_squared_error(y_test, test_preds))
-        test_mae = mean_absolute_error(y_test, test_preds)
-        test_r2 = r2_score(y_test, test_preds)
-        test_maxae = np.max(np.abs(y_test - test_preds))
+        metrics["test"] = _regression_metrics(y_test, test_preds, w_test)
 
-        print("\n" + "=" * 72)
-        print("Hold-out test-set performance")
-        print("=" * 72)
-        print(f"Test RMSE : {test_rmse:.8f}")
-        print(f"Test MAE  : {test_mae:.8f}")
-        print(f"Test MaxAE: {test_maxae:.8f}")
-        print(f"Test R^2  : {test_r2:.8f}")
-
-        if w_test is not None:
-            test_wrmse = np.sqrt(
-                mean_squared_error(y_test, test_preds, sample_weight=w_test)
-            )
-            print(f"Test wRMSE: {test_wrmse:.8f}")
+        report.section("Hold-out test-set performance")
+        report.table(["metric", "value"], _metrics_rows(metrics["test"]))
 
         abs_errors = np.abs(y_test - test_preds)
         sorted_indices = np.argsort(abs_errors)[::-1]
         topn = min(10, len(sorted_indices))
 
-        print(f"\nLargest absolute errors on hold-out test set (top {topn})")
-        for rank, idx in enumerate(sorted_indices[:topn], start=1):
-            print(
-                f"[{rank:2d}] local_test_index={idx}, "
-                f"abs_err={abs_errors[idx]:.8f}, "
-                f"pred={test_preds[idx]:.8f}, "
-                f"target={y_test[idx]:.8f}, "
-                f"diff(target-pred)={(y_test[idx] - test_preds[idx]):.8f}"
-            )
+        report.section(f"Largest absolute errors on hold-out test set (top {topn})", 3)
+        report.table(
+            ["rank", "test index", "abs err", "pred", "target", "target-pred"],
+            [
+                [
+                    rank,
+                    idx,
+                    f"{abs_errors[idx]:.8f}",
+                    f"{test_preds[idx]:.8f}",
+                    f"{y_test[idx]:.8f}",
+                    f"{(y_test[idx] - test_preds[idx]):.8f}",
+                ]
+                for rank, idx in enumerate(sorted_indices[:topn], start=1)
+            ],
+        )
 
     # ------------------------------------------------------------------
     # Model summaries on training data only
     # ------------------------------------------------------------------
+    input_names = [f"c{i}" for i in range(x_train.shape[1])]
+    index_map = None
     if selection_model is not None:
-        print(reg.named_steps["selector"].estimator_)
+        selector_idx = [name for name, _ in reg.steps].index("selector")
+        pre_selector = reg[:selector_idx]
+        selector = reg.named_steps["selector"]
+        x_sel = _transform(pre_selector, x_train)
+        names_sel = _feature_names(pre_selector, input_names)
         summarize_model(
-            reg.named_steps["selector"].estimator_,
-            x_train,
+            selector.estimator_,
+            x_sel,
             y_train,
             selection_model["class"],
             label="SELECTOR",
+            feature_names=names_sel,
+            report=report,
         )
+        _report_selection(
+            report, selector, x_sel.shape[1], names_sel, selection_must_include
+        )
+        index_map = np.flatnonzero(selector.get_support())
 
-    print(reg.named_steps["regressor"])
+    pre_regressor = reg[:-1]
     summarize_model(
         reg.named_steps["regressor"],
-        x_train,
+        _transform(pre_regressor, x_train),
         y_train,
         regression_model["class"],
         label="REGRESSOR",
+        feature_names=_feature_names(pre_regressor, input_names),
+        index_map=index_map,
+        report=report,
     )
 
     used_cols = used_input_columns(reg, x_train.shape[1])
-    print(
-        f"Info({get_command_name()}): {len(used_cols)} of {x_train.shape[1]} "
-        "input columns are used in the final model:"
+    report.section("Input columns used by the final model")
+    report.text(
+        f"{len(used_cols)} of {x_train.shape[1]} input columns (clusters) "
+        "influence the predictions:"
     )
-    print(used_cols.tolist())
+    report.code(str(used_cols.tolist()))
 
-    print(f"Info({get_command_name()}): Building and serializing Model object")
+    return {
+        "pipeline": reg,
+        "used_columns": used_cols,
+        "x_train": x_train,
+        "y_train": y_train,
+        "w_train": w_train,
+        "x_test": x_test,
+        "y_test": y_test,
+        "w_test": w_test,
+        "metrics": metrics,
+    }
 
-    nlmodel = Model(corrc=ccalc, property_name=property_name, estimator=reg)
-    nlmodel.serialize(model_filepath)
-    print(f"Info({get_command_name()}): Model serialized to '{model_filepath}'")
+
+def _regression_metrics(y, preds, weights=None):
+    out = {
+        "RMSE": float(np.sqrt(mean_squared_error(y, preds))),
+        "MAE": float(mean_absolute_error(y, preds)),
+        "MaxAE": float(np.max(np.abs(y - preds))),
+        "R^2": float(r2_score(y, preds)),
+    }
+    if weights is not None:
+        out["wRMSE"] = float(
+            np.sqrt(mean_squared_error(y, preds, sample_weight=weights))
+        )
+    return out
 
 
-def summarize_model(regressor, x, y, model_type: str, label: str = "MODEL"):
+def _metrics_rows(metrics: dict):
+    return [[k, f"{v:.8f}"] for k, v in metrics.items()]
+
+
+def _transform(pipeline_part, x):
+    """Transform x with the leading steps of a pipeline (identity if empty)."""
+    return pipeline_part.transform(x) if len(pipeline_part.steps) > 0 else x
+
+
+def _feature_names(pipeline_part, input_names):
+    if len(pipeline_part.steps) == 0:
+        return list(input_names)
+    try:
+        return list(pipeline_part.get_feature_names_out(input_names))
+    except Exception:
+        return None
+
+
+def summarize_model(
+    regressor,
+    x,
+    y,
+    model_type: str,
+    label: str = "MODEL",
+    feature_names=None,
+    index_map=None,
+    report: Optional[MarkdownReport] = None,
+    top_n: int = 15,
+):
     """
-    Print CV performance summary for a fitted pipeline containing LassoCV or RidgeCV.
+    Write a Markdown summary of a fitted estimator (selector or regressor).
+
+    Reports the estimator, cross-validation information (LassoCV, RidgeCV, or
+    leave-one-out for Lasso), the number of non-zero coefficients, and the
+    largest coefficients by absolute value.
 
     Parameters
     ----------
-    pipeline : sklearn.pipeline.Pipeline
-        The fitted pipeline with a 'regressor' step.
-    X : array-like
-        Input features to predict on (e.g., training set).
+    regressor : fitted estimator
+        Estimator with ``coef_``, e.g. the ``estimator_`` of a SelectFromModel
+        or the final regression step.
+    x : array-like
+        Features the estimator was fitted on, i.e. the input *after* all
+        preceding pipeline steps.
     y : array-like
         Ground truth values.
     model_type : str
-        One of 'LassoCV' or 'RidgeCV'.
+        Class name of the estimator, e.g. 'LassoCV', 'RidgeCV', 'Lasso', 'Ridge'.
+    label : str
+        Label of the pipeline stage, e.g. 'SELECTOR' or 'REGRESSOR'.
+    feature_names : list of str, optional
+        Names of the columns of ``x``, used when listing coefficients.
+    index_map : array-like of int, optional
+        For each column of ``x``, its index before feature selection. If given,
+        it is listed next to the column index.
+    report : MarkdownReport, optional
+        Where to write the summary. Defaults to a console-echoing report.
+    top_n : int
+        Number of largest coefficients to list.
     """
-    # Predict and compute fit error
-    print("\n" + "=" * 72)
-    print(f"Model Summary Report — {model_type}/{label}")
-    print("=" * 72)
-    print_cv_info = False
-    # Collect cross-validation scores
+    if report is None:
+        report = MarkdownReport()
+
+    report.section(f"Model summary: {label} ({model_type})")
+    report.code(str(regressor))
+
+    cv_rows = None
     if model_type == "LassoCV":
         if not hasattr(regressor, "mse_path_"):
-            print("mse_path_ not available. Did you forget to fit the model?")
+            report.text("`mse_path_` not available. Did you forget to fit the model?")
             return
-        cv_scores = regressor.mse_path_  # shape: (n_alphas, n_folds)
-        mean_cv_scores = np.mean(cv_scores, axis=1)  # mean over folds
+        mean_cv_scores = np.mean(regressor.mse_path_, axis=1)  # mean over folds
         alphas = regressor.alphas_
-        print_cv_info = True
+        cv_rows = (alphas, mean_cv_scores)
 
     elif model_type == "RidgeCV":
         if not hasattr(regressor, "cv_results_"):
-            print(
-                "cv_results_ not available. Set store_cv_results to True, and cv to None."
+            report.text(
+                "`cv_results_` not available. Set store_cv_results to True, and cv to None."
             )
             return
-        cv_scores = regressor.cv_results_  # shape: (n_samples, n_alphas)
-        mean_cv_scores = np.mean(cv_scores, axis=0)  # mean over samples
+        mean_cv_scores = np.mean(regressor.cv_results_, axis=0)  # mean over samples
         alphas = regressor.alphas
-        print_cv_info = True
+        cv_rows = (alphas, mean_cv_scores)
 
     elif model_type == "Lasso":
         cvs = cross_val_score(
@@ -469,53 +593,123 @@ def summarize_model(regressor, x, y, model_type: str, label: str = "MODEL"):
         pred_cv = cross_val_predict(regressor, x, y, cv=LeaveOneOut())
 
         absolute_errors = np.sqrt(-cvs)
-        cv = np.sqrt(-np.mean(cvs))
-        maxae = np.amax(absolute_errors)
-        mae = np.mean(absolute_errors)
-
-        print(
-            "RMSE-CV",
-            cv,
-            "MAE-CV",
-            mae,
-            "MaxAE-CV",
-            maxae,
+        report.section("Leave-one-out cross-validation", 3)
+        report.table(
+            ["RMSE-CV", "MAE-CV", "MaxAE-CV"],
+            [
+                [
+                    f"{np.sqrt(-np.mean(cvs)):.8f}",
+                    f"{np.mean(absolute_errors):.8f}",
+                    f"{np.amax(absolute_errors):.8f}",
+                ]
+            ],
         )
 
-        sorted_indices = np.argsort(absolute_errors)[::-1]
-        top10_indices = sorted_indices[:10]
-        top10_values = absolute_errors[top10_indices]
-        print("Absolute errors (sorted, first 10)")
-        for i, v in zip(top10_indices, top10_values):
-            print(
-                f"Structure index: {i}, Absolute error: {v}, Prediction (CV): {pred_cv[i]}, ab-initio: {y[i]}, Diff(ai-pred): {y[i] - pred_cv[i]}"
-            )
-    elif model_type == "Ridge":
+        top = np.argsort(absolute_errors)[::-1][:10]
+        report.text("Largest leave-one-out errors:")
+        report.table(
+            ["structure", "abs err", "prediction (CV)", "target", "target-pred"],
+            [
+                [
+                    i,
+                    f"{absolute_errors[i]:.6f}",
+                    f"{pred_cv[i]:.6f}",
+                    f"{y[i]:.6f}",
+                    f"{y[i] - pred_cv[i]:.6f}",
+                ]
+                for i in top
+            ],
+        )
+    elif model_type in ("Ridge", "LinearRegression"):
         pass
     else:
-        print(f"Unsupported model type: {model_type}")
-        return
+        report.text(f"No cross-validation summary for model type `{model_type}`.")
 
-    if print_cv_info:
-        # Compute RMSE for each alpha
-        rmse_cv_scores = np.sqrt(mean_cv_scores)
-        print("\nCross-Validation RMSE by Alpha:")
-        for a, rmse in zip(alphas, rmse_cv_scores):
-            print(f"  alpha = {a:10.5f} -> RMSE = {rmse:10.5f}")
-
-        # Summary of fitted model
-        print("\nOptimal alpha:", regressor.alpha_)
-        print("Number of features:", regressor.n_features_in_)
-
-    if model_type in ["Ridge", "LinearRegression"]:
-        print(f"Number of non-zero coefficients: {np.count_nonzero(regressor.coef_)}.")
-    else:
-        print(
-            f"Number of non-zero coefficients: {np.count_nonzero(regressor.coef_)} out of {len(regressor.coef_)}."
+    if cv_rows is not None:
+        alphas, mean_cv_scores = cv_rows
+        best = int(np.argmin(mean_cv_scores))
+        report.section("Cross-validation RMSE by alpha", 3)
+        report.table(
+            ["alpha", "RMSE", ""],
+            [
+                [f"{a:.5g}", f"{np.sqrt(s):.6f}", "<- optimal" if i == best else ""]
+                for i, (a, s) in enumerate(zip(alphas, mean_cv_scores))
+            ],
         )
-    print("First 10 coefficients:\n", regressor.coef_[:10])
+        report.text(f"Optimal alpha: {regressor.alpha_}")
 
-    print("=" * 72 + "\n")
+    coef = np.ravel(np.asarray(regressor.coef_))
+    n_nonzero = int(np.count_nonzero(coef))
+    report.section("Coefficients", 3)
+    report.text(
+        f"Non-zero coefficients: {n_nonzero} out of {len(coef)} features "
+        f"entering this {label.lower()}."
+    )
+
+    if n_nonzero > 0:
+        order = np.argsort(np.abs(coef))[::-1][: min(top_n, n_nonzero)]
+        report.text(f"Largest {len(order)} coefficients by absolute value:")
+        headers = ["feature index", "feature", "coefficient"]
+        if index_map is not None:
+            headers.insert(1, "index before selection")
+        rows = []
+        for i in order:
+            row = [i, feature_names[i] if feature_names is not None else ""]
+            if index_map is not None:
+                row.insert(1, int(index_map[i]))
+            rows.append(row + [f"{coef[i]:.8g}"])
+        report.table(headers, rows)
+
+
+def _report_selection(report, selector, n_input, input_names, selection_must_include):
+    """Explain how many features the selector keeps and why."""
+    importances = np.asarray(
+        selector.importance_getter(selector.estimator_), dtype=float
+    )
+    support = selector.get_support()
+    threshold = selector.threshold_
+    must = sorted(set(int(i) for i in selection_must_include))
+    n_nonzero = int(np.count_nonzero(np.ravel(selector.estimator_.coef_)))
+    must_below = [i for i in must if abs(importances[i]) < threshold]
+
+    report.section("Feature selection (selector -> regressor)", 2)
+    report.table(
+        ["step", "number of features"],
+        [
+            ["features entering the selector", n_input],
+            [f"non-zero {type(selector.estimator_).__name__} coefficients", n_nonzero],
+            [
+                f"importance >= threshold ({threshold:.6g}, "
+                f"selection_threshold={selector.threshold!r})",
+                int(np.count_nonzero(importances >= threshold)),
+            ],
+            [f"forced by selection_must_include {must}", len(must)],
+            ["selected features entering the regressor", int(support.sum())],
+        ],
+    )
+    report.text(
+        "The selector keeps a feature if its importance (absolute selector "
+        "coefficient) is at least the threshold, or if it is in "
+        "`selection_must_include`. Selector coefficients that are non-zero but "
+        "below the threshold are discarded, so the regressor receives fewer "
+        "features than the selector has non-zero coefficients."
+    )
+    if must_below:
+        report.text(
+            f"Features kept only because of `selection_must_include`: {must_below}."
+        )
+
+    names = input_names if input_names is not None else [""] * n_input
+    kept = np.flatnonzero(support)
+    order = kept[np.argsort(importances[kept])[::-1]]
+    report.text("Selected features (index before selection, in order of importance):")
+    report.table(
+        ["position in regressor input", "index before selection", "feature", "importance"],
+        [
+            [int(np.flatnonzero(kept == i)[0]), int(i), names[i], f"{importances[i]:.6g}"]
+            for i in order
+        ],
+    )
 
 
 def _selection_importance(estimator, selection_must_include=[]):
