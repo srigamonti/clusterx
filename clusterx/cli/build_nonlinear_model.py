@@ -403,6 +403,13 @@ def build_nonlinear_model(
         label="REGRESSOR",
     )
 
+    used_cols = used_input_columns(reg, x_train.shape[1])
+    print(
+        f"Info({get_command_name()}): {len(used_cols)} of {x_train.shape[1]} "
+        "input columns are used in the final model:"
+    )
+    print(used_cols.tolist())
+
     print(f"Info({get_command_name()}): Building and serializing Model object")
 
     nlmodel = Model(corrc=ccalc, property_name=property_name, estimator=reg)
@@ -611,3 +618,45 @@ def _build_pipeline(
 
     # return make_pipeline(*pipeline_steps)
     return Pipeline(steps=pipeline_steps)
+
+
+def used_input_columns(pipeline, n_input_columns: int) -> np.ndarray:
+    """
+    Return the indices of the input columns (e.g. of comat) that actually
+    influence the predictions of a fitted pipeline built by `_build_pipeline`.
+
+    A column is used if it enters (through the nonlinear transformer) at least
+    one feature that survives the selector (selection_threshold, Lasso,
+    must-include) and has a non-zero coefficient in the final regressor.
+    """
+    steps = pipeline.named_steps
+    reg_coef = np.asarray(steps["regressor"].coef_)
+    alive = np.any(reg_coef != 0, axis=tuple(range(reg_coef.ndim - 1)))
+    alive = np.atleast_1d(alive)
+
+    if "selector" in steps:
+        # Map regressor features back to the features entering the selector
+        n_before = len(steps["selector"].get_support())
+        full = np.zeros(n_before, dtype=bool)
+        full[steps["selector"].get_support()] = alive
+        alive = full
+
+    transformer = steps.get("transformer")
+    if transformer is None:
+        return np.flatnonzero(alive)
+
+    if hasattr(transformer, "powers_"):
+        # Exact: a column is used if its exponent is > 0 in an alive feature
+        return np.flatnonzero(np.any(transformer.powers_[alive] > 0, axis=0))
+
+    # Generic fallback: probe which input columns change the alive features
+    rng = np.random.default_rng(0)
+    x0 = rng.normal(size=(8, n_input_columns))
+    ref = transformer.transform(x0)[:, alive]
+    used = []
+    for j in range(n_input_columns):
+        x1 = x0.copy()
+        x1[:, j] += 1.0
+        if not np.allclose(transformer.transform(x1)[:, alive], ref):
+            used.append(j)
+    return np.array(used, dtype=int)
