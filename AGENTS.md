@@ -78,8 +78,11 @@ delegation, copying, mutation, and serialization before relying on inherited
 
 `DSGenerator` remains a compatibility alias for `DerivativeStructures`. Preserve
 it for existing Python imports and pickle files saved under the former name.
-The summary command is `summarize_derivative_structures`; preserve the old
-`summarize_dsgenerator` command and module as compatibility aliases for scripts.
+Artifact reports use the `print_info_*` commands. `print_info_derivative_structures`
+(also `print_info_dss`) reports derivative structures; preserve the older
+`summarize_derivative_structures` and `summarize_dsgenerator` commands and modules
+as compatibility aliases. Likewise preserve `print_plat_info` and
+`print_cpool_info` as aliases of `print_info_plat` and `print_info_cpool`.
 
 ## Scientific conventions to preserve
 
