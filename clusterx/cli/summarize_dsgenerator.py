@@ -7,29 +7,29 @@ from typing import Optional
 import plac
 
 from clusterx.cli.config_utils import cmd_message
-from clusterx.derivative_structures import DSGenerator
+from clusterx.derivative_structures import DerivativeStructures
 
 commands = ["summarize_dsgenerator"]
 
 
 @plac.annotations(
     dss_filepath=(
-        "Path to serialized DSGenerator object.",
+        "Path to serialized DerivativeStructures object.",
         "positional",
         None,
         str,
     ),
 )
 def summarize_dsgenerator(dss_filepath: Optional[str] = None):
-    """Print a summary of a serialized DSGenerator object."""
+    """Print a summary of a serialized DerivativeStructures object."""
     cmd_message("head")
 
     if dss_filepath is None:
         raise ValueError("dss_filepath must be provided.")
 
-    dss = DSGenerator.from_file(dss_filepath)
+    dss = DerivativeStructures.from_file(dss_filepath)
 
-    print("DSGenerator summary")
+    print("DerivativeStructures summary")
     print("=" * 72)
 
     # configurations dataframe

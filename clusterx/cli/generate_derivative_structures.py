@@ -15,7 +15,7 @@ import pandas as pd
 import plac
 from ase.calculators.calculator import Calculator
 
-from clusterx.derivative_structures import DSGenerator
+from clusterx.derivative_structures import DerivativeStructures
 from clusterx.model import Model
 from clusterx.parent_lattice import ParentLattice
 from clusterx.structures_set import StructuresSet
@@ -176,11 +176,11 @@ def generate_derivative_structures(
     """
     Generate derivative structures and (optionally) compute/plot properties.
 
-    This command wraps several workflows around :class:`clusterx.derivative_structures.DSGenerator`,
+    This command wraps several workflows around :class:`clusterx.derivative_structures.DerivativeStructures`,
     :class:`clusterx.parent_lattice.ParentLattice`, and :class:`clusterx.model.Model`.
     The behavior is controlled by ``task`` (see **Tasks** below).
 
-    By default, results are serialized to ``dss.pickle`` (a pickled ``DSGenerator`` with
+    By default, results are serialized to ``dss.pickle`` (a pickled ``DerivativeStructures`` with
     its generated configurations and masks). Some tasks may also produce plots or update
     properties inside the serialized object.
 
@@ -205,7 +205,7 @@ def generate_derivative_structures(
     plat_filepath : str, optional
         Path to a serialized :class:`clusterx.parent_lattice.ParentLattice` (required by enumeration/random tasks).
     dss_filepath : str, default ``"dss.pickle"``
-        Output/input pickle filepath for the :class:`clusterx.derivative_structures.DSGenerator`.
+        Output/input pickle filepath for the :class:`clusterx.derivative_structures.DerivativeStructures`.
     dss_filepaths : list[str], optional
         Input filepaths for ``task="merge_dsses"``.
     merge_mask_names : list[str | None], optional
@@ -242,7 +242,7 @@ def generate_derivative_structures(
         ``"least-squares"`` / ``"concentration-endpoints"`` to define a reference by fitting
         the computed values. ``None`` disables the linear-reference.
         The behavior and constraints are documented in
-        :meth:`clusterx.derivative_structures.DSGenerator.compute_properties`.
+        :meth:`clusterx.derivative_structures.DerivativeStructures.compute_properties`.
     mask_name : str or list[str | None], optional
         Name of a mask to write/read within the serialized DSS object for downstream
         filtering. For ``task=merge_dsses``, a single string applies the same mask to
@@ -308,7 +308,7 @@ def generate_derivative_structures(
     ``"compute_property_with_custom_solver"``
         Load and call the module-level function or class method selected by
         ``property_solver`` for every configuration via
-        :meth:`clusterx.derivative_structures.DSGenerator.compute_properties`.
+        :meth:`clusterx.derivative_structures.DerivativeStructures.compute_properties`.
         The selected callable receives the generated clusterX structure, its
         3×3 supercell shape, the binary fractional concentration, and the
         configuration's pandas Series as ``row``; optional
@@ -363,7 +363,7 @@ def generate_derivative_structures(
 
     Save a module-level function in a Python file, for example
     ``my_custom_solvers.py``. Functions follow the callable interface
-    documented by :meth:`clusterx.derivative_structures.DSGenerator.compute_properties`:
+    documented by :meth:`clusterx.derivative_structures.DerivativeStructures.compute_properties`:
 
     .. code-block:: python
 
@@ -429,14 +429,14 @@ def generate_derivative_structures(
     sources during merge.
 
     For the custom solver callable contract, including multi-property return
-    values, see :meth:`clusterx.derivative_structures.DSGenerator.compute_properties`.
+    values, see :meth:`clusterx.derivative_structures.DerivativeStructures.compute_properties`.
     """
 
     match task:
         # Generate random structures
         case "random":
             plat = ParentLattice(filepath=plat_filepath)
-            dsgen = DSGenerator(plat)
+            dsgen = DerivativeStructures(plat)
             sc_shape = normalize_shape_input(sc_shape)
             nsubs_list = normalize_nsubs_list(nsubs_list)
             dsgen.generate(
@@ -469,7 +469,7 @@ def generate_derivative_structures(
 
         case "add_binary_complements":
             print("Loading DSS from file...")
-            dss = DSGenerator.from_file(dss_filepath)
+            dss = DerivativeStructures.from_file(dss_filepath)
 
             print("Adding binary complements...")
             dss.add_binary_complements(mode="extend", skip_existing=skip_existing)
@@ -506,7 +506,7 @@ def generate_derivative_structures(
 
         # Plot properties of derivative structures
         case "plot_property_vs_concentration" | "plot_property":
-            dsgen = DSGenerator.from_file(dss_filepath)
+            dsgen = DerivativeStructures.from_file(dss_filepath)
             dsgen.add_fractional_concentration_binary()
             dsgen.serialize(filepath=dss_filepath)
 
@@ -595,7 +595,7 @@ def generate_derivative_structures(
             # mask_name (optional)
             # sset_filepath
 
-            dss = DSGenerator.from_file(dss_filepath)
+            dss = DerivativeStructures.from_file(dss_filepath)
             sset = dss.to_structures_set(mask_name=mask_name)
             print("serializing sset")
             sset.serialize(filepath=sset_filepath, overwrite=True)
@@ -700,7 +700,7 @@ def _do_full_enumeration(
     dss_filepath: str = "dss.pickle",
     recursive=True,
 ) -> None:
-    dsgen = DSGenerator(plat)
+    dsgen = DerivativeStructures(plat)
 
     dsgen.generate(
         num_subs_list=nsubs_list,
@@ -1105,14 +1105,14 @@ def _do_merge_dss(
     make_ids_unique: bool = True,
     store_source_map: bool = True,
     check_parent_lattice: bool = True,
-) -> "DSGenerator":
+) -> "DerivativeStructures":
     """
-    Merge multiple serialized DSGenerator objects into a new DSGenerator.
+    Merge multiple serialized DerivativeStructures objects into a new DerivativeStructures.
 
     Parameters
     ----------
     paths:
-        Iterable of file paths to serialized DSGenerator objects.
+        Iterable of file paths to serialized DerivativeStructures objects.
     mask_names:
         Either a single mask name applied to all sources, or an iterable with one
         mask per source. A value of ``None`` for a source means include all data
@@ -1129,8 +1129,8 @@ def _do_merge_dss(
 
     Returns
     -------
-    DSGenerator
-        New merged DSGenerator.
+    DerivativeStructures
+        New merged DerivativeStructures.
     """
     paths = [str(p) for p in paths]
     if not paths:
@@ -1155,9 +1155,9 @@ def _do_merge_dss(
 
     # Load first to seed the merged object
     first_path = Path(paths[0])
-    dss0 = DSGenerator.from_file(first_path)
+    dss0 = DerivativeStructures.from_file(first_path)
 
-    merged = type(dss0)(dss0.plat)  # new DSGenerator with same parent lattice
+    merged = type(dss0)(dss0.plat)  # new DerivativeStructures with same parent lattice
     merged.property_names = set(getattr(dss0, "property_names", set()))
 
     # We'll build these and concat at the end (tree-reduction to avoid quadratic concat cost)
@@ -1172,7 +1172,7 @@ def _do_merge_dss(
 
     for source_id, p in enumerate(paths):
         path = Path(p)
-        dss = DSGenerator.from_file(path)
+        dss = DerivativeStructures.from_file(path)
         mask_name = masks_per_source[source_id]
 
         if check_parent_lattice:

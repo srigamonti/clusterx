@@ -5,14 +5,14 @@
 import plac
 
 from clusterx.cli.config_utils import cmd_message
-from clusterx.derivative_structures import DSGenerator
+from clusterx.derivative_structures import DerivativeStructures
 
 commands = ["remove_mask"]
 
 
 @plac.pos(
     "dss_filepath",
-    help="Path to serialized DSGenerator object.",
+    help="Path to serialized DerivativeStructures object.",
 )
 @plac.pos(
     "mask_name",
@@ -28,10 +28,10 @@ def remove_mask(
     mask_name: str,
     force: bool = False,
 ):
-    """Remove a mask from a serialized DSGenerator and persist the change."""
+    """Remove a mask from a serialized DerivativeStructures and persist the change."""
     cmd_message("head")
 
-    dss = DSGenerator.from_file(dss_filepath)
+    dss = DerivativeStructures.from_file(dss_filepath)
     mask_names = sorted(dss.masks.keys())
 
     if mask_name not in dss.masks:

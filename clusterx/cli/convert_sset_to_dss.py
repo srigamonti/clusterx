@@ -4,7 +4,7 @@
 import plac
 
 from clusterx.cli.config_utils import cmd_message
-from clusterx.derivative_structures import DSGenerator
+from clusterx.derivative_structures import DerivativeStructures
 
 commands = ["convert_sset_to_dss"]
 
@@ -15,7 +15,7 @@ commands = ["convert_sset_to_dss"]
 )
 @plac.pos(
     "dss_filepath",
-    help="Output path for the serialized DSGenerator pickle.",
+    help="Output path for the serialized DerivativeStructures pickle.",
 )
 @plac.opt(
     "quick_parse",
@@ -28,12 +28,12 @@ def convert_sset_to_dss(
     dss_filepath: str,
     quick_parse: bool = False,
 ):
-    """Convert a serialized StructuresSet file to a serialized DSGenerator."""
+    """Convert a serialized StructuresSet file to a serialized DerivativeStructures."""
     cmd_message("head")
 
-    dss = DSGenerator.from_structures_set_file(
+    dss = DerivativeStructures.from_structures_set_file(
         sset_filepath,
         quick_parse=quick_parse,
     )
     dss.serialize(filepath=dss_filepath)
-    print(f"Info(convert_sset_to_dss): wrote DSGenerator to '{dss_filepath}'.")
+    print(f"Info(convert_sset_to_dss): wrote DerivativeStructures to '{dss_filepath}'.")

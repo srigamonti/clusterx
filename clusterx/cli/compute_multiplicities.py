@@ -5,14 +5,14 @@
 import plac
 
 from clusterx.cli.config_utils import cmd_message
-from clusterx.derivative_structures import DSGenerator
+from clusterx.derivative_structures import DerivativeStructures
 
 commands = ["compute_multiplicities"]
 
 
 @plac.pos(
     "dss_filepath",
-    help="Path to serialized DSGenerator object.",
+    help="Path to serialized DerivativeStructures object.",
 )
 @plac.flg(
     "skip_existing",
@@ -29,10 +29,10 @@ def compute_multiplicities(
     skip_existing: bool = False,
     quiet: bool = False,
 ):
-    """Compute DSGenerator multiplicities and persist them to the same file."""
+    """Compute DerivativeStructures multiplicities and persist them to the same file."""
     cmd_message("head")
 
-    dss = DSGenerator.from_file(dss_filepath)
+    dss = DerivativeStructures.from_file(dss_filepath)
     dss.add_multiplicity(recompute=not skip_existing, show_progress=not quiet)
     dss.serialize(filepath=dss_filepath)
 

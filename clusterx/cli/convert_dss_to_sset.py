@@ -6,20 +6,20 @@ from typing import Optional
 import plac
 
 from clusterx.cli.config_utils import cmd_message
-from clusterx.derivative_structures import DSGenerator
+from clusterx.derivative_structures import DerivativeStructures
 
 commands = ["convert_dss_to_sset"]
 
 
 def load_dss_as_structures_set(dss_filepath: str, mask_name: Optional[str] = None):
-    """Load a serialized DSGenerator and convert it to a StructuresSet."""
-    dss = DSGenerator.from_file(dss_filepath)
+    """Load a serialized DerivativeStructures and convert it to a StructuresSet."""
+    dss = DerivativeStructures.from_file(dss_filepath)
     return dss.to_structures_set(mask_name=mask_name)
 
 
 @plac.pos(
     "dss_filepath",
-    help="Path to a serialized DSGenerator object.",
+    help="Path to a serialized DerivativeStructures object.",
 )
 @plac.pos(
     "sset_filepath",
@@ -28,7 +28,7 @@ def load_dss_as_structures_set(dss_filepath: str, mask_name: Optional[str] = Non
 @plac.opt(
     "mask_name",
     abbrev="m",
-    help="Optional DSGenerator mask name used to select configurations.",
+    help="Optional DerivativeStructures mask name used to select configurations.",
     type=str,
 )
 @plac.opt(
@@ -43,7 +43,7 @@ def convert_dss_to_sset(
     mask_name: Optional[str] = None,
     ase_db_type: Optional[str] = None,
 ):
-    """Convert a serialized DSGenerator file to a serialized StructuresSet."""
+    """Convert a serialized DerivativeStructures file to a serialized StructuresSet."""
     cmd_message("head")
 
     sset = load_dss_as_structures_set(dss_filepath, mask_name=mask_name)

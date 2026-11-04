@@ -13,7 +13,7 @@ import plac
 from scipy.stats import gaussian_kde
 
 from clusterx.cli.config_utils import cmd_message
-from clusterx.derivative_structures import DSGenerator
+from clusterx.derivative_structures import DerivativeStructures
 
 commands = ["plot_columns"]
 
@@ -196,7 +196,7 @@ def _shared_target_prediction_limits(
 
 @plac.annotations(
     source_filepath=(
-        "Path to serialized DSGenerator or StructuresSet object.",
+        "Path to serialized DerivativeStructures or StructuresSet object.",
         "positional",
         None,
         str,
@@ -306,7 +306,7 @@ def _shared_target_prediction_limits(
         "or style={...} for grouped styling. Also supports ymode in "
         "{marker,cloud,violin,boxplot,auto} for array-valued y columns. "
         "Set binned=true to group scalar y values by unique x bin (with optional xtol snap). "
-        "Set weight_by_multiplicity=true to weight y values by DSGenerator multiplicity.",
+        "Set weight_by_multiplicity=true to weight y values by DerivativeStructures multiplicity.",
         "option",
         None,
         list,
@@ -353,7 +353,7 @@ def plot_columns(
     figdata_fname: Optional[str] = None,
     series: Optional[List[Dict[str, Any]]] = None,
 ):
-    """Plot one or more columns from serialized DSGenerator or StructuresSet objects.
+    """Plot one or more columns from serialized DerivativeStructures or StructuresSet objects.
 
     This command can be driven from TOML using ``[plot_columns]`` and optional
     ``[[plot_columns.series]]`` blocks. If ``series`` is omitted or empty,
@@ -363,7 +363,7 @@ def plot_columns(
 
     Top-level options
     -----------------
-    - ``source_filepath`` (str, optional): default serialized DSGenerator or
+    - ``source_filepath`` (str, optional): default serialized DerivativeStructures or
         StructuresSet file used by all series that do not explicitly set
         ``source_filepath``.
     - ``xcolumn`` / ``ycolumn`` (str, optional): default x/y columns used by
@@ -427,7 +427,7 @@ def plot_columns(
 
     Optional:
     - ``source_filepath`` (str): override top-level source for this series.
-    - ``mask_name`` (str): mask name in the DSGenerator.
+    - ``mask_name`` (str): mask name in the DerivativeStructures.
     - ``filter_ycolumn`` (str): optional column name used to filter rows before
         plotting.
     - ``filter_value``: only rows where ``filter_ycolumn == filter_value`` are
@@ -664,8 +664,8 @@ def plot_columns(
 
     legend_location_normalized = _normalize_legend_location(legend_location)
 
-    # Cache DSGenerator objects by filepath to avoid repeated I/O
-    dsg_cache: Dict[str, DSGenerator] = {}
+    # Cache DerivativeStructures objects by filepath to avoid repeated I/O
+    dsg_cache: Dict[str, DerivativeStructures] = {}
     plot_payload: Dict[str, Any] = {
         "title": title,
         "xlabel": xlabel,
@@ -1155,14 +1155,14 @@ def plot_columns(
 
 def _load_plot_source(source_filepath):
     try:
-        return DSGenerator.from_file(source_filepath)
+        return DerivativeStructures.from_file(source_filepath)
     except Exception as dss_error:
         try:
-            return DSGenerator.from_structures_set_file(source_filepath)
+            return DerivativeStructures.from_structures_set_file(source_filepath)
         except Exception as sset_error:
             raise ValueError(
                 f"Could not load '{source_filepath}' as a serialized "
-                "DSGenerator or StructuresSet file. "
-                f"DSGenerator error: {dss_error}. "
+                "DerivativeStructures or StructuresSet file. "
+                f"DerivativeStructures error: {dss_error}. "
                 f"StructuresSet error: {sset_error}"
             ) from sset_error

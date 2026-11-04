@@ -6,27 +6,27 @@ from typing import Optional
 import plac
 
 from clusterx.cli.config_utils import cmd_message
-from clusterx.derivative_structures import DSGenerator
+from clusterx.derivative_structures import DerivativeStructures
 
 commands = ["print_masks"]
 
 
 @plac.annotations(
     dss_filepath=(
-        "Path to serialized DSGenerator object.",
+        "Path to serialized DerivativeStructures object.",
         "positional",
         None,
         str,
     ),
 )
 def print_masks(dss_filepath: Optional[str] = None):
-    """Print all mask names and their contents from a serialized DSGenerator."""
+    """Print all mask names and their contents from a serialized DerivativeStructures."""
     cmd_message("head")
 
     if dss_filepath is None:
         raise ValueError("dss_filepath must be provided.")
 
-    dss = DSGenerator.from_file(dss_filepath)
+    dss = DerivativeStructures.from_file(dss_filepath)
     mask_names = sorted(dss.masks.keys())
 
     if not mask_names:

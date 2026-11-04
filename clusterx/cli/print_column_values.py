@@ -7,14 +7,14 @@ from typing import Optional
 import plac
 
 from clusterx.cli.config_utils import cmd_message
-from clusterx.derivative_structures import DSGenerator
+from clusterx.derivative_structures import DerivativeStructures
 
 commands = ["print_column_values"]
 
 
 @plac.pos(
     "dss_filepath",
-    help="Path to serialized DSGenerator object.",
+    help="Path to serialized DerivativeStructures object.",
 )
 @plac.pos(
     "column_names",
@@ -45,10 +45,10 @@ def print_column_values(
     show_index: bool = True,
     n_output_values: Optional[int] = None,
 ):
-    """Print configuration column values from a serialized DSGenerator."""
+    """Print configuration column values from a serialized DerivativeStructures."""
     cmd_message("head")
 
-    dss = DSGenerator.from_file(dss_filepath)
+    dss = DerivativeStructures.from_file(dss_filepath)
     configurations = dss.get_configurations(mask_name=mask_name)
 
     if configurations is None:

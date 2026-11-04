@@ -16,7 +16,7 @@ from clusterx.super_cell import SuperCell
 from clusterx.model import Model, ModelBuilder
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
-from clusterx.derivative_structures import DSGenerator
+from clusterx.derivative_structures import DerivativeStructures
 from clusterx.structures_set import StructuresSet
 from clusterx.calculators.emt import EMT2
 from clusterx.cli.build_model import build_model
@@ -184,7 +184,7 @@ def test_compute_predictions_cli_dsgenerator(dummy_ce_11, plat, tmp_path):
     sigmas = [(1, 0), (0, 0)]
     expected = [dummy_ce_11.predict(scell.gen_structure(sigmas=sigma)) for sigma in sigmas]
 
-    dss = DSGenerator(plat)
+    dss = DerivativeStructures(plat)
     shape_id = dss.add_scell_shape(shape)
     for sigma in sigmas:
         dss.add_configuration(sigma=sigma, shape_id=shape_id)
@@ -193,7 +193,7 @@ def test_compute_predictions_cli_dsgenerator(dummy_ce_11, plat, tmp_path):
 
     compute_predictions(str(dss_filepath), property_name, str(model_filepath))
 
-    dss_loaded = DSGenerator.from_file(dss_filepath)
+    dss_loaded = DerivativeStructures.from_file(dss_filepath)
     assert property_name in dss_loaded.get_property_names()
     np.testing.assert_allclose(
         dss_loaded.configurations[property_name].to_numpy(),

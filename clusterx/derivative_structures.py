@@ -30,11 +30,15 @@ def _filter_property_names(property_name, property_names):
         raise ValueError("At least one of property_name or property_names must be provided.")
 
 
-class DSGenerator:
-    """Generation of derivative structures
+class DerivativeStructures:
+    """Collection of derivative structures and their properties.
 
-    A :class:`DSGenerator <clusterx.derivative_structure.DSGenerator>` object is used to generate
-    derivative structures from a :class:`parent lattice <clusterx.parent_lattice.ParentLattice>`.
+    A :class:`DerivativeStructures <clusterx.derivative_structures.DerivativeStructures>`
+    object generates and stores derivative structures from a
+    :class:`parent lattice <clusterx.parent_lattice.ParentLattice>`.
+
+    ``DSGenerator`` remains available as a compatibility alias for existing
+    imports and pickle files saved under the original class name.
 
     **Parameters:**
 
@@ -68,13 +72,13 @@ class DSGenerator:
     @classmethod
     def from_file(cls, filepath):
         """
-        Deserialize an instance of DSGenerator from a native pickle file.
+        Deserialize an instance of DerivativeStructures from a native pickle file.
 
         Args:
             filepath (str): Path to the file from which the object will be loaded.
 
         Returns:
-            DSGenerator: An instance of the class loaded from the file.
+            DerivativeStructures: An instance of the class loaded from the file.
         """
         with open(filepath, "rb") as f:
             dss = pickle.load(f)
@@ -86,7 +90,7 @@ class DSGenerator:
 
     @classmethod
     def from_structures_set_file(cls, filepath, quick_parse=False):
-        """Build a DSGenerator from a serialized StructuresSet file."""
+        """Build a DerivativeStructures object from a serialized StructuresSet file."""
         from clusterx.structures_set import StructuresSet
 
         return cls.from_structures_set(StructuresSet.from_file(filepath=filepath, quick_parse=quick_parse))
@@ -94,7 +98,7 @@ class DSGenerator:
     @classmethod
     def from_structures_set(cls, structures_set):
         """
-        Build a DSGenerator from a StructuresSet.
+        Build a DerivativeStructures object from a StructuresSet.
 
         Each structure becomes one configuration. Unique supercell
         transformations are stored in ``scell_shapes`` and all StructuresSet
@@ -132,7 +136,7 @@ class DSGenerator:
         return dss
 
     def to_structures_set(self, mask_name=None, include_properties=True):
-        """Build a StructuresSet from this DSGenerator.
+        """Build a StructuresSet from this derivative-structure collection.
 
         If ``mask_name`` is provided, only configurations in that mask are
         converted and the output StructuresSet receives a ``mask`` property with
@@ -1118,7 +1122,7 @@ class DSGenerator:
             for sigmai in range(1, ems[site]):
                 if sigmai != sigma[site]:
                     newsigma = sigma[:site] + (sigmai,) + sigma[site + 1 :]
-                    if DSGenerator._validate_sigma(newsigma, nsubs, stypes):
+                    if DerivativeStructures._validate_sigma(newsigma, nsubs, stypes):
                         children.add(newsigma)
 
         unique_children = {}  # dict with child hash as key and degeneracy as value
@@ -1298,7 +1302,7 @@ class DSGenerator:
 
         num_conf_start = len(self.configurations)
 
-        configurations = DSGenerator._generate_multilattice_configurations(natoms, site_type_by_index, nsubs)
+        configurations = DerivativeStructures._generate_multilattice_configurations(natoms, site_type_by_index, nsubs)
 
         for sigma in configurations:
             if tuple(sigma) not in full_list:
@@ -1319,7 +1323,7 @@ class DSGenerator:
         # Create generators for each domain
 
         sublattice_labelings = {
-            sublattice_type: DSGenerator._generate_labelings_for_sublattice(
+            sublattice_type: DerivativeStructures._generate_labelings_for_sublattice(
                 natoms, sublattice_positions[sublattice_type], nsubs[sublattice_type]
             )
             for sublattice_type in nsubs
@@ -1519,7 +1523,7 @@ class DSGenerator:
         3) Require exactly one substitutional sublattice:
                 len(scell.get_substitutional_tags()) == 1
         4) Flip sigma entries at scell.get_substitutional_sites() (only those sites).
-        5) Either return a new DSGenerator with the complemented configurations (mode="new"),
+        5) Either return a new DerivativeStructures object with the complemented configurations (mode="new"),
             or extend self by adding them (mode="extend").
 
         Parameters
@@ -1527,15 +1531,15 @@ class DSGenerator:
         mask_name : str or None
             If provided, only configurations in the mask are processed (uses get_configurations()).
         mode : {"new", "extend"}
-            - "new": return a new DSGenerator with only complemented configs.
+            - "new": return a new DerivativeStructures object with only complemented configs.
             - "extend": add complemented configs to self and return self.
         skip_existing : bool
             If True, do not add complements that already exist (same sigma and shape_id).
 
         Returns
         -------
-        DSGenerator
-            The new generator (mode="new") or self (mode="extend").
+        DerivativeStructures
+            The new collection (mode="new") or self (mode="extend").
 
         Raises
         ------
@@ -1650,6 +1654,11 @@ class DSGenerator:
         out.configurations = pd.concat([out.configurations, new_df], ignore_index=True)
 
         return out
+
+
+# Keep the historical module attribute so existing imports, isinstance checks,
+# and pickle files referencing clusterx.derivative_structures.DSGenerator work.
+DSGenerator = DerivativeStructures
 
 
 def _divisors(n):

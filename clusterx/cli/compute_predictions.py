@@ -9,7 +9,7 @@ import numpy as np
 import plac
 
 from clusterx.cli.config_utils import cmd_message
-from clusterx.derivative_structures import DSGenerator
+from clusterx.derivative_structures import DerivativeStructures
 from clusterx.model import Model
 from clusterx.parent_lattice import ParentLattice
 from clusterx.structures_set import StructuresSet
@@ -19,7 +19,7 @@ commands = ["compute_predictions"]
 
 @plac.pos(
     "target_filepath",
-    help="Path to a serialized StructuresSet or DSGenerator object.",
+    help="Path to a serialized StructuresSet or DerivativeStructures object.",
 )
 @plac.pos(
     "property_name",
@@ -125,14 +125,14 @@ def _load_target(filepath: str):
     except Exception as err:
         pickle_error = err
     else:
-        if isinstance(obj, DSGenerator):
+        if isinstance(obj, DerivativeStructures):
             return "dsgenerator", obj
 
     try:
         return "structures_set", StructuresSet(filepath=filepath)
     except Exception as err:
         raise ValueError(
-            f"Could not load '{filepath}' as a serialized DSGenerator or "
+            f"Could not load '{filepath}' as a serialized DerivativeStructures or "
             f"StructuresSet. Pickle error: {pickle_error}. "
             f"StructuresSet error: {err}"
         ) from err

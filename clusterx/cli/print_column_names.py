@@ -6,25 +6,25 @@ from typing import Optional
 import plac
 
 from clusterx.cli.config_utils import cmd_message
-from clusterx.derivative_structures import DSGenerator
+from clusterx.derivative_structures import DerivativeStructures
 
 commands = ["print_column_names"]
 
 
 @plac.annotations(
     dss_filepath=(
-        "Path to serialized DSGenerator object.",
+        "Path to serialized DerivativeStructures object.",
         "positional",
         None,
         str,
     ),
 )
 def print_column_names(dss_filepath: Optional[str] = None):
-    """Print column names available in a serialized DSGenerator configurations table."""
+    """Print column names available in a serialized DerivativeStructures configurations table."""
     cmd_message("head")
 
     if dss_filepath is None:
         raise ValueError("dss_filepath must be provided.")
 
-    dss = DSGenerator.from_file(dss_filepath)
+    dss = DerivativeStructures.from_file(dss_filepath)
     print(list(dss.configurations.columns))

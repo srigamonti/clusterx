@@ -110,7 +110,7 @@ def _write_correlation_matrix(filepath, comat):
         str,
     ),
     dss_filepaths=(
-        "List of paths to serialized DSGenerator objects. Correlations are concatenated in the given order.",
+        "List of paths to serialized DerivativeStructures objects. Correlations are concatenated in the given order.",
         "option",
         "dsfs",
         list,

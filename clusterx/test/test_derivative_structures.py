@@ -1,6 +1,7 @@
 """Test the derivative structures module."""
 
 import math
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -13,7 +14,7 @@ from clusterx.cli.compute_comat import compute_comat
 from clusterx.cli.compute_multiplicities import compute_multiplicities
 from clusterx.cli.convert_dss_to_sset import convert_dss_to_sset
 from clusterx.cli.convert_sset_to_dss import convert_sset_to_dss
-from clusterx.derivative_structures import DSGenerator, get_HNFs, get_unique_supercells
+from clusterx.derivative_structures import DSGenerator, DerivativeStructures, get_HNFs, get_unique_supercells
 from clusterx.parent_lattice import ParentLattice
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
@@ -87,7 +88,7 @@ def model_multi(parent_lattice, cpool, corrc):
 
 @pytest.fixture
 def ds_generator_empty(parent_lattice):
-    return DSGenerator(parent_lattice)
+    return DerivativeStructures(parent_lattice)
 
 
 @pytest.fixture
@@ -119,7 +120,7 @@ def test_cemodel_calc(ds_generator_full, model_, request):
 
 
 def test_generate_perov(plat_perov):
-    ds_generator = DSGenerator(plat_perov)
+    ds_generator = DerivativeStructures(plat_perov)
     plat_perov.print_sublattice_types()
     p = [1, 1, 1]
     max_Br = np.prod(p) * 3
@@ -325,10 +326,48 @@ def test_compute_properties_conflict(ds_generator_full, solver_single_properties
         )
 
 
+def test_legacy_class_alias(parent_lattice):
+    assert DSGenerator is DerivativeStructures
+    assert DerivativeStructures.__name__ == "DerivativeStructures"
+    assert type(DSGenerator(parent_lattice)) is DerivativeStructures
+    assert isinstance(DerivativeStructures(parent_lattice), DSGenerator)
+
+
+@pytest.mark.parametrize("protocol", [0, pickle.HIGHEST_PROTOCOL])
+def test_load_legacy_pickle(ds_generator_full, tmp_path, monkeypatch, protocol):
+    filepath = tmp_path / "legacy_dsgenerator.pickle"
+    ds_generator_full.add_mask("selected", [0])
+    ds_generator_full.metadata["source"] = "legacy"
+    ds_generator_full.configurations["energy"] = np.arange(len(ds_generator_full.configurations), dtype=float)
+    ds_generator_full.property_names.add("energy")
+
+    # Reproduce the historical module/class path and instance state without
+    # changing the canonical class's name or its methods.
+    legacy_class = type("DSGenerator", (), {"__module__": DerivativeStructures.__module__})
+    legacy_instance = legacy_class()
+    legacy_instance.__dict__.update(ds_generator_full.__dict__)
+    with monkeypatch.context() as legacy_name:
+        legacy_name.setattr("clusterx.derivative_structures.DSGenerator", legacy_class)
+        payload = pickle.dumps(legacy_instance, protocol=protocol)
+
+    assert b"DSGenerator" in payload
+    filepath.write_bytes(payload)
+
+    for loaded in (pickle.loads(payload), DerivativeStructures.from_file(filepath), DSGenerator.from_file(filepath)):
+        assert type(loaded) is DerivativeStructures
+        assert loaded.plat == ds_generator_full.plat
+        pd.testing.assert_frame_equal(loaded.scell_shapes, ds_generator_full.scell_shapes)
+        pd.testing.assert_frame_equal(loaded.configurations, ds_generator_full.configurations)
+        assert loaded.masks == ds_generator_full.masks
+        assert loaded.property_names == ds_generator_full.property_names
+        assert loaded.metadata == ds_generator_full.metadata
+
+
 def test_serialize_load(ds_generator_full, tmp_path):
     filepath = tmp_path / "test_ds_generator.json"
     ds_generator_full.serialize(filepath)
-    ds_generator_loaded = DSGenerator.from_file(filepath)
+    ds_generator_loaded = DerivativeStructures.from_file(filepath)
+    assert type(ds_generator_loaded) is DerivativeStructures
     assert ds_generator_full.plat == ds_generator_loaded.plat
     pd.testing.assert_frame_equal(
         ds_generator_full.scell_shapes, ds_generator_loaded.scell_shapes
@@ -344,7 +383,7 @@ def test_compute_multiplicities_cli_persists(ds_generator_full, tmp_path):
 
     compute_multiplicities(str(filepath), quiet=True)
 
-    ds_generator_loaded = DSGenerator.from_file(filepath)
+    ds_generator_loaded = DerivativeStructures.from_file(filepath)
     assert "multiplicity" in ds_generator_loaded.configurations.columns
     assert "multiplicity" in ds_generator_loaded.get_property_names()
     assert len(ds_generator_loaded.configurations["multiplicity"]) == len(
@@ -379,9 +418,9 @@ def test_from_structures_set_file_loads_structures_set_db(ds_generator_full, tmp
     sset.serialize(filepath=str(filepath), ase_db_type="db", overwrite=True, rm_vac=False)
 
     with pytest.raises(Exception):
-        DSGenerator.from_file(filepath)
+        DerivativeStructures.from_file(filepath)
 
-    dss = DSGenerator.from_structures_set_file(filepath)
+    dss = DerivativeStructures.from_structures_set_file(filepath)
 
     assert dss.plat == ds_generator_full.plat
     assert dss.property_names == {"energy", "mask"}
@@ -447,7 +486,7 @@ def test_convert_sset_dss_cli_roundtrip(ds_generator_full, tmp_path):
     )
 
     convert_sset_to_dss(str(sset_filepath), str(dss_filepath))
-    dss = DSGenerator.from_file(dss_filepath)
+    dss = DerivativeStructures.from_file(dss_filepath)
     assert dss.configurations["sigma"].tolist() == [
         tuple(row["sigma"]) for _, row in data.iterrows()
     ]
