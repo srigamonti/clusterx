@@ -87,13 +87,13 @@ def model_multi(parent_lattice, cpool, corrc):
 
 
 @pytest.fixture
-def ds_generator_empty(parent_lattice):
+def derivative_structures_empty(parent_lattice):
     return DerivativeStructures(parent_lattice)
 
 
 @pytest.fixture
-def ds_generator_full(ds_generator_empty):
-    ds_generator_empty.generate(
+def derivative_structures_full(derivative_structures_empty):
+    derivative_structures_empty.generate(
         supercell_sizes=[1, 2],
         num_subs_list=[[1], [2]],
         sc_shape=None,
@@ -101,14 +101,14 @@ def ds_generator_full(ds_generator_empty):
         n_random=None,
         random_state=42,
     )
-    return ds_generator_empty
+    return derivative_structures_empty
 
 
 @pytest.mark.parametrize("model_", ["model_single", "model_multi"])
-def test_cemodel_calc(ds_generator_full, model_, request):
+def test_cemodel_calc(derivative_structures_full, model_, request):
     # prime example of using multiple fixtures with parametrize
     model = request.getfixturevalue(model_)
-    dss = ds_generator_full
+    dss = derivative_structures_full
     prop = model.property_name
     if isinstance(prop, str):
         dss.compute_properties(property_name=prop, cemodel=model)
@@ -120,18 +120,18 @@ def test_cemodel_calc(ds_generator_full, model_, request):
 
 
 def test_generate_perov(plat_perov):
-    ds_generator = DerivativeStructures(plat_perov)
+    derivative_structures = DerivativeStructures(plat_perov)
     plat_perov.print_sublattice_types()
     p = [1, 1, 1]
     max_Br = np.prod(p) * 3
     max_Sn = np.prod(p)
-    ds_generator.generate(
+    derivative_structures.generate(
         num_subs_list=[{0: max_Br // 2, 2: max_Sn // 2}],
         sc_shape=np.diag(p),
         recursive=False,
     )
-    assert ds_generator.configurations["degeneracy"].sum() > 0
-    assert len(ds_generator.configurations) > 0
+    assert derivative_structures.configurations["degeneracy"].sum() > 0
+    assert len(derivative_structures.configurations) > 0
 
 
 @pytest.mark.parametrize("recursive", [False, True])
@@ -153,9 +153,9 @@ def test_generate(
     sc_shapes,
     n_random,
     recursive,
-    ds_generator_empty,
+    derivative_structures_empty,
 ):
-    ds_generator_empty.generate(
+    derivative_structures_empty.generate(
         supercell_sizes=supercell_sizes,
         shapes_nearest_orthogonal=shapes_nearest_orthogonal,
         num_subs_list=num_subs_list,
@@ -168,8 +168,8 @@ def test_generate(
 
 
 @pytest.mark.parametrize("nsubs", [0, 1, 2, 3])
-def test_degeneracy(ds_generator_empty, nsubs):
-    dss = ds_generator_empty
+def test_degeneracy(derivative_structures_empty, nsubs):
+    dss = derivative_structures_empty
     p = np.diag([2, 2, 2])
     scell = SuperCell(dss.plat, p)
     nsites = len(scell)
@@ -187,9 +187,9 @@ def test_degeneracy(ds_generator_empty, nsubs):
 
 
 @pytest.mark.parametrize("recursive", [False, True])
-def test_generate_pure(ds_generator_empty, recursive):
+def test_generate_pure(derivative_structures_empty, recursive):
     p = np.diag([2, 2, 2])
-    ds_generator_empty.generate(
+    derivative_structures_empty.generate(
         supercell_sizes=None,
         num_subs_list=[[0]],
         sc_shape=p,
@@ -198,14 +198,14 @@ def test_generate_pure(ds_generator_empty, recursive):
         random_state=42,
         recursive=recursive,
     )
-    for _, row in ds_generator_empty.configurations.iterrows():
+    for _, row in derivative_structures_empty.configurations.iterrows():
         assert np.all(np.array(row["sigma"]) == 0)
-    assert len(ds_generator_empty.configurations) == 1
+    assert len(derivative_structures_empty.configurations) == 1
 
 
-def test_compute_emt(ds_generator_full):
+def test_compute_emt(derivative_structures_full):
     calc = EMT2()
-    ds_generator_full.compute_properties(
+    derivative_structures_full.compute_properties(
         property_name="energy_emt",
         ase_calculator=calc,
         cemodel=None,
@@ -214,7 +214,7 @@ def test_compute_emt(ds_generator_full):
         linear_reference=None,
         per_formula_unit=False,
     )
-    assert "energy_emt" in ds_generator_full.configurations.columns
+    assert "energy_emt" in derivative_structures_full.configurations.columns
 
 
 @pytest.fixture
@@ -243,9 +243,9 @@ def solver_single_properties_rand():
     ],
 )
 def test_compute_properties_single(
-    ds_generator_full, solver_single_properties_rand, lin_ref
+    derivative_structures_full, solver_single_properties_rand, lin_ref
 ):
-    ds_generator_full.compute_properties(
+    derivative_structures_full.compute_properties(
         property_name="dummy",
         ase_calculator=None,
         cemodel=None,
@@ -254,7 +254,7 @@ def test_compute_properties_single(
         linear_reference=lin_ref,
         per_formula_unit=False,
     )
-    assert "dummy" in ds_generator_full.configurations.columns
+    assert "dummy" in derivative_structures_full.configurations.columns
 
 
 @pytest.fixture
@@ -283,9 +283,9 @@ def solver_multi_properties_rand():
     ],
 )
 def test_compute_properties_multi(
-    ds_generator_full, solver_multi_properties_rand, lin_ref
+    derivative_structures_full, solver_multi_properties_rand, lin_ref
 ):
-    ds_generator_full.compute_properties(
+    derivative_structures_full.compute_properties(
         property_names=["dummy1", "dummy2"],
         ase_calculator=None,
         cemodel=None,
@@ -294,14 +294,14 @@ def test_compute_properties_multi(
         linear_reference=lin_ref,
         per_formula_unit=False,
     )
-    assert "dummy1" in ds_generator_full.configurations.columns
-    assert "dummy2" in ds_generator_full.configurations.columns
+    assert "dummy1" in derivative_structures_full.configurations.columns
+    assert "dummy2" in derivative_structures_full.configurations.columns
 
 
 @pytest.mark.xfail(reason="Exception not yet implemented")
-def test_compute_properties_raises(ds_generator_full):
+def test_compute_properties_raises(derivative_structures_full):
     with pytest.raises(ValueError):
-        ds_generator_full.compute_properties(
+        derivative_structures_full.compute_properties(
             property_name="dummy",
             ase_calculator=None,
             cemodel=None,
@@ -312,9 +312,9 @@ def test_compute_properties_raises(ds_generator_full):
         )
 
 
-def test_compute_properties_conflict(ds_generator_full, solver_single_properties_dummy):
+def test_compute_properties_conflict(derivative_structures_full, solver_single_properties_dummy):
     with pytest.raises(ValueError):
-        ds_generator_full.compute_properties(
+        derivative_structures_full.compute_properties(
             property_name="dummy",
             property_names=["dummy1", "dummy2"],
             ase_calculator=None,
@@ -334,18 +334,20 @@ def test_legacy_class_alias(parent_lattice):
 
 
 @pytest.mark.parametrize("protocol", [0, pickle.HIGHEST_PROTOCOL])
-def test_load_legacy_pickle(ds_generator_full, tmp_path, monkeypatch, protocol):
-    filepath = tmp_path / "legacy_dsgenerator.pickle"
-    ds_generator_full.add_mask("selected", [0])
-    ds_generator_full.metadata["source"] = "legacy"
-    ds_generator_full.configurations["energy"] = np.arange(len(ds_generator_full.configurations), dtype=float)
-    ds_generator_full.property_names.add("energy")
+def test_load_legacy_pickle(derivative_structures_full, tmp_path, monkeypatch, protocol):
+    filepath = tmp_path / "legacy_derivative_structures.pickle"
+    derivative_structures_full.add_mask("selected", [0])
+    derivative_structures_full.metadata["source"] = "legacy"
+    derivative_structures_full.configurations["energy"] = np.arange(
+        len(derivative_structures_full.configurations), dtype=float
+    )
+    derivative_structures_full.property_names.add("energy")
 
     # Reproduce the historical module/class path and instance state without
     # changing the canonical class's name or its methods.
     legacy_class = type("DSGenerator", (), {"__module__": DerivativeStructures.__module__})
     legacy_instance = legacy_class()
-    legacy_instance.__dict__.update(ds_generator_full.__dict__)
+    legacy_instance.__dict__.update(derivative_structures_full.__dict__)
     with monkeypatch.context() as legacy_name:
         legacy_name.setattr("clusterx.derivative_structures.DSGenerator", legacy_class)
         payload = pickle.dumps(legacy_instance, protocol=protocol)
@@ -355,56 +357,56 @@ def test_load_legacy_pickle(ds_generator_full, tmp_path, monkeypatch, protocol):
 
     for loaded in (pickle.loads(payload), DerivativeStructures.from_file(filepath), DSGenerator.from_file(filepath)):
         assert type(loaded) is DerivativeStructures
-        assert loaded.plat == ds_generator_full.plat
-        pd.testing.assert_frame_equal(loaded.scell_shapes, ds_generator_full.scell_shapes)
-        pd.testing.assert_frame_equal(loaded.configurations, ds_generator_full.configurations)
-        assert loaded.masks == ds_generator_full.masks
-        assert loaded.property_names == ds_generator_full.property_names
-        assert loaded.metadata == ds_generator_full.metadata
+        assert loaded.plat == derivative_structures_full.plat
+        pd.testing.assert_frame_equal(loaded.scell_shapes, derivative_structures_full.scell_shapes)
+        pd.testing.assert_frame_equal(loaded.configurations, derivative_structures_full.configurations)
+        assert loaded.masks == derivative_structures_full.masks
+        assert loaded.property_names == derivative_structures_full.property_names
+        assert loaded.metadata == derivative_structures_full.metadata
 
 
-def test_serialize_load(ds_generator_full, tmp_path):
-    filepath = tmp_path / "test_ds_generator.json"
-    ds_generator_full.serialize(filepath)
-    ds_generator_loaded = DerivativeStructures.from_file(filepath)
-    assert type(ds_generator_loaded) is DerivativeStructures
-    assert ds_generator_full.plat == ds_generator_loaded.plat
+def test_serialize_load(derivative_structures_full, tmp_path):
+    filepath = tmp_path / "test_derivative_structures.pickle"
+    derivative_structures_full.serialize(filepath)
+    derivative_structures_loaded = DerivativeStructures.from_file(filepath)
+    assert type(derivative_structures_loaded) is DerivativeStructures
+    assert derivative_structures_full.plat == derivative_structures_loaded.plat
     pd.testing.assert_frame_equal(
-        ds_generator_full.scell_shapes, ds_generator_loaded.scell_shapes
+        derivative_structures_full.scell_shapes, derivative_structures_loaded.scell_shapes
     )
     pd.testing.assert_frame_equal(
-        ds_generator_full.configurations, ds_generator_loaded.configurations
+        derivative_structures_full.configurations, derivative_structures_loaded.configurations
     )
 
 
-def test_compute_multiplicities_cli_persists(ds_generator_full, tmp_path):
+def test_compute_multiplicities_cli_persists(derivative_structures_full, tmp_path):
     filepath = tmp_path / "dss.pickle"
-    ds_generator_full.serialize(filepath)
+    derivative_structures_full.serialize(filepath)
 
     compute_multiplicities(str(filepath), quiet=True)
 
-    ds_generator_loaded = DerivativeStructures.from_file(filepath)
-    assert "multiplicity" in ds_generator_loaded.configurations.columns
-    assert "multiplicity" in ds_generator_loaded.get_property_names()
-    assert len(ds_generator_loaded.configurations["multiplicity"]) == len(
-        ds_generator_full.configurations
+    derivative_structures_loaded = DerivativeStructures.from_file(filepath)
+    assert "multiplicity" in derivative_structures_loaded.configurations.columns
+    assert "multiplicity" in derivative_structures_loaded.get_property_names()
+    assert len(derivative_structures_loaded.configurations["multiplicity"]) == len(
+        derivative_structures_full.configurations
     )
-    assert all(ds_generator_loaded.configurations["multiplicity"] > 0)
+    assert all(derivative_structures_loaded.configurations["multiplicity"] > 0)
 
 
-def test_from_structures_set_file_loads_structures_set_db(ds_generator_full, tmp_path):
-    data = ds_generator_full.configurations.head(4).copy()
+def test_from_structures_set_file_loads_structures_set_db(derivative_structures_full, tmp_path):
+    data = derivative_structures_full.configurations.head(4).copy()
     energies = [float(i) for i in range(len(data))]
     masks = ["selected", "other", "selected", None]
-    sset = StructuresSet(ds_generator_full.plat)
+    sset = StructuresSet(derivative_structures_full.plat)
     scell_cache = {}
 
     for _, row in data.iterrows():
         shape_id = row["shape_id"]
         if shape_id not in scell_cache:
             scell_cache[shape_id] = SuperCell(
-                ds_generator_full.plat,
-                ds_generator_full.get_scell_shape(shape_id),
+                derivative_structures_full.plat,
+                derivative_structures_full.get_scell_shape(shape_id),
             )
 
         sset.add_structure(Structure(scell_cache[shape_id], sigmas=row["sigma"]))
@@ -422,7 +424,7 @@ def test_from_structures_set_file_loads_structures_set_db(ds_generator_full, tmp
 
     dss = DerivativeStructures.from_structures_set_file(filepath)
 
-    assert dss.plat == ds_generator_full.plat
+    assert dss.plat == derivative_structures_full.plat
     assert dss.property_names == {"energy", "mask"}
     assert dss.masks == {"selected": [0, 2], "other": [1]}
     assert dss.configurations["config_id"].tolist() == list(range(len(data)))
@@ -439,7 +441,7 @@ def test_from_structures_set_file_loads_structures_set_db(ds_generator_full, tmp
     ):
         np.testing.assert_array_equal(
             dss.get_scell_shape(loaded_shape_id),
-            ds_generator_full.get_scell_shape(original_shape_id),
+            derivative_structures_full.get_scell_shape(original_shape_id),
         )
 
     sset_selected = dss.to_structures_set(mask_name="selected")
@@ -454,17 +456,17 @@ def test_from_structures_set_file_loads_structures_set_db(ds_generator_full, tmp
     )
 
 
-def test_convert_sset_dss_cli_roundtrip(ds_generator_full, tmp_path):
-    data = ds_generator_full.configurations.head(3).copy()
-    sset = StructuresSet(ds_generator_full.plat)
+def test_convert_sset_dss_cli_roundtrip(derivative_structures_full, tmp_path):
+    data = derivative_structures_full.configurations.head(3).copy()
+    sset = StructuresSet(derivative_structures_full.plat)
     scell_cache = {}
 
     for _, row in data.iterrows():
         shape_id = row["shape_id"]
         if shape_id not in scell_cache:
             scell_cache[shape_id] = SuperCell(
-                ds_generator_full.plat,
-                ds_generator_full.get_scell_shape(shape_id),
+                derivative_structures_full.plat,
+                derivative_structures_full.get_scell_shape(shape_id),
             )
 
         sset.add_structure(Structure(scell_cache[shape_id], sigmas=row["sigma"]))
@@ -512,12 +514,12 @@ def _add_energy_property(dss):
     return energies
 
 
-def test_add_property_column_registers_property(ds_generator_full):
-    ds_generator_full.add_property_column("energy", default_value=0.0)
+def test_add_property_column_registers_property(derivative_structures_full):
+    derivative_structures_full.add_property_column("energy", default_value=0.0)
 
-    assert ds_generator_full.get_property_names() == {"energy"}
-    assert ds_generator_full.configurations["energy"].tolist() == [0.0] * len(
-        ds_generator_full.configurations
+    assert derivative_structures_full.get_property_names() == {"energy"}
+    assert derivative_structures_full.configurations["energy"].tolist() == [0.0] * len(
+        derivative_structures_full.configurations
     )
 
 
@@ -527,9 +529,9 @@ def _write_ccalc(corrc, tmp_path):
     return ccalc_filepath
 
 
-def test_compute_comat_combines_sset_filepaths(ds_generator_full, corrc, tmp_path):
-    energies = _add_energy_property(ds_generator_full)
-    sset = ds_generator_full.to_structures_set()
+def test_compute_comat_combines_sset_filepaths(derivative_structures_full, corrc, tmp_path):
+    energies = _add_energy_property(derivative_structures_full)
+    sset = derivative_structures_full.to_structures_set()
     ccalc_filepath = _write_ccalc(corrc, tmp_path)
     sset_filepath_a = tmp_path / "sset_a.db"
     sset_filepath_b = tmp_path / "sset_b.db"
@@ -559,14 +561,14 @@ def test_compute_comat_combines_sset_filepaths(ds_generator_full, corrc, tmp_pat
     np.testing.assert_allclose(np.loadtxt(f"{comat_filepath}.txt"), comat)
 
 
-def test_compute_comat_combines_dss_filepaths(ds_generator_full, corrc, tmp_path):
-    energies = _add_energy_property(ds_generator_full)
+def test_compute_comat_combines_dss_filepaths(derivative_structures_full, corrc, tmp_path):
+    energies = _add_energy_property(derivative_structures_full)
     ccalc_filepath = _write_ccalc(corrc, tmp_path)
     dss_filepath_a = tmp_path / "dss_a.pickle"
     dss_filepath_b = tmp_path / "dss_b.pickle"
     comat_filepath = tmp_path / "multi_dss_comat"
-    ds_generator_full.serialize(str(dss_filepath_a))
-    ds_generator_full.serialize(str(dss_filepath_b))
+    derivative_structures_full.serialize(str(dss_filepath_a))
+    derivative_structures_full.serialize(str(dss_filepath_b))
 
     compute_comat(
         ccalc_filepath=str(ccalc_filepath),
@@ -579,7 +581,7 @@ def test_compute_comat_combines_dss_filepaths(ds_generator_full, corrc, tmp_path
         comat = arrays["comat"]
         pvals = arrays["property_energy"]
 
-    assert comat.shape[0] == 2 * len(ds_generator_full.configurations)
+    assert comat.shape[0] == 2 * len(derivative_structures_full.configurations)
     np.testing.assert_array_equal(pvals, np.concatenate([energies, energies]))
 
 
@@ -588,10 +590,10 @@ def test_compute_comat_rejects_multiple_sources():
         compute_comat(sset_filepath="sset.db", dss_filepath="dss.pickle")
 
 
-def test_concentration(ds_generator_full):
-    assert "frconc_binary" not in ds_generator_full.configurations.columns
-    ds_generator_full.add_fractional_concentration_binary()
-    assert "frconc_binary" in ds_generator_full.configurations.columns
+def test_concentration(derivative_structures_full):
+    assert "frconc_binary" not in derivative_structures_full.configurations.columns
+    derivative_structures_full.add_fractional_concentration_binary()
+    assert "frconc_binary" in derivative_structures_full.configurations.columns
 
 
 def test_get_all_hnf():

@@ -137,8 +137,9 @@ def test_serialize_load(model, structure):
     np.testing.assert_allclose(prediction_loaded, prediction)
 
 
-def test_compute_predictions_cli_structures_set(dummy_ce_11, plat, scell, tmp_path, capsys):
-    sset_filepath = tmp_path / "sset.db"
+@pytest.mark.parametrize("file_ext", ["db", "json", "xyz"])
+def test_compute_predictions_cli_structures_set(dummy_ce_11, plat, scell, tmp_path, capsys, file_ext):
+    sset_filepath = tmp_path / f"sset.{file_ext}"
     model_filepath = tmp_path / "model.pickle"
     plat_filepath = tmp_path / "plat.json"
     property_name = "predicted_energy"
@@ -152,7 +153,6 @@ def test_compute_predictions_cli_structures_set(dummy_ce_11, plat, scell, tmp_pa
 
     structures_set.serialize(
         filepath=str(sset_filepath),
-        ase_db_type="db",
         overwrite=True,
         rm_vac=False,
     )
@@ -168,14 +168,85 @@ def test_compute_predictions_cli_structures_set(dummy_ce_11, plat, scell, tmp_pa
 
     out = capsys.readouterr().out
     assert "CE model property_name is 'energy'" in out
-    sset_loaded = StructuresSet(filepath=str(sset_filepath))
+    sset_loaded = StructuresSet.from_file(filepath=str(sset_filepath))
     np.testing.assert_allclose(
         sset_loaded.get_property_values(property_name),
         expected,
     )
 
 
-def test_compute_predictions_cli_dsgenerator(dummy_ce_11, plat, tmp_path):
+@pytest.mark.parametrize("target_ext", ["db", "json", "xyz", "pickle", "pkl"])
+@pytest.mark.parametrize("existing_target", [False, True])
+def test_compute_predictions_cli_xyz_source(dummy_ce_11, plat, tmp_path, target_ext, existing_target):
+    source_filepath = tmp_path / "source.xyz"
+    target_filepath = tmp_path / f"target.{target_ext}"
+    model_filepath = tmp_path / "model.pickle"
+    plat_filepath = tmp_path / "plat.json"
+    property_name = "predicted_energy"
+    scell = SuperCell(plat, [2, 1, 1])
+    structures_set = StructuresSet(plat)
+    for sigmas in [(0, 0), (0, 1)]:
+        structures_set.add_structure(scell.gen_structure(sigmas=sigmas))
+    structures_set.set_property_values("reference_energy", [2.0, 4.0], update_db=False)
+    structures_set.set_property_values("mask", ["selected", "other"], update_db=False)
+    expected = [dummy_ce_11.predict(structure) for structure in structures_set]
+    structures_set.serialize(filepath=str(source_filepath))
+    original_source = source_filepath.read_bytes()
+    if existing_target:
+        if target_ext in ("pickle", "pkl"):
+            DerivativeStructures.from_structures_set(structures_set).serialize(filepath=str(target_filepath))
+        else:
+            structures_set.serialize(filepath=str(target_filepath))
+    dummy_ce_11.serialize(filepath=str(model_filepath))
+    plat.serialize(filepath=str(plat_filepath))
+
+    compute_predictions(
+        str(target_filepath),
+        property_name,
+        str(model_filepath),
+        plat_filepath=str(plat_filepath),
+        source_filepath=str(source_filepath),
+    )
+
+    if target_ext in ("pickle", "pkl"):
+        dss = DerivativeStructures.from_file(target_filepath)
+        assert dss.masks == {"selected": [0], "other": [1]}
+        assert property_name in dss.get_property_names()
+        loaded = dss.to_structures_set()
+    else:
+        loaded = StructuresSet.from_file(filepath=str(target_filepath))
+    assert source_filepath.read_bytes() == original_source
+    assert len(loaded) == len(structures_set)
+    assert loaded.get_parent_lattice() == plat
+    np.testing.assert_allclose(loaded.get_property_values(property_name), expected)
+    np.testing.assert_array_equal(loaded.get_property_values("reference_energy"), [2.0, 4.0])
+    for actual, original in zip(loaded, structures_set):
+        np.testing.assert_array_equal(actual.get_sigmas(), original.get_sigmas())
+
+
+def test_compute_predictions_rejects_wrong_existing_target_kind(dummy_ce_11, plat, tmp_path):
+    source_filepath = tmp_path / "source.xyz"
+    target_filepath = tmp_path / "target.db"
+    model_filepath = tmp_path / "model.pickle"
+    structures_set = StructuresSet(plat)
+    structures_set.add_structure(SuperCell(plat, 1).gen_structure(sigmas=[0]))
+    structures_set.serialize(filepath=str(source_filepath))
+    DerivativeStructures.from_structures_set(structures_set).serialize(filepath=str(target_filepath))
+    original_target = target_filepath.read_bytes()
+    dummy_ce_11.serialize(filepath=str(model_filepath))
+
+    with pytest.raises(ValueError, match="Target file contains a derivative_structures"):
+        compute_predictions(
+            str(target_filepath),
+            "predicted_energy",
+            str(model_filepath),
+            source_filepath=str(source_filepath),
+        )
+
+    assert target_filepath.read_bytes() == original_target
+
+
+def test_compute_predictions_cli_derivative_structures(dummy_ce_11, plat, tmp_path):
     dss_filepath = tmp_path / "dss.pickle"
     model_filepath = tmp_path / "model.pickle"
     property_name = "predicted_energy"

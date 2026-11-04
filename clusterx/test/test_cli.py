@@ -14,6 +14,7 @@ from clusterx.cli.compute_comat import compute_comat
 from clusterx.cli.compute_concentrations import compute_concentrations
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
+from clusterx.derivative_structures import DerivativeStructures
 from clusterx.parent_lattice import ParentLattice
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
@@ -73,6 +74,25 @@ def err_str(command, response):
 def test_help(command):
     response = run_command("cell -h")
     assert response.returncode == 0, err_str(command, response)
+
+
+def test_legacy_summary_alias():
+    from clusterx.cli.summarize_derivative_structures import summarize_derivative_structures
+    from clusterx.cli.summarize_dsgenerator import summarize_dsgenerator
+
+    assert summarize_dsgenerator is summarize_derivative_structures
+
+
+@pytest.mark.parametrize("command", ["summarize_derivative_structures", "summarize_dsgenerator"])
+def test_summarize_derivative_structures(command, structures_set, tmp_path):
+    filepath = tmp_path / "derivative_structures.pickle"
+    DerivativeStructures.from_structures_set(structures_set).serialize(filepath=filepath)
+
+    response = subprocess.run(["cell", command, str(filepath)], capture_output=True, text=True)
+
+    assert response.returncode == 0, err_str(command, response)
+    assert "DerivativeStructures summary" in response.stdout
+    assert "Number of configurations: 1" in response.stdout
 
 
 def run_build_parent_lattice(path):

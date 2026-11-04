@@ -78,6 +78,8 @@ delegation, copying, mutation, and serialization before relying on inherited
 
 `DSGenerator` remains a compatibility alias for `DerivativeStructures`. Preserve
 it for existing Python imports and pickle files saved under the former name.
+The summary command is `summarize_derivative_structures`; preserve the old
+`summarize_dsgenerator` command and module as compatibility aliases for scripts.
 
 ## Scientific conventions to preserve
 
