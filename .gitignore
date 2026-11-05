@@ -3,6 +3,9 @@
 clusterX.egg-info
 __pycache__
 .*
+!/.agents/
+/.agents/*
+!/.agents/skills/
 !.gitlab-ci.yml
 *#
 build
