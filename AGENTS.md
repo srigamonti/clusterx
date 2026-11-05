@@ -168,7 +168,8 @@ instead of assuming their APIs are fixed or fully described by the papers.
 `setup.py` declares Python >=3.10 and the dependencies. CI currently uses Python
 3.12, an editable install, and `cell test`. Reuse an appropriate existing virtual
 environment; activate it so CLI subprocess tests find the matching `cell`.
-For a new environment, install the package with `python -m pip install -e .`.
+For a new development environment, install the package and optional tools with
+`python -m pip install -e '.[dev]'` (or `uv pip install -e '.[dev]'`).
 
 Useful commands from the repository root, with that environment active:
 
@@ -183,8 +184,8 @@ Select tests for the code changed and its affected consumers. For shared lattice
 symmetry, correlation, or model changes, include dependent cluster-pool,
 derivative-structure, and thermodynamics checks as appropriate. Use the full CI
 command for broad changes when feasible; describe any checks not run and why.
-If Ruff is available, run `ruff check` on changed Python files and distinguish
-existing violations from new ones.
+Run `ruff check` on changed Python files and distinguish existing violations
+from new ones. Ruff is included in the optional `dev` dependencies.
 
 Package imports and CLI startup must not read or write the legacy
 `cellconfig.json` file. Tests automatically run in isolated temporary working

@@ -91,3 +91,17 @@ retains temporary directories from the last three runs by default.
 explicitly, use pytest::
 
     python -m pytest clusterx/test --junitxml=.test-reports/testlog.xml --html=.test-reports/testlog.html
+
+For development, install the optional tools, including Ruff::
+
+    python -m pip install -e '.[dev]'
+
+Run this command from the repository root, writing ``'.[dev]'`` exactly as
+shown. The ``.`` refers to the package in the current directory, and ``[dev]``
+selects the optional development dependencies declared in ``setup.py`` (currently
+Ruff). The ``-e`` option installs CELL in editable mode, so source changes take
+effect without reinstalling the package.
+
+For environments managed with uv, use ``uv pip install -e '.[dev]'``.
+Run ``ruff check`` on changed Python files; it uses the repository's
+``ruff.toml`` configuration.
