@@ -186,9 +186,9 @@ command for broad changes when feasible; describe any checks not run and why.
 If Ruff is available, run `ruff check` on changed Python files and distinguish
 existing violations from new ones.
 
-Importing `clusterx` currently reads/writes `cellconfig.json` in the working
-directory. Several legacy tests also write files with fixed names there, and
-`cell test` writes `testlog.xml` and `testlog.html`. Run artifact-producing checks
+Package imports and CLI startup must not read or write the legacy
+`cellconfig.json` file. Several legacy tests write files with fixed names in the
+working directory, and `cell test` writes `testlog.xml` and `testlog.html`. Run artifact-producing checks
 in a disposable working directory with absolute test paths and the editable
 installation available. For new file-producing tests, use `tmp_path` and change
 the working directory with `monkeypatch.chdir` when needed.

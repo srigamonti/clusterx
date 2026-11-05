@@ -6,6 +6,13 @@ simple and complex alloys and performing thermodynamical analyses of materials.
 
 Webpage: http://sol.physik.hu-berlin.de/cell/
 
+Importing ``clusterx`` and starting ``cell`` do not read or write the legacy
+``cellconfig.json`` file. Run parameters come from command-line options or TOML
+input files, and individual commands manage their output artifacts.
+The unused ``clusterx.config`` module and its ``CellConfig`` API have been
+removed, along with the package attributes ``config``, ``cfg``, ``PRECISION``, and
+``T2D``.
+
 Inspect saved data
 ------------------
 
