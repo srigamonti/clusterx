@@ -187,11 +187,12 @@ If Ruff is available, run `ruff check` on changed Python files and distinguish
 existing violations from new ones.
 
 Package imports and CLI startup must not read or write the legacy
-`cellconfig.json` file. Several legacy tests write files with fixed names in the
-working directory, and `cell test` writes `testlog.xml` and `testlog.html`. Run artifact-producing checks
-in a disposable working directory with absolute test paths and the editable
-installation available. For new file-producing tests, use `tmp_path` and change
-the working directory with `monkeypatch.chdir` when needed.
+`cellconfig.json` file. Tests automatically run in isolated temporary working
+directories through `clusterx/test/conftest.py`. Run test commands normally from
+the repository root. Use `tmp_path` for additional file paths in new tests.
+`cell test` reports to the terminal; request HTML or XML reports explicitly
+through pytest when needed. Temporary artifacts remain available according to
+pytest's retention settings for manual inspection.
 
 For scientific or behavioral changes, add a regression check that can detect the
 original problem. Prefer small, analytically checkable systems, explicit numerical

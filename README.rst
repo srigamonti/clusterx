@@ -73,3 +73,21 @@ be mixed with named steps. Legacy array entries run consecutively as one group;
 use named steps when individual invocations must be interleaved. A registered
 command's own table still passes its options directly, so an actual argument
 named ``command`` remains supported for custom commands.
+
+Running tests
+-------------
+
+With the project environment active, run tests from the repository root::
+
+    cell test
+    cell test -n test_parent_lattice
+    python -m pytest -q clusterx/test/test_parent_lattice.py
+
+Each test automatically runs in its own temporary working directory. Generated
+structures, databases, and other artifacts stay there for inspection; pytest
+retains temporary directories from the last three runs by default.
+
+``cell test`` reports to the terminal. To generate XML and HTML reports
+explicitly, use pytest::
+
+    python -m pytest clusterx/test --junitxml=.test-reports/testlog.xml --html=.test-reports/testlog.html

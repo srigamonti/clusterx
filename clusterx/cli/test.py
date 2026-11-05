@@ -36,8 +36,6 @@ def test(testslist=False, name=""):
                 "--cache-clear",
                 "--capture=no",
                 "--disable-warnings",
-                "--junit-xml=testlog.xml",
-                "--html=testlog.html",
             ]
         )
         if not exit_code == pytest.ExitCode.OK:
