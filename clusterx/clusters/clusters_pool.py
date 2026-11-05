@@ -261,12 +261,11 @@ class ClustersPool:
         self.nclusters = len(self._cpool)
 
     def get_npoints(self):
-        """Return array of number of points of the clusters in the pool.
+        """Return cluster orders paired with the bounds in ``get_max_radii()``.
 
-        The returned integer array has the same length and its elements
-        correspond with those of the array ``self.get_radii()``. Thus, the
-        pool is defined by having all clusters of ``self.get_npoints()[i]``
-        number of points up to a radius of ``self.get_max_radii()[i]``
+        Generated pools record the requested orders. Subpools record the sorted
+        unique orders of their retained clusters. Use ``get_all_npoints()`` for
+        the order of each individual cluster.
         """
         return self._npoints
 
@@ -279,12 +278,12 @@ class ClustersPool:
         return np.array(npoints)
 
     def get_max_radii(self):
-        """Return array of maximum radii of the clusters in the pool.
+        """Return per-order diameter bounds paired with ``get_npoints()``.
 
-        The returned float array has the same length and its elements
-        correspond with those of the array ``self.get_npoints()``. Thus, the
-        pool is defined by having all clusters of ``self.get_npoints()[i]``
-        number of points up to a radius of ``self.get__max_radii()[i]``
+        Generated pools record the requested generation cutoffs. Subpools record
+        the largest retained cluster diameter for each order; they need not
+        contain every cluster within these bounds. Use ``get_all_radii()`` for
+        the radius of each individual cluster.
         """
         return np.array(self._radii)
 
@@ -315,6 +314,11 @@ class ClustersPool:
 
         cluster_indexes: array of integers
             The indexes of the clusters to build the subpool from.
+
+        The original cluster order, multiplicities, and defining supercell are
+        preserved. The sorted unique orders and maximum diameter for each order
+        are determined from the retained clusters, without regenerating clusters
+        or asserting that the selected subset is a complete pool.
         """
         subpool = ClustersPool(self._plat, super_cell=self._cpool_scell)
         add_mults = len(self._multiplicities) == len(self)
@@ -323,6 +327,10 @@ class ClustersPool:
                 subpool.add_cluster(cl)
                 if add_mults:
                     subpool._multiplicities.append(self._multiplicities[i])
+        orders = subpool.get_all_npoints()
+        subpool._npoints = np.unique(orders).astype(int)
+        diameters = subpool.get_all_radii()
+        subpool._radii = np.array([diameters[orders == n].max() for n in subpool._npoints], dtype=float)
         return subpool
 
     def get_clusters_sets(self, grouping_strategy="size", nclmax=0, set0=[0, 0]):

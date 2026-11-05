@@ -174,7 +174,7 @@ class Model:
     def init_reduced_model(self, structure):
         cpool = self.corrc.get_cpool()
         plat = cpool.get_plat()
-        r_max = self.corrc.get_cpool().get_max_radii().max()
+        r_max = cpool.get_max_radii().max()
         cell = plat.get_cell()
         p_reduced = transformation_containing_sphere_diag(r_max, cell, full_sphere=True)
         # round up to odd, to get a central cell
