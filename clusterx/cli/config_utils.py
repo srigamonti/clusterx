@@ -1,4 +1,5 @@
 import os
+from copy import deepcopy
 from typing import List
 import toml
 import inspect
@@ -101,6 +102,56 @@ def read_toml_config(toml_file):
     with open(toml_file, "r") as file:
         config = toml.load(file)
     return config
+
+
+def get_toml_commands(config, available_commands):
+    """Prepare legacy command groups and uniquely named steps in input order.
+
+    Named steps select an implementation with ``command``. Registered command
+    tables retain their native argument semantics. ``do`` selects table/step
+    names; legacy arrays remain consecutive invocations of one group. Returned
+    argument dictionaries are independent copies of the configuration.
+    """
+    metadata = {"do", "custom_dir", "custom_modules"}
+    sections = [
+        name for name, value in config.items()
+        if name not in metadata and (
+            isinstance(value, dict)
+            or (isinstance(value, list) and all(isinstance(item, dict) for item in value))
+        )
+    ]
+    selected = config.get("do", sections)
+    if not isinstance(selected, list) or not all(isinstance(name, str) for name in selected):
+        raise ValueError("'do' must be a list of command or step names.")
+
+    available = set(available_commands)
+    calls = []
+    for name in selected:
+        if name not in config or name in metadata:
+            raise ValueError(f"No command table or named step '{name}' is defined.")
+        value = config[name]
+        if isinstance(value, dict):
+            entries = [value]
+        elif isinstance(value, list) and all(isinstance(item, dict) for item in value):
+            entries = value
+        else:
+            raise ValueError(f"'{name}' must be a table or an array of tables.")
+        for index, entry in enumerate(entries, 1):
+            label = name if isinstance(value, dict) else f"{name}[{index}]"
+            params = deepcopy(entry)
+            if name in available:
+                command = name
+            else:
+                command = params.pop("command", None)
+                if not isinstance(command, str):
+                    raise ValueError(f"Unknown command '{name}': a named step needs a string 'command' field.")
+            if command not in available:
+                raise ValueError(f"Unknown command '{command}' in step '{label}'.")
+            ignored = params.pop("ignore", False)
+            if not isinstance(ignored, bool):
+                raise ValueError(f"'ignore' in step '{label}' must be true or false.")
+            calls.append((label, command, params, ignored))
+    return calls
 
 
 def get_command_name():

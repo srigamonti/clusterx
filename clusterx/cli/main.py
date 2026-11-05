@@ -4,13 +4,14 @@
 
 import os
 import sys
+from inspect import signature
 from pprint import pformat
 
 import plac
 
 from clusterx.cli import commands as cmds
 from clusterx.cli.commands import import_custom_modules
-from clusterx.cli.config_utils import read_toml_config
+from clusterx.cli.config_utils import get_toml_commands, read_toml_config
 
 
 def main():
@@ -45,8 +46,31 @@ def main():
             opt2 = "val2"
             flag1 = true
 
-        You can also run the same command repeatedly with different parameters
-        using TOML arrays of tables::
+        To repeat commands with other operations in between, use unique step
+        names and specify the command in each table. This is standard TOML and
+        needs only single brackets. Steps run in the order they appear::
+
+            [export_before]
+            command = "convert_dss_to_sset"
+            dss_filepath = "dss.pickle"
+            sset_filepath = "before.xyz"
+
+            [plot]
+            command = "plot_columns"
+            source_filepath = "dss.pickle"
+            xcolumn = "f_mix_pred_full"
+            ycolumn = "f_mix_pred_pruned"
+
+            [export_after]
+            command = "convert_dss_to_sset"
+            dss_filepath = "dss.pickle"
+            sset_filepath = "after.xyz"
+
+        A top-level ``do = ["export_before", "plot", "export_after"]`` can
+        explicitly select and order steps. Put it before any table header.
+
+        Legacy command tables and arrays of tables remain supported. Array
+        entries execute as a group, so use named steps for interleaving::
 
             [[command1]]
             opt1 = "val1A"
@@ -57,7 +81,7 @@ def main():
             opt2 = "val2B"
 
         You can avoid execution of a command by adding the key `ignore` with the
-        value `false`, e.g., below commmandA and the second call to commandB will
+        value `true`, e.g., below commandA and the second call to commandB will
         be ignored::
 
             [commandA]
@@ -134,54 +158,31 @@ def main():
     else:
         config_dict = read_toml_config(toml_file_path)
 
-        commands_ = [
-            key
-            for key, value in config_dict.items()
-            if isinstance(value, dict)
-            or (
-                isinstance(value, list)
-                and all(isinstance(item, dict) for item in value)
-            )
-        ]
+        try:
+            calls = get_toml_commands(config_dict, cmds.commands)
+            # Check arguments before running commands that may write files.
+            for label, command, params, ignored in calls:
+                if ignored:
+                    continue
+                try:
+                    sig = signature(getattr(cmds, command))
+                except (ValueError, TypeError):
+                    continue  # Some extension callables do not expose a signature.
+                try:
+                    sig.bind(**params)
+                except TypeError as exc:
+                    raise ValueError(f"Invalid arguments for step '{label}' ({command}): {exc}") from exc
+        except ValueError as exc:
+            print(f"Invalid TOML command configuration: {exc}", file=sys.stderr)
+            sys.exit(1)
 
-        commands = config_dict.get("do", commands_)
-        available_commands = cmds.commands  # List of available command names
-
-        for command in commands:
-            if command in available_commands:
-                func = getattr(cmds, command)
-                arg_dict_from_toml = config_dict[str(command)]
-
-                # Check if arg_dict_from_toml is a list of dictionaries
-                if isinstance(arg_dict_from_toml, list) and all(
-                    isinstance(item, dict) for item in arg_dict_from_toml
-                ):
-                    # Execute func for each dictionary in the list
-                    for params in arg_dict_from_toml:
-                        ignore_flag = params.pop("ignore", None)
-                        if ignore_flag is True:
-                            print(f"Skipping {command} because 'ignore' is True")
-                        else:
-                            print(f"Executing {command} with params: {params}")
-                            func(**params)
-                elif isinstance(arg_dict_from_toml, dict):
-                    ignore_flag = arg_dict_from_toml.pop("ignore", None)
-                    if ignore_flag is True:
-                        print(f"Skipping {command} because 'ignore' is True")
-                    else:
-                        # Execute func with the single dictionary of parameters
-                        print(
-                            f"\nExecuting {command} with params:\n {pformat(arg_dict_from_toml)}\n"
-                        )
-                        func(**arg_dict_from_toml)
-                else:
-                    print(
-                        f"Invalid format for arguments in command '{command}': {arg_dict_from_toml}"
-                    )
-                    sys.exit(1)
+        for label, command, params, ignored in calls:
+            description = command if label == command else f"{command} (step {label})"
+            if ignored:
+                print(f"Skipping {description} because 'ignore' is True")
             else:
-                print(f"Unknown command: {command}")
-                sys.exit(1)
+                print(f"\nExecuting {description} with params:\n {pformat(params)}\n")
+                getattr(cmds, command)(**params)
 
 
 if __name__ == "__main__":

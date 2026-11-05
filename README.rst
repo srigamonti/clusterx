@@ -31,3 +31,38 @@ standalone model pickle as well as the usual model/calculator file pair.
 Every parent-lattice table lists the number of supported species per sublattice,
 including vacancies and spectator sublattices.
 These commands read the artifacts without fitting models or regenerating orbits.
+
+Ordered command workflows
+-------------------------
+
+To repeat a command with other commands in between, give each invocation a unique
+step name and select its implementation with ``command``. This uses standard TOML
+single-bracket tables::
+
+    [export_before]
+    command = "convert_dss_to_sset"
+    dss_filepath = "dss.pickle"
+    sset_filepath = "before.xyz"
+
+    [plot]
+    command = "plot_columns"
+    source_filepath = "dss.pickle"
+    xcolumn = "f_mix_pred_full"
+    ycolumn = "f_mix_pred_pruned"
+
+    [export_after]
+    command = "convert_dss_to_sset"
+    dss_filepath = "dss.pickle"
+    sset_filepath = "after.xyz"
+
+Run this with ``cell --input_file workflow.toml``. By default, named steps execute
+in file order. Set ``ignore = true`` inside a step to skip it. To select or reorder
+steps, place ``do = ["export_before", "plot", "export_after"]`` at the top of the
+file, before any table header. Command names and argument signatures are checked
+before execution begins.
+
+Existing ``[command]`` tables and ``[[command]]`` arrays remain supported and can
+be mixed with named steps. Legacy array entries run consecutively as one group;
+use named steps when individual invocations must be interleaved. A registered
+command's own table still passes its options directly, so an actual argument
+named ``command`` remains supported for custom commands.

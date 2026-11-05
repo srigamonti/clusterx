@@ -151,6 +151,9 @@ instead of assuming their APIs are fixed or fully described by the papers.
 - Exercise both direct command invocation and TOML configuration when changing
   shared dispatch or configuration behavior. Preserve support for repeated
   commands and custom command modules where relevant.
+- TOML named steps use unique single-bracket table names and a `command` selector
+  to support interleaving. Preserve legacy command tables/arrays and `do` ordering;
+  legacy array entries execute as a group.
 - Prefer shared Python logic with thin CLI wrappers. Inspect helpers in
   `config_utils.py`, `report_utils.py`, and existing model-building commands
   before introducing another implementation.
