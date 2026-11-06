@@ -512,6 +512,79 @@ def cluster_correlations_flip(
     return np.around(correlations_diff, decimals=12)
 
 
+def _pack_cluster_interactions(site_clusters, cluster_orbits_array, max_bytes=16 * 1024**2):
+    """Pack interaction lists in their existing order, within a numeric byte budget.
+
+    Callers use this only for reduced cells. Return None before allocating the
+    packed arrays if the budget would be exceeded. Fill arrays directly rather
+    than constructing temporary flattened Python lists.
+    """
+    n_entries = sum(len(indices) for indices in site_clusters)
+    n_members = sum(len(cluster.get_idxs()) for cluster in cluster_orbits_array)
+    n_integers = len(site_clusters) + len(cluster_orbits_array) + 2 + n_entries + 2 * n_members
+    if n_integers * np.dtype(np.intp).itemsize > max_bytes:
+        return None
+
+    site_offsets = np.empty(len(site_clusters) + 1, dtype=np.intp)
+    touched_clusters = np.empty(n_entries, dtype=np.intp)
+    site_offsets[0] = 0
+    for site, indices in enumerate(site_clusters):
+        start = site_offsets[site]
+        stop = start + len(indices)
+        touched_clusters[start:stop] = indices
+        site_offsets[site + 1] = stop
+
+    cluster_offsets = np.empty(len(cluster_orbits_array) + 1, dtype=np.intp)
+    sites = np.empty(n_members, dtype=np.intp)
+    alphas = np.empty(n_members, dtype=np.intp)
+    cluster_offsets[0] = 0
+    for index, cluster in enumerate(cluster_orbits_array):
+        start = cluster_offsets[index]
+        stop = start + len(cluster.get_idxs())
+        sites[start:stop] = cluster.get_idxs()
+        alphas[start:stop] = cluster.alphas
+        cluster_offsets[index + 1] = stop
+    return site_offsets, touched_clusters, cluster_offsets, sites, alphas
+
+
+@jit
+def _cluster_correlations_flip_packed_raw(
+    ind, old_sigma, new_sigma, sigmas, ems, basis_set_values,
+    site_offsets, touched_clusters, cluster_offsets, sites, alphas, cluster_indices, n_columns,
+):
+    """Accumulate local changes in one compiled loop, preserving summation order."""
+    correlations_diff = np.zeros(n_columns, dtype=np.float64)
+    for entry in range(site_offsets[ind], site_offsets[ind + 1]):
+        cluster = touched_clusters[entry]
+        cf = 1.0
+        flipped = False
+        for member in range(cluster_offsets[cluster], cluster_offsets[cluster + 1]):
+            site = sites[member]
+            alpha = alphas[member]
+            em = ems[site]
+            # Preserve the existing flip-once convention for wrapped sites.
+            if ind == site and not flipped:
+                cf *= basis_set_values[alpha, new_sigma, em] - basis_set_values[alpha, old_sigma, em]
+                flipped = True
+            else:
+                cf *= basis_set_values[alpha, sigmas[site], em]
+        correlations_diff[cluster_indices[cluster]] += cf
+    return correlations_diff
+
+
+def _cluster_correlations_flip_packed(
+    structure, ind, old_sigma, new_sigma, packed_interactions, cluster_indices, basis_set_values, multiplicities,
+):
+    """Calculate local changes using packed reduced-cell geometry."""
+    correlations_diff = _cluster_correlations_flip_packed_raw(
+        ind, old_sigma, new_sigma, structure.sigmas, structure.ems, basis_set_values,
+        *packed_interactions, cluster_indices, len(multiplicities),
+    )
+    # Keep normalization and rounding in NumPy, exactly as in the reference path.
+    correlations_diff /= multiplicities
+    return np.around(correlations_diff, decimals=12)
+
+
 def cluster_correlations_partial(
     structure: Structure,
     ind: int,

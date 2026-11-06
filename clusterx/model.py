@@ -15,6 +15,8 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.clusters_selector import ClustersSelector
 from clusterx.correlations import (
     CorrelationsCalculator,
+    _cluster_correlations_flip_packed,
+    _pack_cluster_interactions,
     cluster_correlations_flip,
     cluster_correlations_partial,
 )
@@ -164,6 +166,8 @@ class Model:
 
     def reset_mc(self, mc=False):
         self.invalidate_prediction_cache()
+        self.__dict__.pop("_packed_interactions", None)
+        self.__dict__.pop("_interaction_scell_key", None)
         self.corrc.reset_mc(mc)
         self._mc = mc
         self._num_mc_calls = 0
@@ -336,8 +340,7 @@ class Model:
         _structure, _index = structure.get_reduced_structure(index)
         _scell = _structure.get_supercell()
 
-        if not self.initialized_interactions:
-            self._init_interaction_dict(_scell)
+        self._ensure_interaction_dict(_scell)
 
         correlations_partial = cluster_correlations_partial(
             structure=_structure,
@@ -357,8 +360,10 @@ class Model:
 
     def _init_interaction_dict(self, super_cell: SuperCell):
         """Construct list of which sites are contained in which orbit.
-        NOTE: This method needs to be re-called, when super_cell transformation
-        (p) changes."""
+        Rebuilding interactions discards any derived packed geometry.
+        """
+        self.__dict__.pop("_packed_interactions", None)
+        self.initialized_interactions = False
         cluster_orbits = self.corrc.get_cluster_orbits_for_scell(super_cell)
         cluster_indices = []  # to which primitive cluster each cluster belongs
         cluster_orbits_array = []  # all clusters from all orbits
@@ -385,7 +390,18 @@ class Model:
         self._multiplicities = np.array(multiplicities, dtype=int)
         self._n_body_list = np.array(n_body_list)
         self._site_clusters = site_clusters
+        self._interaction_scell_key = self._interaction_key(super_cell)
         self.initialized_interactions = True
+
+    @staticmethod
+    def _interaction_key(super_cell):
+        # Constant-size key; never retain another full supercell or a site map.
+        return id(super_cell.get_parent_lattice()), super_cell.get_transformation().tobytes()
+
+    def _ensure_interaction_dict(self, super_cell):
+        if (not self.initialized_interactions
+                or getattr(self, "_interaction_scell_key", None) != self._interaction_key(super_cell)):
+            self._init_interaction_dict(super_cell)
 
     def predict_correlations_diff(
         self,
@@ -407,20 +423,30 @@ class Model:
             _structure, _index = structure.get_reduced_structure(index)
             _scell = _structure.get_supercell()
 
-        if not self.initialized_interactions:
-            self._init_interaction_dict(_scell)
+        self._ensure_interaction_dict(_scell)
 
-        correlations_diff = cluster_correlations_flip(
-            structure=_structure,
-            ind=_index,
-            old_sigma=old_sigma,
-            new_sigma=new_sigma,
-            site_clusters=self._site_clusters,
-            cluster_orbits_array=self._cluster_orbits_array,
-            cluster_indices=self._cluster_indices,
-            basis_set_values=self.corrc.basis_set_values,
-            multiplicities=self._multiplicities,
-        )
+        # Only reduced-cell geometry is packed. Cache a declined attempt as None
+        # so a pool exceeding the byte budget does not retry on every flip.
+        if reduce_structure and "_packed_interactions" not in self.__dict__:
+            self._packed_interactions = _pack_cluster_interactions(self._site_clusters, self._cluster_orbits_array)
+        packed = getattr(self, "_packed_interactions", None) if reduce_structure else None
+        if packed is not None:
+            correlations_diff = _cluster_correlations_flip_packed(
+                _structure, _index, old_sigma, new_sigma, packed, self._cluster_indices,
+                self.corrc.basis_set_values, self._multiplicities,
+            )
+        else:
+            correlations_diff = cluster_correlations_flip(
+                structure=_structure,
+                ind=_index,
+                old_sigma=old_sigma,
+                new_sigma=new_sigma,
+                site_clusters=self._site_clusters,
+                cluster_orbits_array=self._cluster_orbits_array,
+                cluster_indices=self._cluster_indices,
+                basis_set_values=self.corrc.basis_set_values,
+                multiplicities=self._multiplicities,
+            )
         correlations_diff /= self.scell_factor
 
         return correlations_diff
@@ -491,12 +517,15 @@ class Model:
         self.__dict__.pop("_affine_parameters", None)
 
     def __getstate__(self):
-        # Derived coefficients must never outlive the fitted state they describe.
-        return {key: value for key, value in self.__dict__.items() if not key.startswith("_affine_")}
+        # Derived caches must not outlive the fitted state or geometry they describe.
+        return {key: value for key, value in self.__dict__.items()
+                if not key.startswith("_affine_") and key not in ("_packed_interactions", "_interaction_scell_key")}
 
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.invalidate_prediction_cache()
+        self.__dict__.pop("_packed_interactions", None)
+        self.__dict__.pop("_interaction_scell_key", None)
 
     def _get_affine_parameters(self, n_features):
         estimator = self.estimator

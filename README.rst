@@ -145,3 +145,11 @@ With ``reduce_structure=True``, periodic neighborhoods are extracted in one
 gather. Cached offsets and temporary neighborhood storage depend on the reduced
 cell, so their size stays fixed when the full supercell grows for a fixed model.
 The offset cache refreshes automatically when either grid shape changes.
+
+Reduced local correlation changes also use one compiled loop over packed
+interaction arrays. This cache contains only reduced-cell geometry and is
+limited to 16 MiB of numeric storage; larger pools use the per-cluster
+calculation. Unreduced calculations do not create a packed cache. The cache
+is discarded on MC reset or rebuilding interactions and is rebuilt after
+loading a saved model. Switching supercell transformations rebuilds interactions
+automatically. Cluster order, normalization, and rounding are preserved.
