@@ -105,3 +105,36 @@ effect without reinstalling the package.
 For environments managed with uv, use ``uv pip install -e '.[dev]'``.
 Run ``ruff check`` on changed Python files; it uses the repository's
 ``ruff.toml`` configuration.
+
+Affine model predictions
+------------------------
+
+``Model`` automatically folds supported fitted affine estimators into effective
+coefficients in correlation space and a complete intercept. This includes
+``ColumnExpander``, ``PolynomialFeatures`` of degree zero or one,
+``StandardScaler``, ``SelectFromModel``, and passthrough steps, followed by
+``LinearRegression``, ``Ridge``, ``RidgeCV``, ``Lasso``, ``LassoCV``, ``ElasticNet``,
+or ``ElasticNetCV``. Multi-output coefficients are supported. Multiplicities
+are not applied again.
+
+The fitted estimator remains available as ``model.estimator`` for reference.
+Other transformations, estimator subclasses, and nonlinear polynomials use
+the original estimator prediction path. Local affine energy differences use
+only the effective coefficients, so offsets from centering and bias features
+cancel correctly.
+
+The folded coefficients are cached lazily and are not saved in pickle files.
+Existing saved models enable the optimization automatically when loaded.
+Replacing the estimator or a pipeline step, or refitting with new final
+``coef_``/``intercept_`` objects, refreshes the cache automatically. After
+editing fitted arrays in place or changing transformer/selector settings with
+``set_params()``, call ``model.invalidate_prediction_cache()``. Starting a new
+Monte Carlo run also clears the cache through ``reset_mc()``.
+
+For a reproducible comparison with the fitted pipeline, run::
+
+    python benchmarks/affine_prediction.py pruned_model.pickle --reference-model full_model.pickle
+
+The benchmark uses one numerical-library thread, a half-filled 4x4x3 supercell,
+100 warm-up moves, and three timed repetitions of 5,000 proposed swaps. It
+checks prediction errors, composition, final occupations, and both MC RNG states.

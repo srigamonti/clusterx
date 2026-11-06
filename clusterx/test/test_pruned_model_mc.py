@@ -80,7 +80,8 @@ def test_subpool_bound_does_not_wrap_cluster_positions(pool):
 
 
 @pytest.mark.parametrize("singlets_only", [False, True])
-def test_builder_pruned_model_reduced_mc(pool, tmp_path, monkeypatch, singlets_only):
+@pytest.mark.parametrize("standardize", [False, True])
+def test_builder_pruned_model_reduced_mc(pool, tmp_path, monkeypatch, singlets_only, standardize):
     plat = pool.get_plat()
     training_cell = SuperCell(plat, [3, 3, 1])
     training = StructuresSet(plat)
@@ -101,10 +102,13 @@ def test_builder_pruned_model_reduced_mc(pool, tmp_path, monkeypatch, singlets_o
         "prop", source, npoints=[1, 2], radii=[0, 1.55], output_prefix=prefix,
         regression_model=linear, selection_model=linear, selection_threshold=1e-8,
         nonlinear_transformation={"args": {"degree": 1, "include_bias": False}},
+        standardize=standardize,
     )
     full = Model(filepath=f"{prefix}_1_full_model.pickle")
     pruned = Model(filepath=f"{prefix}_2_pruned_model.pickle")
     pruned_pool = pruned.corrc.get_cpool()
+    assert full._get_affine_parameters(len(full.corrc.get_cpool())) is not None
+    assert pruned._get_affine_parameters(len(pruned_pool)) is not None
     assert 0 < len(pruned_pool) < len(full.corrc.get_cpool())
     np.testing.assert_allclose([full.predict(s) for s in training], targets, atol=1e-11)
     np.testing.assert_allclose([pruned.predict(s) for s in training], targets, atol=1e-11)

@@ -19,6 +19,7 @@ from clusterx.correlations import (
     cluster_correlations_partial,
 )
 from clusterx.estimators.estimator_factory import EstimatorFactory
+from clusterx.estimators.affine import affine_parameters
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
@@ -162,6 +163,7 @@ class Model:
             raise ValueError(f"Error loading model from JSON file: {e}") from e
 
     def reset_mc(self, mc=False):
+        self.invalidate_prediction_cache()
         self.corrc.reset_mc(mc)
         self._mc = mc
         self._num_mc_calls = 0
@@ -319,9 +321,11 @@ class Model:
             corrs = self.corrc.get_cluster_correlations(structure, flag=flag)
             return self.predict_on_correlations(corrs)
         else:
+            affine = self._get_affine_parameters(len(self.corrc.get_cpool()))
+            intercept = affine[1] if affine is not None else self.intercept
             prediction = self.predict_partial(structure, 0, True)
             for i in range(1, len(structure.sigmas)):
-                prediction += self.predict_partial(structure, i, True) - self.intercept
+                prediction += self.predict_partial(structure, i, True) - intercept
             return prediction
 
     def predict_partial(self, structure: Structure, index: int, divide_n_body: bool = False):
@@ -468,11 +472,57 @@ class Model:
             for diagonal supercell transformation.
         """
         correlations_diff = self.predict_correlations_diff(structure, index, old_sigma, new_sigma, reduce_structure)
+        affine = self._get_affine_parameters(len(correlations_diff))
+        if affine is not None:
+            # Offsets from scaling and bias features cancel in an energy difference.
+            return affine[0] @ correlations_diff
         return self.predict_on_correlations(correlations_diff) - self.intercept
+
+    def invalidate_prediction_cache(self):
+        """Discard folded coefficients after modifying a fitted estimator in place.
+
+        Estimator/step replacement and refits replacing final coef_/intercept_
+        are detected automatically. Call this after editing fitted arrays in
+        place or changing transformer/selector settings with set_params().
+        Starting a MonteCarlo run through reset_mc() also clears the cache.
+        """
+        self.__dict__.pop("_affine_sources", None)
+        self.__dict__.pop("_affine_n_features", None)
+        self.__dict__.pop("_affine_parameters", None)
+
+    def __getstate__(self):
+        # Derived coefficients must never outlive the fitted state they describe.
+        return {key: value for key, value in self.__dict__.items() if not key.startswith("_affine_")}
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.invalidate_prediction_cache()
+
+    def _get_affine_parameters(self, n_features):
+        estimator = self.estimator
+        if estimator is None:
+            return None  # Explicit ECIs already use a direct dot product.
+        steps = [step for _, step in estimator.steps] if isinstance(estimator, Pipeline) else [estimator]
+        final = steps[-1]
+        # Retain references, rather than only ids, so Python cannot reuse a freed
+        # fitted array's id and accidentally make an old cache appear current.
+        sources = (estimator, *steps, getattr(final, "coef_", None), getattr(final, "intercept_", None))
+        previous = getattr(self, "_affine_sources", ())
+        if (n_features != getattr(self, "_affine_n_features", None) or len(sources) != len(previous)
+                or any(a is not b for a, b in zip(sources, previous))):
+            self._affine_parameters = affine_parameters(estimator, n_features)
+            self._affine_sources = sources
+            self._affine_n_features = n_features
+            self.ecis = getattr(final, "coef_", None)
+            self.intercept = getattr(final, "intercept_", None)
+        return self._affine_parameters
 
     def predict_on_correlations(self, correlations: np.array):
         """Using calculated correlations, return a prediction."""
         if self.estimator is not None:
+            affine = self._get_affine_parameters(len(correlations))
+            if affine is not None:
+                return affine[0] @ correlations + affine[1]
             return self.estimator.predict(correlations.reshape(1, -1))[0]
         else:
             return np.dot(self.ecis, correlations)
