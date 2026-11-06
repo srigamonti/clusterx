@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import copy
+import operator
 import os
 import pickle
 import warnings
@@ -20,7 +21,7 @@ from ase.io import read, write
 
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
-from clusterx.utils import is_diagonal, take_tile, ListDict
+from clusterx.utils import is_diagonal, ListDict
 
 
 class Structure(SuperCell):
@@ -445,18 +446,40 @@ class Structure(SuperCell):
 
     def get_reduced_structure(self, index: int) -> Structure:
         """Return a reduced structure and reduced index.
-        Given transformation p, around site index."""
+        Given transformation p, around site index.
+
+        Only local offsets are cached, so additional storage is independent of
+        the full supercell size for a fixed reduced shape. The cache is rebuilt
+        when either grid shape changes and is created lazily for older pickles.
+        """
         if self.structure_reduced is None:
             raise RuntimeError(
                 "structure.get_reduced_structure was called before structure.init_reduced_structure"
             )
-        index_grid = list(np.unravel_index(index, self.sigma_grid.shape))
-        sigma_grid_reduced, index_grid_reduced = take_tile(
-            self.sigma_grid, index_grid, self.p_reduced_diag
-        )
-        index_reduced = int(
-            np.ravel_multi_index(index_grid_reduced, sigma_grid_reduced.shape)
-        )
+        grid = self.sigma_grid
+        index = operator.index(index)
+        if index < 0 or index >= grid.size:
+            raise ValueError(f"index {index} is out of bounds for array with size {grid.size}")
+        shape = grid.shape
+        reduced_shape = tuple(int(p) for p in self.p_reduced_diag)
+        key = (shape, reduced_shape)
+        if getattr(self, "_reduced_tile_key", None) != key:
+            hx, hy, hz = (p // 2 for p in reduced_shape)
+            # Match take_tile's centered, odd window, including even input extents.
+            dx = np.arange(-hx, hx + 1, dtype=np.intp)[:, None, None]
+            dy = np.arange(-hy, hy + 1, dtype=np.intp)[None, :, None]
+            dz = np.arange(-hz, hz + 1, dtype=np.intp)[None, None, :]
+            center = ((hx * dy.size + hy) * dz.size + hz) * shape[-1]
+            self._reduced_tile = (dx, dy, dz, center)
+            self._reduced_tile_key = key
+        dx, dy, dz, center = self._reduced_tile
+        cell, site = divmod(index, shape[-1])
+        x, yz = divmod(cell, shape[1] * shape[2])
+        y, z = divmod(yz, shape[2])
+        # Gather only the final neighborhood. Sequential takes create intermediate
+        # arrays that still span the unprocessed axes of the full supercell.
+        sigma_grid_reduced = grid[(dx + x) % shape[0], (dy + y) % shape[1], (dz + z) % shape[2], :]
+        index_reduced = center + site
         # link current sigmas of structure to sigmas of structure_reduced
         self.structure_reduced.sigmas = sigma_grid_reduced.reshape((-1,), copy=False)
         return self.structure_reduced, index_reduced

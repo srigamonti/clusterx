@@ -496,11 +496,11 @@ def cluster_correlations_flip(
     for cluster, cluster_index in zip(clusters, cluster_indices):
         cluster_sites = cluster.get_idxs()
         cluster_funcs = cluster.alphas
-        cf = cluster_function_flip(
+        cf = _cluster_function_flip_indexed(
             cluster_sites,
             cluster_funcs,
-            structure.sigmas.take(cluster_sites),
-            structure.ems.take(cluster_sites),
+            structure.sigmas,
+            structure.ems,
             ind,
             old_sigma,
             new_sigma,
@@ -613,6 +613,31 @@ def cluster_function(
     cf = 1.0
     for cl_alpha, cl_idx in zip(cluster_alphas, cluster_idxs):
         cf *= basis_set_values[cl_alpha, sigmas[cl_idx], ems[cl_idx]]
+    return cf
+
+
+@jit
+def _cluster_function_flip_indexed(
+    cluster_sites: list,
+    cluster_alphas: np.ndarray,
+    sigmas: np.ndarray,
+    ems: np.ndarray,
+    i_flip: int,
+    sigma_old: int,
+    sigma_new: int,
+    basis_set_values: np.ndarray,
+) -> float:
+    """Evaluate a local change using full arrays, without per-cluster gathers."""
+    cf = 1.0
+    flipped = False
+    for site, alpha in zip(cluster_sites, cluster_alphas):
+        em = ems[site]
+        # Preserve the existing flip-once convention for repeated wrapped sites.
+        if i_flip == site and not flipped:
+            cf *= basis_set_values[alpha, sigma_new, em] - basis_set_values[alpha, sigma_old, em]
+            flipped = True
+        else:
+            cf *= basis_set_values[alpha, sigmas[site], em]
     return cf
 
 

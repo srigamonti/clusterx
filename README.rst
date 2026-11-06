@@ -138,3 +138,10 @@ For a reproducible comparison with the fitted pipeline, run::
 The benchmark uses one numerical-library thread, a half-filled 4x4x3 supercell,
 100 warm-up moves, and three timed repetitions of 5,000 proposed swaps. It
 checks prediction errors, composition, final occupations, and both MC RNG states.
+
+With ``predict_swap=True``, local cluster calculations access occupations directly
+without allocating occupation and species-count arrays for each cluster.
+With ``reduce_structure=True``, periodic neighborhoods are extracted in one
+gather. Cached offsets and temporary neighborhood storage depend on the reduced
+cell, so their size stays fixed when the full supercell grows for a fixed model.
+The offset cache refreshes automatically when either grid shape changes.
