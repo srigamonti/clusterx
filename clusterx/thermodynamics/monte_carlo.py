@@ -4,6 +4,7 @@
 
 ## packages needed for MonteCarloTrajectory
 import json
+from io import StringIO
 from copy import deepcopy
 import math
 import os
@@ -13,7 +14,7 @@ import random
 from tqdm import tqdm
 import numpy as np
 from ase.cell import Cell
-from ase.io import Trajectory, iread, write
+from ase.io import Trajectory, iread, read, write
 
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
@@ -120,6 +121,16 @@ class MonteCarlo:
         physical configuration is resumed with the random streams initialized
         from ``seed``; the original random stream is not restored.
 
+    ``save_atoms_endpoints``: boolean (default: False)
+        Write the initial configuration and each metropolis call's endpoint.
+        Continuing calls share one stage boundary frame. Periodic checkpoints
+        set by ``save_atoms_every`` follow the chain's proposal counter.
+
+    ``atoms_mode``: string (default: "auto")
+        Apply once per chain: "x" requires a new output file, "w" overwrites,
+        "a" appends, and "auto" overwrites fresh runs and appends resumes.
+        XYZ counters start at zero for each fresh start or file-based resume.
+
     """
 
     def __init__(
@@ -139,6 +150,8 @@ class MonteCarlo:
         filename: str = "trajectory.json",
         seed: int | None = None,
         resume_from: str | os.PathLike | None = None,
+        save_atoms_endpoints: bool = False,
+        atoms_mode: str = "auto",
     ):
         if (ensemble == "semigrand-canonical") and (chemical_potentials is None):
             raise ValueError("`chemical_potentials` have to be given when ensemble is 'semigrand-canonical")
@@ -154,7 +167,15 @@ class MonteCarlo:
         self._predict_swap = predict_swap
         self._reduce_structure = reduce_structure
         self._save_atoms_every = save_atoms_every
-        self._atoms_filename = atoms_filename
+        self._atoms_filename = os.fspath(atoms_filename)
+        if atoms_mode not in {"auto", "w", "a", "x"}:
+            raise ValueError("atoms_mode must be 'auto', 'w' (overwrite), 'a' (append), or 'x' (new file)")
+        if save_atoms_every < 0:
+            raise ValueError("save_atoms_every must be nonnegative")
+        self._save_atoms_endpoints = save_atoms_endpoints
+        self._atoms_mode = atoms_mode
+        self._atoms_output_path = None
+        self._atoms_last_step = None
         self._resume_from = resume_from
         self._resume_source = os.path.abspath(os.fspath(resume_from)) if resume_from is not None else None
         self._chain_state = None
@@ -338,21 +359,19 @@ class MonteCarlo:
         if self._reduce_structure:
             e_last = np.float64(0.0)
 
-        if self._save_atoms_every > 0:
-            if self._atoms_filename.endswith((".xyz", ".extxyz")):
-                atoms_traj = self._atoms_filename
-                same_resume_file = (
-                    resume_frame is not None
-                    and self._resume_source is not None
-                    and os.path.abspath(os.fspath(self._atoms_filename)) == self._resume_source
-                )
-                if not same_resume_file:
-                    append = continuing or resume_frame is not None
-                    write(atoms_traj, structure.get_atoms(), format="extxyz", append=append)
-            else:
-                mode = "a" if continuing or resume_frame is not None else "w"
-                atoms_traj = Trajectory(self._atoms_filename, mode=mode)
-                atoms_traj.write(structure.get_atoms(ignore_observer_atoms=True))
+        global_step_offset = self._chain_state["global_step"] if continuing else 0
+        stage = self._chain_state.get("stage", 1) + 1 if continuing else 1
+        counter_origin = self._chain_state["counter_origin"] if continuing else (
+            "xyz_resume" if resume_frame is not None else "fresh_start"
+        )
+        save_atoms = self._save_atoms_every > 0 or self._save_atoms_endpoints
+        if save_atoms:
+            write_initial = self._prepare_atoms_output(continuing, resume_frame is not None)
+            initial_temperature = temperature if temperature_array is None else (
+                temperature_array[0] if no_of_sampling_steps else None
+            )
+            if write_initial:
+                self._write_atoms_checkpoint(global_step_offset, stage, 0, initial_temperature, counter_origin)
 
         traj = MonteCarloTrajectory(
             self._scell,
@@ -384,7 +403,6 @@ class MonteCarlo:
         )
         rave = self._chain_state["running_average"] if continuing else RunningAverage(1000)
         beta_scale = self._chain_state["beta_scale"] if continuing else 1.0
-        global_step_offset = self._chain_state["global_step"] if continuing else 0
         beta_chunks = iter(self._iter_beta_chunks(
             no_of_sampling_steps, temperature, temperature_array, boltzmann_constant, max_steps_per_batch
         ))
@@ -491,38 +509,88 @@ class MonteCarlo:
                 if global_step % 10 == 0 and global_step >= 1000:
                     beta_scale /= math.exp((target_rate - rate) / 10.0)
 
-            if self._save_atoms_every > 0 and step % self._save_atoms_every == 0:
-                structure.set_arrays(sigmas)
-                atoms = structure.get_atoms()
-                atoms.info["mc_step"] = global_step_offset + step
+            if self._save_atoms_every > 0 and (global_step_offset + step) % self._save_atoms_every == 0:
                 frame_temperature = temperature if temperature_array is None else temperature_array[step - 1]
-                atoms.info["temperature"] = float(frame_temperature)
-                if isinstance(atoms_traj, str):
-                    write(atoms_traj, atoms, format="extxyz", append=True)
-                else:
-                    atoms_traj.write(
-                        structure.get_atoms(ignore_observer_atoms=True), energy=de
-                    )
+                self._write_atoms_checkpoint(
+                    global_step_offset + step, stage, step, frame_temperature, counter_origin, de
+                )
 
             if step % 1000 == 0 or no_of_sampling_steps < 1000:
                 # if updated too often, progress display might delay steps
                 progress.set_description(f"MMC sim. | Acc. rate: {rate:.4f} | delta_E: {de:.1e}")
 
+        if self._save_atoms_endpoints:
+            final_temperature = temperature if temperature_array is None else (
+                temperature_array[-1] if no_of_sampling_steps else None
+            )
+            self._write_atoms_checkpoint(
+                global_step_offset + no_of_sampling_steps, stage, no_of_sampling_steps,
+                final_temperature, counter_origin,
+            )
         if serialize:
             traj.serialize()
 
         self._chain_state = {
             "use_correlations": use_correlations,
             "correlations": correlations.copy() if use_correlations else None,
-            "current_energy": current_energy if "current_energy" in locals() else self._energy_value(
-                self._emodel.predict(structure, reduce_structure=self._reduce_structure)
-            ),
+            "current_energy": current_energy,
             "running_average": rave,
             "beta_scale": beta_scale,
             "global_step": global_step_offset + no_of_sampling_steps,
+            "stage": stage,
+            "counter_origin": counter_origin,
         }
 
         return traj
+
+    def _prepare_atoms_output(self, continuing, resumed):
+        """Apply the output mode once per chain, then append subsequent stages."""
+        path = os.path.abspath(self._atoms_filename)
+        if continuing and path == self._atoms_output_path:
+            return False
+        mode = self._atoms_mode
+        if mode == "auto":
+            mode = "a" if continuing or resumed else "w"
+        if mode == "x" and os.path.exists(path):
+            raise FileExistsError(f"Checkpoint output already exists: {path}. Use atoms_mode='a' or 'w' explicitly.")
+        self._atoms_write_mode = mode
+        self._atoms_output_path = path
+        self._atoms_last_step = None
+        if resumed and path == self._resume_source and mode == "a":
+            # The source's final frame already contains this initial configuration.
+            self._atoms_last_step = 0
+            if getattr(self, "_resume_complete_bytes", None) is not None:
+                with open(path, "r+b") as output:
+                    output.truncate(self._resume_complete_bytes)
+        return True
+
+    def _write_atoms_checkpoint(self, step, stage, stage_step, temperature, origin, energy=None):
+        """Snapshot sigmas without changing index maps, correlations, or random streams."""
+        if step == self._atoms_last_step:
+            return
+        atoms = self.structure.get_atoms()
+        atoms.numbers = self.structure.get_decoration()
+        nsites = self._scell.get_n_sub_sites(unique=False)
+        atoms.info.update(mc_step=int(step), mc_stage=int(stage), mc_stage_step=int(stage_step),
+                          mc_counter_origin=origin)
+        if nsites:
+            atoms.info["mc_sweeps"] = float(step / nsites)
+            atoms.info["mc_sweep_sites"] = int(nsites)
+        if temperature is not None:
+            atoms.info["temperature"] = float(temperature)
+        append = self._atoms_write_mode == "a"
+        if self._atoms_filename.endswith((".xyz", ".extxyz")):
+            write(self._atoms_filename, atoms, format="extxyz", append=append)
+        else:
+            # Preserve the historical ASE trajectory convention of omitting spectators.
+            atoms = atoms[self._scell.get_substitutional_sites()]
+            with Trajectory(self._atoms_filename, mode="a" if append else "w") as trajectory:
+                if energy is None:
+                    trajectory.write(atoms)
+                else:
+                    trajectory.write(atoms, energy=energy)
+        self._atoms_write_mode = "a"
+        self._atoms_last_step = step
 
     @staticmethod
     def _iter_beta_chunks(no_steps, temperature, temperature_array, boltzmann_constant, batch_size):
@@ -538,6 +606,8 @@ class MonteCarlo:
     def reset_chain(self, initial_decoration=None, seed=None, resume_from=None):
         """Reset the Markov chain, optionally selecting a new start or XYZ frame."""
         self._chain_state = None
+        self._atoms_output_path = None
+        self._atoms_last_step = None
         self._resume_from = resume_from
         self._resume_source = os.path.abspath(os.fspath(resume_from)) if resume_from is not None else None
         self._pending_initial_decoration = (
@@ -547,19 +617,56 @@ class MonteCarlo:
         self._rng_np = np.random.Generator(np.random.SFC64(seed))
         self._rng_std.seed(seed)
 
-    @staticmethod
-    def _read_resume_frame(filename):
-        """Read the final complete frame from an ASE-readable trajectory."""
-        last = None
+    def _read_resume_frame(self, filename):
+        """Read only the last complete XYZ frame, tolerating an interrupted final write."""
+        if not os.path.isfile(filename):
+            raise FileNotFoundError(f"Resume checkpoint not found: {filename}")
+        self._resume_complete_bytes = None
         try:
+            if os.fspath(filename).endswith((".xyz", ".extxyz")):
+                # Scan with constant storage, then parse just the final complete
+                # frame. ASE's whole-file indexing can fail on a partial tail.
+                last_bounds = previous_bounds = None
+                with open(filename, "rb") as source:
+                    while True:
+                        start = source.tell()
+                        line = source.readline()
+                        try:
+                            count = int(line)
+                        except ValueError:
+                            break
+                        if count < 0:
+                            break
+                        for _ in range(count + 1):  # Comment plus atom records.
+                            if not source.readline():
+                                break
+                        else:
+                            previous_bounds, last_bounds = last_bounds, (start, source.tell())
+                            continue
+                        break
+                    if last_bounds is None:
+                        raise ValueError("no complete frame")
+                    for bounds in (last_bounds, previous_bounds):
+                        if bounds is None:
+                            continue
+                        start, end = bounds
+                        source.seek(start)
+                        try:
+                            atoms = read(StringIO(source.read(end - start).decode()), format="extxyz")
+                        except (OSError, ValueError, IndexError):
+                            if bounds == previous_bounds or previous_bounds is None:
+                                raise
+                        else:
+                            self._resume_complete_bytes = end
+                            return atoms
+            last = None
             for frame in iread(filename, index=":"):
-                last = frame.copy()
-        except (OSError, ValueError, IndexError):
+                last = frame
             if last is None:
-                raise
-        if last is None:
-            raise ValueError(f"No complete XYZ frame found in {filename!r}")
-        return last
+                raise ValueError("no complete frame")
+            return last
+        except (OSError, ValueError, IndexError) as exc:
+            raise ValueError(f"Cannot resume checkpoint {filename!r}: {exc}") from exc
 
     def _validate_resume_frame(self, atoms):
         if self._emodel.get_parent_lattice() != self._scell.get_parent_lattice():
@@ -570,7 +677,7 @@ class MonteCarlo:
             raise ValueError("Resume frame cell does not match the Monte Carlo supercell")
         if not np.array_equal(atoms.pbc, self._scell.get_pbc()):
             raise ValueError("Resume frame periodicity does not match the Monte Carlo supercell")
-        if not np.array_equal(atoms.get_tags(), self._scell.get_tags()):
+        if "tags" in atoms.arrays and not np.array_equal(atoms.get_tags(), self._scell.get_tags()):
             raise ValueError("Resume frame sublattice tags do not match the Monte Carlo supercell")
         if not np.allclose(atoms.positions, self._scell.get_positions(), atol=1e-5, rtol=0):
             raise ValueError("Resume frame positions or site ordering do not match the Monte Carlo supercell")
@@ -578,9 +685,11 @@ class MonteCarlo:
         if tmat is not None and not np.array_equal(np.asarray(tmat), self._scell.get_transformation()):
             raise ValueError("Resume frame transformation does not match the Monte Carlo supercell")
         # Structure validates that each loaded atomic number is allowed at its site.
-        Structure(self._scell, decoration=atoms.numbers, track_indices=True)
-        if self._ensemble == "canonical" and self._nsubs is not None:
+        try:
             structure = Structure(self._scell, decoration=atoms.numbers, track_indices=True)
+        except AttributeError as exc:
+            raise ValueError("Resume frame contains species not allowed by the model parent lattice") from exc
+        if self._ensemble == "canonical" and self._nsubs is not None:
             conc = structure.get_fractional_concentrations()
             nsites = structure.get_nsites_per_type()
             composition = {key: [int(round(value * nsites[key])) for value in values[1:]]
@@ -620,7 +729,7 @@ class MonteCarlo:
     def initialize_structure(self, initial_decoration: list[int] | None = None, nsubs: dict | None = None):
         if initial_decoration is not None:
             self.structure = Structure(self._scell, initial_decoration, track_indices=True)
-            if self._nsubs is None:
+            if self._nsubs is None or self._ensemble != "canonical":
                 return
             conc = self.structure.get_fractional_concentrations()
             nsites = self.structure.get_nsites_per_type()
@@ -1074,7 +1183,7 @@ class MonteCarloTrajectory:
         if self._scale_factor is not None:
             traj_info.update({"scale_factor": self._scale_factor})
         if self._target_rate is not None:
-            traj_info.update({"target_rate", self._target_rate})
+            traj_info.update({"target_rate": self._target_rate})
 
         for key in self._keyword_arguments.keys():
             traj_info.update({key: self._keyword_arguments[key]})

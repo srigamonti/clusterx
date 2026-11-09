@@ -396,7 +396,8 @@ def test_metropolis_perov(plat_perov, model_perov):
         traj = Trajectory("perov_mc.traj")
         assert len(traj) == 11
         energies.append(mctraj.get_energies())
-        assert len(mctraj.get_energies()) > 10
+        offset = energies[0][0] if reduce else 0
+        np.testing.assert_allclose(mctraj.get_energies()[-1] + offset, model_perov.predict(mc.structure))
     energies[2] += energies[0][0]  # energies of reduce=True are offset
     np.testing.assert_allclose(energies[0], energies[1])
     np.testing.assert_allclose(energies[0], energies[2])
