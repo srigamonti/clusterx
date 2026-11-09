@@ -585,6 +585,24 @@ def _cluster_correlations_flip_packed(
     return np.around(correlations_diff, decimals=12)
 
 
+@jit
+def _cluster_correlations_cell_packed_raw(
+    sigmas, ems, first_site, n_parent_sites, basis_set_values,
+    site_offsets, touched_clusters, cluster_offsets, sites, alphas, cluster_indices, n_columns,
+):
+    """Sum unnormalized correlation contributions touching the central parent cell."""
+    correlations = np.zeros(n_columns, dtype=np.float64)
+    for ind in range(first_site, first_site + n_parent_sites):
+        for entry in range(site_offsets[ind], site_offsets[ind + 1]):
+            cluster = touched_clusters[entry]
+            cf = 1.0
+            for member in range(cluster_offsets[cluster], cluster_offsets[cluster + 1]):
+                site = sites[member]
+                cf *= basis_set_values[alphas[member], sigmas[site], ems[site]]
+            correlations[cluster_indices[cluster]] += cf
+    return correlations
+
+
 def cluster_correlations_partial(
     structure: Structure,
     ind: int,
@@ -593,8 +611,13 @@ def cluster_correlations_partial(
     cluster_indices: np.ndarray,
     basis_set_values: np.ndarray,
     multiplicities: np.ndarray,
+    normalize: bool = True,
 ) -> np.ndarray:
-    """Compute partial cluster correlations around site `ind`."""
+    """Compute partial cluster correlations around site `ind`.
+
+    With normalize=False, return raw sums for streaming global correlations;
+    normalization and rounding are then performed once after accumulation.
+    """
     indices = site_clusters[ind]
     clusters = cluster_orbits_array[indices]
     cluster_indices = cluster_indices[indices]
@@ -612,8 +635,10 @@ def cluster_correlations_partial(
         )
         correlations_diff[cluster_index] += cf
 
-    correlations_diff /= multiplicities
-    return np.around(correlations_diff, decimals=12)
+    if normalize:
+        correlations_diff /= multiplicities
+        return np.around(correlations_diff, decimals=12)
+    return correlations_diff
 
 
 @jit

@@ -15,6 +15,7 @@ from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.clusters_selector import ClustersSelector
 from clusterx.correlations import (
     CorrelationsCalculator,
+    _cluster_correlations_cell_packed_raw,
     _cluster_correlations_flip_packed,
     _pack_cluster_interactions,
     cluster_correlations_flip,
@@ -22,6 +23,7 @@ from clusterx.correlations import (
 )
 from clusterx.estimators.estimator_factory import EstimatorFactory
 from clusterx.estimators.affine import affine_parameters
+from clusterx.estimators.polynomial import evaluate_polynomial, polynomial_parameters
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
@@ -321,21 +323,61 @@ class Model:
                    print("INFO: correlations calculator computed orbits from scrach.")
                    model.serialize(filepath="myfilepath.pickle")
         """
+        return self.predict_on_correlations(self.get_correlations(structure, reduce_structure, flag=flag))
+
+    def get_correlations(self, structure: Structure, reduce_structure: bool = False, flag=None):
+        """Return global correlations, optionally streaming through reduced neighborhoods.
+
+        The reduced structure must first be initialized with init_reduced_model
+        and Structure.init_reduced_structure, as in reduced Monte Carlo. This
+        path uses model-sized accumulators and only reduced-cell orbit geometry,
+        independent of the full supercell size. It works for nonlinear models
+        because correlations are accumulated before applying the estimator.
+        """
         if not reduce_structure:
-            corrs = self.corrc.get_cluster_correlations(structure, flag=flag)
-            return self.predict_on_correlations(corrs)
-        else:
-            affine = self._get_affine_parameters(len(self.corrc.get_cpool()))
-            intercept = affine[1] if affine is not None else self.intercept
-            prediction = self.predict_partial(structure, 0, True)
-            for i in range(1, len(structure.sigmas)):
-                prediction += self.predict_partial(structure, i, True) - intercept
-            return prediction
+            return self.corrc.get_cluster_correlations(structure, flag=flag)
+
+        local, _ = structure.get_reduced_structure(0)
+        local_cell = local.get_supercell()
+        if len(local.sigmas) != len(local_cell):
+            raise ValueError(
+                "Reduced correlation grids require odd repeat lengths. "
+                "Initialize them with Model.init_reduced_model and Structure.init_reduced_structure."
+            )
+        self._ensure_interaction_dict(local_cell)
+        if "_packed_interactions" not in self.__dict__:
+            self._packed_interactions = _pack_cluster_interactions(self._site_clusters, self._cluster_orbits_array)
+        packed = self._packed_interactions
+        correlations = np.zeros(len(self._multiplicities))
+        n_parent_sites = len(structure.get_parent_lattice())
+        for index in range(0, len(structure.sigmas), n_parent_sites):
+            local, first_site = structure.get_reduced_structure(index)
+            if packed is not None:
+                correlations += _cluster_correlations_cell_packed_raw(
+                    local.sigmas, local.ems, first_site, n_parent_sites, self.corrc.basis_set_values,
+                    *packed, self._cluster_indices, len(correlations),
+                )
+            else:
+                for site in range(first_site, first_site + n_parent_sites):
+                    correlations += cluster_correlations_partial(
+                        local, site, self._site_clusters, self._cluster_orbits_array,
+                        self._cluster_indices, self.corrc.basis_set_values, self._multiplicities,
+                        normalize=False,
+                    )
+        nonempty = self._n_body_list != 0
+        # Summing over sites counts every cluster once per member. Undo this,
+        # normalize the orbit sums, and rescale from the reduced to the full cell.
+        correlations[nonempty] /= (
+            self._n_body_list[nonempty] * self._multiplicities[nonempty] * self.scell_factor
+        )
+        correlations[~nonempty] = 1.0  # Empty-cluster correlations are constant.
+        return np.around(correlations, decimals=12)
 
     def predict_partial(self, structure: Structure, index: int, divide_n_body: bool = False):
         """Predict property using only the correlations around site `index`.
         This uses all correlations of all clusters that include this site.
         Note: only works for diagonal super cells.
+        It is an additive energy contribution only for affine models.
         """
         _structure, _index = structure.get_reduced_structure(index)
         _scell = _structure.get_supercell()
@@ -482,6 +524,8 @@ class Model:
         """Predict property change by flipping a species.
 
         Structure object remains unchanged
+        This direct difference path assumes an affine model. Nonlinear Monte
+        Carlo tracks the global correlation state with nonlinear=True instead.
 
         **Parameters:**
 
@@ -515,11 +559,16 @@ class Model:
         self.__dict__.pop("_affine_sources", None)
         self.__dict__.pop("_affine_n_features", None)
         self.__dict__.pop("_affine_parameters", None)
+        self.__dict__.pop("_polynomial_sources", None)
+        self.__dict__.pop("_polynomial_n_features", None)
+        self.__dict__.pop("_polynomial_parameters", None)
+        self.__dict__.pop("_polynomial_scalar_output", None)
 
     def __getstate__(self):
         # Derived caches must not outlive the fitted state or geometry they describe.
         return {key: value for key, value in self.__dict__.items()
-                if not key.startswith("_affine_") and key not in ("_packed_interactions", "_interaction_scell_key")}
+                if not key.startswith(("_affine_", "_polynomial_"))
+                and key not in ("_packed_interactions", "_interaction_scell_key")}
 
     def __setstate__(self, state):
         self.__dict__.update(state)
@@ -546,12 +595,58 @@ class Model:
             self.intercept = getattr(final, "intercept_", None)
         return self._affine_parameters
 
+    def _get_polynomial_parameters(self, n_features):
+        estimator = self.estimator
+        if estimator is None:
+            return None
+        steps = estimator.steps if type(estimator) is Pipeline else [("regressor", estimator)]
+
+        def cache_source(value):
+            if value is None or np.isscalar(value):
+                return ("value", value)
+            return value
+
+        sources = [estimator]
+        for _, step in steps:
+            sources.append(step)
+            # The transformer object is tracked; powers are generated only for
+            # selected features when the compiled cache is built.
+            for attribute in ("coef_", "intercept_", "mean_", "scale_"):
+                value = getattr(step, attribute, None)
+                if value is not None:
+                    sources.append(cache_source(value))
+            fitted_selector = getattr(step, "estimator_", None)
+            if fitted_selector is not None:
+                sources.extend((fitted_selector, cache_source(getattr(fitted_selector, "coef_", None))))
+        sources = tuple(sources)
+        previous = getattr(self, "_polynomial_sources", ())
+        source_changed = [
+            index for index, (a, b) in enumerate(zip(sources, previous))
+            if (a != b if isinstance(a, tuple) and a[:1] == ("value",) else a is not b)
+        ]
+        if (n_features != getattr(self, "_polynomial_n_features", None) or len(sources) != len(previous)
+                or source_changed):
+            result = polynomial_parameters(estimator, n_features)
+            if result is None:
+                self._polynomial_parameters = None
+                self._polynomial_scalar_output = None
+            else:
+                self._polynomial_parameters, self._polynomial_scalar_output = result
+            self._polynomial_sources = sources
+            self._polynomial_n_features = n_features
+        if self._polynomial_parameters is None:
+            return None
+        return self._polynomial_parameters, self._polynomial_scalar_output
+
     def predict_on_correlations(self, correlations: np.array):
         """Using calculated correlations, return a prediction."""
         if self.estimator is not None:
             affine = self._get_affine_parameters(len(correlations))
             if affine is not None:
                 return affine[0] @ correlations + affine[1]
+            polynomial = self._get_polynomial_parameters(len(correlations))
+            if polynomial is not None:
+                return evaluate_polynomial(polynomial[0], correlations, polynomial[1])
             return self.estimator.predict(correlations.reshape(1, -1))[0]
         else:
             return np.dot(self.ecis, correlations)
@@ -564,6 +659,9 @@ class Model:
         reduce_structure: bool = False,
     ):
         """Predict property difference with the optimal cluster expansion model.
+
+        This direct difference path assumes an affine model; use the nonlinear
+        Monte Carlo path for models nonlinear in their correlations.
 
         **Parameters:**
 

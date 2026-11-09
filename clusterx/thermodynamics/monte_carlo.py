@@ -232,8 +232,11 @@ class MonteCarlo:
 
         ``nonlinear``: boolean (default: False)
             Whether or not the model is nonlinear with respect to cluster
-            correlations. If True, total cluster correlations have to be summed,
-            if False, model can be applied to difference of correlations.
+            correlations. If True, cache global correlations and the current
+            model energy, evaluating the trial correlations once per proposal.
+            Compatible with reduce_structure. Recognized affine models retain
+            their direct energy-difference path even when this is True. If
+            False, use the direct linear energy-difference path.
 
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the MonteCarloTrajectory object that is initialized in this method.
@@ -242,8 +245,6 @@ class MonteCarlo:
             Trajectory containing the complete information of the sampling trajectory.
 
         """
-        if nonlinear and self._reduce_structure:
-            raise ValueError("Combination of nonlinear and reduce_structure currently not supported.")
         scale_factor = scale_factor if scale_factor is not None else [self._scell.get_index()]
 
         if len(np.shape(temperature)) == 0:
@@ -255,19 +256,35 @@ class MonteCarlo:
         self.initialize_structure(initial_decoration, self._nsubs)
         structure = self.structure
         sigmas = structure.get_sigmas()
+        use_correlations = nonlinear and self._predict_swap
+        if use_correlations and (self._emodel.estimator is None or self._emodel._get_affine_parameters(
+                len(self._emodel.corrc.get_cpool())) is not None):
+            use_correlations = False
 
         if self._reduce_structure:
-            e_last = np.float64(0.0)  # undefined, we only care about energy differences
             self._emodel.init_reduced_model(structure)
             self._emodel._init_interaction_dict(self._emodel.scell_reduced)
             structure.init_reduced_structure(self._emodel.scell_reduced)
-        else:
-            e_last = self._emodel.predict(structure)
-            e_last = e_last if len(e_last.shape) == 0 else e_last[self._energy_prediction_index]
+            if self._predict_swap:
+                self._check_reduced_local_geometry()
+        elif not use_correlations:
+            e_last = self._energy_value(self._emodel.predict(structure))
             self._emodel._init_interaction_dict(self._scell)
 
-        if nonlinear:
-            correlations = self._emodel.corrc.get_cluster_correlations(structure)
+        if use_correlations:
+            correlations = self._emodel.get_correlations(structure, reduce_structure=self._reduce_structure)
+            # Estimator transforms may operate in place; keep MC's state private.
+            current_energy = self._energy_value(self._emodel.predict_on_correlations(correlations.copy()))
+            e_last = current_energy
+        elif not self._predict_swap:
+            # Keep an absolute prediction separately from reduced trajectories,
+            # whose recorded energies remain relative to their initial state.
+            if self._reduce_structure:
+                current_energy = self._energy_value(self._emodel.predict(structure, reduce_structure=True))
+            else:
+                current_energy = e_last
+        if self._reduce_structure:
+            e_last = np.float64(0.0)
 
         if self._save_atoms_every > 0:
             atoms_traj = Trajectory(self._atoms_filename, mode="w")
@@ -322,11 +339,13 @@ class MonteCarlo:
 
             de = 0.0
             if self._predict_swap:
-                if nonlinear:
+                if use_correlations:
                     correlations_diff = np.zeros_like(correlations)
                 for i, new_sigma, old_sigma, site_type in flip_tuples:
-                    if nonlinear:
-                        correlations_diff += self._emodel.predict_correlations_diff(structure, i, old_sigma, new_sigma)
+                    if use_correlations:
+                        correlations_diff += self._emodel.predict_correlations_diff(
+                            structure, i, old_sigma, new_sigma, reduce_structure=self._reduce_structure,
+                        )
                     else:
                         de += self._emodel.predict_flip(
                             structure=structure,
@@ -336,14 +355,19 @@ class MonteCarlo:
                             reduce_structure=self._reduce_structure,
                         )
                     structure.flip(i, old_sigma, new_sigma, site_type)
-                if nonlinear:
-                    e_old = self._emodel.predict_on_correlations(correlations)
-                    e_new = self._emodel.predict_on_correlations(correlations + correlations_diff)
-                    de = e_new - e_old
+                if use_correlations:
+                    trial_correlations = correlations + correlations_diff
+                    trial_energy = self._energy_value(
+                        self._emodel.predict_on_correlations(trial_correlations.copy())
+                    )
+                    de = trial_energy - current_energy
             else:
                 for i, new_sigma, old_sigma, site_type in flip_tuples:
                     structure.flip(i, old_sigma, new_sigma, site_type)
-                de = self._emodel.predict(structure) - e_last
+                trial_energy = self._energy_value(
+                    self._emodel.predict(structure, reduce_structure=self._reduce_structure)
+                )
+                de = trial_energy - current_energy
 
             dmu = 0.0  # sum up chemical potential change
             if self._ensemble == "semigrand-canonical":
@@ -365,8 +389,10 @@ class MonteCarlo:
 
             if accept_step:
                 e_last += de
-                if nonlinear and self._predict_swap:
-                    correlations += correlations_diff
+                if use_correlations:
+                    correlations = trial_correlations
+                if use_correlations or not self._predict_swap:
+                    current_energy = trial_energy
 
                 key_value_pairs = {}
                 for m, mo in enumerate(self._models):
@@ -401,6 +427,35 @@ class MonteCarlo:
             traj.serialize()
 
         return traj
+
+    def _energy_value(self, prediction):
+        prediction = np.asarray(prediction)
+        return prediction[()] if prediction.ndim == 0 else prediction[self._energy_prediction_index]
+
+    def _check_reduced_local_geometry(self):
+        """Reject local updates that would miss other images of the flipped atom."""
+        full = tuple(self._scell.get_transformation().diagonal())
+        reduced = tuple(self._emodel.scell_reduced.get_transformation().diagonal())
+        if all(n >= r for n, r in zip(full, reduced)):
+            return
+        n_parent_sites = len(self._emodel.get_parent_lattice())
+        first_site = ((reduced[0] // 2 * reduced[1] + reduced[1] // 2) * reduced[2] + reduced[2] // 2) * n_parent_sites
+        # Only clusters touching the central parent cell enter local updates.
+        # Boundary clusters can wrap around the reduced box rather than the full one.
+        for center in range(first_site, first_site + n_parent_sites):
+            for cluster_id in self._emodel._site_clusters[center]:
+                seen = set()
+                for index in self._emodel._cluster_orbits_array[cluster_id].get_idxs():
+                    cell, site = divmod(index, n_parent_sites)
+                    x, yz = divmod(cell, reduced[1] * reduced[2])
+                    y, z = divmod(yz, reduced[2])
+                    wrapped = (x % full[0], y % full[1], z % full[2], site)
+                    if wrapped in seen:
+                        raise ValueError(
+                            "A cluster wraps onto the same atom more than once in this supercell. "
+                            "Increase its periodic repeat lengths to use reduced local MC updates."
+                        )
+                    seen.add(wrapped)
 
     def initialize_structure(self, initial_decoration: list[int] | None = None, nsubs: dict | None = None):
         if initial_decoration is not None:

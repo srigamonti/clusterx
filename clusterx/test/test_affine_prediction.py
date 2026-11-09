@@ -119,8 +119,101 @@ def test_unsupported_pipeline_uses_reference_prediction(transformer, regressor, 
 
     monkeypatch.setattr(pipeline, "predict", reference)
     np.testing.assert_allclose([model.predict_on_correlations(row) for row in x[:2]], expected)
-    assert len(calls) == 2
+    if type(transformer) is PolynomialFeatures and transformer.degree == 2:
+        assert len(calls) == 0
+        assert model._get_polynomial_parameters(3) is not None
+    else:
+        assert len(calls) == 2
+        assert model._get_polynomial_parameters(3) is None
     assert model._get_affine_parameters(3) is None
+
+
+@pytest.mark.parametrize("degree", [2, 3, (2, 3)])
+@pytest.mark.parametrize("multi_output", [False, True])
+@pytest.mark.parametrize("standardize_position", ["before", "after"])
+def test_compiled_polynomial_pipeline_matches_sklearn(degree, multi_output, standardize_position, monkeypatch):
+    x = np.random.default_rng(131).normal(loc=[2.0, -3.0, 0.5], size=(100, 3))
+    y = 1.7 + x[:, 0] ** 2 - 0.4 * x[:, 1] ** 3 + x[:, 0] * x[:, 2]
+    if multi_output:
+        y = np.column_stack([y, -2 * y + 0.3])
+    steps = [("expand", ColumnExpander(5, [4, 0, 2]))]
+    if standardize_position == "before":
+        steps.append(("scale_input", StandardScaler()))
+    steps.append(("poly", PolynomialFeatures(degree=degree, include_bias=True, order="F")))
+    if standardize_position == "after":
+        steps.append(("scale_features", StandardScaler()))
+    steps.extend([
+        ("select", SelectFromModel(LinearRegression(), threshold=1e-8)),
+        ("regressor", Ridge(alpha=0.01)),
+    ])
+    pipeline = Pipeline(steps).fit(x, y)
+    model = Model(estimator=pipeline)
+    expected = pipeline.predict(x[:8])
+    def reference(values):
+        pytest.fail("Supported polynomial pipeline unexpectedly used sklearn prediction")
+
+    monkeypatch.setattr(pipeline, "predict", reference)
+    actual = np.asarray([model.predict_on_correlations(row) for row in x[:8]])
+    cached_parameters = model._polynomial_parameters
+    for row in x[8:16]:
+        model.predict_on_correlations(row)
+    assert model._polynomial_parameters is cached_parameters
+    assert sum(array.nbytes for array in model._polynomial_parameters) <= 16 * 1024 * 1024
+    monkeypatch.undo()
+    np.testing.assert_allclose(actual, expected, atol=3e-12, rtol=3e-12)
+    assert model._get_polynomial_parameters(3) is not None
+    restored = pickle.loads(pickle.dumps(model))
+    assert "_polynomial_parameters" not in restored.__dict__
+    np.testing.assert_allclose(
+        [restored.predict_on_correlations(row) for row in x[:8]], expected, atol=3e-12, rtol=3e-12,
+    )
+
+
+def test_compiled_polynomial_cache_refit_and_explicit_invalidation():
+    x = np.random.default_rng(141).normal(size=(80, 3))
+    y = x[:, 0] ** 2 - 0.5 * x[:, 1] + 0.2
+    pipeline = Pipeline([
+        ("poly", PolynomialFeatures(degree=2)),
+        ("scale", StandardScaler()),
+        ("regressor", Ridge(alpha=0.01)),
+    ]).fit(x, y)
+    model = Model(estimator=pipeline)
+    model.predict_on_correlations(x[0])
+    cached = model._polynomial_parameters
+
+    pipeline.fit(x, y + 2.0)
+    expected = pipeline.predict(x[:5])
+    actual = np.asarray([model.predict_on_correlations(row) for row in x[:5]])
+    assert model._polynomial_parameters is not cached
+    np.testing.assert_allclose(actual, expected, atol=2e-12, rtol=2e-12)
+
+
+def test_compiled_polynomial_uses_selected_terms_without_dense_powers():
+    rng = np.random.default_rng(151)
+    x = rng.normal(size=(12, 29))
+    y = 1.0 + x[:, 0] ** 2 + 0.2 * x[:, 1] * x[:, 2]
+    pipeline = Pipeline([
+        ("expand", ColumnExpander(60, list(range(29)))),
+        ("poly", PolynomialFeatures(degree=3, include_bias=False)),
+        ("scale", StandardScaler()),
+        ("select", SelectFromModel(Ridge(alpha=0.01), threshold=-np.inf, max_features=53)),
+        ("regressor", Ridge(alpha=0.01)),
+    ]).fit(x, y)
+    polynomial = pipeline.named_steps["poly"]
+    assert polynomial.n_output_features_ == 39_710
+    assert pipeline.named_steps["select"].get_support().sum() == 53
+    model = Model(estimator=pipeline)
+    expected = pipeline.predict(x[:4])
+    actual = np.asarray([model.predict_on_correlations(row) for row in x[:4]])
+    np.testing.assert_allclose(actual, expected, atol=2e-12, rtol=2e-12)
+    assert model._get_polynomial_parameters(x.shape[1]) is not None
+    assert sum(array.nbytes for array in model._polynomial_parameters) < 16 * 1024 * 1024
+
+    pipeline[-1].coef_[0] += 0.1
+    model.invalidate_prediction_cache()
+    expected = pipeline.predict(x[:5])
+    actual = np.asarray([model.predict_on_correlations(row) for row in x[:5]])
+    np.testing.assert_allclose(actual, expected, atol=2e-12, rtol=2e-12)
 
 
 def test_cache_reuse_refit_replacement_and_explicit_invalidation(monkeypatch):

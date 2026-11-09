@@ -153,3 +153,41 @@ calculation. Unreduced calculations do not create a packed cache. The cache
 is discarded on MC reset or rebuilding interactions and is rebuilt after
 loading a saved model. Switching supercell transformations rebuilds interactions
 automatically. Cluster order, normalization, and rounding are preserved.
+
+Nonlinear Monte Carlo
+---------------------
+
+For models nonlinear in their correlations, including polynomial degrees two
+and higher, use ``predict_swap=True`` and pass ``nonlinear=True`` to
+``MonteCarlo.metropolis``. This also supports ``reduce_structure=True``.
+Recognized affine models keep their direct energy-difference path even when
+``nonlinear=True`` is requested.
+
+The nonlinear path initializes the global correlation vector and caches its
+model prediction. Each proposal adds the local correlation changes and evaluates
+the trial vector once. Recognized polynomial pipelines use a compiled sparse
+monomial evaluator, with fitted expansion, feature selection, scaling, bias,
+and feature order folded into its cached parameters. Other supported linear
+transformations retain the affine fast path; unsupported pipelines use sklearn's
+fitted predictor. Only accepted moves replace the cached correlations and
+prediction. The compiled cache is limited to 16 MiB and is rebuilt after loading
+a model or invalidating fitted prediction parameters. No degree-specific dense
+coefficient tensors are constructed.
+
+Reduced initialization streams one parent-cell neighborhood at a time, sums
+correlation contributions, and normalizes once before evaluating the model.
+It uses the same capped reduced-cell geometry cache as local moves. Added MC
+workspace consists of correlation vectors and reduced neighborhoods, independent
+of the full atom count for a fixed model. The fitted estimator still has its
+own workspace requirements, which depend on feature count and polynomial degree.
+Reduced trajectories continue to report energies relative to the initial state;
+the cached absolute prediction is kept separately.
+
+Reduced local updates require that a cluster does not wrap onto the same atom
+more than once. Such small periodic cells raise an error requesting larger
+periodic repeat lengths; the local flip calculation cannot treat these images
+as independently occupied sites.
+
+``Model.get_correlations(structure, reduce_structure=True)`` and
+``Model.predict(structure, reduce_structure=True)`` use this streaming calculation
+after initializing the reduced model and structure, as Monte Carlo does.
