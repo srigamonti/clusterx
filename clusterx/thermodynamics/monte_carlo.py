@@ -6,12 +6,14 @@
 import json
 from copy import deepcopy
 import math
+import os
+import operator
 import random
 
 from tqdm import tqdm
 import numpy as np
 from ase.cell import Cell
-from ase.io import Trajectory
+from ase.io import Trajectory, iread, write
 
 from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
@@ -113,6 +115,11 @@ class MonteCarlo:
         seed value for random number generators. For reproducible results,
         pass integer seed, otherwise seed=None
 
+    ``resume_from``: string or path-like (default: None)
+        Start from the final complete frame of an XYZ/extxyz trajectory. The
+        physical configuration is resumed with the random streams initialized
+        from ``seed``; the original random stream is not restored.
+
     """
 
     def __init__(
@@ -131,6 +138,7 @@ class MonteCarlo:
         atoms_filename: str = "metropolis.traj",
         filename: str = "trajectory.json",
         seed: int | None = None,
+        resume_from: str | os.PathLike | None = None,
     ):
         if (ensemble == "semigrand-canonical") and (chemical_potentials is None):
             raise ValueError("`chemical_potentials` have to be given when ensemble is 'semigrand-canonical")
@@ -147,6 +155,10 @@ class MonteCarlo:
         self._reduce_structure = reduce_structure
         self._save_atoms_every = save_atoms_every
         self._atoms_filename = atoms_filename
+        self._resume_from = resume_from
+        self._resume_source = os.path.abspath(os.fspath(resume_from)) if resume_from is not None else None
+        self._chain_state = None
+        self._pending_initial_decoration = None
         # Use two rngs, numpy.rng produces MC acceptance probability,
         # random.Random produces hashable values for random flip sites
         # SFC64 should be fastest bit generator in numpy at time of writing
@@ -174,6 +186,8 @@ class MonteCarlo:
         serialize: bool = False,
         filename: str = "trajectory.json",
         nonlinear: bool = False,
+        max_steps_per_batch: int = 100_000,
+        continue_chain: bool = False,
         **kwargs,
     ):
         r"""Perform Monte-Carlo Metropolis simulation
@@ -238,6 +252,16 @@ class MonteCarlo:
             their direct energy-difference path even when this is True. If
             False, use the direct linear energy-difference path.
 
+        ``max_steps_per_batch``: integer (default: 100000)
+            Maximum number of proposal temperatures held in a temporary array at
+            once. The Markov chain and random-number streams continue across these
+            internal batches.
+
+        ``continue_chain``: boolean (default: False)
+            Continue the configuration and cached nonlinear correlation state from
+            the previous call. The default preserves the historical behavior of
+            starting a new configuration for each call.
+
         ``**kwargs``: keyworded argument list, arbitrary length
             These arguments are added to the MonteCarloTrajectory object that is initialized in this method.
 
@@ -247,13 +271,33 @@ class MonteCarlo:
         """
         scale_factor = scale_factor if scale_factor is not None else [self._scell.get_index()]
 
-        if len(np.shape(temperature)) == 0:
-            beta = np.ones((no_of_sampling_steps,), dtype=float) / (boltzmann_constant * temperature)
-        else:
-            beta = 1 / (boltzmann_constant * temperature)
+        try:
+            max_steps_per_batch = operator.index(max_steps_per_batch)
+        except TypeError as exc:
+            raise ValueError("max_steps_per_batch must be a positive integer") from exc
+        if max_steps_per_batch < 1:
+            raise ValueError("max_steps_per_batch must be a positive integer")
+        temperature_array = None if np.ndim(temperature) == 0 else temperature
+        if temperature_array is not None and len(temperature_array) != no_of_sampling_steps:
+            raise ValueError("temperature must be a scalar or have one value per sampling step")
+        if np.ndim(temperature) == 0 and (not np.isfinite(temperature) or temperature <= 0):
+            raise ValueError("temperature must be finite and positive")
         scale_factor_product = np.prod(scale_factor)
 
-        self.initialize_structure(initial_decoration, self._nsubs)
+        continuing = continue_chain and self._chain_state is not None and initial_decoration is None
+        resume_frame = None
+        if not continuing:
+            if initial_decoration is None and self._pending_initial_decoration is not None:
+                initial_decoration = self._pending_initial_decoration
+                self._pending_initial_decoration = None
+            if self._resume_from is not None and initial_decoration is None:
+                resume_frame = self._read_resume_frame(self._resume_from)
+                initial_decoration = resume_frame.numbers
+                self._validate_resume_frame(resume_frame)
+                self._resume_from = None
+            elif self._resume_from is not None:
+                raise ValueError("Specify either resume_from or initial_decoration, not both")
+            self.initialize_structure(initial_decoration, self._nsubs)
         structure = self.structure
         sigmas = structure.get_sigmas()
         use_correlations = nonlinear and self._predict_swap
@@ -261,22 +305,30 @@ class MonteCarlo:
                 len(self._emodel.corrc.get_cpool())) is not None):
             use_correlations = False
 
-        if self._reduce_structure:
+        if continuing:
+            use_correlations = self._chain_state["use_correlations"]
+            correlations = self._chain_state.get("correlations")
+            current_energy = self._chain_state["current_energy"]
+            e_last = current_energy
+        elif self._reduce_structure:
             self._emodel.init_reduced_model(structure)
             self._emodel._init_interaction_dict(self._emodel.scell_reduced)
             structure.init_reduced_structure(self._emodel.scell_reduced)
+            if not use_correlations:
+                current_energy = 0.0
             if self._predict_swap:
                 self._check_reduced_local_geometry()
         elif not use_correlations:
             e_last = self._energy_value(self._emodel.predict(structure))
+            current_energy = e_last
             self._emodel._init_interaction_dict(self._scell)
 
-        if use_correlations:
+        if use_correlations and not continuing:
             correlations = self._emodel.get_correlations(structure, reduce_structure=self._reduce_structure)
             # Estimator transforms may operate in place; keep MC's state private.
             current_energy = self._energy_value(self._emodel.predict_on_correlations(correlations.copy()))
             e_last = current_energy
-        elif not self._predict_swap:
+        elif not continuing and not self._predict_swap:
             # Keep an absolute prediction separately from reduced trajectories,
             # whose recorded energies remain relative to their initial state.
             if self._reduce_structure:
@@ -287,8 +339,20 @@ class MonteCarlo:
             e_last = np.float64(0.0)
 
         if self._save_atoms_every > 0:
-            atoms_traj = Trajectory(self._atoms_filename, mode="w")
-            atoms_traj.write(structure.get_atoms(ignore_observer_atoms=True))
+            if self._atoms_filename.endswith((".xyz", ".extxyz")):
+                atoms_traj = self._atoms_filename
+                same_resume_file = (
+                    resume_frame is not None
+                    and self._resume_source is not None
+                    and os.path.abspath(os.fspath(self._atoms_filename)) == self._resume_source
+                )
+                if not same_resume_file:
+                    append = continuing or resume_frame is not None
+                    write(atoms_traj, structure.get_atoms(), format="extxyz", append=append)
+            else:
+                mode = "a" if continuing or resume_frame is not None else "w"
+                atoms_traj = Trajectory(self._atoms_filename, mode=mode)
+                atoms_traj.write(structure.get_atoms(ignore_observer_atoms=True))
 
         traj = MonteCarloTrajectory(
             self._scell,
@@ -309,7 +373,7 @@ class MonteCarlo:
             energy=e_last,
             indices_list=[],
             new_sigmas=[],
-            sigmas=sigmas,
+            sigmas=sigmas.copy(),
             key_value_pairs=key_value_pairs,
         )
 
@@ -318,9 +382,17 @@ class MonteCarlo:
             total=no_of_sampling_steps,
             desc="MMC sim.",
         )
-        rave = RunningAverage(1000)  # keep track of acceptance rate
-
+        rave = self._chain_state["running_average"] if continuing else RunningAverage(1000)
+        beta_scale = self._chain_state["beta_scale"] if continuing else 1.0
+        global_step_offset = self._chain_state["global_step"] if continuing else 0
+        beta_chunks = iter(self._iter_beta_chunks(
+            no_of_sampling_steps, temperature, temperature_array, boltzmann_constant, max_steps_per_batch
+        ))
+        beta_chunk_start, beta_chunk = next(beta_chunks, (0, np.empty(0)))
         for step in progress:
+            beta_index = step - 1
+            if beta_index >= beta_chunk_start + len(beta_chunk):
+                beta_chunk_start, beta_chunk = next(beta_chunks)
             flip_tuples = []  # store tuples with (index, new_sigma, old_sigma, site_type)
 
             if self._ensemble == "canonical":
@@ -382,7 +454,8 @@ class MonteCarlo:
 
             if de + dmu <= 0:
                 accept_step = True
-            elif self._rng_np.random() <= np.exp(-beta[step - 1] * (de * scale_factor_product + dmu)):
+            elif self._rng_np.random() <= np.exp(-beta_chunk[beta_index - beta_chunk_start]
+                                                 * beta_scale * (de * scale_factor_product + dmu)):
                 accept_step = True
             else:
                 accept_step = False
@@ -393,6 +466,8 @@ class MonteCarlo:
                     correlations = trial_correlations
                 if use_correlations or not self._predict_swap:
                     current_energy = trial_energy
+                elif not self._reduce_structure:
+                    current_energy += de
 
                 key_value_pairs = {}
                 for m, mo in enumerate(self._models):
@@ -412,12 +487,22 @@ class MonteCarlo:
 
             rate = rave.update_and_get_average(1.0 * accept_step)
             if target_rate is not None:
-                if step % 10 == 0 and step >= 1000:
-                    beta /= math.exp((target_rate - rate) / 10.0)
+                global_step = global_step_offset + step
+                if global_step % 10 == 0 and global_step >= 1000:
+                    beta_scale /= math.exp((target_rate - rate) / 10.0)
 
             if self._save_atoms_every > 0 and step % self._save_atoms_every == 0:
                 structure.set_arrays(sigmas)
-                atoms_traj.write(structure.get_atoms(ignore_observer_atoms=True), energy=de)
+                atoms = structure.get_atoms()
+                atoms.info["mc_step"] = global_step_offset + step
+                frame_temperature = temperature if temperature_array is None else temperature_array[step - 1]
+                atoms.info["temperature"] = float(frame_temperature)
+                if isinstance(atoms_traj, str):
+                    write(atoms_traj, atoms, format="extxyz", append=True)
+                else:
+                    atoms_traj.write(
+                        structure.get_atoms(ignore_observer_atoms=True), energy=de
+                    )
 
             if step % 1000 == 0 or no_of_sampling_steps < 1000:
                 # if updated too often, progress display might delay steps
@@ -426,7 +511,82 @@ class MonteCarlo:
         if serialize:
             traj.serialize()
 
+        self._chain_state = {
+            "use_correlations": use_correlations,
+            "correlations": correlations.copy() if use_correlations else None,
+            "current_energy": current_energy if "current_energy" in locals() else self._energy_value(
+                self._emodel.predict(structure, reduce_structure=self._reduce_structure)
+            ),
+            "running_average": rave,
+            "beta_scale": beta_scale,
+            "global_step": global_step_offset + no_of_sampling_steps,
+        }
+
         return traj
+
+    @staticmethod
+    def _iter_beta_chunks(no_steps, temperature, temperature_array, boltzmann_constant, batch_size):
+        """Yield proposal-temperature arrays whose length is bounded by batch_size."""
+        for start in range(0, no_steps, batch_size):
+            stop = min(start + batch_size, no_steps)
+            values = (np.full(stop - start, temperature, dtype=float) if temperature_array is None
+                      else np.asarray(temperature_array[start:stop], dtype=float))
+            if np.any(~np.isfinite(values)) or np.any(values <= 0):
+                raise ValueError("temperature values must be finite and positive")
+            yield start, 1.0 / (boltzmann_constant * values)
+
+    def reset_chain(self, initial_decoration=None, seed=None, resume_from=None):
+        """Reset the Markov chain, optionally selecting a new start or XYZ frame."""
+        self._chain_state = None
+        self._resume_from = resume_from
+        self._resume_source = os.path.abspath(os.fspath(resume_from)) if resume_from is not None else None
+        self._pending_initial_decoration = (
+            list(initial_decoration) if initial_decoration is not None else None
+        )
+        self._emodel.reset_mc(mc=True)
+        self._rng_np = np.random.Generator(np.random.SFC64(seed))
+        self._rng_std.seed(seed)
+
+    @staticmethod
+    def _read_resume_frame(filename):
+        """Read the final complete frame from an ASE-readable trajectory."""
+        last = None
+        try:
+            for frame in iread(filename, index=":"):
+                last = frame.copy()
+        except (OSError, ValueError, IndexError):
+            if last is None:
+                raise
+        if last is None:
+            raise ValueError(f"No complete XYZ frame found in {filename!r}")
+        return last
+
+    def _validate_resume_frame(self, atoms):
+        if self._emodel.get_parent_lattice() != self._scell.get_parent_lattice():
+            raise ValueError("Monte Carlo model parent lattice does not match the requested supercell")
+        if len(atoms) != len(self._scell):
+            raise ValueError("Resume frame site count does not match the Monte Carlo supercell")
+        if not np.allclose(atoms.cell.array, self._scell.get_cell().array, atol=1e-6, rtol=0):
+            raise ValueError("Resume frame cell does not match the Monte Carlo supercell")
+        if not np.array_equal(atoms.pbc, self._scell.get_pbc()):
+            raise ValueError("Resume frame periodicity does not match the Monte Carlo supercell")
+        if not np.array_equal(atoms.get_tags(), self._scell.get_tags()):
+            raise ValueError("Resume frame sublattice tags do not match the Monte Carlo supercell")
+        if not np.allclose(atoms.positions, self._scell.get_positions(), atol=1e-5, rtol=0):
+            raise ValueError("Resume frame positions or site ordering do not match the Monte Carlo supercell")
+        tmat = atoms.info.get("tmat")
+        if tmat is not None and not np.array_equal(np.asarray(tmat), self._scell.get_transformation()):
+            raise ValueError("Resume frame transformation does not match the Monte Carlo supercell")
+        # Structure validates that each loaded atomic number is allowed at its site.
+        Structure(self._scell, decoration=atoms.numbers, track_indices=True)
+        if self._ensemble == "canonical" and self._nsubs is not None:
+            structure = Structure(self._scell, decoration=atoms.numbers, track_indices=True)
+            conc = structure.get_fractional_concentrations()
+            nsites = structure.get_nsites_per_type()
+            composition = {key: [int(round(value * nsites[key])) for value in values[1:]]
+                           for key, values in conc.items()}
+            if not dict_compare(composition, self._nsubs):
+                raise ValueError("Resume frame composition does not match canonical nsubs")
 
     def _energy_value(self, prediction):
         prediction = np.asarray(prediction)
@@ -460,6 +620,8 @@ class MonteCarlo:
     def initialize_structure(self, initial_decoration: list[int] | None = None, nsubs: dict | None = None):
         if initial_decoration is not None:
             self.structure = Structure(self._scell, initial_decoration, track_indices=True)
+            if self._nsubs is None:
+                return
             conc = self.structure.get_fractional_concentrations()
             nsites = self.structure.get_nsites_per_type()
             check_dict = {}

@@ -183,6 +183,46 @@ own workspace requirements, which depend on feature count and polynomial degree.
 Reduced trajectories continue to report energies relative to the initial state;
 the cached absolute prediction is kept separately.
 
+Long proposal runs use bounded temporary temperature arrays by default. For
+example, run two million proposals in batches of 20,000 while retaining one
+continuous chain::
+
+    mc = MonteCarlo(model, scell, nsubs={0: [480]}, predict_swap=True, seed=42)
+    trajectory = mc.metropolis(
+        no_of_sampling_steps=2_000_000,
+        temperature=300,
+        max_steps_per_batch=20_000,
+        nonlinear=True,
+    )
+
+``max_steps_per_batch`` defaults to 100,000 and bounds only temporary
+per-proposal temperature storage; structure and nonlinear correlation state
+are retained across those internal batches. Use ``serialize=False`` (the
+default) and periodic XYZ checkpoints when the accepted-state trajectory itself
+must not grow with run length. To continue with a later temperature schedule,
+call ``metropolis(..., continue_chain=True)`` on the same object. This retains
+the configuration, random streams, nonlinear correlations, cached energy, and
+acceptance-rate adaptation. Call ``mc.reset_chain(seed=...)`` to start fresh.
+After changing or refitting the model, reset the chain before continuing so its
+cached energy uses the updated fitted model.
+
+To start from the final complete frame in an XYZ/extxyz file, pass
+``resume_from`` when constructing ``MonteCarlo``::
+
+    mc = MonteCarlo(
+        model, scell, nsubs={0: [480]}, predict_swap=True,
+        resume_from="previous-temperature.extxyz", seed=43,
+        save_atoms_every=10_000, atoms_filename="anneal.extxyz",
+    )
+    trajectory = mc.metropolis(500_000, temperature=250, nonlinear=True)
+
+Resume checks the cell, periodicity, ordered site positions, allowed species,
+and canonical composition before building the ``Structure``. It uses a new
+random stream initialized from ``seed``; XYZ does not contain enough state to
+reproduce the original proposal sequence exactly. New XYZ checkpoints include
+all sites and can be used for later resumes. Use ``reset_chain(resume_from=...)``
+to explicitly discard an in-memory chain and start from another saved frame.
+
 Reduced local updates require that a cluster does not wrap onto the same atom
 more than once. Such small periodic cells raise an error requesting larger
 periodic repeat lengths; the local flip calculation cannot treat these images
