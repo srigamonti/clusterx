@@ -323,6 +323,8 @@ def test_fixed_seed_mc_matches_pipeline_sampling(calculator, tmp_path):
         trajectory = mc.metropolis(
             no_of_sampling_steps=80, temperature=0.3, initial_decoration=initial.get_decoration(),
             serialize=True, filename=str(tmp_path / f"trajectory-{fast}.json"),
+            energy_factor=1.0,
+            boltzmann_constant=1.0,
         )
         np.testing.assert_array_equal(np.bincount(mc.structure.sigmas, minlength=2), [25, 24])
         sigmas = initial.sigmas.copy()

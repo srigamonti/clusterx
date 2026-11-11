@@ -1,7 +1,11 @@
 """Benchmark warmed affine MC prediction without modifying model artifacts.
 
 Run from an installed checkout, for example:
-python benchmarks/affine_prediction.py model.pickle --reference-model full_model.pickle
+python benchmarks/affine_prediction.py model.pickle --energy-factor 960 \
+    --temperature 600 --boltzmann-constant 8.617330337217213e-5
+
+The example assumes eV/atom predictions and a 960-atom supercell. Supply the
+conversion factor, temperature, and k_B appropriate to the actual model units.
 """
 
 import argparse
@@ -15,7 +19,6 @@ from time import perf_counter
 
 import numpy as np
 import sklearn
-from ase.units import kB
 from threadpoolctl import threadpool_info, threadpool_limits
 
 from clusterx.model import Model
@@ -24,15 +27,7 @@ from clusterx.super_cell import SuperCell
 from clusterx.thermodynamics.monte_carlo import MonteCarlo
 
 
-class ContinuingMonteCarlo(MonteCarlo):
-    """Preserve the warmed structure and its proposal index maps between batches."""
-
-    def initialize_structure(self, initial_decoration=None, nsubs=None):
-        if initial_decoration is not None or not hasattr(self, "structure"):
-            super().initialize_structure(initial_decoration, nsubs)
-
-
-def run_case(filepath, steps, warmup, fast, seed):
+def run_case(filepath, steps, warmup, fast, seed, energy_factor, temperature, boltzmann_constant):
     model = Model(filepath=filepath)
     model.corrc.pickle_file = None  # Keep warmed orbit caches in memory; never write back to study artifacts.
     scell = SuperCell(model.get_parent_lattice(), [4, 4, 3])
@@ -54,17 +49,19 @@ def run_case(filepath, steps, warmup, fast, seed):
             return pipeline.predict(delta.reshape(1, -1))[0] - offset
 
         model.predict_flip = reference_flip
-    mc = ContinuingMonteCarlo(model, scell, nsubs={int(tags[0]): [len(active) // 2]},
-                             predict_swap=True, reduce_structure=True, seed=seed)
-    options = dict(temperature=600.0, boltzmann_constant=kB, scale_factor=[float(len(scell))], serialize=False)
+    mc = MonteCarlo(model, scell, nsubs={int(tags[0]): [len(active) // 2]},
+                    predict_swap=True, reduce_structure=True, seed=seed)
+    options = dict(temperature=temperature, boltzmann_constant=boltzmann_constant,
+                   energy_factor=energy_factor, serialize=False)
     with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
         mc.metropolis(no_of_sampling_steps=warmup, **options)
         start = perf_counter()
-        mc.metropolis(no_of_sampling_steps=steps, **options)
+        mc.metropolis(no_of_sampling_steps=steps, continue_chain=True, **options)
         elapsed = perf_counter() - start
     np.testing.assert_array_equal(np.bincount(mc.structure.sigmas[active], minlength=2), [len(active) // 2] * 2)
     conditions = dict(atoms=len(scell), substitutional_sites=len(active), concentration=0.5,
-                      temperature_kelvin=600.0, predict_swap=True, reduce_structure=True)
+                      temperature=temperature, boltzmann_constant=boltzmann_constant,
+                      energy_factor=energy_factor, predict_swap=True, reduce_structure=True)
     return (elapsed, mc.structure.sigmas.copy(), deepcopy(mc._rng_np.bit_generator.state),
             mc._rng_std.getstate(), conditions)
 
@@ -111,6 +108,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("model", type=str)
     parser.add_argument("--reference-model", type=str)
+    parser.add_argument("--energy-factor", type=float, required=True)
+    parser.add_argument("--temperature", type=float, required=True)
+    parser.add_argument("--boltzmann-constant", type=float, required=True)
     parser.add_argument("--steps", type=int, default=5000)
     parser.add_argument("--warmup", type=int, default=100)
     parser.add_argument("--repeats", type=int, default=3)
@@ -121,8 +121,9 @@ def main():
         checks = numerical_checks(args.model, args.reference_model)
         baseline, fast = [], []
         for _ in range(args.repeats):
-            reference_run = run_case(args.model, args.steps, args.warmup, False, args.seed)
-            fast_run = run_case(args.model, args.steps, args.warmup, True, args.seed)
+            options = (args.energy_factor, args.temperature, args.boltzmann_constant)
+            reference_run = run_case(args.model, args.steps, args.warmup, False, args.seed, *options)
+            fast_run = run_case(args.model, args.steps, args.warmup, True, args.seed, *options)
             np.testing.assert_array_equal(reference_run[1], fast_run[1])
             np.testing.assert_equal(reference_run[2], fast_run[2])
             assert reference_run[3] == fast_run[3]

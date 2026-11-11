@@ -133,11 +133,14 @@ Monte Carlo run also clears the cache through ``reset_mc()``.
 
 For a reproducible comparison with the fitted pipeline, run::
 
-    python benchmarks/affine_prediction.py pruned_model.pickle --reference-model full_model.pickle
+    python benchmarks/affine_prediction.py pruned_model.pickle --reference-model full_model.pickle \
+        --energy-factor 960 --temperature 600 --boltzmann-constant 8.617330337217213e-5
 
 The benchmark uses one numerical-library thread, a half-filled 4x4x3 supercell,
 100 warm-up moves, and three timed repetitions of 5,000 proposed swaps. It
 checks prediction errors, composition, final occupations, and both MC RNG states.
+The example factor assumes that this supercell has 960 atoms and the model
+predicts eV/atom. The benchmark requires the physical inputs explicitly.
 
 With ``predict_swap=True``, local cluster calculations access occupations directly
 without allocating occupation and species-count arrays for each cluster.
@@ -153,6 +156,86 @@ calculation. Unreduced calculations do not create a packed cache. The cache
 is discarded on MC reset or rebuilding interactions and is rebuilt after
 loading a saved model. Switching supercell transformations rebuilds interactions
 automatically. Cluster order, normalization, and rounding are preserved.
+
+Monte Carlo energy and temperature units
+----------------------------------------
+
+Every maintained ``MonteCarlo.metropolis`` call requires three explicit inputs:
+``energy_factor``, ``temperature``, and ``boltzmann_constant``. The CLI also
+requires ``energy_factor`` and ``boltzmann_constant``; give temperature directly
+or in every schedule stage. There is no default physical unit system and no
+inferred normalization. The user is responsible for making all three consistent.
+
+For canonical sampling, CELL uses::
+
+    delta_E_total = energy_factor * (model_prediction_after - model_prediction_before)
+    acceptance_probability = min(1, exp(-delta_E_total / (boltzmann_constant * temperature)))
+
+``delta_E_total`` MUST be the TOTAL energy change of the entire simulation
+supercell, and MUST have the same energy unit as ``boltzmann_constant * temperature``.
+``energy_factor`` is one finite positive number, multiplying energy, never
+temperature or k_B. It must include both the conversion from the model's
+normalization to the whole supercell and any energy-unit conversion. Lists,
+reciprocal factors, and automatic atom-count selection are not supported.
+For temperature in K and k_B in eV/K:
+
+==========================  =====================================
+Model prediction            User-supplied energy_factor
+==========================  =====================================
+eV per atom                 N_atoms
+meV per atom                N_atoms / 1000
+eV per parent cell          N_parent_cells
+Total supercell energy, eV  1
+==========================  =====================================
+
+The relevant atom/site count is part of the USER'S model normalization. For
+example, energy per all lattice sites and energy per occupied atom differ when
+vacancies are present. CELL cannot determine the correct count from a fitted
+model, the property name, or the supercell geometry. Likewise, Kelvin and eV
+are examples, not assumptions: another consistent energy/temperature system
+is valid. Even an already extensive energy model needs an explicit factor 1.
+
+Example for a model known by the user to predict eV per atom::
+
+    from ase.units import kB  # eV/K
+
+    trajectory = mc.metropolis(
+        100_000, energy_factor=float(len(scell)),
+        temperature=300.0, boltzmann_constant=kB,
+    )
+
+For semigrand sampling, the existing convention adds the supplied
+chemical-potential COST change to ``delta_E_total``. These costs must already
+have the same total-energy unit as k_B*T and are not scaled by energy_factor.
+To represent the usual E - sum(mu*N), supply negative physical chemical
+potentials (including a reference value for pristine species). Both the
+unconditional acceptance check and exponential use this same combined change.
+
+``target_rate`` actively adapts the inverse temperature. With this option, the
+nominal temperature is not a fixed sampling temperature; use fixed-temperature
+production sampling without adaptation for fluctuation-based thermodynamics.
+
+Trajectory ``get_energies()`` and ``get_energy()`` return raw MODEL predictions.
+``get_model_total_energies()`` and ``get_model_total_energy()`` apply energy_factor.
+Reduced MC retains its relative initial-state energy zero in either accessor.
+The average property ``U`` is the scaled total supercell energy. The historical
+``C_p`` property computes TOTAL configurational heat capacity,
+``Var(E_total)/(k_B*T**2)``, in energy per temperature unit. It requires canonical
+fixed-temperature sampling without adaptation, contains no pressure/volume
+contribution, and is not per atom or divided by k_B. Normalize that result
+explicitly if needed.
+These averages require the accepted-move history from ``serialize=True``;
+endpoint-only XYZ output does not record all samples needed for fluctuations.
+
+The old ``scale_factor`` list, reciprocal ``energy_scale_factor``, and
+``energy_normalization`` shortcuts have been removed. Update input files and
+Python calls to one multiplicative ``energy_factor`` and explicit k_B and T.
+Removed or misspelled sampling arguments now fail instead of becoming metadata;
+use the explicit ``metadata`` dictionary for descriptive trajectory information.
+CE model pickle files are unaffected. New trajectory JSON stores energy_factor.
+When loading an older trajectory lacking that field, supply the factor explicitly
+to ``MonteCarloTrajectory(..., read=True, energy_factor=...)``; its old conversion
+settings are not inferred or migrated automatically.
 
 Nonlinear Monte Carlo
 ---------------------
@@ -190,7 +273,9 @@ continuous chain::
     mc = MonteCarlo(model, scell, nsubs={0: [480]}, predict_swap=True, seed=42)
     trajectory = mc.metropolis(
         no_of_sampling_steps=2_000_000,
+        energy_factor=float(len(scell)),  # This example assumes a model in eV/atom.
         temperature=300,
+        boltzmann_constant=8.617330337217213e-5,  # eV/K
         max_steps_per_batch=20_000,
         nonlinear=True,
     )
@@ -214,7 +299,10 @@ To start from the final complete frame in an XYZ/extxyz file, pass
         resume_from="previous-temperature.extxyz", seed=43,
         save_atoms_every=10_000, atoms_filename="anneal.extxyz",
     )
-    trajectory = mc.metropolis(500_000, temperature=250, nonlinear=True)
+    trajectory = mc.metropolis(
+        500_000, energy_factor=float(len(scell)),  # Model in eV/atom.
+        temperature=250, boltzmann_constant=8.617330337217213e-5, nonlinear=True,
+    )
 
 Resume checks the cell, periodicity, ordered site positions, allowed species,
 and canonical composition before building the ``Structure``. It uses a new
@@ -268,7 +356,7 @@ needed. Execute with ``cell --input_file anneal.toml``::
     reduce_structure = true
     nonlinear = true
     random_seed = 42
-    energy_normalization = "per_atom"
+    energy_factor = 1008000.0  # USER conversion: eV/atom -> total supercell eV
     boltzmann_constant = 8.617330337217213e-5  # ASE kB in eV/K
     max_steps_per_batch = 100000
     serialize = false
@@ -285,14 +373,10 @@ needed. Execute with ``cell --input_file anneal.toml``::
     temperature = 250.0
     n_mc_sweeps = 40
 
-The model's ``f_mix`` is in eV/atom. ``energy_normalization = "per_atom"``
-passes ``scale_factor=[len(scell)]`` to the Python API. Alternatives are
-``"total"`` (factor one) and ``"per_parent_cell"`` (number of parent cells).
-The existing ``energy_scale_factor`` convention is preserved: the CLI passes
-``scale_factor=[1 / energy_scale_factor]``, so a per-atom model requires the
-reciprocal of the total atom count. Set only one of ``energy_normalization``
-and ``energy_scale_factor``. If neither is set, the historical default is the
-number of parent cells, and ``boltzmann_constant`` still defaults to one.
+This particular model's ``f_mix`` is in eV/atom, so the explicitly supplied
+factor is the TOTAL atom count, 1,008,000, not the 604,800 substitutional sites.
+The temperature is in K and the supplied k_B is in eV/K. If model units,
+normalization, or supercell size change, the user must recalculate this factor.
 
 To continue from the final complete frame of ``anneal.xyz``, create a separate
 ``continue-anneal.toml`` and run ``cell --input_file continue-anneal.toml``::
@@ -312,7 +396,7 @@ To continue from the final complete frame of ``anneal.xyz``, create a separate
     nonlinear = true
     random_seed = 43
     resume_from = "anneal.xyz"
-    energy_normalization = "per_atom"
+    energy_factor = 1008000.0  # USER conversion: eV/atom -> total supercell eV
     boltzmann_constant = 8.617330337217213e-5
     max_steps_per_batch = 100000
     serialize = false
@@ -357,6 +441,8 @@ boundaries are written once. Checkpoint writes do not change the proposal
 sequence. Output metadata contains:
 
 - ``temperature``: the current stage temperature.
+- ``energy_factor`` and ``boltzmann_constant``: the user-supplied numerical
+  conversion and k_B, without an inferred unit label.
 - ``mc_step``: proposals since this fresh start or XYZ resume, beginning at zero.
 - ``mc_sweeps``: ``mc_step`` divided by ``mc_sweep_sites``, the total number of
   substitutional sites.
@@ -376,7 +462,8 @@ The continuation example uses a distinct output file to retain source results.
 When serializing a schedule, JSON histories use
 ``mc-trajectory_stage0001.json``, ``mc-trajectory_stage0002.json``, etc.;
 ``traj_filepath`` selects the base path, and each stage may override it.
-The older single-run filename behavior and MonteCarloLite tasks are unchanged.
+The single-run filename behavior is unchanged. MonteCarloLite sampling tasks
+are discontinued; use the maintained ``runmc`` task.
 
 The same options are available directly through plac. Structured values use
 JSON, and boolean options take explicit ``true``/``false`` values, for example::
@@ -384,6 +471,10 @@ JSON, and boolean options take explicit ``true``/``false`` values, for example::
     cell metropolis -task runmc -mofp model.pickle -plfp plat.json \
         -scsh '[8,1,1]' -nsubs '{"0":[4]}' \
         -runs '[{"temperature":300,"n_mc_sweeps":2},{"temperature":250,"n_mc_steps":100}]' \
-        -energy_norm per_atom -k_B 8.617330337217213e-5 \
+        -ef 8.0 -k_B 8.617330337217213e-5 \
         -serialize false -nonlinear true -batch 100000 \
         -endpoints true -atoms anneal.xyz -atoms_mode x -rs 42
+
+This direct-command example assumes a one-atom parent cell, hence eight atoms
+in that supercell, and model energies in eV/atom. Supply the factor appropriate
+to the actual model and supercell used.

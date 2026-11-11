@@ -31,7 +31,10 @@ def make_system():
 def test_batched_proposals_match_uninterrupted_and_bound_beta_arrays(monkeypatch):
     _, scell, model = make_system()
     expected_mc = MonteCarlo(model, scell, nsubs={0: [8]}, seed=102)
-    expected_mc.metropolis(120, temperature=0.8)
+    expected_mc.metropolis(120, temperature=0.8,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
     expected_sigmas = expected_mc.structure.get_sigmas().copy()
     expected_np_state = expected_mc._rng_np.bit_generator.state
     expected_py_state = random.getstate()
@@ -46,7 +49,10 @@ def test_batched_proposals_match_uninterrupted_and_bound_beta_arrays(monkeypatch
 
     monkeypatch.setattr(MonteCarlo, "_iter_beta_chunks", staticmethod(tracked))
     actual_mc = MonteCarlo(model, scell, nsubs={0: [8]}, seed=102)
-    actual_mc.metropolis(120, temperature=0.8, max_steps_per_batch=7)
+    actual_mc.metropolis(120, temperature=0.8, max_steps_per_batch=7,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
     np.testing.assert_array_equal(actual_mc.structure.get_sigmas(), expected_sigmas)
     actual_np_state = actual_mc._rng_np.bit_generator.state
     np.testing.assert_array_equal(actual_np_state["state"]["state"], expected_np_state["state"]["state"])
@@ -70,7 +76,10 @@ def test_xyz_resume_uses_last_frame_and_appends_checkpoints(tmp_path):
 
     mc = MonteCarlo(model, scell, nsubs={0: [8]}, seed=204, resume_from=str(path),
                     save_atoms_every=1, atoms_filename=str(path))
-    trajectory = mc.metropolis(5, temperature=0.1, serialize=True)
+    trajectory = mc.metropolis(5, temperature=0.1, serialize=True,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
     np.testing.assert_array_equal(trajectory._trajectory[0]["sigmas"], second_sigmas)
     assert len(mc.structure) == len(scell)
     assert mc.structure.get_fractional_concentrations()[0][0] == 0.5
@@ -92,7 +101,11 @@ def test_resume_rejects_a_frame_with_the_wrong_canonical_composition(tmp_path):
     write(path, structure.get_atoms(), format="extxyz")
     mc = MonteCarlo(model, scell, nsubs={0: [7]}, resume_from=str(path), seed=3)
     with pytest.raises(ValueError, match="composition"):
-        mc.metropolis(1)
+        mc.metropolis(1,
+            energy_factor=1.0,
+            boltzmann_constant=1.0,
+            temperature=1.0,
+        )
 
 
 def test_reset_chain_reuses_requested_initial_decoration():
@@ -101,7 +114,11 @@ def test_reset_chain_reuses_requested_initial_decoration():
     expected = np.array([0, 1] * 8)
     # Atomic numbers in this lattice are H=1 and N=7; use an explicit decoration.
     mc.reset_chain(initial_decoration=[7 if sigma else 1 for sigma in expected], seed=77)
-    mc.metropolis(0, continue_chain=True)
+    mc.metropolis(0, continue_chain=True,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+        temperature=1.0,
+    )
     np.testing.assert_array_equal(mc.structure.get_sigmas(), expected)
 
 
@@ -124,7 +141,10 @@ def test_nonlinear_continuation_keeps_correlation_cache(monkeypatch):
     whole = MonteCarlo(
         model, scell, nsubs={0: [8]}, predict_swap=True, reduce_structure=True, seed=305
     )
-    whole.metropolis(20, temperature=0.4, nonlinear=True, max_steps_per_batch=3)
+    whole.metropolis(20, temperature=0.4, nonlinear=True, max_steps_per_batch=3,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
     whole_sigmas = whole.structure.get_sigmas().copy()
     whole_rng = whole._rng_np.bit_generator.state
     assert calls == 1
@@ -133,8 +153,14 @@ def test_nonlinear_continuation_keeps_correlation_cache(monkeypatch):
     split = MonteCarlo(
         model, scell, nsubs={0: [8]}, predict_swap=True, reduce_structure=True, seed=305
     )
-    split.metropolis(8, temperature=0.4, nonlinear=True, max_steps_per_batch=3)
-    split.metropolis(12, temperature=0.4, nonlinear=True, continue_chain=True, max_steps_per_batch=5)
+    split.metropolis(8, temperature=0.4, nonlinear=True, max_steps_per_batch=3,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
+    split.metropolis(12, temperature=0.4, nonlinear=True, continue_chain=True, max_steps_per_batch=5,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
     np.testing.assert_array_equal(split.structure.get_sigmas(), whole_sigmas)
     split_rng = split._rng_np.bit_generator.state
     np.testing.assert_array_equal(split_rng["state"]["state"], whole_rng["state"]["state"])
@@ -144,13 +170,22 @@ def test_nonlinear_continuation_keeps_correlation_cache(monkeypatch):
 def test_target_rate_adaptation_continues_across_calls():
     _, scell, model = make_system()
     whole = MonteCarlo(model, scell, nsubs={0: [8]}, seed=409)
-    whole.metropolis(1_100, temperature=0.5, target_rate=0.35, max_steps_per_batch=113)
+    whole.metropolis(1_100, temperature=0.5, target_rate=0.35, max_steps_per_batch=113,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
     expected_sigmas = whole.structure.get_sigmas().copy()
     expected_rng = whole._rng_np.bit_generator.state
 
     split = MonteCarlo(model, scell, nsubs={0: [8]}, seed=409)
-    split.metropolis(550, temperature=0.5, target_rate=0.35, max_steps_per_batch=71)
-    split.metropolis(550, temperature=0.5, target_rate=0.35, continue_chain=True, max_steps_per_batch=29)
+    split.metropolis(550, temperature=0.5, target_rate=0.35, max_steps_per_batch=71,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
+    split.metropolis(550, temperature=0.5, target_rate=0.35, continue_chain=True, max_steps_per_batch=29,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
     np.testing.assert_array_equal(split.structure.get_sigmas(), expected_sigmas)
     np.testing.assert_array_equal(
         split._rng_np.bit_generator.state["state"]["state"], expected_rng["state"]["state"]

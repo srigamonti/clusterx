@@ -10,6 +10,7 @@ import math
 import os
 import operator
 import random
+from numbers import Real
 
 from tqdm import tqdm
 import numpy as np
@@ -20,6 +21,16 @@ from clusterx.super_cell import SuperCell
 from clusterx.structure import Structure
 from clusterx.model import Model
 from clusterx.utils import dict_compare, RunningAverage
+
+
+def _positive_scalar(value, name):
+    """Validate numerical inputs without inferring their physical units."""
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
+        raise ValueError(f"{name} must be supplied explicitly as one finite positive number")
+    value = float(value)
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be supplied explicitly as one finite positive number")
+    return value
 
 
 class MonteCarlo:
@@ -44,8 +55,9 @@ class MonteCarlo:
     **Parameters**:
 
     ``energy_model``: Model object
-        Model used for acceptance and rejection. Usually, the Model enables to
-        calculate the total energy of a structure.
+        Model used for acceptance and rejection. Its predictions retain the
+        fitted target's normalization and units. The user must convert them
+        to total supercell energy with metropolis's explicit energy_factor.
 
     ``scell``: SuperCell object
         Simulation cell in which the sampling is performed.
@@ -76,7 +88,10 @@ class MonteCarlo:
         Then, put ``sublattice_indices`` = [0].
 
     ``chemical_potentials``: dictionary (default: None)
-        Define the chemical potentials used for samplings in the grand canonical ensemble.
+        Define additive chemical-potential costs for semigrand sampling, in the
+        same energy unit as k_B*T. Supply one value per allowed species,
+        including pristine species (usually reference cost zero). To use
+        physical chemical potentials in E - sum(mu*N), supply their negatives.
 
         The format of the dictionary is as follows
 
@@ -198,9 +213,10 @@ class MonteCarlo:
     def metropolis(
         self,
         no_of_sampling_steps: int = 100,
-        scale_factor: list[float] = [1.0],
-        temperature: float | list[float] = 1.0,
-        boltzmann_constant: float = 1.0,
+        *,
+        energy_factor: float,
+        temperature: float | list[float],
+        boltzmann_constant: float,
         initial_decoration: list[int] | None = None,
         target_rate: float | None = None,
         n_clics: int = 1,
@@ -209,7 +225,7 @@ class MonteCarlo:
         nonlinear: bool = False,
         max_steps_per_batch: int = 100_000,
         continue_chain: bool = False,
-        **kwargs,
+        metadata: dict | None = None,
     ):
         r"""Perform Monte-Carlo Metropolis simulation
 
@@ -217,15 +233,26 @@ class MonteCarlo:
             Perfom Monte-Carlo Metropolis sampling for
             ``no_of_sampling_steps`` sampling steps.
 
-            During the sampling, a new structure at step i is accepted
-            with the probability given by :math:`\min( 1, \exp( - (E_i - E_{i-1})/(k_B T)) )`
+            In the canonical ensemble, accept a proposal with probability
+            :math:`\min(1,\exp[-s\Delta E_{model}/(k_B T)])`, where
+            :math:`s` is the required scalar ``energy_factor``. The user must
+            choose this multiplier so that :math:`s\Delta E_{model}` is the
+            TOTAL energy change of the simulation supercell, in the SAME energy
+            units as ``boltzmann_constant * temperature``. CELL cannot infer
+            model units, model normalization, or the temperature unit.
 
-            The energy :math:`E_i` of visited structure at step i is calculated from the Model
-            ``energy_model``. The factor :math:`k_B T` is the product of the temperature :math:`T`
-            and the Boltzmann constant :math:`k_B`.
+            For a model in eV/atom and temperature in K, supply
+            ``energy_factor=len(scell)`` and k_B in eV/K. For meV/atom with
+            k_B in eV/K, supply ``energy_factor=len(scell)/1000``. A model
+            already predicting total supercell energy requires an explicit 1
+            if its energy unit agrees with k_B*T. No automatic conversion is
+            performed. The former ``scale_factor`` list API has been removed.
 
-            Note: The units of the ``energy`` :math:`E` and the factor :math:`k_B T` must be the same.
-            With ``scale_factor``, :math:`k_B T` can be adjusted to the correct units (see below).
+            Semigrand sampling retains the existing additive chemical-potential
+            cost convention: the acceptance change is s*delta_E + delta_mu.
+            Chemical-potential costs must already use the total-energy unit of
+            k_B*T; they are not multiplied by energy_factor. To express the
+            conventional E - sum(mu*N), pass negative physical chemical potentials.
 
         **Parameters**:
 
@@ -233,17 +260,19 @@ class MonteCarlo:
             Number of sampling steps
 
         ``temperature``: float or list of float
-            Temperature at which the sampling is performed. If list, length of
-            list must be equal to `no_of_sampling_steps`.
+            Required positive temperature in units chosen by the user. If list,
+            its length must equal ``no_of_sampling_steps``. Kelvin is not assumed.
 
         ``boltzmann_constant``: float
-            Boltzmann constant
+            Required finite positive k_B in energy per temperature unit. Its
+            product with temperature must have the unit of the scaled TOTAL
+            supercell energy change. There is no default unit system.
 
-        ``scale_factor``: list of floats
-            List is used to adjust the factor :math:`k_B T` to the same units as the energy from ``energy_model``.
-
-            All floats in list are multiplied by the factor :math:`k_B T`.
-            If list is empty, the factor :math:`k_B T` remains unchanged.
+        ``energy_factor``: float
+            Required finite positive scalar multiplying model energy differences.
+            Includes BOTH the extensive normalization (per atom, per parent cell,
+            etc. to the full simulation supercell) and any energy-unit conversion.
+            No list, reciprocal convention, or inferred atom count is accepted.
 
         ``initial_decoration``: list of integers
             Atomic numbers of the initial structure, from which the sampling starts.
@@ -254,6 +283,8 @@ class MonteCarlo:
             If not ``None``, the initial temperature will be adjusted to match the given
             acceptance rate. The acceptance ratio during the simulation is computed using
             the last 1000 moves.
+            This changes the effective sampling temperature. Setting it to None
+            restores the explicitly supplied temperature for fixed-temperature sampling.
 
         ``n_clics``: integer
             Number of species flips (grandcanonical) or species swaps (canonical) per sampling step.
@@ -283,14 +314,19 @@ class MonteCarlo:
             the previous call. The default preserves the historical behavior of
             starting a new configuration for each call.
 
-        ``**kwargs``: keyworded argument list, arbitrary length
-            These arguments are added to the MonteCarloTrajectory object that is initialized in this method.
+        ``metadata``: dict or None
+            Optional descriptive information saved with the trajectory. Sampling
+            options must be explicit arguments; unknown keywords are errors.
 
         **Returns**: MonteCarloTrajectory object
             Trajectory containing the complete information of the sampling trajectory.
 
         """
-        scale_factor = scale_factor if scale_factor is not None else [self._scell.get_index()]
+        energy_factor = _positive_scalar(energy_factor, "energy_factor")
+        boltzmann_constant = _positive_scalar(boltzmann_constant, "boltzmann_constant")
+        if metadata is not None and not isinstance(metadata, dict):
+            raise ValueError("metadata must be a dictionary")
+        self._sampling_parameters = {"energy_factor": energy_factor, "boltzmann_constant": boltzmann_constant}
 
         try:
             max_steps_per_batch = operator.index(max_steps_per_batch)
@@ -301,9 +337,8 @@ class MonteCarlo:
         temperature_array = None if np.ndim(temperature) == 0 else temperature
         if temperature_array is not None and len(temperature_array) != no_of_sampling_steps:
             raise ValueError("temperature must be a scalar or have one value per sampling step")
-        if np.ndim(temperature) == 0 and (not np.isfinite(temperature) or temperature <= 0):
-            raise ValueError("temperature must be finite and positive")
-        scale_factor_product = np.prod(scale_factor)
+        if np.ndim(temperature) == 0:
+            temperature = _positive_scalar(temperature, "temperature")
 
         continuing = continue_chain and self._chain_state is not None and initial_decoration is None
         resume_frame = None
@@ -380,9 +415,11 @@ class MonteCarlo:
             no_of_sampling_steps=no_of_sampling_steps,
             temperature=temperature,
             boltzmann_constant=boltzmann_constant,
-            scale_factor=scale_factor,
+            energy_factor=energy_factor,
             target_rate=target_rate,
-            **kwargs,
+            metadata=metadata or {},
+            ensemble=self._ensemble,
+            reduce_structure=self._reduce_structure,
         )
         key_value_pairs = {}
         for m, mo in enumerate(self._models):
@@ -402,7 +439,7 @@ class MonteCarlo:
             desc="MMC sim.",
         )
         rave = self._chain_state["running_average"] if continuing else RunningAverage(1000)
-        beta_scale = self._chain_state["beta_scale"] if continuing else 1.0
+        beta_scale = self._chain_state["beta_scale"] if continuing and target_rate is not None else 1.0
         beta_chunks = iter(self._iter_beta_chunks(
             no_of_sampling_steps, temperature, temperature_array, boltzmann_constant, max_steps_per_batch
         ))
@@ -470,10 +507,11 @@ class MonteCarlo:
             # handle multi-linear model, make sure that `de` is np.float64
             de = de if len(de.shape) == 0 else de[self._energy_prediction_index]
 
-            if de + dmu <= 0:
+            acceptance_energy = energy_factor * de + dmu
+            if acceptance_energy <= 0:
                 accept_step = True
             elif self._rng_np.random() <= np.exp(-beta_chunk[beta_index - beta_chunk_start]
-                                                 * beta_scale * (de * scale_factor_product + dmu)):
+                                                 * beta_scale * acceptance_energy):
                 accept_step = True
             else:
                 accept_step = False
@@ -573,6 +611,7 @@ class MonteCarlo:
         nsites = self._scell.get_n_sub_sites(unique=False)
         atoms.info.update(mc_step=int(step), mc_stage=int(stage), mc_stage_step=int(stage_step),
                           mc_counter_origin=origin)
+        atoms.info.update(self._sampling_parameters)
         if nsites:
             atoms.info["mc_sweeps"] = float(step / nsites)
             atoms.info["mc_sweep_sites"] = int(nsites)
@@ -755,11 +794,15 @@ class MonteCarlo:
         raise NotImplementedError("Stepwise sampling is not yet implemented.")
 
     def accept_step(self, de: float, dmu: float, beta: float) -> bool:
-        """Accept or reject the proposed step based on the energy difference,
-        chemical potential difference, and beta."""
+        """Stepwise helper: de and dmu must already be TOTAL energy changes.
+
+        beta is the inverse of k_B*T in the same energy unit. This helper
+        performs no normalization or unit conversion; metropolis applies the
+        required energy_factor before its own acceptance check.
+        """
         if de + dmu <= 0:
             return True
-        elif self.rng.uniform(0, 1) <= np.exp(-beta * (de + dmu)):
+        elif self._rng_np.random() <= np.exp(-beta * (de + dmu)):
             return True
         else:
             return False
@@ -777,21 +820,8 @@ class MonteCarlo:
         n_steps: int,
         temperature: float | list[float] = 1.0,
     ):
-        """Run the Metropolis sampling."""
-        if len(np.shape(temperature)) == 0:
-            beta = np.ones((n_steps,), dtype=float) / (self.kB * temperature)
-        else:
-            beta = 1 / (self.kB * temperature)
-        self.rave = RunningAverage(1000)  # keep track of acceptance rate
-        progress = tqdm(
-            range(1, n_steps + 1),
-            total=n_steps,
-            desc="MMC sim.",
-        )
-        for i in progress:
-            self.beta = beta[i - 1]
-            accept = self.step()
-            self.rave.update_and_get_average(1.0 * accept)
+        """The stepwise runner is unfinished; use metropolis with explicit physical inputs."""
+        raise NotImplementedError("Use metropolis with explicit energy_factor, temperature, and boltzmann_constant")
 
 
 class MonteCarloTrajectory:
@@ -816,43 +846,46 @@ class MonteCarloTrajectory:
     ``read``: boolean (default: False)
         If **True**, the trajectory is read from the Json file ``filename``.
 
-    ``**kwargs``: keyword arguments
-
-        ``models``: List of Model objects
-
-        Further keyword arguments can be used to store additional information about the parameters used for
-        the MonteCarloTrajectory.metropolis rountine. This will be saved in the Json file ``filename``
-        under ``sampling_info``, if the object is serialized.
+    New trajectories require an explicit scalar ``energy_factor`` and
+    ``boltzmann_constant``. Reading new JSON obtains these inputs from
+    ``sampling_info``. For older files missing energy_factor, the user must
+    declare it explicitly. ``metadata`` holds optional descriptive information;
+    unknown constructor keywords are errors.
 
     """
 
-    def __init__(self, scell, filename="trajectory.json", read=False, **kwargs):
-        # Load Boltzmann constant in eV / K from ASE
-        from ase.units import kB
-
+    def __init__(self, scell=None, filename="trajectory.json", read=False, *, energy_factor=None,
+                 boltzmann_constant=None, temperature=None, no_of_sampling_steps=None, models=None,
+                 target_rate=None, save_nsteps=10, reduce_structure=False, ensemble=None, metadata=None):
         self._filename = filename
         self._scell = scell
+        self._energy_factor_override = (
+            _positive_scalar(energy_factor, "energy_factor") if energy_factor is not None else None
+        )
 
         if read:
             self.read()
-            self._models = kwargs.pop("models", [])
+            self._models = models or []
 
         else:
             self._trajectory = []
 
             self._scell = scell
-            self._save_nsteps = kwargs.pop("save_nsteps", 10)
+            self._save_nsteps = save_nsteps
             self._write_no = 0
 
-            self._models = kwargs.pop("models", [])
+            self._models = models or []
 
-            self._nmc = kwargs.pop("no_of_sampling_steps", None)
-            self._temperature = kwargs.pop("temperature", None)
-            self._boltzmann_constant = kwargs.pop("boltzmann_constant", kB)
-            self._scale_factor = kwargs.pop("scale_factor", None)
-            self._target_rate = kwargs.pop("target_rate", None)
-            self._keyword_arguments = kwargs
-            self._reduce_structure = kwargs.pop("reduce_structure", False)
+            self._nmc = no_of_sampling_steps
+            self._temperature = temperature
+            self._boltzmann_constant = _positive_scalar(boltzmann_constant, "boltzmann_constant")
+            self._energy_factor = _positive_scalar(energy_factor, "energy_factor")
+            self._target_rate = target_rate
+            if metadata is not None and not isinstance(metadata, dict):
+                raise ValueError("metadata must be a dictionary")
+            self._keyword_arguments = {"metadata": metadata or {}, "ensemble": ensemble,
+                                       "reduce_structure": reduce_structure}
+            self._reduce_structure = reduce_structure
 
     def calculate_properties(self, models=[], prop_func=None, prop_name=None, **kwargs):
         """Calculate the property for all decorations in the trajectory. The property can be
@@ -998,7 +1031,7 @@ class MonteCarloTrajectory:
         return nid
 
     def get_energies(self):
-        """Return energies of all entries in trajectory as array."""
+        """Return raw model energies, before energy_factor (relative for reduced MC)."""
         energies = []
         for tr in self._trajectory:
             energies.append(tr["energy"])
@@ -1006,14 +1039,16 @@ class MonteCarloTrajectory:
         return np.asarray(energies)
 
     def get_model_total_energies(self):
-        return self.get_energies()
+        """Return supercell energies in the user-chosen energy unit; retain any reduced-MC offset."""
+        return self._energy_factor * self.get_energies()
 
     def get_energy(self, nid):
-        """Return energy of entry at index ``nid`` in trajectory."""
+        """Return the raw model energy of entry nid, before energy_factor."""
         return self._trajectory[nid]["energy"]
 
     def get_model_total_energy(self, nid):
-        self.get_energy(nid)
+        """Return one supercell energy, retaining the reduced-MC relative zero when used."""
+        return self._energy_factor * self.get_energy(nid)
 
     def get_properties(self, prop):
         """Return the property ``prop`` from all entries in the trajectory as array."""
@@ -1045,7 +1080,9 @@ class MonteCarloTrajectory:
         props_list=None,
         **kwargs,
     ):
-        """Get averaged property of property with name ``prop_name`` after discarding at the start a given number of
+        """Average a complete accepted-move history (sample with serialize=True).
+
+           Get averaged property of property with name ``prop_name`` after discarding at the start a given number of
            equilibration steps. The average can only be obtained from a property that was already calculated before,
            e.g. by MonteCarlo.Trajectory.calculate_properties(...).
 
@@ -1059,8 +1096,13 @@ class MonteCarloTrajectory:
 
         ``prop_name``: string (default: ``U``)
             Name of property that is averaged.
-            If **C_p**, the isobaric specific heat at zero pressure is calculated.
-            If **U**, the internal energy is calculated.
+            If **U**, return mean TOTAL supercell energy after applying energy_factor.
+            Reduced MC retains its relative initial-state energy zero.
+            **C_p** is the historical name for the TOTAL configurational heat
+            capacity Var(E_total)/(k_B*T**2), in energy per temperature unit.
+            It requires a canonical, fixed-temperature trajectory without
+            target-rate adaptation. It does not include pressure/volume terms
+            and is not normalized per atom or reported in units of k_B.
 
         ``no_of_equilibration_steps``: integer
             Number of equilibration steps at the start of the Monte-Carlo sampling that are discarded from the average.
@@ -1082,10 +1124,11 @@ class MonteCarloTrajectory:
         else:
             prop_n = prop_name
 
-        factor = 1.0
-        if self._scale_factor is not None:
-            for s in self._scale_factor:
-                factor *= float(s)
+        if prop_name == "C_p":
+            if (np.ndim(self._temperature) != 0 or self._target_rate is not None
+                    or self._keyword_arguments.get("ensemble") != "canonical"):
+                raise ValueError("C_p requires canonical sampling at fixed temperature without target_rate adaptation")
+            _positive_scalar(self._temperature, "temperature")
 
         ind = 0
         maxind = len(self._trajectory)
@@ -1132,17 +1175,10 @@ class MonteCarloTrajectory:
             prop_average = np.divide(prop_sum, len_prop)
 
             if prop_name == "C_p":
-                prop_array = np.divide(prop_array, factor)
-                prop_average = np.divide(prop_average, factor)
-
-                ediff = 0
-                for p in prop_array:
-                    ediff += np.subtract(p, prop_average) * np.subtract(p, prop_average)
-
-                const = 1.0 * np.multiply((self._temperature) ** 2, (self._boltzmann_constant) ** 2)
-
-                return np.divide(ediff, (const * len_prop * 1 / (1.0 * factor)))
-
+                total_energies = self._energy_factor * np.asarray(prop_array)
+                return np.var(total_energies) / (self._boltzmann_constant * self._temperature**2)
+            elif prop_name == "U":
+                return self._energy_factor * prop_average
             else:
                 return prop_average
 
@@ -1180,8 +1216,7 @@ class MonteCarloTrajectory:
         traj_info.update({"number_of_sampling_steps": self._nmc})
         traj_info.update({"temperature": self._temperature})
         traj_info.update({"boltzmann_constant": self._boltzmann_constant})
-        if self._scale_factor is not None:
-            traj_info.update({"scale_factor": self._scale_factor})
+        traj_info.update({"energy_factor": self._energy_factor})
         if self._target_rate is not None:
             traj_info.update({"target_rate": self._target_rate})
 
@@ -1214,14 +1249,26 @@ class MonteCarloTrajectory:
             self._trajectory = []
 
         traj_info = data.pop("sampling_info", None)
+        if traj_info is None:
+            raise ValueError(
+                "Trajectory lacks sampling_info; declare its physical inputs before thermodynamic analysis"
+            )
 
         if traj_info is not None:
             self._nmc = traj_info.pop("number_of_sampling_steps", None)
             self._temperature = traj_info.pop("temperature", None)
-            self._boltzmann_constant = traj_info.pop("boltzmann_constant", None)
-            self._scale_factor = traj_info.pop("scale_factor", None)
+            self._boltzmann_constant = _positive_scalar(traj_info.pop("boltzmann_constant", None), "boltzmann_constant")
+            factor = traj_info.pop("energy_factor", self._energy_factor_override)
+            if factor is None:
+                raise ValueError(
+                    "Trajectory has no energy_factor; supply it explicitly when loading older trajectories"
+                )
+            self._energy_factor = _positive_scalar(factor, "energy_factor")
+            if self._energy_factor_override is not None and self._energy_factor_override != self._energy_factor:
+                raise ValueError("Supplied energy_factor differs from the trajectory's stored factor")
             self._target_rate = traj_info.pop("target_rate", None)
             self._keyword_arguments = traj_info
+            self._reduce_structure = traj_info.get("reduce_structure", False)
 
         data_keys = sorted([int(el) for el in set(data.keys())])
 

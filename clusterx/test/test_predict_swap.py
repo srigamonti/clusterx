@@ -236,8 +236,14 @@ def test_metropolis(plat, model):
         predict_swap=False,
         seed=seed,
     )
-    traj_full = mc_full.metropolis(temperature=100, no_of_sampling_steps=nsteps)
+    traj_full = mc_full.metropolis(temperature=100, no_of_sampling_steps=nsteps,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
 
     mc_swap = MonteCarlo(energy_model=model, scell=scell, nsubs=nsubs, predict_swap=True, seed=seed)
-    traj_swap = mc_swap.metropolis(temperature=100, no_of_sampling_steps=nsteps)
+    traj_swap = mc_swap.metropolis(temperature=100, no_of_sampling_steps=nsteps,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
     np.testing.assert_allclose(traj_swap.get_energies(), traj_full.get_energies())

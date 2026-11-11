@@ -492,7 +492,7 @@ class WangLandau:
         (:math:`E_{CE}`). Set this factor such that :math:`s *  E_{CE}` gives
         the total energy, in [eV], of the supercell (``scell`` below).
         For instance, if the CE model predicts the energy in meV/atom, set this parameter
-        to 1000*Nsc, where Nsc is the total number of atoms of the supercel (``len(scell)``).
+        to Nsc/1000, where Nsc is the total number of atoms of the supercell (``len(scell)``).
         If CE predicts the energy in Hartree
         per parent lattice, set ``energy_factor`` to 27.2114*Npl, where Npl is
         the number of parent lattices contained in the supercell (this can be obtained

@@ -208,6 +208,8 @@ def test_fixed_seed_mc_matches_legacy_local_calculation(local_model, monkeypatch
             trajectory = mc.metropolis(
                 no_of_sampling_steps=80, temperature=0.3, initial_decoration=initial.get_decoration(),
                 serialize=True, filename=str(tmp_path / f"trajectory-{reference}.json"),
+                energy_factor=1.0,
+                boltzmann_constant=1.0,
             )
         sigmas = initial.sigmas.copy()
         energy0 = local_model.predict(initial)

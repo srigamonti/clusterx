@@ -139,7 +139,7 @@ def test_builder_pruned_model_reduced_mc(pool, tmp_path, monkeypatch, singlets_o
     monkeypatch.setattr(pruned, "predict_flip", checked_flip)
     mc = MonteCarlo(pruned, scell, nsubs=nsubs, predict_swap=True, reduce_structure=True, seed=37)
     trajectory = mc.metropolis(
-        no_of_sampling_steps=24, temperature=0.5, boltzmann_constant=1.0, scale_factor=[1.0],
+        no_of_sampling_steps=24, temperature=0.5, boltzmann_constant=1.0, energy_factor=1.0,
         initial_decoration=initial.get_atoms().numbers, serialize=True,
     )
     assert len(checked) == 48

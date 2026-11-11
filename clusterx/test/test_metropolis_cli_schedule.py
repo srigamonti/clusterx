@@ -47,7 +47,8 @@ def system(tmp_path):
 def options():
     return dict(task="runmc", plat_filepath="plat.json", model_filepath="model.pickle",
                 sc_shape=[8, 1, 1], n_substitutions={0: [4], 1: [4]}, random_seed=109,
-                temperature=0.3, serialize=False, predict_swap=True, reduce_structure=True)
+                temperature=0.3, energy_factor=1.0, boltzmann_constant=1.0,
+                serialize=False, predict_swap=True, reduce_structure=True)
 
 
 def assert_rng_equal(left, right):
@@ -68,8 +69,10 @@ def test_schedule_matches_uninterrupted_sampling_and_reuses_state(system, monkey
     model.serialize("model.pickle")
     baseline = MonteCarlo(model, scell, nsubs={0: [4], 1: [4]}, seed=109,
                           predict_swap=True, reduce_structure=True)
-    reference = baseline.metropolis(35, temperature=0.3, nonlinear=True, scale_factor=[len(scell)],
-                                    serialize=True, filename="reference.json")
+    reference = baseline.metropolis(35, temperature=0.3, nonlinear=True, energy_factor=len(scell),
+                                    serialize=True, filename="reference.json",
+        boltzmann_constant=1.0,
+    )
     expected_sigmas = baseline.structure.get_sigmas().copy()
     expected_np = deepcopy(baseline._rng_np.bit_generator.state)
     expected_std = random.getstate()
@@ -94,16 +97,17 @@ def test_schedule_matches_uninterrupted_sampling_and_reuses_state(system, monkey
     monkeypatch.setattr(cli, "MonteCarlo", construct)
     monkeypatch.setattr(MonteCarlo, "metropolis", sampling)
     monkeypatch.setattr(Model, "get_correlations", correlations)
-    result = cli.metropolis(**options(), runs=[{"temperature": 0.3, "n_mc_steps": 20},
+    result = cli.metropolis(**{**options(), "energy_factor": len(scell)},
+                            runs=[{"temperature": 0.3, "n_mc_steps": 20},
                                               {"temperature": 0.3, "n_mc_steps": 15}],
-                            nonlinear=True, energy_normalization="per_atom", max_steps_per_batch=3,
+                            nonlinear=True, max_steps_per_batch=3,
                             save_atoms_every=7, save_atoms_endpoints=True,
                             atoms_filename="schedule.xyz", atoms_mode="x")
     mc = instances[0]
     assert len(instances) == 1
     assert [call["no_of_sampling_steps"] for call in calls] == [20, 15]
     assert [call["continue_chain"] for call in calls] == [False, True]
-    assert all(call["scale_factor"] == [len(scell)] for call in calls)
+    assert all(call["energy_factor"] == len(scell) for call in calls)
     assert len(global_correlations) == (1 if degree == 2 else 0)
     np.testing.assert_array_equal(mc.structure.get_sigmas(), expected_sigmas)
     assert_rng_equal(mc._rng_np.bit_generator.state, expected_np)
@@ -152,7 +156,7 @@ def test_named_toml_schedule_and_continuation(system, tmp_path, nonlinear):
     ]:
         configuration[name] = {"command": "metropolis", **base, "atoms_filename": output,
                                "save_atoms_endpoints": True, "atoms_mode": "x", "runs": stages,
-                               "max_steps_per_batch": 2, "energy_scale_factor": 1 / len(scell)}
+                               "max_steps_per_batch": 2, "energy_factor": len(scell)}
     configuration["continue_anneal"]["resume_from"] = "anneal.xyz"
     configuration["continue_anneal"]["random_seed"] = 117
     path = tmp_path / "anneal.toml"
@@ -176,7 +180,7 @@ def test_direct_cli_routes_sampling_and_constructor_options(system, tmp_path):
     _, _, model = system
     model.serialize("model.pickle")
     command = [sys.executable, "-m", "clusterx.cli.main", "metropolis", "-task", "runmc",
-               "-scsh", "[8,1,1]", "-nsubs", '{"0":[4],"1":[4]}', "-rs", "109",
+               "-scsh", "[8,1,1]", "-nsubs", '{"0":[4],"1":[4]}', "-rs", "109", "-ef", "1", "-k_B", "1",
                "-runs", json.dumps([{"temperature": 0.5, "n_mc_steps": 3},
                                     {"temperature": 0.2, "n_mc_steps": 4}]),
                "-serialize", "false", "-nonlinear", "true", "-reduce", "true", "-batch", "2",
@@ -201,15 +205,17 @@ def test_direct_cli_routes_sampling_and_constructor_options(system, tmp_path):
     ({"n_mc_sweeps": 0.01}, "integer number"),
     ({"runs": [{"temperature": -1, "n_mc_steps": 1}]}, "positive temperature"),
     ({"resume_from": "missing.xyz", "n_mc_steps": 1}, "checkpoint not found"),
-    ({"energy_scale_factor": 1, "energy_normalization": "per_atom"}, "either energy"),
-    ({"seed": 1}, "random_seed"),
+    ({"energy_factor": [1]}, "one finite positive number"),
+    ({"energy_factor": None}, "energy_factor"),
+    ({"boltzmann_constant": None}, "boltzmann_constant"),
+    ({"seed": 1}, "unexpected keyword argument"),
     ({"resume_from": "checkpoint.xyz"}, "explicit runs schedule"),
     ({"resume_from": "checkpoint.xyz", "temperature": None, "n_mc_steps": 3}, "explicit runs schedule"),
 ])
 def test_invalid_requests_are_actionable(system, extra, match):
     _, _, model = system
     model.serialize("model.pickle")
-    with pytest.raises((ValueError, FileNotFoundError), match=match):
+    with pytest.raises((ValueError, FileNotFoundError, TypeError), match=match):
         cli.metropolis(**{**options(), **extra})
 
 

@@ -16,7 +16,7 @@ from clusterx.parent_lattice import ParentLattice
 from clusterx.structure import Structure
 from clusterx.structures_set import StructuresSet
 from clusterx.super_cell import SuperCell
-from clusterx.thermodynamics.monte_carlo import MonteCarlo, MonteCarloTrajectory
+from clusterx.thermodynamics.monte_carlo import MonteCarlo, MonteCarloTrajectory, _positive_scalar
 from clusterx.thermodynamics.monte_carlo_lite import (
     MCRun,
     MonteCarloLite,
@@ -157,20 +157,20 @@ def _sampling_schedule(runs, temperature, n_mc_steps, n_mc_sweeps, nsites):
     continue_chain=("Continue in memory; schedule stages always continue", "option", "continue", _boolean),
     serialize=("Store accepted-move histories as JSON; use false for large runs", "option", "serialize", _boolean),
     energy_key=("Energy property name for multi-output models", "option", "energy_key", str),
-    energy_normalization=("Energy normalization: per_atom, per_parent_cell, or total", "option", "energy_norm", str),
-    energy_scale_factor=(
-        "Divide model energy differences by this factor to obtain supercell energy differences",
+    energy_factor=(
+        "Required scalar multiplier: energy_factor * model change must be TOTAL supercell energy in k_B*T units",
         "option",
-        "escf",
+        "ef",
         float,
     ),
     temperature=(
-        "Temperature at which the sampling is performed.",
+        "Required temperature in user-chosen units consistent with k_B and the scaled supercell energy",
         "option",
         "temp",
         float,
     ),
-    boltzmann_constant=("Boltzmann constant", "option", "k_B", float),
+    boltzmann_constant=("Required k_B in scaled energy per temperature unit; no default units", "option", "k_B", float),
+    metadata=("Optional trajectory descriptions as a JSON dictionary", "option", "metadata", json.loads),
     random_seed=(
         "Random seed to produce reproducible results",
         "option",
@@ -191,12 +191,6 @@ def _sampling_schedule(runs, temperature, n_mc_steps, n_mc_sweeps, nsites):
         "option",
         "acc_ratio",
         float,
-    ),
-    scale_factor=(
-        "Deprecated: use ``energy_scale_factor instead``",
-        "option",
-        "scf",
-        list,
     ),
     filename=(
         "Deprecated: use ``traf_filepath instead``",
@@ -233,15 +227,14 @@ def metropolis(
     n_mc_eq: int = 1,
     n_clics: int = 1,
     runs: Optional[list[dict]] = None,
-    energy_scale_factor: float | None = None,
+    energy_factor: float | None = None,
     temperature: float | None = None,
     temperatures: Optional[List[float]] = None,
-    boltzmann_constant: float = 1.0,
+    boltzmann_constant: float | None = None,
     initial_decoration: Optional[List[int]] = None,
     target_rate: Optional[float] = None,
     random_seed: Optional[int] = None,
     # deprecated
-    scale_factor: Optional[List[float]] = None,  # use energy_scale_factor instead
     filename: Optional[str] = None,  # use traj_filepath instead
     # Maintained MC constructor and sampling options.
     resume_from: str | None = None,
@@ -251,28 +244,28 @@ def metropolis(
     atoms_mode: str = "auto",
     energy_key: str = "energy",
     n_mc_sweeps: float | None = None,
-    energy_normalization: str | None = None,
     max_steps_per_batch: int = 100_000,
     nonlinear: bool = False,
     continue_chain: bool = False,
     serialize: bool = True,
-    **sampling_kwargs,
+    metadata: dict | None = None,
 ):
-    """Perform Metropolis sampling
-    Deprecated:
-    scale_factor: Deprecated. Use energy_scale_factor instead."""
+    """Sample with an explicit TOTAL-supercell energy multiplier, k_B, and temperature.
+
+    The user is responsible for model normalization and units. For model energy
+    eV/atom and T in K, use energy_factor=N_atoms and k_B in eV/K. For meV/atom
+    and k_B in eV/K, use N_atoms/1000. A total-energy model still requires an
+    explicit factor (1 when its energy unit matches k_B*T). CELL does not infer
+    atom counts, unit conversions, or a default temperature/Boltzmann constant.
+    Specify temperature directly or explicitly in every runs stage.
+    """
     cmd_message("head")
 
-    energy_scale_factor = _process_deprecated(
-        energy_scale_factor, scale_factor, "energy_scale_factor", "scale_factor"
-    )
     traj_filepath = _process_deprecated(
         traj_filepath, filename, "traj_filepath", "filename"
     )
     if task not in {"runmc", "runMC", "run-monte-carlo"} and n_mc_steps is None:
         n_mc_steps = 100
-    if task not in {"runmc", "runMC", "run-monte-carlo"} and temperature is None:
-        temperature = 1.0
 
     if random_seed is not None:
         random.seed(random_seed)
@@ -282,11 +275,10 @@ def metropolis(
         case "runmc" | "runMC" | "run-monte-carlo":
             print(f"Info({get_command_name()}): Initialization")
 
-            aliases = {"seed": "random_seed", "nsubs": "n_substitutions", "scell": "sc_shape",
-                       "energy_model": "model_filepath", "models": "models_aux_filepaths",
-                       "no_of_sampling_steps": "n_mc_steps"}
-            for name in sampling_kwargs.keys() & aliases.keys():
-                raise ValueError(f"Use the CLI option {aliases[name]!r} instead of Python API option {name!r}")
+            energy_factor = _positive_scalar(energy_factor, "energy_factor")
+            boltzmann_constant = _positive_scalar(boltzmann_constant, "boltzmann_constant")
+            if runs is None and temperature is None:
+                raise ValueError("temperature must be supplied explicitly, directly or in an explicit runs schedule")
 
             if isinstance(n_substitutions, dict):
                 n_substitutions = {int(k): v for k, v in n_substitutions.items()}
@@ -306,23 +298,9 @@ def metropolis(
             ):
                 raise ValueError("Resume requires an explicit runs schedule, or temperature and a step/sweep count")
             stages = _sampling_schedule(
-                runs, 1.0 if temperature is None else temperature,
+                runs, temperature,
                 n_mc_steps, n_mc_sweeps, scell.get_n_sub_sites(unique=False),
             )
-            if energy_normalization is not None and energy_scale_factor is not None:
-                raise ValueError("Specify either energy_normalization or energy_scale_factor")
-            normalizations = {"per_atom": len(scell), "per_parent_cell": scell.get_index(), "total": 1}
-            if energy_normalization is not None:
-                if energy_normalization not in normalizations:
-                    raise ValueError("energy_normalization must be per_atom, per_parent_cell, or total")
-                sampling_scale = [normalizations[energy_normalization]]
-            else:
-                # Preserve the CLI convention: energy_scale_factor is a divisor.
-                if energy_scale_factor is not None and (
-                    not np.isfinite(energy_scale_factor) or energy_scale_factor <= 0
-                ):
-                    raise ValueError("energy_scale_factor must be finite and positive")
-                sampling_scale = [1 / energy_scale_factor] if energy_scale_factor is not None else None
 
             mc = MonteCarlo(
                 energy_model=energy_model,
@@ -353,7 +331,7 @@ def metropolis(
                     output_path = str(path.with_name(f"{path.stem}_stage{index + 1:04d}{path.suffix}"))
                 trajectory = mc.metropolis(
                     no_of_sampling_steps=stage["n_mc_steps"],
-                    scale_factor=sampling_scale,
+                    energy_factor=energy_factor,
                     temperature=stage["temperature"],
                     boltzmann_constant=boltzmann_constant,
                     initial_decoration=initial_decoration if index == 0 else None,
@@ -364,112 +342,19 @@ def metropolis(
                     max_steps_per_batch=max_steps_per_batch,
                     nonlinear=nonlinear,
                     continue_chain=continue_chain if index == 0 else True,
-                    **sampling_kwargs,
+                    metadata=metadata,
                 )
             return trajectory
 
-        case "setup" | "setupmclite" | "setupMClite" | "setup-monte-carlo-lite":
-            print(f"Info({get_command_name()}): Setting up MC")
-
-            plat = ParentLattice(filepath=plat_filepath)
-            with _timed("CLI.metropolis (task=setupmclite): unpickling model"):
-                energy_model = Model(filepath=model_filepath)
-
-            with _timed("CLI.metropolis (task=setupmclite): building supercell"):
-                scell = SuperCell(plat, sc_shape)
-
-            with _timed("CLI.metropolis (task=setupmclite): Create MC instance"):
-                mclite = MonteCarloLite(
-                    energy_model=energy_model,
-                    scell=scell,
-                    energy_scale_factor=energy_scale_factor,
-                    boltzmann_constant=boltzmann_constant,
-                )
-
-            with _timed("CLI.metropolis(setupMClite): MonteCarloLite serialization"):
-                mclite.serialize(mcsetup_filepath)
-
         case (
-            "run"
-            | "run-metropolis"
-            | "runmclite"
-            | "runMClite"
-            | "run-monte-carlo-lite"
+            "setup" | "setupmclite" | "setupMClite" | "setup-monte-carlo-lite"
+            | "run" | "run-metropolis" | "runmclite" | "runMClite"
+            | "run-monte-carlo-lite" | "run-simulated-annealing"
         ):
-            print(f"Info({get_command_name()}): Read MC setup")
-
-            with _timed("from_file"):
-                mclite = MonteCarloLite.from_file(mcsetup_filepath)
-
-            print(f"Info({get_command_name()}): Running Metropolis MC simulation")
-
-            n_substitutions0 = n_substitutions
-
-            if runs is None:
-                runs = [{}]
-
-            for irun, run in enumerate(runs):
-                temperature = run.get("temperature", temperature)
-                n_mc_steps = run.get("n_mc_steps", n_mc_steps)
-                mcrun_filepath = run.get("mcrun_filepath", mcrun_filepath)
-                ignore = run.get("ignore", False)
-                equilibration_run = run.get("equilibration_run", False)
-                n_substitutions = run.get("n_substitutions", n_substitutions0)
-
-                if ignore:
-                    continue
-
-                mcrun = mclite.metropolis(
-                    temperature=temperature,
-                    n_mc_steps=n_mc_steps,
-                    ensemble=ensemble,
-                    n_substitutions=n_substitutions,
-                    mcrun_filepath=mcrun_filepath,
-                    random_seed=random_seed,
-                    n_clics=n_clics,
-                    keep_sigmas=keep_sigmas,
-                )
-
-        case "run-simulated-annealing":
-            print(f"Info({get_command_name()}): Reading MC setup")
-
-            with _timed("from_file"):
-                mclite = MonteCarloLite.from_file(mcsetup_filepath)
-
-            print(f"Info({get_command_name()}): Running simulated annealing")
-
-            for irun, run in enumerate(runs):
-                temperature = run["temperature"]
-                n_mc_steps = run["n_mc_steps"]
-                mcrun_filepath = run["mcrun_filepath"]
-                ignore = run.get("ignore", False)
-                equilibration_run = run.get("equilibration_run", False)
-
-                if ignore:
-                    continue
-
-                if equilibration_run:
-                    mcrun = mclite.metropolis(
-                        temperature=temperature,
-                        n_mc_steps=n_mc_steps,
-                        ensemble="canonical",
-                        n_substitutions=n_substitutions,
-                        mcrun_filepath=mcrun_filepath,
-                        random_seed=random_seed,
-                        n_clics=n_clics,
-                        is_simulated_annealing=True,
-                        keep_sigmas=keep_sigmas,
-                    )
-                else:
-                    mcrun = mclite.metropolis(
-                        temperature=temperature,
-                        n_mc_steps=n_mc_steps,
-                        ensemble="canonical",
-                        mcrun_filepath=mcrun_filepath,
-                        n_clics=n_clics,
-                        is_simulated_annealing=True,
-                        keep_sigmas=keep_sigmas,
-                    )
+            raise ValueError(
+                "MonteCarloLite sampling tasks are discontinued. Use task='runmc' with "
+                "energy_factor, boltzmann_constant, and an explicit temperature or runs schedule."
+            )
 
         case "compute_specific_heat" | "compute-specific-heat":
             mc_setup = MonteCarloLite.from_file(mcsetup_filepath)
@@ -696,5 +581,5 @@ def metropolis(
                 energies_accepted,
                 prop_name="Energy of visited structures",
                 xaxis_label="step no.",
-                yaxis_label="Energy [eV/#sites]",
+                yaxis_label="Raw model energy (model units)",
             )

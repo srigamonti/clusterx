@@ -152,6 +152,8 @@ def test_nonlinear_mc_matches_full_evaluations(degree, multi_output, reduce, mon
             no_of_sampling_steps=160, temperature=0.025, nonlinear=True,
             initial_decoration=initial.get_decoration(), serialize=True,
             filename=str(tmp_path / f"trace-{predict_swap}-{local_reduced}.json"),
+            energy_factor=1.0,
+            boltzmann_constant=1.0,
         )
         if predict_swap:
             assert len(calls) == 161  # One initial prediction, then one per proposal.
@@ -197,7 +199,10 @@ def test_nonlinear_reduced_mc_never_builds_full_orbits(packed, monkeypatch):
     if not packed:
         monkeypatch.setattr(model_module, "_pack_cluster_interactions", lambda *args: None)
     mc = MonteCarlo(model, scell, nsubs={tag: [32]}, predict_swap=True, reduce_structure=True, seed=131)
-    mc.metropolis(no_of_sampling_steps=24, nonlinear=True, temperature=0.1)
+    mc.metropolis(no_of_sampling_steps=24, nonlinear=True, temperature=0.1,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
     assert all(len(cell) == len(model.scell_reduced) for cell in model.corrc._scells)
     assert (model._packed_interactions is not None) == packed
 
@@ -238,6 +243,8 @@ def test_pruned_builder_nonlinear_model_roundtrip(degree, standardize, tmp_path)
     trajectory = mc.metropolis(
         no_of_sampling_steps=60, temperature=0.05, nonlinear=True, initial_decoration=initial.get_decoration(),
         serialize=True, filename=str(tmp_path / "pruned-trace.json"),
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
     )
     sigmas = initial.sigmas.copy()
     energy0 = full.predict(initial)
@@ -261,7 +268,10 @@ def test_affine_mc_does_not_initialize_global_correlations(nonlinear, monkeypatc
 
     monkeypatch.setattr(model, "get_correlations", unexpected_initialization)
     mc = MonteCarlo(model, scell, nsubs={tag: [32]}, predict_swap=True, reduce_structure=True, seed=151)
-    mc.metropolis(no_of_sampling_steps=24, temperature=0.05, nonlinear=nonlinear)
+    mc.metropolis(no_of_sampling_steps=24, temperature=0.05, nonlinear=nonlinear,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
 
 
 @pytest.mark.parametrize("degree", [1, 3])
@@ -275,7 +285,11 @@ def test_local_mc_rejects_cluster_images_on_the_same_atom(degree):
     scell = SuperCell(plat, (2, 1, 1))
     mc = MonteCarlo(model, scell, nsubs={0: [1]}, predict_swap=True, reduce_structure=True, seed=163)
     with pytest.raises(ValueError, match="wraps onto the same atom"):
-        mc.metropolis(no_of_sampling_steps=1, nonlinear=True)
+        mc.metropolis(no_of_sampling_steps=1, nonlinear=True,
+            energy_factor=1.0,
+            boltzmann_constant=1.0,
+            temperature=1.0,
+        )
 
 
 @pytest.mark.parametrize("transformer", [PolynomialFeatures(5), FunctionTransformer(np.sin)])
@@ -293,6 +307,8 @@ def test_general_nonlinear_transformations(transformer, tmp_path):
     trajectory = mc.metropolis(
         no_of_sampling_steps=80, temperature=0.05, nonlinear=True, initial_decoration=initial.get_decoration(),
         serialize=True, filename=str(tmp_path / "general-trace.json"),
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
     )
     sigmas = initial.sigmas.copy()
     energy0 = model.predict(initial)
@@ -312,7 +328,11 @@ def test_small_periodic_cell_without_self_aliasing_is_supported():
     model = Model(corrc, "energy", estimator=pipeline)
     scell = SuperCell(plat, (2, 1, 1))
     mc = MonteCarlo(model, scell, nsubs={0: [1]}, predict_swap=True, reduce_structure=True, seed=191)
-    mc.metropolis(no_of_sampling_steps=8, nonlinear=True)
+    mc.metropolis(no_of_sampling_steps=8, nonlinear=True,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+        temperature=1.0,
+    )
 
 
 @pytest.mark.parametrize("degree", [2, 3])
@@ -331,6 +351,8 @@ def test_semigrand_nonlinear_sampling_matches_full_evaluations(degree, tmp_path)
         trajectory = mc.metropolis(
             no_of_sampling_steps=120, temperature=0.05, nonlinear=True, initial_decoration=initial.get_decoration(),
             serialize=True, filename=str(tmp_path / f"semigrand-{local}.json"),
+            energy_factor=1.0,
+            boltzmann_constant=1.0,
         )
         sigmas = initial.sigmas.copy()
         energy0 = original.predict(initial) if local else 0
@@ -367,6 +389,8 @@ def test_in_place_transforms_do_not_modify_cached_correlations(tmp_path):
     trajectory = mc.metropolis(
         no_of_sampling_steps=100, temperature=0.05, nonlinear=True, initial_decoration=initial.get_decoration(),
         serialize=True, filename=str(tmp_path / "in-place.json"),
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
     )
     sigmas = initial.sigmas.copy()
     energy0 = original.predict(initial)

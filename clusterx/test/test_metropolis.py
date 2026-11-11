@@ -265,7 +265,7 @@ def cli_kwargs():
     args["n_mc_eq"]: int = 1
     args["n_clics"]: int = 1
     args["runs"]: Optional[dict] = None
-    args["energy_scale_factor"]: float | None = None
+    args["energy_factor"]: float = 1.0
     args["temperature"]: float = 1.0
     args["temperatures"]: Optional[List[float]] = None
     args["boltzmann_constant"]: float = 1.0
@@ -302,7 +302,10 @@ def test_metropolis(plat, model_, request):
     scell = SuperCell(plat, 4)
     model = request.getfixturevalue(model_)
     mc = MonteCarlo(model, scell, nsubs={0: [4]})
-    mc.metropolis(no_of_sampling_steps=10, temperature=600, serialize=True)
+    mc.metropolis(no_of_sampling_steps=10, temperature=600, serialize=True,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
     traj = MonteCarloTrajectory(scell=scell, read=True)
     traj.get_lowest_energy_structure()
 
@@ -341,8 +344,9 @@ def test_sgcmc(plat, model, reduce):
     mc.metropolis(
         no_of_sampling_steps=n_steps,
         temperature=np.linspace(5, 3, n_steps),
-        scale_factor=None,
+        energy_factor=float(scell.get_index()),
         serialize=True,
+        boltzmann_constant=1.0,
     )
 
 
@@ -358,7 +362,10 @@ def test_metropolis_reduce(plat_bulk, model_bulk, reduce):
         reduce_structure=reduce,
         seed=42,
     )
-    mc.metropolis(no_of_sampling_steps=1000, temperature=600, serialize=True)
+    mc.metropolis(no_of_sampling_steps=1000, temperature=600, serialize=True,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
     traj = MonteCarloTrajectory(scell=scell, read=True)
     traj.get_lowest_energy_structure()
 
@@ -375,7 +382,10 @@ def test_target_rate(plat_bulk, model_bulk):
         predict_swap=True,
         seed=42,
     )
-    mc.metropolis(no_of_sampling_steps=10000, temperature=1e4, target_rate=0.5)
+    mc.metropolis(no_of_sampling_steps=10000, temperature=1e4, target_rate=0.5,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
 
 
 def test_metropolis_perov(plat_perov, model_perov):
@@ -392,7 +402,10 @@ def test_metropolis_perov(plat_perov, model_perov):
             atoms_filename="perov_mc.traj",
             seed=42,
         )
-        mctraj = mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, serialize=True)
+        mctraj = mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, serialize=True,
+            energy_factor=1.0,
+            boltzmann_constant=1.0,
+        )
         traj = Trajectory("perov_mc.traj")
         assert len(traj) == 11
         energies.append(mctraj.get_energies())
@@ -481,6 +494,7 @@ def test_metropolis_clathrate_full_subs(
         boltzmann_constant=kb,
         serialize=True,
         filename="trajectory-ternary.json",
+        energy_factor=1.0,
     )
     steps = traj.get_sampling_step_nos()
     traj.get_energies()
@@ -501,7 +515,10 @@ def test_linear_eq_nonlinear(plat_perov, model_perov):
             predict_swap=predict_swap,
             seed=42,
         )
-        mctraj = mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, nonlinear=nonlinear, serialize=True)
+        mctraj = mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, nonlinear=nonlinear, serialize=True,
+            energy_factor=1.0,
+            boltzmann_constant=1.0,
+        )
         energies.append(mctraj.get_energies())
     np.testing.assert_allclose(energies[0], energies[1])
     np.testing.assert_allclose(energies[0], energies[2])
@@ -541,7 +558,10 @@ def test_nonlinear(plat_perov, corrc_perov):
             predict_swap=predict_swap,
             seed=42,
         )
-        mctraj = mc.metropolis(no_of_sampling_steps=1000, temperature=1, nonlinear=nonlinear, serialize=True)
+        mctraj = mc.metropolis(no_of_sampling_steps=1000, temperature=1, nonlinear=nonlinear, serialize=True,
+            energy_factor=1.0,
+            boltzmann_constant=1.0,
+        )
         assert len(mctraj.get_energies()) > 10
         energies.append(mctraj.get_energies())
     np.testing.assert_allclose(energies[0], energies[1])
