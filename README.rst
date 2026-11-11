@@ -478,3 +478,164 @@ JSON, and boolean options take explicit ``true``/``false`` values, for example::
 This direct-command example assumes a one-atom parent cell, hence eight atoms
 in that supercell, and model energies in eV/atom. Supply the factor appropriate
 to the actual model and supercell used.
+
+Configurational free energy of mixing
+------------------------------------
+
+``compute_free_energy_of_mixing`` calculates binary canonical mixing free
+energies by thermodynamic integration. It holds the supplied CE fixed throughout
+each integration and uses the maintained ``MonteCarlo`` sampler. Affine and nonlinear models can
+use local swap predictions, including ``reduce_structure=True``. One binary
+substitutional site type is supported; any spectator sites remain pristine.
+Species A and B are the first and second entries in that site's ordered
+allowed-species list (sigmas 0 and 1).
+
+For N binary substitutional sites and NB = x*N B atoms, define
+beta = 1/(k_B*T). The calculation evaluates:
+
+.. math::
+
+    \beta\Delta f_{\mathrm{mix}}(x,\beta)
+    = -\frac{\ln\binom{N}{N_B}}{N}
+      + \int_0^\beta\left[
+          \frac{\langle E_{\mathrm{total}}\rangle_{x,\beta'}}{N}
+          -(1-x)e_A-xe_B\right]d\beta'.
+
+The endmember energies e_A and e_B are predicted for this same supercell and
+divided by N. Every result is **per binary substitutional site**, including
+the mean energy; N does not include spectator atoms. The finite-cell entropy
+uses the binomial coefficient, approaching
+x*ln(x) + (1-x)*ln(1-x) for beta*delta_f in the thermodynamic limit.
+Pure compositions return zero mixing free energy without proposing swaps.
+Only configurational contributions represented by the CE are included.
+
+The user must provide ``energy_factor`` converting the model prediction to
+**total supercell energy**, and ``boltzmann_constant`` in compatible units.
+For example, for a model in eV per atom and T in kelvin, supply
+``energy_factor=float(len(scell))`` and k_B in eV/K. The atom count in this
+conversion can differ from N when spectators are present. Endmember and
+mixed configurations must use the same normalization.
+
+**Fixed along the integration path** does not exclude a CE fitted to effective
+configuration free energies at a chosen physical temperature. For example, a
+CE representing configuration free energies at 300 K is held fixed while the
+auxiliary sampling beta varies from zero to 1/(k_B*300 K). The result at that
+endpoint is the mixing free energy for the supplied 300 K model. Intermediate
+sampling temperatures are integration parameters; the model is not updated to
+represent the material at those physical temperatures.
+
+The entire ``temperatures`` list or range uses the same CE, including the
+endmember and beta=0 evaluations. If the physical model depends on temperature,
+repeat the complete integration separately for each target temperature using
+its corresponding CE held fixed. The helper does not select or refit models
+as the sampling temperature changes. Following a changing model along the path
+would require temperature-derivative contributions to the integrand and a
+consistent reference treatment, which this implementation does not provide.
+
+Temperatures must be finite, positive and distinct. Either input ordering is
+accepted; sampling and results are ordered from highest T to lowest T,
+equivalently increasing beta. Compositions must correspond to integer NB for
+the chosen supercell and are not silently rounded. Include sufficiently high
+temperatures and refine the grid, especially across transitions: the code uses
+composite trapezoidal quadrature in beta and does not estimate quadrature bias.
+For context, see the `icet canonical free-energy discussion
+<https://icet.materialsmodeling.org/advanced_topics/free_energy_canonical_ensemble.html>`_.
+
+The beta=0 integration node is always included. Its mean energy is estimated
+from ``n_reference_samples`` independent uniform fixed-composition decorations,
+evaluated with the actual CE. This finite-cell reference is not obtained by
+substituting independent-site random correlations into a nonlinear model, or
+by extrapolating positive-temperature samples. At each positive temperature,
+``n_mc_eq`` proposals are discarded before ``n_mc_steps`` production proposals.
+Energy observations occur every ``sample_interval`` production proposals and
+include rejected moves. The same chain continues across temperatures without
+target-rate adaptation or rebuilding valid nonlinear correlation caches.
+
+Python example (assuming ``model`` predicts eV/atom and ``scell`` has a binary
+site count divisible by four; the same model is used at all sampling nodes)::
+
+    from ase.units import kB
+    from clusterx.thermodynamics.monte_carlo import compute_free_energy_of_mixing
+
+    result = compute_free_energy_of_mixing(
+        model, scell, compositions=[0.0, 0.25, 0.5, 0.75, 1.0],
+        temperatures=[4000.0, 2000.0, 1000.0, 750.0, 500.0, 300.0],
+        energy_factor=float(len(scell)), boltzmann_constant=kB,
+        n_mc_eq=10_000, n_mc_steps=100_000, sample_interval=10,
+        n_reference_samples=2000, n_blocks=20, random_seed=42,
+        predict_swap=True, reduce_structure=True, nonlinear=True,
+        max_steps_per_batch=20_000, filename="mixing-free-energy.json",
+    )
+
+If ``model`` describes effective configuration free energies at 300 K, the
+300 K result in this example is the physical target; the higher-temperature
+nodes provide the auxiliary integration path for that same fixed model.
+
+A complete named-step input, executed as ``cell --input_file mixing.toml``,
+is shown below. It assumes a **one-atom binary parent cell**, hence 64 atoms
+for this shape, and a saved model in eV/atom. Change the factor and shape for
+your actual model; a parent cell containing spectators needs a different factor::
+
+    do = ["mixing"]
+
+    [mixing]
+    command = "compute_free_energy_of_mixing"
+    model_filepath = "model.pickle"
+    plat_filepath = "plat.json"
+    sc_shape = [4, 4, 4]
+    compositions = [0.0, 0.25, 0.5, 0.75, 1.0]
+    temperatures = [4000.0, 2000.0, 1000.0, 750.0, 500.0, 300.0]
+    energy_factor = 64.0
+    boltzmann_constant = 8.617330337217213e-5
+    n_mc_eq = 10000
+    n_mc_steps = 100000
+    sample_interval = 10
+    n_reference_samples = 2000
+    n_blocks = 20
+    random_seed = 42
+    predict_swap = true
+    reduce_structure = true
+    nonlinear = true
+    max_steps_per_batch = 20000
+    output_filepath = "mixing-free-energy.json"
+    overwrite = false
+
+Instead of ``temperatures``, supply all three of ``temperature_start``,
+``temperature_stop`` and ``n_temperatures`` for a linearly spaced temperature
+range. These alternatives are mutually exclusive. Direct CLI invocation uses
+JSON lists, for example::
+
+    cell compute_free_energy_of_mixing -mofp model.pickle -plfp plat.json \
+        -scsh '[4,4,4]' -x '[0.25,0.5,0.75]' -temps '[4000,2000,1000,500]' \
+        -ef 64 -k_B 8.617330337217213e-5 -n_eq 10000 -n_steps 100000 \
+        -sample_every 10 -n_ref 2000 -blocks 20 -rs 42 \
+        -pred_swap true -reduce true -nonlinear true -out mixing-free-energy.json
+
+The returned dictionary and JSON file have ``settings``, ``endmembers``,
+``references`` (the beta=0 nodes), and ``results``. Each result includes
+``composition``, ``n_b``, ``temperature``, ``beta``, ``mean_energy_per_site``,
+``mean_mixing_energy_per_site``, ``free_energy_of_mixing_per_site``, and standard
+errors in the corresponding ``*_stderr`` fields. Species, conversion inputs,
+site counts, random seeds, proposal counts and quadrature are recorded. An
+existing destination requires explicit ``overwrite=true``. Input model files
+are not rewritten while warming geometry caches.
+Fields named ``mean_energy_per_site`` refer to the scaled quantity predicted
+by the supplied CE. For an effective configuration free-energy CE, they are
+mean effective free energies, rather than thermodynamic internal energies.
+
+Production standard errors use ``n_blocks`` consecutive block means; there
+must be at least two observations per block. Blocks must be long enough to
+resolve autocorrelation. The beta=0 error uses independent-sample statistics.
+Free-energy errors propagate these node errors with the quadrature weights,
+neglecting correlations between temperatures; they do not include inadequate
+equilibration, quadrature, finite-size or model errors. Check convergence in
+all these controls, particularly near phase transitions.
+
+Energy statistics keep only online moments and block averages. Accepted-move
+histories are not serialized, and temporary proposal arrays respect
+``max_steps_per_batch``. In the lower-level API, the optional
+``metropolis(..., energy_observer=callback, observation_interval=10)`` calls
+``callback(step, total_energy)`` after the requested proposal intervals,
+including rejections. Energy includes the absolute model intercept and the
+user's factor even for reduced MC. Steps are local to that call, no initial
+observation is made, and the callback must not mutate the chain.

@@ -11,6 +11,7 @@ import os
 import operator
 import random
 from numbers import Real
+from pathlib import Path
 
 from tqdm import tqdm
 import numpy as np
@@ -30,6 +31,19 @@ def _positive_scalar(value, name):
     value = float(value)
     if not math.isfinite(value) or value <= 0:
         raise ValueError(f"{name} must be supplied explicitly as one finite positive number")
+    return value
+
+
+def _mc_count(value, name, minimum=0):
+    """Require an integer control without accepting booleans or truncating floats."""
+    try:
+        if isinstance(value, (bool, np.bool_)):
+            raise TypeError
+        value = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer >= {minimum}") from exc
+    if value < minimum:
+        raise ValueError(f"{name} must be an integer >= {minimum}")
     return value
 
 
@@ -226,6 +240,8 @@ class MonteCarlo:
         max_steps_per_batch: int = 100_000,
         continue_chain: bool = False,
         metadata: dict | None = None,
+        energy_observer=None,
+        observation_interval: int = 1,
     ):
         r"""Perform Monte-Carlo Metropolis simulation
 
@@ -318,6 +334,16 @@ class MonteCarlo:
             Optional descriptive information saved with the trajectory. Sampling
             options must be explicit arguments; unknown keywords are errors.
 
+        ``energy_observer``: callable or None
+            Optional callback ``energy_observer(step, total_energy)`` after each
+            observation interval, including rejected moves. Energy is absolute
+            model energy multiplied by energy_factor, also for reduced MC.
+            No initial-state observation is made. The callback must not mutate
+            the chain. This permits averages without accepted-move histories.
+
+        ``observation_interval``: positive integer
+            Proposal spacing for the observer, counted within this call.
+
         **Returns**: MonteCarloTrajectory object
             Trajectory containing the complete information of the sampling trajectory.
 
@@ -326,6 +352,9 @@ class MonteCarlo:
         boltzmann_constant = _positive_scalar(boltzmann_constant, "boltzmann_constant")
         if metadata is not None and not isinstance(metadata, dict):
             raise ValueError("metadata must be a dictionary")
+        if energy_observer is not None and not callable(energy_observer):
+            raise ValueError("energy_observer must be callable")
+        observation_interval = _mc_count(observation_interval, "observation_interval", minimum=1)
         self._sampling_parameters = {"energy_factor": energy_factor, "boltzmann_constant": boltzmann_constant}
 
         try:
@@ -393,6 +422,19 @@ class MonteCarlo:
                 current_energy = e_last
         if self._reduce_structure:
             e_last = np.float64(0.0)
+
+        # Affine reduced MC normally needs only relative energies. Obtain an
+        # absolute origin only when observations need it, then carry it across
+        # calls without rebuilding correlations at temperature boundaries.
+        if use_correlations or not self._predict_swap or not self._reduce_structure:
+            absolute_start = current_energy
+        else:
+            absolute_start = self._chain_state.get("absolute_energy") if continuing else None
+        if energy_observer is not None and absolute_start is None:
+            absolute_start = self._energy_value(
+                self._emodel.predict(structure, reduce_structure=self._reduce_structure)
+            )
+        energy_offset = absolute_start - e_last if absolute_start is not None else None
 
         global_step_offset = self._chain_state["global_step"] if continuing else 0
         stage = self._chain_state.get("stage", 1) + 1 if continuing else 1
@@ -541,6 +583,9 @@ class MonteCarlo:
                 for i, new_sigma, old_sigma, site_type in flip_tuples[::-1]:
                     structure.flip(i, new_sigma, old_sigma, site_type)
 
+            if energy_observer is not None and step % observation_interval == 0:
+                energy_observer(step, float(energy_factor * (energy_offset + e_last)))
+
             rate = rave.update_and_get_average(1.0 * accept_step)
             if target_rate is not None:
                 global_step = global_step_offset + step
@@ -577,6 +622,7 @@ class MonteCarlo:
             "global_step": global_step_offset + no_of_sampling_steps,
             "stage": stage,
             "counter_origin": counter_origin,
+            "absolute_energy": energy_offset + e_last if energy_offset is not None else None,
         }
 
         return traj
@@ -822,6 +868,318 @@ class MonteCarlo:
     ):
         """The stepwise runner is unfinished; use metropolis with explicit physical inputs."""
         raise NotImplementedError("Use metropolis with explicit energy_factor, temperature, and boltzmann_constant")
+
+
+class _EnergyMoments:
+    """Online moments for independent reference samples or production energies."""
+
+    def __init__(self):
+        self.count = 0
+        self.mean = 0.0
+        self.m2 = 0.0
+
+    def add(self, value):
+        if not math.isfinite(value):
+            raise ValueError("The energy model returned a nonfinite energy")
+        self.count += 1
+        delta = value - self.mean
+        self.mean += delta / self.count
+        self.m2 += delta * (value - self.mean)
+
+    def independent_stderr(self):
+        return math.sqrt(max(0.0, self.m2) / (self.count * (self.count - 1))) if self.count > 1 else 0.0
+
+
+class _BlockEnergyMoments(_EnergyMoments):
+    """Retain block averages, not a per-proposal trajectory, for an approximate SEM."""
+
+    def __init__(self, n_samples, n_blocks):
+        super().__init__()
+        base, remainder = divmod(n_samples, n_blocks)
+        self.sizes = [base + (i < remainder) for i in range(n_blocks)]
+        self.blocks = []
+        self.current = _EnergyMoments()
+
+    def add(self, value):
+        super().add(value)
+        self.current.add(value)
+        if self.current.count == self.sizes[len(self.blocks)]:
+            self.blocks.append(self.current.mean)
+            self.current = _EnergyMoments()
+
+    def stderr(self):
+        # Weighted block means also handle sample counts not divisible by n_blocks.
+        residual = sum(n * (value - self.mean)**2 for n, value in zip(self.sizes, self.blocks))
+        return math.sqrt(residual / ((len(self.blocks) - 1) * self.count))
+
+
+def _ti_values(values, name):
+    """Normalize a scalar or one-dimensional numerical input without guessing units."""
+    values = np.asarray(values)
+    if values.ndim == 0:
+        values = values.reshape(1)
+    if values.ndim != 1 or not values.size or values.dtype.kind not in "ifu":
+        raise ValueError(f"{name} must be a number or a nonempty one-dimensional list of numbers")
+    values = values.astype(float)
+    if not np.all(np.isfinite(values)):
+        raise ValueError(f"{name} must contain only finite values")
+    return values
+
+
+def compute_free_energy_of_mixing(
+    energy_model: Model,
+    scell: SuperCell,
+    compositions,
+    temperatures,
+    *,
+    energy_factor: float,
+    boltzmann_constant: float,
+    n_mc_steps: int = 10_000,
+    n_mc_eq: int = 1_000,
+    sample_interval: int = 1,
+    n_reference_samples: int = 1_000,
+    n_blocks: int = 10,
+    random_seed: int | None = None,
+    predict_swap: bool = True,
+    reduce_structure: bool = False,
+    nonlinear: bool = True,
+    energy_key: str = "energy",
+    max_steps_per_batch: int = 100_000,
+    filename: str | os.PathLike | None = None,
+    overwrite: bool = False,
+):
+    r"""Compute configurational mixing free energies by canonical thermodynamic integration.
+
+    For N binary substitutional sites, NB=x*N, and beta=1/(k_B*T), evaluate
+
+    .. math::
+
+        \beta\Delta f_{mix}=-\log\binom{N}{N_B}/N+
+        \int_0^\beta [\langle E_{total}\rangle/N-(1-x)e_A-xe_B]d\beta'.
+
+    Only one binary substitutional site type is supported. Spectators remain
+    pristine; N counts alloy sites, not all atoms. Species B is sigma=1 in the
+    ordered allowed-species list. Compositions must give integer NB exactly;
+    they are never silently rounded to a different composition. Pure limits
+    are computed analytically without attempting an impossible unlike-atom swap.
+
+    energy_factor must convert predictions to TOTAL supercell energy, in the
+    same energy unit as boltzmann_constant*temperature, for every composition
+    including both endmembers.
+    Results are per binary site in that user-chosen energy unit. No unit system
+    or atom-count normalization is inferred.
+
+    The supplied CE is held fixed along the integration path, including the
+    endmembers and beta=0 reference. It may represent configuration energies
+    or effective configuration free energies at a chosen physical temperature.
+    For example, keep a CE fitted at 300 K fixed while integrating the auxiliary
+    sampling beta from zero to 1/(k_B*300 K). The endpoint gives the mixing free
+    energy for that 300 K model; intermediate temperatures are sampling
+    parameters and do not change the physical temperature represented by the CE.
+    All entries in temperatures use the same supplied model. To evaluate a
+    family of temperature-dependent CEs, repeat the complete integration for
+    each physical target using its corresponding CE held fixed. This function
+    neither updates the CE with sampling temperature nor includes the derivative
+    terms needed for integration along a path with changing model parameters.
+    E_total and mean_energy_per_site denote scaled model predictions; for an
+    effective free-energy CE, they are not thermodynamic internal energies.
+
+    Positive, distinct temperatures may be supplied in either order. Sampling
+    and output are ordered from high to low T (increasing beta). Composite
+    trapezoidal quadrature includes beta=0 explicitly. At beta=0, independent
+    random decorations are drawn uniformly at fixed NB and their actual model
+    predictions averaged. Independent-site random correlations are not exact
+    at finite fixed composition and cannot replace these samples for nonlinear
+    models. n_reference_samples controls this reference estimate, not MC burn-in.
+
+    Each positive-temperature node discards n_mc_eq proposals, then measures
+    n_mc_steps production proposals at sample_interval spacing, including
+    rejected moves. Chains continue across temperatures. n_blocks block means
+    estimate production standard errors; require at least two samples per block.
+    References use the ordinary independent-sample SEM. Free-energy SEMs propagate
+    node errors with trapezoidal weights, neglecting cross-temperature covariance.
+    They exclude quadrature bias, poor equilibration, and finite-size errors.
+    Check convergence in beta spacing, reference samples, burn-in, run length,
+    block length, and supercell size. No target-rate adaptation is used.
+
+    Returns a JSON-compatible dictionary with settings, endmember energies,
+    beta=0 reference estimates, and one results row per composition/temperature.
+    filename optionally writes the same dictionary as JSON; overwrite defaults
+    to False. Added sampling storage depends on n_blocks and the grid size,
+    not on the total number of proposals. No accepted-move history is serialized.
+    """
+    energy_factor = _positive_scalar(energy_factor, "energy_factor")
+    boltzmann_constant = _positive_scalar(boltzmann_constant, "boltzmann_constant")
+    n_mc_steps = _mc_count(n_mc_steps, "n_mc_steps", minimum=1)
+    n_mc_eq = _mc_count(n_mc_eq, "n_mc_eq")
+    sample_interval = _mc_count(sample_interval, "sample_interval", minimum=1)
+    n_reference_samples = _mc_count(n_reference_samples, "n_reference_samples", minimum=2)
+    n_blocks = _mc_count(n_blocks, "n_blocks", minimum=2)
+    max_steps_per_batch = _mc_count(max_steps_per_batch, "max_steps_per_batch", minimum=1)
+    if random_seed is not None:
+        random_seed = _mc_count(random_seed, "random_seed")
+    n_samples = n_mc_steps // sample_interval
+    if n_samples < 2 * n_blocks:
+        raise ValueError("n_mc_steps/sample_interval must yield at least two samples per block")
+    xs = _ti_values(compositions, "compositions")
+    ts = _ti_values(temperatures, "temperatures")
+    if np.any((xs < 0) | (xs > 1)):
+        raise ValueError("compositions must lie between 0 and 1")
+    if np.any(ts <= 0) or len(np.unique(ts)) != len(ts):
+        raise ValueError("temperatures must be positive and distinct")
+    temperatures = np.sort(ts)[::-1]
+    betas = 1.0 / (boltzmann_constant * temperatures)
+    if not np.all(np.isfinite(betas)) or np.any(betas <= 0) or np.any(np.diff(betas) <= 0):
+        raise ValueError("k_B*T must give finite positive inverse temperatures")
+    if energy_model.get_parent_lattice() != scell.get_parent_lattice():
+        raise ValueError("Model and simulation parent lattices differ")
+    tags = scell.get_substitutional_tags()
+    if len(tags) != 1 or len(scell.get_sublattice_types()[tags[0]]) != 2:
+        raise ValueError("Free-energy integration requires exactly one binary substitutional site type")
+    tag = int(tags[0])
+    active = scell.get_substitutional_sites()
+    n_sites = len(active)
+    if not n_sites:
+        raise ValueError("The simulation supercell must contain binary substitutional sites")
+    counts = [int(round(float(x) * n_sites)) for x in xs]
+    if any(abs(float(x) * n_sites - count) > 1e-8 for x, count in zip(xs, counts)):
+        raise ValueError("Each composition must give an integer number of species-B sites in this supercell")
+    if len(set(counts)) != len(counts):
+        raise ValueError("compositions must specify distinct species-B counts")
+    output = Path(filename) if filename is not None else None
+    if not isinstance(overwrite, (bool, np.bool_)):
+        raise ValueError("overwrite must be a boolean")
+    if output is not None:
+        if output.exists() and not overwrite:
+            raise FileExistsError(f"Output already exists: {output}; set overwrite=True explicitly")
+        if not output.parent.is_dir():
+            raise FileNotFoundError(f"Output directory does not exist: {output.parent}")
+    width = len(energy_model.corrc.get_cpool())
+    if (predict_swap and not nonlinear and energy_model.estimator is not None
+            and energy_model._get_affine_parameters(width) is None):
+        raise ValueError("Use nonlinear=True for estimators not recognized as affine")
+
+    # Keep input model artifacts read-only while warming geometry caches.
+    cache_filepath = energy_model.corrc.pickle_file
+    energy_model.corrc.pickle_file = None
+    try:
+        selector = MonteCarlo(energy_model, scell, nsubs={tag: [0]}, energy_key=energy_key)
+        pristine = Structure(scell, sigmas=np.zeros(len(scell), dtype=int))
+        if reduce_structure:
+            energy_model.init_reduced_model(pristine)
+
+        def energy_per_site(structure):
+            if reduce_structure:
+                structure.init_reduced_structure(energy_model.scell_reduced)
+            prediction = selector._energy_value(energy_model.predict(structure, reduce_structure=reduce_structure))
+            prediction = np.asarray(prediction)
+            if prediction.size != 1 or not np.all(np.isfinite(prediction)):
+                raise ValueError("The selected energy model must return one finite energy")
+            energy = energy_factor * float(prediction.reshape(-1)[0]) / n_sites
+            if not math.isfinite(energy):
+                raise ValueError("energy_factor must give finite scaled model energies")
+            return energy
+
+        e_a = energy_per_site(pristine)
+        sigmas_b = np.zeros(len(scell), dtype=int)
+        sigmas_b[active] = 1
+        e_b = energy_per_site(Structure(scell, sigmas=sigmas_b))
+        seed_sequence = np.random.SeedSequence(random_seed)
+        seeds = seed_sequence.spawn(2 * len(counts))
+        result = {
+            "schema_version": 1,
+            "method": "canonical_monte_carlo_thermodynamic_integration",
+            "settings": {
+                "energy_factor": energy_factor, "boltzmann_constant": boltzmann_constant,
+                "n_sites": n_sites, "n_atoms": len(scell), "site_type": tag,
+                "species_a": int(scell.get_sublattice_types()[tag][0]),
+                "species_b": int(scell.get_sublattice_types()[tag][1]),
+                "input_temperatures": ts.tolist(), "temperature_order": "decreasing_temperature_increasing_beta",
+                "n_mc_steps": n_mc_steps, "n_mc_eq": n_mc_eq, "sample_interval": sample_interval,
+                "n_reference_samples": n_reference_samples, "n_blocks": n_blocks,
+                "predict_swap": predict_swap, "reduce_structure": reduce_structure, "nonlinear": nonlinear,
+                "max_steps_per_batch": max_steps_per_batch, "seed_entropy": seed_sequence.entropy,
+                "quadrature": "composite_trapezoid_in_beta_including_zero",
+                "uncertainty": (
+                    "block_SEM; node_error_propagation; excludes_cross_temperature_covariance_and_quadrature_bias"
+                ),
+            },
+            "endmembers": {"energy_a_per_site": e_a, "energy_b_per_site": e_b},
+            "references": [], "results": [],
+        }
+        for index, count in enumerate(counts):
+            x = count / n_sites
+            baseline = (1 - x) * e_a + x * e_b
+            pure = count in (0, n_sites)
+            reference_seed = int(seeds[2 * index].generate_state(1, dtype=np.uint64)[0])
+            mc_seed = int(seeds[2 * index + 1].generate_state(1, dtype=np.uint64)[0])
+            reference = _EnergyMoments()
+            mc = MonteCarlo(energy_model, scell, nsubs={tag: [count]}, predict_swap=predict_swap,
+                            reduce_structure=reduce_structure, energy_key=energy_key, seed=mc_seed)
+            if pure:
+                reference.add(baseline)
+            else:
+                rng = np.random.default_rng(reference_seed)
+                for _ in range(n_reference_samples):
+                    reference.add(energy_per_site(scell.gen_random_structure(nsubs={tag: [count]}, rng=rng)))
+            result["references"].append({
+                "composition": x, "n_b": count, "beta": 0.0, "temperature": None,
+                "mean_energy_per_site": reference.mean,
+                "mean_energy_per_site_stderr": reference.independent_stderr(),
+                "n_samples": reference.count,
+                "method": "single_configuration" if pure else "uniform_random_fixed_composition",
+                "reference_seed": reference_seed, "mc_seed": mc_seed,
+            })
+            log_omega = math.lgamma(n_sites + 1) - math.lgamma(count + 1) - math.lgamma(n_sites - count + 1)
+            means = [reference.mean - baseline]
+            errors = [reference.independent_stderr()]
+            beta_grid = [0.0]
+            continuing = False
+            for temperature, beta in zip(temperatures, betas):
+                if pure:
+                    mean, error, sample_count = baseline, 0.0, 0
+                else:
+                    sampling = dict(energy_factor=energy_factor, boltzmann_constant=boltzmann_constant,
+                                    temperature=float(temperature), nonlinear=nonlinear,
+                                    max_steps_per_batch=max_steps_per_batch, serialize=False)
+                    if n_mc_eq:
+                        mc.metropolis(n_mc_eq, continue_chain=continuing, **sampling)
+                        continuing = True
+                    statistics = _BlockEnergyMoments(n_samples, n_blocks)
+
+                    def observe(_step, total_energy):
+                        statistics.add(total_energy / n_sites)
+
+                    mc.metropolis(n_mc_steps, continue_chain=continuing, energy_observer=observe,
+                                  observation_interval=sample_interval, **sampling)
+                    continuing = True
+                    mean, error, sample_count = statistics.mean, statistics.stderr(), statistics.count
+                means.append(mean - baseline)
+                errors.append(error)
+                beta_grid.append(float(beta))
+                widths = np.diff(beta_grid)
+                weights = np.zeros(len(beta_grid))
+                weights[:-1] += widths / 2
+                weights[1:] += widths / 2
+                integral = float(np.dot(weights, means))
+                beta_free_energy = -log_omega / n_sites + integral
+                free_error = float(np.linalg.norm(weights * errors) / beta)
+                result["results"].append({
+                    "composition": x, "n_b": count, "temperature": float(temperature), "beta": float(beta),
+                    "mean_energy_per_site": mean, "mean_energy_per_site_stderr": error,
+                    "mean_mixing_energy_per_site": mean - baseline,
+                    "free_energy_of_mixing_per_site": beta_free_energy / float(beta),
+                    "free_energy_of_mixing_per_site_stderr": free_error,
+                    "beta_free_energy_of_mixing_per_site": beta_free_energy,
+                    "n_samples": sample_count, "log_configuration_count": log_omega,
+                })
+        if output is not None:
+            with output.open("w" if overwrite else "x", encoding="utf-8") as stream:
+                json.dump(result, stream, cls=NumpyEncoder, indent=2, allow_nan=False)
+                stream.write("\n")
+        return result
+    finally:
+        energy_model.corrc.pickle_file = cache_filepath
 
 
 class MonteCarloTrajectory:
