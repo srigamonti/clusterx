@@ -3,8 +3,10 @@
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
 import json
+import operator
 import os
 import warnings
+from numbers import Real
 from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
@@ -152,6 +154,54 @@ def _normalize_legend_location(value: str) -> str:
     raise ValueError("legend_location must be one of: " + ", ".join(valid))
 
 
+def _legend_anchor(value):
+    if value is None:
+        return None
+    if not isinstance(value, list) or len(value) not in (2, 4):
+        raise ValueError("legend_bbox_to_anchor must be a list of 2 or 4 finite numbers in axes fractions.")
+    if any(isinstance(v, (bool, np.bool_)) or not isinstance(v, Real) for v in value):
+        raise ValueError("legend_bbox_to_anchor must contain only finite numbers.")
+    try:
+        anchor = [float(v) for v in value]
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("legend_bbox_to_anchor must contain only finite numbers.") from exc
+    if not np.all(np.isfinite(anchor)):
+        raise ValueError("legend_bbox_to_anchor must contain only finite numbers.")
+    return anchor
+
+
+def _plot_annotations(value):
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("annotations must be a list of dictionaries.")
+    required = {"text", "x", "y"}
+    allowed = required | {"coordinates", "ha", "va", "fontsize", "fontweight"}
+    annotations = []
+    for i, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise ValueError(f"annotations[{i}] must be a dictionary.")
+        if item.keys() - allowed:
+            unknown = ", ".join(sorted(str(key) for key in item.keys() - allowed))
+            raise ValueError(f"annotations[{i}] has unknown keys: {unknown}.")
+        if required - item.keys():
+            raise ValueError(f"annotations[{i}] is missing required keys: {', '.join(sorted(required - item.keys()))}.")
+        item = item.copy()
+        if not isinstance(item["text"], str):
+            raise ValueError(f"annotations[{i}].text must be a string.")
+        for name in ("x", "y"):
+            coordinate = item[name]
+            if (isinstance(coordinate, (bool, np.bool_)) or not isinstance(coordinate, Real)
+                    or not np.isfinite(coordinate)):
+                raise ValueError(f"annotations[{i}].{name} must be a finite number.")
+            item[name] = float(coordinate)
+        coordinates = item.setdefault("coordinates", "axes fraction")
+        if coordinates not in ("axes fraction", "data"):
+            raise ValueError(f"annotations[{i}].coordinates must be 'axes fraction' or 'data'.")
+        annotations.append(item)
+    return annotations
+
+
 def _shared_target_prediction_limits(
     x_values: np.ndarray,
     y_values: np.ndarray,
@@ -216,6 +266,7 @@ def _shared_target_prediction_limits(
     title=("Figure title.", "option", "t", str),
     xlabel=("Label for the x-axis of the plot.", "option", "xl", str),
     ylabel=("Label for the y-axis of the plot.", "option", "yl", str),
+    xfactor=("Multiplicative factor applied to x data before plotting/export.", "option", "xf", float),
     yfactor=(
         "Multiplicative factor applied to y data before plotting/export.",
         "option",
@@ -284,6 +335,12 @@ def _shared_target_prediction_limits(
     legend_location=("Legend position using Matplotlib names, e.g. upper left/best.", "option", None, str),
     legend_handlelength=("Legend handle length in font-size units.", "option", None, float),
     legend_handletextpad=("Legend padding between handle and text in font-size units.", "option", None, float),
+    legend_ncols=("Positive number of legend columns (default 1).", "option", None, int),
+    legend_bbox_to_anchor=("JSON list of 2 or 4 legend anchor coordinates in axes fractions.",
+                           "option", None, json.loads),
+    rc_params=("Matplotlib rcParams as a JSON dictionary, scoped to this plot.", "option", None, json.loads),
+    annotations=("JSON list of text/x/y dictionaries; coordinates: 'axes fraction' or 'data'.",
+                 "option", None, json.loads),
     show_plot=("Display the plot window if True.", "option", None, bool),
     savefig=(
         "Filepath to save generated figure (e.g. plot.png).",
@@ -292,6 +349,7 @@ def _shared_target_prediction_limits(
         str,
     ),
     dpi=("Resolution in dots per inch used when saving figures.", "option", None, float),
+    savefig_bbox_inches=("Use 'tight' to include outside legends and labels when saving.", "option", None, str),
     figdata_fname=(
         "Filepath to save plotted data. Supported extensions: .npz, .json, .txt, .dat.",
         "option",
@@ -302,7 +360,7 @@ def _shared_target_prediction_limits(
         "List of series dictionaries from TOML. Per-series keys: xcolumn, ycolumn, "
         "source_filepath (optional), mask_name (optional), label (optional), "
         "filter_ycolumn/filter_value (optional), "
-        "yfactor (optional), color/marker/size/edgecolor/facecolor/linewidth/alpha (optional), "
+        "xfactor/yfactor (optional), color/marker/size/edgecolor/facecolor/linewidth/alpha (optional), "
         "or style={...} for grouped styling. Also supports ymode in "
         "{marker,cloud,violin,boxplot,auto} for array-valued y columns. "
         "Set binned=true to group scalar y values by unique x bin (with optional xtol snap). "
@@ -352,6 +410,12 @@ def plot_columns(
     dpi: float = 300.0,
     figdata_fname: Optional[str] = None,
     series: Optional[List[Dict[str, Any]]] = None,
+    xfactor: float = 1.0,
+    rc_params: Optional[Dict[str, Any]] = None,
+    legend_ncols: int = 1,
+    legend_bbox_to_anchor: Optional[list] = None,
+    annotations: Optional[List[Dict[str, Any]]] = None,
+    savefig_bbox_inches: Optional[str] = None,
 ):
     """Plot one or more columns from serialized DerivativeStructures or StructuresSet objects.
 
@@ -370,9 +434,16 @@ def plot_columns(
         series that do not explicitly set them.
     - ``title`` (str, optional): figure title.
     - ``xlabel`` / ``ylabel`` (str, optional): axis labels.
-    - ``yfactor`` (float): multiplicative factor applied to y data before
-        plotting and exporting data (default: ``1.0``).
-    - ``xrange`` / ``yrange`` (list[float, float], optional): axis limits.
+    - ``xfactor`` / ``yfactor`` (float): multiply each coordinate once before
+        grouping, plotting, parity limits and export (both default to ``1.0``).
+        Source properties are unchanged. Each series can override either factor.
+    - ``xrange`` / ``yrange`` (list[float, float], optional): axis limits in
+        displayed units, after coordinate scaling. Ticks, ``xtol``, distribution
+        widths and x jitter also use displayed units and are not scaled again.
+    - ``rc_params`` (dict, optional): Matplotlib rcParams applied inside an
+        ``rc_context`` spanning figure creation, formatting and saving. Settings
+        are restored even on errors. Set the backend before calling this command;
+        ``backend`` is not a supported presentation setting here.
     - ``colors`` (list[str], optional): default color palette for series without
         explicit ``color``.
     - ``width`` / ``height`` (float, optional): figure size in inches. Defaults
@@ -409,12 +480,27 @@ def plot_columns(
     - ``show_legend_frame`` (bool): show/hide the legend frame box.
     - ``legend_location`` (str): legend position using Matplotlib ``loc``
         names (e.g. ``"best"``, ``"upper left"``, ``"lower center"``).
+    - ``legend_ncols`` (int): positive number of legend columns (default ``1``).
+    - ``legend_bbox_to_anchor`` (list, optional): 2 or 4 finite numbers in axes
+        fractions, passed as Matplotlib's ``bbox_to_anchor``. For two entries,
+        anchor at (x, y); four entries specify (x, y, width, height). For a
+        horizontal legend above the plot, use ``legend_ncols=2``,
+        ``legend_location="lower center"`` and anchor ``[0.5, 1.04]``.
     - ``legend_handlelength`` (float, optional): handle length passed to
         Matplotlib ``legend(handlelength=...)``.
     - ``legend_handletextpad`` (float, optional): spacing between legend
         handles and labels passed to ``legend(handletextpad=...)``.
     - ``show_plot`` (bool): show interactive window.
     - ``savefig`` (str, optional): output figure path (e.g. ``plot.png``).
+    - ``savefig_bbox_inches`` (str, optional): ``"tight"`` includes outside
+        legends and labels when saving PNG, PDF or SVG. Omitted by default to
+        preserve existing figure dimensions. Legends participate in layout.
+    - ``annotations`` (list[dict], optional): text labels with required keys
+        ``text`` (str), ``x`` and ``y`` (finite numbers). ``coordinates`` defaults
+        to ``"axes fraction"``: (0, 0) is the lower-left axes corner, (1, 1) the
+        upper-right, independent of data limits. ``"data"`` uses displayed data
+        coordinates. Optional keys are ``ha``, ``va``, ``fontsize``, ``fontweight``.
+        Other keys are rejected. Annotation coordinates are not scaled again.
     - ``dpi`` (float): resolution used for ``savefig`` (default: ``300``).
     - ``figdata_fname`` (str, optional): data export path
         (``.json/.npz/.txt/.dat``).
@@ -433,8 +519,8 @@ def plot_columns(
     - ``filter_value``: only rows where ``filter_ycolumn == filter_value`` are
         kept.
     - ``label`` (str): legend label.
-    - ``yfactor`` (float): override the top-level y scaling factor for this
-        series.
+    - ``xfactor`` / ``yfactor`` (float): override the corresponding top-level
+        scaling factor for this series.
     - ``color`` (str): matplotlib color spec (e.g. ``"k"``, ``"#1f77b4"``,
         ``"red"``).
     - ``marker`` (str): matplotlib marker (e.g. ``"o"``, ``"s"``, ``"^"``, ``"."``).
@@ -473,6 +559,52 @@ def plot_columns(
     - ``mean_line_label`` (str): optional legend label for the mean line.
 
     If both ``style`` and direct keys are provided, direct keys win.
+
+    JSON exports record presentation settings and the transformed series
+    ``x``, ``y`` and ``y_samples`` values, with their effective x/y factors.
+    NPZ exports include ``xfactor_i``, ``yfactor_i`` and a JSON ``plot_metadata``
+    string. Text exports retain their three numeric columns and add factors
+    in the comment header.
+
+    Presentation example with named TOML steps
+    ------------------------------------------
+    Run with ``cell --input_file plots.toml``. Both energy columns in this
+    example are stored in eV/atom and displayed in meV/atom::
+
+        do = ["parity"]
+
+        [parity]
+        command = "plot_columns"
+        source_filepath = "training_predictions.xyz"
+        xcolumn = "f_mix"
+        ycolumn = "f_mix_pred"
+        xfactor = 1000.0
+        yfactor = 1000.0
+        target_vs_predictions = true
+        xlabel = '$F_v$, TI [meV / atom]'
+        ylabel = '$F_v$, CE [meV / atom]'
+        show_plot = false
+        savefig = "parity.png"
+        savefig_bbox_inches = "tight"
+        figdata_fname = "parity.json"
+
+        [parity.rc_params]
+        "font.size" = 20.0
+        "axes.labelsize" = 24.0
+        "axes.spines.top" = false
+
+        [[parity.annotations]]
+        text = "300 K"
+        x = 0.06
+        y = 0.94
+        ha = "left"
+        va = "top"
+        fontweight = "bold"
+
+    Direct CLI structured options use JSON, for example
+    ``-rc-params '{"axes.labelsize":24}'``,
+    ``-legend-bbox-to-anchor '[0.5,1.04]'``, and
+    ``-annotations '[{"text":"300 K","x":0.06,"y":0.94}]'``.
 
     Color precedence
     ----------------
@@ -628,7 +760,25 @@ def plot_columns(
     if float(dpi) <= 0:
         raise ValueError("dpi must be positive.")
 
+    xfactor = float(xfactor)
     yfactor = float(yfactor)
+
+    if rc_params is not None and not isinstance(rc_params, dict):
+        raise ValueError("rc_params must be a dictionary when provided.")
+    if rc_params is not None and "backend" in rc_params:
+        raise ValueError("rc_params cannot set backend; select the Matplotlib backend before calling plot_columns.")
+    try:
+        if isinstance(legend_ncols, (bool, np.bool_)):
+            raise TypeError
+        legend_ncols = operator.index(legend_ncols)
+    except TypeError as exc:
+        raise ValueError("legend_ncols must be a positive integer.") from exc
+    if legend_ncols < 1:
+        raise ValueError("legend_ncols must be a positive integer.")
+    legend_bbox_to_anchor = _legend_anchor(legend_bbox_to_anchor)
+    annotations = _plot_annotations(annotations)
+    if savefig_bbox_inches not in (None, "tight"):
+        raise ValueError("savefig_bbox_inches must be None or 'tight'.")
 
     if loglog and symlog:
         raise ValueError("Use only one of loglog=True or symlog=True.")
@@ -672,7 +822,13 @@ def plot_columns(
         "ylabel": ylabel,
         "width": width,
         "height": height,
+        "xfactor": xfactor,
         "yfactor": yfactor,
+        "rc_params": rc_params,
+        "legend_ncols": legend_ncols,
+        "legend_bbox_to_anchor": legend_bbox_to_anchor,
+        "annotations": annotations,
+        "savefig_bbox_inches": savefig_bbox_inches,
         "target_vs_predictions": target_vs_predictions,
         "loglog": loglog,
         "symlog": symlog,
@@ -704,453 +860,481 @@ def plot_columns(
         fig_width = 6.0 if width is None else float(width)
         fig_height = 4.0 if height is None else float(height)
 
-    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-    plotted_x_values: List[np.ndarray] = []
-    plotted_y_values: List[np.ndarray] = []
+    with plt.rc_context(rc=rc_params):
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+        try:
+            plotted_x_values: List[np.ndarray] = []
+            plotted_y_values: List[np.ndarray] = []
 
-    # Color priority: series[i].color > colors[i] > matplotlib tab10 cycle
-    default_colors = [
-        "#1f77b4",
-        "#ff7f0e",
-        "#2ca02c",
-        "#d62728",
-        "#9467bd",
-        "#8c564b",
-        "#e377c2",
-        "#7f7f7f",
-        "#bcbd22",
-        "#17becf",
-    ]
-    palette = colors if (colors is not None and len(colors) > 0) else default_colors
-
-    for i, item in enumerate(series):
-        if not isinstance(item, dict):
-            raise ValueError(f"series[{i}] must be a dictionary.")
-
-        src = item.get("source_filepath", source_filepath)
-        xcolumn_s = item.get("xcolumn", xcolumn)
-        ycolumn_s = item.get("ycolumn", ycolumn)
-        yfactor_s = float(item.get("yfactor", yfactor))
-        mask_name = item.get("mask_name")
-        filter_ycolumn = item.get("filter_ycolumn")
-        has_filter_value = "filter_value" in item
-        filter_value = item.get("filter_value")
-
-        if xcolumn_s is None or ycolumn_s is None:
-            raise ValueError(
-                f"series[{i}] must define both 'xcolumn' and 'ycolumn', either directly or via top-level defaults."
-            )
-
-        if filter_ycolumn is not None and not has_filter_value:
-            raise ValueError(f"series[{i}] defines 'filter_ycolumn' but is missing 'filter_value'.")
-        if has_filter_value and filter_ycolumn is None:
-            raise ValueError(f"series[{i}] defines 'filter_value' but is missing 'filter_ycolumn'.")
-
-        if src not in dsg_cache:
-            dsg_cache[src] = _load_plot_source(src)
-
-        dsg = dsg_cache[src]
-
-        if xcolumn_s == "frconc_binary" and xcolumn_s not in dsg.configurations.columns:
-            dsg.add_fractional_concentration_binary()
-
-        if filter_ycolumn == "frconc_binary" and filter_ycolumn not in dsg.configurations.columns:
-            dsg.add_fractional_concentration_binary()
-
-        if xcolumn_s not in dsg.configurations.columns:
-            raise ValueError(f"Column '{xcolumn_s}' not found in configurations from '{src}'.")
-
-        if ycolumn_s not in dsg.configurations.columns:
-            raise ValueError(f"Column '{ycolumn_s}' not found in configurations from '{src}'.")
-
-        weight_by_multiplicity = bool(item.get("weight_by_multiplicity", False))
-        if weight_by_multiplicity and "multiplicity" not in dsg.configurations.columns:
-            dsg.add_multiplicity()
-
-        df = dsg.get_configurations(mask_name=mask_name)
-
-        if filter_ycolumn is not None:
-            if filter_ycolumn not in df.columns:
-                raise ValueError(f"Column '{filter_ycolumn}' not found in configurations from '{src}'.")
-            df = df[df[filter_ycolumn] == filter_value]
-
-        if len(df) == 0:
-            warnings.warn(
-                f"series[{i}] produced no rows after applying mask/filter; skipping series.",
-                RuntimeWarning,
-            )
-            continue
-
-        x = np.asarray(df[xcolumn_s].to_numpy(), dtype=float)
-
-        # y can be scalar-valued or array-valued (e.g., bagging predictions)
-        y_cells = df[ycolumn_s].tolist()
-        y_arrays = [_to_1d_float_array(v) * yfactor_s for v in y_cells]
-        is_array_valued = any(len(v) > 1 for v in y_arrays)
-        if weight_by_multiplicity:
-            row_weights = _validate_multiplicity_weights(df["multiplicity"].to_numpy(), i)
-        else:
-            row_weights = np.ones(len(y_arrays), dtype=float)
-        y_weights = [np.full(len(values), weight) for values, weight in zip(y_arrays, row_weights)]
-
-        binned = bool(item.get("binned", False))
-        xtol = item.get("xtol", None)
-
-        if binned:
-            # Snap x to a regular grid when a tolerance is given, then group
-            # all y samples that fall in the same x bin into one array.
-            if xtol is not None:
-                x_key = np.round(x / float(xtol)) * float(xtol)
-            else:
-                x_key = x.copy()
-            unique_x, inverse = np.unique(x_key, return_inverse=True)
-            y_arrays = [np.concatenate([y_arrays[j] for j in np.where(inverse == k)[0]]) for k in range(len(unique_x))]
-            y_weights = [
-                np.concatenate([y_weights[j] for j in np.where(inverse == k)[0]]) for k in range(len(unique_x))
+            # Color priority: series[i].color > colors[i] > matplotlib tab10 cycle
+            default_colors = [
+                "#1f77b4",
+                "#ff7f0e",
+                "#2ca02c",
+                "#d62728",
+                "#9467bd",
+                "#8c564b",
+                "#e377c2",
+                "#7f7f7f",
+                "#bcbd22",
+                "#17becf",
             ]
-            x = unique_x
-            is_array_valued = any(len(v) > 1 for v in y_arrays)
+            palette = colors if (colors is not None and len(colors) > 0) else default_colors
 
-        scatter_kwargs = {}
+            for i, item in enumerate(series):
+                if not isinstance(item, dict):
+                    raise ValueError(f"series[{i}] must be a dictionary.")
 
-        style = item.get("style")
-        if style is not None:
-            if not isinstance(style, dict):
-                raise ValueError(f"series[{i}].style must be a dictionary.")
+                src = item.get("source_filepath", source_filepath)
+                xcolumn_s = item.get("xcolumn", xcolumn)
+                ycolumn_s = item.get("ycolumn", ycolumn)
+                xfactor_s = float(item.get("xfactor", xfactor))
+                yfactor_s = float(item.get("yfactor", yfactor))
+                mask_name = item.get("mask_name")
+                filter_ycolumn = item.get("filter_ycolumn")
+                has_filter_value = "filter_value" in item
+                filter_value = item.get("filter_value")
 
-            # accept user-friendly keys in style dict
-            if "size" in style and "s" not in style:
-                scatter_kwargs["s"] = style["size"]
-            if "linewidth" in style and "linewidths" not in style:
-                scatter_kwargs["linewidths"] = style["linewidth"]
-            if "edgecolor" in style and "edgecolors" not in style:
-                scatter_kwargs["edgecolors"] = style["edgecolor"]
-            if "facecolor" in style and "facecolors" not in style:
-                scatter_kwargs["facecolors"] = style["facecolor"]
+                if xcolumn_s is None or ycolumn_s is None:
+                    raise ValueError(
+                        f"series[{i}] must define both 'xcolumn' and 'ycolumn', "
+                        "either directly or via top-level defaults."
+                    )
 
-            for k in (
-                "color",
-                "marker",
-                "s",
-                "edgecolors",
-                "facecolors",
-                "linewidths",
-                "alpha",
-            ):
-                if k in style:
-                    scatter_kwargs[k] = style[k]
+                if filter_ycolumn is not None and not has_filter_value:
+                    raise ValueError(f"series[{i}] defines 'filter_ycolumn' but is missing 'filter_value'.")
+                if has_filter_value and filter_ycolumn is None:
+                    raise ValueError(f"series[{i}] defines 'filter_value' but is missing 'filter_ycolumn'.")
 
-        # direct keys override style keys
-        if "color" in item:
-            color = item["color"]
-        elif "color" in scatter_kwargs:
-            color = scatter_kwargs["color"]
-        else:
-            color = palette[i % len(palette)]
-        scatter_kwargs["color"] = color
+                if src not in dsg_cache:
+                    dsg_cache[src] = _load_plot_source(src)
 
-        if "marker" in item:
-            scatter_kwargs["marker"] = item["marker"]
-        if "size" in item:
-            scatter_kwargs["s"] = item["size"]
-        if "edgecolor" in item:
-            scatter_kwargs["edgecolors"] = item["edgecolor"]
-        if "facecolor" in item:
-            scatter_kwargs["facecolors"] = item["facecolor"]
-        if "linewidth" in item:
-            scatter_kwargs["linewidths"] = item["linewidth"]
-        if "alpha" in item:
-            scatter_kwargs["alpha"] = item["alpha"]
+                dsg = dsg_cache[src]
 
-        ymode = str(item.get("ymode", "auto")).lower()
-        if ymode == "auto":
-            ymode = "cloud" if is_array_valued else "marker"
-        if ymode not in ("marker", "cloud", "violin", "boxplot", "box"):
-            raise ValueError(f"series[{i}].ymode must be one of marker, cloud, violin, boxplot, auto.")
+                if xcolumn_s == "frconc_binary" and xcolumn_s not in dsg.configurations.columns:
+                    dsg.add_fractional_concentration_binary()
 
-        aggregation = str(item.get("aggregation", "mean")).lower()
-        if aggregation not in ("mean", "median"):
-            raise ValueError("aggregation must be 'mean' or 'median'.")
+                if filter_ycolumn == "frconc_binary" and filter_ycolumn not in dsg.configurations.columns:
+                    dsg.add_fractional_concentration_binary()
 
-        mean_line = bool(item.get("mean_line", False))
-        mean_line_label = item.get("mean_line_label")
-        mean_line_style = item.get("mean_line_style", {})
-        if not isinstance(mean_line_style, dict):
-            raise ValueError(f"series[{i}].mean_line_style must be a dictionary.")
+                if xcolumn_s not in dsg.configurations.columns:
+                    raise ValueError(f"Column '{xcolumn_s}' not found in configurations from '{src}'.")
 
-        label = item.get("label", f"series_{i}")
+                if ycolumn_s not in dsg.configurations.columns:
+                    raise ValueError(f"Column '{ycolumn_s}' not found in configurations from '{src}'.")
 
-        # Representative scalar y per x (used by marker mode and for exports)
-        y_repr = np.asarray(
-            [_aggregate(v, aggregation, weights) for v, weights in zip(y_arrays, y_weights)],
-            dtype=float,
-        )
-        has_distribution_per_x = any(len(v) > 1 for v in y_arrays)
-        plotted_x_values.append(x)
-        if ymode in ("cloud", "violin", "boxplot", "box"):
-            plotted_y_values.append(np.concatenate([values for values, weights in zip(y_arrays, y_weights)]))
-        else:
-            plotted_y_values.append(y_repr)
+                weight_by_multiplicity = bool(item.get("weight_by_multiplicity", False))
+                if weight_by_multiplicity and "multiplicity" not in dsg.configurations.columns:
+                    dsg.add_multiplicity()
 
-        if ymode == "marker":
-            ax.scatter(x, y_repr, label=label, **scatter_kwargs)
-        elif ymode == "cloud":
-            cloud_kwargs = scatter_kwargs.copy()
-            xjitter = float(item.get("xjitter", 0.0))
-            cloud_kwargs.setdefault("s", 8)
-            cloud_kwargs.setdefault("alpha", 0.35)
+                df = dsg.get_configurations(mask_name=mask_name)
 
-            all_x = []
-            all_y = []
-            for xi, yi, weights in zip(x, y_arrays, y_weights):
+                if filter_ycolumn is not None:
+                    if filter_ycolumn not in df.columns:
+                        raise ValueError(f"Column '{filter_ycolumn}' not found in configurations from '{src}'.")
+                    df = df[df[filter_ycolumn] == filter_value]
+
+                if len(df) == 0:
+                    warnings.warn(
+                        f"series[{i}] produced no rows after applying mask/filter; skipping series.",
+                        RuntimeWarning,
+                    )
+                    continue
+
+                x = np.asarray(df[xcolumn_s].to_numpy(), dtype=float) * xfactor_s
+
+                # y can be scalar-valued or array-valued (e.g., bagging predictions)
+                y_cells = df[ycolumn_s].tolist()
+                y_arrays = [_to_1d_float_array(v) * yfactor_s for v in y_cells]
+                is_array_valued = any(len(v) > 1 for v in y_arrays)
                 if weight_by_multiplicity:
-                    yi = _weighted_samples(yi, weights)
-                if xjitter > 0:
-                    dx = np.random.uniform(-xjitter, xjitter, size=len(yi))
-                    xvals = xi + dx
+                    row_weights = _validate_multiplicity_weights(df["multiplicity"].to_numpy(), i)
                 else:
-                    xvals = np.full(len(yi), xi)
-                all_x.append(xvals)
-                all_y.append(yi)
+                    row_weights = np.ones(len(y_arrays), dtype=float)
+                y_weights = [np.full(len(values), weight) for values, weight in zip(y_arrays, row_weights)]
 
-            cloud_x = np.concatenate(all_x)
-            cloud_y = np.concatenate(all_y)
-            plotted_x_values[-1] = cloud_x
-            plotted_y_values[-1] = cloud_y
-            ax.scatter(cloud_x, cloud_y, label=label, **cloud_kwargs)
-        elif ymode == "violin":
-            width = float(item.get("width", _infer_box_violin_width(x)))
-            if weight_by_multiplicity:
-                for position, values, weights in zip(x, y_arrays, y_weights):
-                    _weighted_violin(ax, values, weights, position, width, color, scatter_kwargs)
-            else:
-                v = ax.violinplot(y_arrays, positions=x, widths=width, showextrema=False)
-                vbodies = v.get("bodies", [])
-                if not isinstance(vbodies, list):
-                    vbodies = [vbodies]
-                for body in vbodies:
-                    body.set_facecolor(scatter_kwargs.get("facecolors", color))
-                    body.set_edgecolor(scatter_kwargs.get("edgecolors", color))
-                    body.set_linewidth(float(scatter_kwargs.get("linewidths", 0.8)))
-                    body.set_alpha(float(scatter_kwargs.get("alpha", 0.3)))
-            ax.plot([], [], color=color, label=label)
-        else:  # boxplot / box
-            width = float(item.get("width", _infer_box_violin_width(x)))
-            box_arrays = [
-                _weighted_samples(values, weights) if weight_by_multiplicity else values
-                for values, weights in zip(y_arrays, y_weights)
-            ]
-            bp = ax.boxplot(
-                box_arrays,
-                positions=x,
-                widths=width,
-                patch_artist=True,
-                showfliers=bool(item.get("showfliers", False)),
-                manage_ticks=False,
-            )
-            alpha = float(scatter_kwargs.get("alpha", 0.8))
-            for patch in bp["boxes"]:
-                patch.set_facecolor(scatter_kwargs.get("facecolors", "none"))
-                patch.set_edgecolor(scatter_kwargs.get("edgecolors", color))
-                patch.set_linewidth(float(scatter_kwargs.get("linewidths", 0.8)))
-                patch.set_alpha(alpha)
-            for med in bp["medians"]:
-                med.set_color(color)
-                med.set_alpha(alpha)
-            for whisk in bp["whiskers"]:
-                whisk.set_color(color)
-                whisk.set_alpha(alpha)
-            for cap in bp["caps"]:
-                cap.set_color(color)
-                cap.set_alpha(alpha)
-            ax.plot([], [], color=color, label=label)
+                binned = bool(item.get("binned", False))
+                xtol = item.get("xtol", None)
 
-        if mean_line:
-            if not has_distribution_per_x:
-                warnings.warn(
-                    f"series[{i}] mean_line requested but no per-x distribution was found "
-                    "(each x has a single y value). Drawing the line anyway.",
-                    RuntimeWarning,
+                if binned:
+                    # Snap x to a regular grid when a tolerance is given, then group
+                    # all y samples that fall in the same x bin into one array.
+                    if xtol is not None:
+                        x_key = np.round(x / float(xtol)) * float(xtol)
+                    else:
+                        x_key = x.copy()
+                    unique_x, inverse = np.unique(x_key, return_inverse=True)
+                    y_arrays = [
+                        np.concatenate([y_arrays[j] for j in np.where(inverse == k)[0]]) for k in range(len(unique_x))
+                    ]
+                    y_weights = [
+                        np.concatenate([y_weights[j] for j in np.where(inverse == k)[0]]) for k in range(len(unique_x))
+                    ]
+                    x = unique_x
+                    is_array_valued = any(len(v) > 1 for v in y_arrays)
+
+                scatter_kwargs = {}
+
+                style = item.get("style")
+                if style is not None:
+                    if not isinstance(style, dict):
+                        raise ValueError(f"series[{i}].style must be a dictionary.")
+
+                    # accept user-friendly keys in style dict
+                    if "size" in style and "s" not in style:
+                        scatter_kwargs["s"] = style["size"]
+                    if "linewidth" in style and "linewidths" not in style:
+                        scatter_kwargs["linewidths"] = style["linewidth"]
+                    if "edgecolor" in style and "edgecolors" not in style:
+                        scatter_kwargs["edgecolors"] = style["edgecolor"]
+                    if "facecolor" in style and "facecolors" not in style:
+                        scatter_kwargs["facecolors"] = style["facecolor"]
+
+                    for k in (
+                        "color",
+                        "marker",
+                        "s",
+                        "edgecolors",
+                        "facecolors",
+                        "linewidths",
+                        "alpha",
+                    ):
+                        if k in style:
+                            scatter_kwargs[k] = style[k]
+
+                # direct keys override style keys
+                if "color" in item:
+                    color = item["color"]
+                elif "color" in scatter_kwargs:
+                    color = scatter_kwargs["color"]
+                else:
+                    color = palette[i % len(palette)]
+                scatter_kwargs["color"] = color
+
+                if "marker" in item:
+                    scatter_kwargs["marker"] = item["marker"]
+                if "size" in item:
+                    scatter_kwargs["s"] = item["size"]
+                if "edgecolor" in item:
+                    scatter_kwargs["edgecolors"] = item["edgecolor"]
+                if "facecolor" in item:
+                    scatter_kwargs["facecolors"] = item["facecolor"]
+                if "linewidth" in item:
+                    scatter_kwargs["linewidths"] = item["linewidth"]
+                if "alpha" in item:
+                    scatter_kwargs["alpha"] = item["alpha"]
+
+                ymode = str(item.get("ymode", "auto")).lower()
+                if ymode == "auto":
+                    ymode = "cloud" if is_array_valued else "marker"
+                if ymode not in ("marker", "cloud", "violin", "boxplot", "box"):
+                    raise ValueError(f"series[{i}].ymode must be one of marker, cloud, violin, boxplot, auto.")
+
+                aggregation = str(item.get("aggregation", "mean")).lower()
+                if aggregation not in ("mean", "median"):
+                    raise ValueError("aggregation must be 'mean' or 'median'.")
+
+                mean_line = bool(item.get("mean_line", False))
+                mean_line_label = item.get("mean_line_label")
+                mean_line_style = item.get("mean_line_style", {})
+                if not isinstance(mean_line_style, dict):
+                    raise ValueError(f"series[{i}].mean_line_style must be a dictionary.")
+
+                label = item.get("label", f"series_{i}")
+
+                # Representative scalar y per x (used by marker mode and for exports)
+                y_repr = np.asarray(
+                    [_aggregate(v, aggregation, weights) for v, weights in zip(y_arrays, y_weights)],
+                    dtype=float,
+                )
+                has_distribution_per_x = any(len(v) > 1 for v in y_arrays)
+                plotted_x_values.append(x)
+                if ymode in ("cloud", "violin", "boxplot", "box"):
+                    plotted_y_values.append(np.concatenate([values for values, weights in zip(y_arrays, y_weights)]))
+                else:
+                    plotted_y_values.append(y_repr)
+
+                if ymode == "marker":
+                    ax.scatter(x, y_repr, label=label, **scatter_kwargs)
+                elif ymode == "cloud":
+                    cloud_kwargs = scatter_kwargs.copy()
+                    xjitter = float(item.get("xjitter", 0.0))
+                    cloud_kwargs.setdefault("s", 8)
+                    cloud_kwargs.setdefault("alpha", 0.35)
+
+                    all_x = []
+                    all_y = []
+                    for xi, yi, weights in zip(x, y_arrays, y_weights):
+                        if weight_by_multiplicity:
+                            yi = _weighted_samples(yi, weights)
+                        if xjitter > 0:
+                            dx = np.random.uniform(-xjitter, xjitter, size=len(yi))
+                            xvals = xi + dx
+                        else:
+                            xvals = np.full(len(yi), xi)
+                        all_x.append(xvals)
+                        all_y.append(yi)
+
+                    cloud_x = np.concatenate(all_x)
+                    cloud_y = np.concatenate(all_y)
+                    plotted_x_values[-1] = cloud_x
+                    plotted_y_values[-1] = cloud_y
+                    ax.scatter(cloud_x, cloud_y, label=label, **cloud_kwargs)
+                elif ymode == "violin":
+                    width = float(item.get("width", _infer_box_violin_width(x)))
+                    if weight_by_multiplicity:
+                        for position, values, weights in zip(x, y_arrays, y_weights):
+                            _weighted_violin(ax, values, weights, position, width, color, scatter_kwargs)
+                    else:
+                        v = ax.violinplot(y_arrays, positions=x, widths=width, showextrema=False)
+                        vbodies = v.get("bodies", [])
+                        if not isinstance(vbodies, list):
+                            vbodies = [vbodies]
+                        for body in vbodies:
+                            body.set_facecolor(scatter_kwargs.get("facecolors", color))
+                            body.set_edgecolor(scatter_kwargs.get("edgecolors", color))
+                            body.set_linewidth(float(scatter_kwargs.get("linewidths", 0.8)))
+                            body.set_alpha(float(scatter_kwargs.get("alpha", 0.3)))
+                    ax.plot([], [], color=color, label=label)
+                else:  # boxplot / box
+                    width = float(item.get("width", _infer_box_violin_width(x)))
+                    box_arrays = [
+                        _weighted_samples(values, weights) if weight_by_multiplicity else values
+                        for values, weights in zip(y_arrays, y_weights)
+                    ]
+                    bp = ax.boxplot(
+                        box_arrays,
+                        positions=x,
+                        widths=width,
+                        patch_artist=True,
+                        showfliers=bool(item.get("showfliers", False)),
+                        manage_ticks=False,
+                    )
+                    alpha = float(scatter_kwargs.get("alpha", 0.8))
+                    for patch in bp["boxes"]:
+                        patch.set_facecolor(scatter_kwargs.get("facecolors", "none"))
+                        patch.set_edgecolor(scatter_kwargs.get("edgecolors", color))
+                        patch.set_linewidth(float(scatter_kwargs.get("linewidths", 0.8)))
+                        patch.set_alpha(alpha)
+                    for med in bp["medians"]:
+                        med.set_color(color)
+                        med.set_alpha(alpha)
+                    for whisk in bp["whiskers"]:
+                        whisk.set_color(color)
+                        whisk.set_alpha(alpha)
+                    for cap in bp["caps"]:
+                        cap.set_color(color)
+                        cap.set_alpha(alpha)
+                    ax.plot([], [], color=color, label=label)
+
+                if mean_line:
+                    if not has_distribution_per_x:
+                        warnings.warn(
+                            f"series[{i}] mean_line requested but no per-x distribution was found "
+                            "(each x has a single y value). Drawing the line anyway.",
+                            RuntimeWarning,
+                        )
+
+                    order = np.argsort(x)
+                    line_kwargs = {
+                        "color": color,
+                        "linewidth": 1.2,
+                        "linestyle": "-",
+                    }
+                    line_kwargs.update(mean_line_style)
+                    line_kwargs["label"] = mean_line_label if mean_line_label is not None else "_nolegend_"
+                    ax.plot(x[order], y_repr[order], **line_kwargs)
+
+                plot_payload["series"].append(
+                    {
+                        "source_filepath": src,
+                        "xcolumn": xcolumn_s,
+                        "ycolumn": ycolumn_s,
+                        "xfactor": xfactor_s,
+                        "yfactor": yfactor_s,
+                        "mask_name": mask_name,
+                        "filter_ycolumn": filter_ycolumn,
+                        "filter_value": filter_value if has_filter_value else None,
+                        "label": label,
+                        "ymode": ymode,
+                        "aggregation": aggregation,
+                        "weight_by_multiplicity": weight_by_multiplicity,
+                        "binned": binned,
+                        "xtol": xtol,
+                        "mean_line": mean_line,
+                        "mean_line_label": mean_line_label,
+                        "mean_line_style": mean_line_style,
+                        "color": color,
+                        "marker": scatter_kwargs.get("marker"),
+                        "size": scatter_kwargs.get("s"),
+                        "edgecolor": scatter_kwargs.get("edgecolors"),
+                        "facecolor": scatter_kwargs.get("facecolors"),
+                        "linewidth": scatter_kwargs.get("linewidths"),
+                        "alpha": scatter_kwargs.get("alpha"),
+                        "x": x.tolist(),
+                        "y": y_repr.tolist(),
+                        "y_samples": [v.tolist() for v in y_arrays],
+                    }
                 )
 
-            order = np.argsort(x)
-            line_kwargs = {
-                "color": color,
-                "linewidth": 1.2,
-                "linestyle": "-",
-            }
-            line_kwargs.update(mean_line_style)
-            line_kwargs["label"] = mean_line_label if mean_line_label is not None else "_nolegend_"
-            ax.plot(x[order], y_repr[order], **line_kwargs)
+            ax.set_xlabel(xlabel if xlabel is not None else ("Target" if target_vs_predictions else "x"))
+            ax.set_ylabel(ylabel if ylabel is not None else ("Predictions" if target_vs_predictions else "y"))
 
-        plot_payload["series"].append(
-            {
-                "source_filepath": src,
-                "xcolumn": xcolumn_s,
-                "ycolumn": ycolumn_s,
-                "yfactor": yfactor_s,
-                "mask_name": mask_name,
-                "filter_ycolumn": filter_ycolumn,
-                "filter_value": filter_value if has_filter_value else None,
-                "label": label,
-                "ymode": ymode,
-                "aggregation": aggregation,
-                "weight_by_multiplicity": weight_by_multiplicity,
-                "binned": binned,
-                "xtol": xtol,
-                "mean_line": mean_line,
-                "mean_line_label": mean_line_label,
-                "mean_line_style": mean_line_style,
-                "color": color,
-                "marker": scatter_kwargs.get("marker"),
-                "size": scatter_kwargs.get("s"),
-                "edgecolor": scatter_kwargs.get("edgecolors"),
-                "facecolor": scatter_kwargs.get("facecolors"),
-                "linewidth": scatter_kwargs.get("linewidths"),
-                "alpha": scatter_kwargs.get("alpha"),
-                "x": x.tolist(),
-                "y": y_repr.tolist(),
-                "y_samples": [v.tolist() for v in y_arrays],
-            }
-        )
+            if xaxis_top:
+                ax.xaxis.set_label_position("top")
+                ax.tick_params(axis="x", which="both", bottom=False, top=True, labelbottom=False, labeltop=True)
 
-    ax.set_xlabel(xlabel if xlabel is not None else ("Target" if target_vs_predictions else "x"))
-    ax.set_ylabel(ylabel if ylabel is not None else ("Predictions" if target_vs_predictions else "y"))
+            if yaxis_right:
+                ax.yaxis.set_label_position("right")
+                ax.tick_params(axis="y", which="both", left=False, right=True, labelleft=False, labelright=True)
 
-    if xaxis_top:
-        ax.xaxis.set_label_position("top")
-        ax.tick_params(axis="x", which="both", bottom=False, top=True, labelbottom=False, labeltop=True)
+            if not show_xlabel:
+                ax.set_xlabel("")
+            if not show_ylabel:
+                ax.set_ylabel("")
+            if not show_xticklabels:
+                ax.tick_params(axis="x", which="both", labelbottom=False, labeltop=False)
+            if not show_yticklabels:
+                ax.tick_params(axis="y", which="both", labelleft=False, labelright=False)
+            if title is not None:
+                ax.set_title(title)
 
-    if yaxis_right:
-        ax.yaxis.set_label_position("right")
-        ax.tick_params(axis="y", which="both", left=False, right=True, labelleft=False, labelright=True)
+            if xticks is not None:
+                ax.set_xticks([float(value) for value in xticks])
+            if yticks is not None:
+                ax.set_yticks([float(value) for value in yticks])
 
-    if not show_xlabel:
-        ax.set_xlabel("")
-    if not show_ylabel:
-        ax.set_ylabel("")
-    if not show_xticklabels:
-        ax.tick_params(axis="x", which="both", labelbottom=False, labeltop=False)
-    if not show_yticklabels:
-        ax.tick_params(axis="y", which="both", labelleft=False, labelright=False)
-    if title is not None:
-        ax.set_title(title)
+            xrange_values = _validate_axis_range(xrange, "xrange")
+            yrange_values = _validate_axis_range(yrange, "yrange")
+            finite_x_values = _finite_values(plotted_x_values)
+            finite_y_values = _finite_values(plotted_y_values)
 
-    if xticks is not None:
-        ax.set_xticks([float(value) for value in xticks])
-    if yticks is not None:
-        ax.set_yticks([float(value) for value in yticks])
+            if loglog:
+                _require_positive(finite_x_values, "x data")
+                _require_positive(finite_y_values, "y data")
+                if xrange_values is not None:
+                    _require_positive(np.asarray(xrange_values, dtype=float), "xrange")
+                if yrange_values is not None:
+                    _require_positive(np.asarray(yrange_values, dtype=float), "yrange")
+                ax.set_xscale("log")
+                ax.set_yscale("log")
 
-    xrange_values = _validate_axis_range(xrange, "xrange")
-    yrange_values = _validate_axis_range(yrange, "yrange")
-    finite_x_values = _finite_values(plotted_x_values)
-    finite_y_values = _finite_values(plotted_y_values)
+            if symlog:
+                symlog_values = _finite_values([finite_x_values, finite_y_values])
+                if xrange_values is not None:
+                    symlog_values = _finite_values([symlog_values, np.asarray(xrange_values, dtype=float)])
+                if yrange_values is not None:
+                    symlog_values = _finite_values([symlog_values, np.asarray(yrange_values, dtype=float)])
+                linthresh = (
+                    float(symlog_linthresh) if symlog_linthresh is not None else _infer_symlog_linthresh(symlog_values)
+                )
+                ax.set_xscale("symlog", linthresh=linthresh)
+                ax.set_yscale("symlog", linthresh=linthresh)
+                plot_payload["symlog_linthresh"] = linthresh
 
-    if loglog:
-        _require_positive(finite_x_values, "x data")
-        _require_positive(finite_y_values, "y data")
-        if xrange_values is not None:
-            _require_positive(np.asarray(xrange_values, dtype=float), "xrange")
-        if yrange_values is not None:
-            _require_positive(np.asarray(yrange_values, dtype=float), "yrange")
-        ax.set_xscale("log")
-        ax.set_yscale("log")
+            if target_vs_predictions:
+                shared_limits = _shared_target_prediction_limits(
+                    finite_x_values,
+                    finite_y_values,
+                    xrange_values,
+                    yrange_values,
+                    loglog,
+                )
+                ax.set_xlim(shared_limits)
+                ax.set_ylim(shared_limits)
+                ax.set_box_aspect(1)
+                ax.plot(
+                    shared_limits,
+                    shared_limits,
+                    color="k",
+                    linewidth=0.8,
+                    linestyle="--",
+                    label="y=x",
+                    zorder=0,
+                )
+                plot_payload["axis_limits"] = shared_limits
+            else:
+                if xrange_values is not None:
+                    ax.set_xlim(xrange_values)
 
-    if symlog:
-        symlog_values = _finite_values([finite_x_values, finite_y_values])
-        if xrange_values is not None:
-            symlog_values = _finite_values([symlog_values, np.asarray(xrange_values, dtype=float)])
-        if yrange_values is not None:
-            symlog_values = _finite_values([symlog_values, np.asarray(yrange_values, dtype=float)])
-        linthresh = float(symlog_linthresh) if symlog_linthresh is not None else _infer_symlog_linthresh(symlog_values)
-        ax.set_xscale("symlog", linthresh=linthresh)
-        ax.set_yscale("symlog", linthresh=linthresh)
-        plot_payload["symlog_linthresh"] = linthresh
+                if yrange_values is not None:
+                    ax.set_ylim(yrange_values)
 
-    if target_vs_predictions:
-        shared_limits = _shared_target_prediction_limits(
-            finite_x_values,
-            finite_y_values,
-            xrange_values,
-            yrange_values,
-            loglog,
-        )
-        ax.set_xlim(shared_limits)
-        ax.set_ylim(shared_limits)
-        ax.set_box_aspect(1)
-        ax.plot(
-            shared_limits,
-            shared_limits,
-            color="k",
-            linewidth=0.8,
-            linestyle="--",
-            label="y=x",
-            zorder=0,
-        )
-        plot_payload["axis_limits"] = shared_limits
-    else:
-        if xrange_values is not None:
-            ax.set_xlim(xrange_values)
+            if show_yzero_axis:
+                if loglog:
+                    warnings.warn(
+                        "show_yzero_axis=True is ignored when loglog=True.",
+                        RuntimeWarning,
+                    )
+                else:
+                    ax.axhline(y=0, color="k", linewidth=0.5)
 
-        if yrange_values is not None:
-            ax.set_ylim(yrange_values)
+            if grid:
+                ax.set_axisbelow(True)
+                ax.grid(True, which=grid_which, axis=grid_axis, **grid_style)
 
-    if show_yzero_axis:
-        if loglog:
-            warnings.warn(
-                "show_yzero_axis=True is ignored when loglog=True.",
-                RuntimeWarning,
-            )
-        else:
-            ax.axhline(y=0, color="k", linewidth=0.5)
+            if legend:
+                legend_kwargs = {
+                    "frameon": show_legend_frame,
+                    "loc": legend_location_normalized,
+                    "ncols": legend_ncols,
+                }
+                if legend_bbox_to_anchor is not None:
+                    legend_kwargs["bbox_to_anchor"] = legend_bbox_to_anchor
+                    legend_kwargs["bbox_transform"] = ax.transAxes
+                if legend_handlelength is not None:
+                    legend_kwargs["handlelength"] = legend_handlelength
+                if legend_handletextpad is not None:
+                    legend_kwargs["handletextpad"] = legend_handletextpad
+                ax.legend(**legend_kwargs)
 
-    if grid:
-        ax.set_axisbelow(True)
-        ax.grid(True, which=grid_which, axis=grid_axis, **grid_style)
+            for item in annotations:
+                kwargs = {key: value for key, value in item.items() if key not in {"text", "x", "y", "coordinates"}}
+                transform = ax.transAxes if item["coordinates"] == "axes fraction" else ax.transData
+                ax.text(item["x"], item["y"], item["text"], transform=transform, **kwargs)
 
-    if legend:
-        legend_kwargs = {
-            "frameon": show_legend_frame,
-            "loc": legend_location_normalized,
-        }
-        if legend_handlelength is not None:
-            legend_kwargs["handlelength"] = legend_handlelength
-        if legend_handletextpad is not None:
-            legend_kwargs["handletextpad"] = legend_handletextpad
-        ax.legend(**legend_kwargs)
+            fig.tight_layout()
 
-    fig.tight_layout()
+            if savefig:
+                save_kwargs = {"dpi": float(dpi)}
+                if savefig_bbox_inches is not None:
+                    save_kwargs["bbox_inches"] = savefig_bbox_inches
+                fig.savefig(savefig, **save_kwargs)
 
-    if savefig:
-        fig.savefig(savefig, dpi=float(dpi))
+            if figdata_fname is not None:
+                ext = os.path.splitext(figdata_fname)[1].lower()
+                if ext == ".json":
+                    with open(figdata_fname, "w", encoding="utf-8") as f:
+                        json.dump(plot_payload, f, indent=2)
+                elif ext == ".npz":
+                    out = {}
+                    for i, s in enumerate(plot_payload["series"]):
+                        out[f"x_{i}"] = np.asarray(s["x"], dtype=float)
+                        out[f"y_{i}"] = np.asarray(s["y"], dtype=float)
+                        out[f"label_{i}"] = np.asarray([s["label"]], dtype=object)
+                        out[f"source_filepath_{i}"] = np.asarray([s["source_filepath"]], dtype=object)
+                        out[f"xfactor_{i}"] = np.asarray(s["xfactor"])
+                        out[f"yfactor_{i}"] = np.asarray(s["yfactor"])
+                    out["plot_metadata"] = np.asarray(json.dumps(plot_payload))
+                    np.savez(figdata_fname, **out)
+                elif ext in (".txt", ".dat"):
+                    rows = []
+                    for i, s in enumerate(plot_payload["series"]):
+                        for x, y in zip(s["x"], s["y"]):
+                            rows.append([i, x, y])
+                    factors = [{"xfactor": s["xfactor"], "yfactor": s["yfactor"]} for s in plot_payload["series"]]
+                    header = "series_index x y\nseries_factors=" + json.dumps(factors)
+                    np.savetxt(figdata_fname, np.asarray(rows, dtype=float), header=header)
+                else:
+                    raise ValueError(
+                        f"Unsupported figdata_fname extension '{ext}'. Expected .npz, .json, .txt, or .dat."
+                    )
 
-    if figdata_fname is not None:
-        ext = os.path.splitext(figdata_fname)[1].lower()
-        if ext == ".json":
-            with open(figdata_fname, "w", encoding="utf-8") as f:
-                json.dump(plot_payload, f, indent=2)
-        elif ext == ".npz":
-            out = {}
-            for i, s in enumerate(plot_payload["series"]):
-                out[f"x_{i}"] = np.asarray(s["x"], dtype=float)
-                out[f"y_{i}"] = np.asarray(s["y"], dtype=float)
-                out[f"label_{i}"] = np.asarray([s["label"]], dtype=object)
-                out[f"source_filepath_{i}"] = np.asarray([s["source_filepath"]], dtype=object)
-            np.savez(figdata_fname, **out)
-        elif ext in (".txt", ".dat"):
-            rows = []
-            for i, s in enumerate(plot_payload["series"]):
-                for x, y in zip(s["x"], s["y"]):
-                    rows.append([i, x, y])
-            header = "series_index x y"
-            np.savetxt(figdata_fname, np.asarray(rows, dtype=float), header=header)
-        else:
-            raise ValueError(f"Unsupported figdata_fname extension '{ext}'. Expected .npz, .json, .txt, or .dat.")
-
-    if show_plot:
-        plt.show()
-    else:
-        plt.close(fig)
+            if show_plot:
+                plt.show()
+        finally:
+            if not show_plot:
+                plt.close(fig)
 
 
 def _load_plot_source(source_filepath):
