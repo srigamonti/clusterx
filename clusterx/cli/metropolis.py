@@ -148,6 +148,8 @@ def _sampling_schedule(runs, temperature, n_mc_steps, n_mc_sweeps, nsites):
     n_mc_sweeps=("Sweeps; one sweep is one proposal per substitutional site", "option", "sweeps", float),
     runs=("Ordered temperature/length stages as a JSON list", "option", "runs", json.loads),
     resume_from=("Resume the final complete XYZ frame with a new seeded random stream", "option", "resume", str),
+    start_from=("Initial XYZ source if output is absent; otherwise use resume_from (default: output)",
+                "option", "start", str),
     save_atoms_every=("Checkpoint interval in proposals; zero disables periodic output", "option", "save_every", int),
     atoms_filename=("XYZ/extxyz or ASE checkpoint output", "option", "atoms", str),
     save_atoms_endpoints=("Save initial configuration and each temperature endpoint", "option", "endpoints", _boolean),
@@ -249,8 +251,9 @@ def metropolis(
     continue_chain: bool = False,
     serialize: bool = True,
     metadata: dict | None = None,
+    start_from: str | None = None,
 ):
-    """Sample with an explicit TOTAL-supercell energy multiplier, k_B, and temperature.
+    r"""Sample with an explicit TOTAL-supercell energy multiplier, k_B, and temperature.
 
     The user is responsible for model normalization and units. For model energy
     eV/atom and T in K, use energy_factor=N_atoms and k_B in eV/K. For meV/atom
@@ -258,6 +261,93 @@ def metropolis(
     explicit factor (1 when its energy unit matches k_B*T). CELL does not infer
     atom counts, unit conversions, or a default temperature/Boltzmann constant.
     Specify temperature directly or explicitly in every runs stage.
+
+    Checkpoint initialization for task="runmc"
+    ------------------------------------------
+    resume_from alone always loads that file's final complete frame, even when
+    atoms_filename does not exist. It never infers a temperature or run length.
+    With start_from, the existence of atoms_filename selects the source, BEFORE
+    opening or writing output:
+
+    - Output absent: load the last complete frame of start_from.
+    - Output present: load the last complete frame of resume_from.
+
+    When start_from is supplied, omitted resume_from defaults to atoms_filename.
+    If resume_from names a different file, existence of atoms_filename still
+    determines which source is selected. Missing, empty or incompatible selected
+    checkpoints cause an error; they never silently fall back to the other file.
+    The command prints the selected source and the output-existence decision.
+    initial_decoration cannot be combined with either checkpoint option.
+
+    Loading restores cell/site/species/composition-compatible configurations
+    and rebuilds model correlations and energy before sampling, including for
+    nonlinear reduced models. random_seed initializes a new random stream;
+    checkpoint files do not restore the exact original proposal sequence.
+    Selection happens once for the new MC object. Later schedule stages reuse
+    the chain, random streams and caches without rechecking files.
+
+    Output and reuse
+    ----------------
+    Use atoms_mode="a" to create an absent output or append to an existing one.
+    With the shorthand resume/output path, appending avoids duplicating the
+    last loaded frame and removes an interrupted final XYZ tail before writing.
+    A distinct start_from source is only read. atoms_mode="w" explicitly
+    replaces output AFTER loading the selected configuration; "x" refuses an
+    existing output. Output existence is tested before either action.
+    Enable save_atoms_every > 0 and/or save_atoms_endpoints=true to write frames;
+    without checkpoints, output cannot mark completion of a previous invocation.
+    These options specify another explicit number of proposals/sweeps each
+    invocation, not a cumulative target or an inferred remaining run length.
+
+    Reusable named-step TOML example
+    --------------------------------
+    Save as anneal-250K.toml and run ``cell --input_file anneal-250K.toml``.
+    This example assumes a one-atom binary parent cell, a 64-site supercell at
+    half filling, and a model predicting eV/atom; adjust paths, geometry, counts
+    and energy_factor for your model. The same input can be invoked repeatedly::
+
+        do = ["anneal_250K"]
+
+        [anneal_250K]
+        command = "metropolis"
+        task = "runmc"
+        model_filepath = "model.pickle"
+        plat_filepath = "plat.json"
+        sc_shape = [4, 4, 4]
+        n_substitutions = {"0" = [32]}
+        ensemble = "canonical"
+        temperature = 250.0
+        n_mc_sweeps = 10
+        energy_factor = 64.0
+        boltzmann_constant = 8.617330337217213e-5
+        predict_swap = true
+        reduce_structure = true
+        nonlinear = true
+        start_from = "300K.xyz"
+        # resume_from = "250K.xyz"  # Defaults to atoms_filename with start_from.
+        atoms_filename = "250K.xyz"
+        atoms_mode = "a"
+        save_atoms_endpoints = true
+        save_atoms_every = 64
+        serialize = false
+        random_seed = 43
+        max_steps_per_batch = 100000
+
+    First invocation reads 300K.xyz and creates 250K.xyz. Later invocations
+    continue from 250K.xyz. To use another continuation source, set
+    resume_from="restart.xyz"; existence of 250K.xyz still selects that branch.
+
+    Equivalent direct CLI invocation (booleans take explicit true/false)::
+
+        cell metropolis -task runmc -mofp model.pickle -plfp plat.json \
+            -scsh '[4,4,4]' -nsubs '{"0":[32]}' -temp 250 -sweeps 10 \
+            -ef 64 -k_B 8.617330337217213e-5 -pred_swap true -reduce true \
+            -nonlinear true -start 300K.xyz -atoms 250K.xyz -atoms_mode a \
+            -endpoints true -save_every 64 -serialize false -rs 43
+
+    The Python API provides MonteCarlo(..., start_from=...) and
+    mc.reset_chain(start_from=..., seed=...) with the same selection rule.
+    mc.reset_chain(seed=...) clears file-based initialization for a fresh run.
     """
     cmd_message("head")
 
@@ -293,10 +383,11 @@ def metropolis(
             models_aux = [Model(filepath=fp) for fp in models_aux_filepaths]
             if temperatures is not None:
                 raise ValueError("For maintained MC schedules, use runs with an explicit length for each temperature")
-            if resume_from is not None and runs is None and (
+            if (start_from is not None or resume_from is not None) and runs is None and (
                 temperature is None or (n_mc_steps is None and n_mc_sweeps is None)
             ):
-                raise ValueError("Resume requires an explicit runs schedule, or temperature and a step/sweep count")
+                raise ValueError("Checkpoint initialization requires an explicit runs schedule, "
+                                 "or temperature and a step/sweep count")
             stages = _sampling_schedule(
                 runs, temperature,
                 n_mc_steps, n_mc_sweeps, scell.get_n_sub_sites(unique=False),
@@ -318,6 +409,7 @@ def metropolis(
                 filename=traj_filepath,
                 seed=random_seed,
                 resume_from=resume_from,
+                start_from=start_from,
                 save_atoms_every=save_atoms_every,
                 atoms_filename=atoms_filename,
                 save_atoms_endpoints=save_atoms_endpoints,

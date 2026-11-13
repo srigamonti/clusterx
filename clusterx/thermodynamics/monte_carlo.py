@@ -2,6 +2,19 @@
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+"""Maintained Monte Carlo sampling and trajectory analysis.
+
+MonteCarlo can initialize from the last complete XYZ frame. resume_from alone
+always reads the requested checkpoint. For a reusable annealing input, use
+start_from="300K.xyz", atoms_filename="250K.xyz", atoms_mode="a": output
+absence selects start_from; output existence selects resume_from, which defaults
+to atoms_filename in this mode. An explicit resume_from may name another file;
+the output's existence remains the switch. The selected file must be valid.
+File-based initialization restores the configuration with new seeded random
+streams, not the saved run's exact proposal sequence. See MonteCarlo and
+reset_chain docstrings for examples and the checkpoint-validation contract.
+"""
+
 ## packages needed for MonteCarloTrajectory
 import json
 from io import StringIO
@@ -148,7 +161,28 @@ class MonteCarlo:
     ``resume_from``: string or path-like (default: None)
         Start from the final complete frame of an XYZ/extxyz trajectory. The
         physical configuration is resumed with the random streams initialized
-        from ``seed``; the original random stream is not restored.
+        from ``seed``; the original random stream is not restored. Without
+        start_from this file is always used, regardless of output existence.
+
+    ``start_from``: string or path-like (default: None)
+        Enable automatic first-run/continuation selection. At the first
+        metropolis call, inspect atoms_filename BEFORE opening it: if absent,
+        load the final complete frame of start_from; if present, load the final
+        complete frame of resume_from. With start_from, omitted resume_from
+        defaults to atoms_filename. Even with distinct resume/output paths,
+        output existence is the switch. Invalid selected checkpoints raise an
+        error, without falling back to the other file. Selection happens once
+        after construction or reset_chain; continuing stages reuse memory state.
+        Both checkpoint options conflict with an explicit initial_decoration.
+
+        For reusable annealing input, use start_from="300K.xyz",
+        atoms_filename="250K.xyz", atoms_mode="a" and an explicit temperature
+        and proposal/sweep count. The first invocation reads 300K.xyz; later
+        invocations read 250K.xyz. The separate 300 K source remains unchanged.
+        Enable save_atoms_every or save_atoms_endpoints to create checkpoints.
+        To choose a different continuation source, add resume_from="restart.xyz";
+        existence of 250K.xyz still selects between that source and 300K.xyz.
+        These options restore configurations, not exact original random streams.
 
     ``save_atoms_endpoints``: boolean (default: False)
         Write the initial configuration and each metropolis call's endpoint.
@@ -181,6 +215,7 @@ class MonteCarlo:
         resume_from: str | os.PathLike | None = None,
         save_atoms_endpoints: bool = False,
         atoms_mode: str = "auto",
+        start_from: str | os.PathLike | None = None,
     ):
         if (ensemble == "semigrand-canonical") and (chemical_potentials is None):
             raise ValueError("`chemical_potentials` have to be given when ensemble is 'semigrand-canonical")
@@ -205,8 +240,9 @@ class MonteCarlo:
         self._atoms_mode = atoms_mode
         self._atoms_output_path = None
         self._atoms_last_step = None
-        self._resume_from = resume_from
-        self._resume_source = os.path.abspath(os.fspath(resume_from)) if resume_from is not None else None
+        self._start_from = start_from
+        self._resume_from = atoms_filename if start_from is not None and resume_from is None else resume_from
+        self._resume_source = None  # Set to the checkpoint actually selected and loaded.
         self._chain_state = None
         self._pending_initial_decoration = None
         # Use two rngs, numpy.rng produces MC acceptance probability,
@@ -375,13 +411,16 @@ class MonteCarlo:
             if initial_decoration is None and self._pending_initial_decoration is not None:
                 initial_decoration = self._pending_initial_decoration
                 self._pending_initial_decoration = None
-            if self._resume_from is not None and initial_decoration is None:
-                resume_frame = self._read_resume_frame(self._resume_from)
-                initial_decoration = resume_frame.numbers
+            if initial_decoration is not None and (self._start_from is not None or self._resume_from is not None):
+                raise ValueError("Specify either start_from/resume_from or initial_decoration, not both")
+            checkpoint = self._select_initial_checkpoint()
+            if checkpoint is not None:
+                resume_frame = self._read_resume_frame(checkpoint)
                 self._validate_resume_frame(resume_frame)
+                initial_decoration = resume_frame.numbers
+                self._resume_source = os.path.abspath(os.fspath(checkpoint))
+                self._start_from = None
                 self._resume_from = None
-            elif self._resume_from is not None:
-                raise ValueError("Specify either resume_from or initial_decoration, not both")
             self.initialize_structure(initial_decoration, self._nsubs)
         structure = self.structure
         sigmas = structure.get_sigmas()
@@ -640,7 +679,10 @@ class MonteCarlo:
         self._atoms_write_mode = mode
         self._atoms_output_path = path
         self._atoms_last_step = None
-        if resumed and path == self._resume_source and mode == "a":
+        same_source = resumed and mode == "a" and self._resume_source is not None and (
+            path == self._resume_source or (os.path.isfile(path) and os.path.samefile(path, self._resume_source))
+        )
+        if same_source:
             # The source's final frame already contains this initial configuration.
             self._atoms_last_step = 0
             if getattr(self, "_resume_complete_bytes", None) is not None:
@@ -688,19 +730,48 @@ class MonteCarlo:
                 raise ValueError("temperature values must be finite and positive")
             yield start, 1.0 / (boltzmann_constant * values)
 
-    def reset_chain(self, initial_decoration=None, seed=None, resume_from=None):
-        """Reset the Markov chain, optionally selecting a new start or XYZ frame."""
+    def reset_chain(self, initial_decoration=None, seed=None, resume_from=None, start_from=None):
+        """Discard the chain and caches, and optionally choose a new XYZ start.
+
+        No checkpoint arguments means a fresh random configuration, or the
+        supplied initial_decoration. resume_from alone always loads that file.
+        With start_from, select start_from if atoms_filename is absent, otherwise
+        resume_from (defaulting to atoms_filename). Selection occurs at the next
+        metropolis call, once, before opening the output. Checkpoint options and
+        initial_decoration are mutually exclusive. All resets initialize new
+        random streams from seed, not the saved run's original random state.
+
+        Example: mc.reset_chain(start_from="300K.xyz", seed=43), with
+        mc configured to write 250K.xyz, loads 300K.xyz for a new output or
+        resumes 250K.xyz if it exists. Pass resume_from="restart.xyz" to use
+        that alternate source when 250K.xyz exists. mc.reset_chain(seed=43)
+        explicitly clears file-based initialization and starts fresh instead.
+        """
+        if initial_decoration is not None and (start_from is not None or resume_from is not None):
+            raise ValueError("Specify either start_from/resume_from or initial_decoration, not both")
         self._chain_state = None
         self._atoms_output_path = None
         self._atoms_last_step = None
-        self._resume_from = resume_from
-        self._resume_source = os.path.abspath(os.fspath(resume_from)) if resume_from is not None else None
+        self._start_from = start_from
+        self._resume_from = self._atoms_filename if start_from is not None and resume_from is None else resume_from
+        self._resume_source = None
         self._pending_initial_decoration = (
             list(initial_decoration) if initial_decoration is not None else None
         )
         self._emodel.reset_mc(mc=True)
         self._rng_np = np.random.Generator(np.random.SFC64(seed))
         self._rng_std.seed(seed)
+
+    def _select_initial_checkpoint(self):
+        """Resolve the initial file once, using output existence only when start_from is set."""
+        if self._start_from is None:
+            return self._resume_from
+        output_exists = os.path.exists(self._atoms_filename)
+        checkpoint = self._resume_from if output_exists else self._start_from
+        option = "resume_from" if output_exists else "start_from"
+        state = "exists" if output_exists else "does not exist"
+        print(f"Monte Carlo: output {self._atoms_filename!r} {state}; loading {option}={os.fspath(checkpoint)!r}")
+        return checkpoint
 
     def _read_resume_frame(self, filename):
         """Read only the last complete XYZ frame, tolerating an interrupted final write."""

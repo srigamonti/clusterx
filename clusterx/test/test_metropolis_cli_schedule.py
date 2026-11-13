@@ -271,3 +271,80 @@ def test_schedule_serialization_keeps_separate_stage_histories(system):
             history = json.load(source)
         assert history["sampling_info"]["number_of_sampling_steps"] == steps
         assert history["sampling_info"]["target_rate"] == 0.35
+
+
+@pytest.mark.parametrize("nonlinear", [False, True])
+def test_named_start_from_can_be_invoked_repeatedly(system, tmp_path, nonlinear):
+    _, scell, model = system
+    if nonlinear:
+        features = np.random.default_rng(75).uniform(-1, 1, (100, len(model.ecis)))
+        model.estimator = make_pipeline(PolynomialFeatures(2), Ridge(alpha=0.001)).fit(
+            features, features @ model.ecis + 0.4 * features[:, -1]**2,
+        )
+    model.serialize("model.pickle")
+    initial = scell.gen_random_structure(nsubs={0: [4], 1: [4]}, rng=np.random.default_rng(76)).get_atoms()
+    earlier = scell.gen_random_structure(nsubs={0: [4], 1: [4]}, rng=np.random.default_rng(77)).get_atoms()
+    earlier.info["temperature"], initial.info["temperature"] = 600, 300
+    write("300K.xyz", [earlier, initial], format="extxyz")
+    source_bytes = Path("300K.xyz").read_bytes()
+    configuration = {"do": ["anneal_250K"], "anneal_250K": {
+        "command": "metropolis", **options(), "start_from": "300K.xyz", "atoms_filename": "250K.xyz",
+        "n_substitutions": {"0": [4], "1": [4]},
+        "atoms_mode": "a", "save_atoms_endpoints": True, "nonlinear": nonlinear,
+        "runs": [{"temperature": 250, "n_mc_steps": 4}, {"temperature": 200, "n_mc_steps": 3}],
+    }}
+    path = tmp_path / "reusable.toml"
+    path.write_text(toml.dumps(configuration))
+    command = [sys.executable, "-m", "clusterx.cli.main", "--input_file", str(path)]
+    completed = subprocess.run(command, capture_output=True, text=True)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "does not exist; loading start_from=" in completed.stdout
+    first = read("250K.xyz", index=":")
+    assert len(first) == 3
+    np.testing.assert_array_equal(first[0].numbers, initial.numbers)
+    # An interrupted tail is repaired only in the output being resumed.
+    with open("250K.xyz", "a") as output:
+        output.write(f"{len(scell)}\npartial final frame\nH 0")
+    completed = subprocess.run(command, capture_output=True, text=True)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "exists; loading resume_from=" in completed.stdout
+    resumed = read("250K.xyz", index=":")
+    assert len(resumed) == 5  # Two endpoints per invocation, with no duplicated loaded frame.
+    assert [frame.info["mc_step"] for frame in resumed] == [0, 4, 7, 4, 7]
+    for previous, actual in zip(first, resumed):
+        np.testing.assert_array_equal(actual.numbers, previous.numbers)
+    assert Path("300K.xyz").read_bytes() == source_bytes
+    for frame in resumed:
+        assert np.count_nonzero(frame.numbers == 7) == 4
+        assert np.count_nonzero(frame.numbers == 10) == 4
+        assert np.all(frame.numbers[scell.get_spectator_sites()] == 3)
+
+
+def test_direct_start_from_and_distinct_resume_source(system):
+    _, scell, model = system
+    model.serialize("model.pickle")
+    initial = scell.gen_random_structure(nsubs={0: [4], 1: [4]}, rng=np.random.default_rng(78)).get_atoms()
+    later = scell.gen_random_structure(nsubs={0: [4], 1: [4]}, rng=np.random.default_rng(79)).get_atoms()
+    write("300K.xyz", initial, format="extxyz")
+    write("restart.xyz", later, format="extxyz")
+    source_bytes = {name: Path(name).read_bytes() for name in ("300K.xyz", "restart.xyz")}
+    command = [sys.executable, "-m", "clusterx.cli.main", "metropolis", "-task", "runmc",
+               "-scsh", "[8,1,1]", "-nsubs", '{"0":[4],"1":[4]}', "-ef", "1", "-k_B", "1",
+               "-temp", "250", "-n_steps", "2", "-serialize", "false", "-reduce", "true",
+               "-start", "300K.xyz", "-resume", "restart.xyz", "-atoms", "250K.xyz",
+               "-atoms_mode", "a", "-endpoints", "true"]
+    for index in range(2):
+        completed = subprocess.run(command, capture_output=True, text=True)
+        assert completed.returncode == 0, completed.stdout + completed.stderr
+        frames = read("250K.xyz", index=":")
+        np.testing.assert_array_equal(frames[0 if index == 0 else 2].numbers,
+                                      initial.numbers if index == 0 else later.numbers)
+        assert len(frames) == 2 * (index + 1)
+    assert all(Path(name).read_bytes() == content for name, content in source_bytes.items())
+
+
+def test_cli_start_from_requires_explicit_length(system):
+    _, _, model = system
+    model.serialize("model.pickle")
+    with pytest.raises(ValueError, match="explicit runs schedule"):
+        cli.metropolis(**options(), start_from="300K.xyz")

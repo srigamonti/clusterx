@@ -1,11 +1,12 @@
 """Tests for memory-bounded and resumable Monte Carlo runs."""
 
 import random
+from copy import deepcopy
 
 import numpy as np
 import pytest
 from ase import Atoms
-from ase.io import write
+from ase.io import read, write
 from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import PolynomialFeatures
@@ -190,3 +191,224 @@ def test_target_rate_adaptation_continues_across_calls():
     np.testing.assert_array_equal(
         split._rng_np.bit_generator.state["state"]["state"], expected_rng["state"]["state"]
     )
+
+
+def checkpoint(scell, filename, sigmas, temperature=300):
+    atoms = Structure(scell, sigmas=np.asarray(sigmas), track_indices=True).get_atoms()
+    atoms.info["temperature"] = temperature
+    write(filename, atoms, format="extxyz")
+
+
+@pytest.mark.parametrize("nonlinear", [False, True])
+@pytest.mark.parametrize("reduce", [False, True])
+def test_start_from_then_resume_shorthand_and_cache_reuse(tmp_path, monkeypatch, capsys, nonlinear, reduce):
+    _, scell, model = make_system()
+    if nonlinear:
+        features = np.random.default_rng(52).normal(size=(80, 2))
+        model.estimator = make_pipeline(PolynomialFeatures(2), LinearRegression()).fit(
+            features, 0.3 + features[:, 0]**2 - 0.4*features[:, 1],
+        )
+    reference_model = deepcopy(model)
+    start, output = tmp_path / "300K.xyz", tmp_path / "250K.xyz"
+    old = Structure(scell, sigmas=[0, 1]*8).get_atoms()
+    initial = np.array([0]*8 + [1]*8)
+    final = Structure(scell, sigmas=initial).get_atoms()
+    old.info["temperature"], final.info["temperature"] = 600, 300
+    write(start, [old, final], format="extxyz")
+    source_bytes = start.read_bytes()
+    calls = []
+    original = model.get_correlations
+
+    def correlations(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(model, "get_correlations", correlations)
+    mc = MonteCarlo(model, scell, nsubs={0: [8]}, seed=57, predict_swap=True, reduce_structure=reduce,
+                    start_from=start, atoms_filename=output, atoms_mode="a", save_atoms_endpoints=True)
+    sampling = dict(temperature=250, energy_factor=1, boltzmann_constant=1,
+                    nonlinear=True, max_steps_per_batch=3)
+    first = mc.metropolis(7, **sampling)
+    np.testing.assert_array_equal(first._trajectory[0]["sigmas"], initial)
+    # Creating output in the first stage must not cause the next stage to reload it.
+    loaded = []
+    monkeypatch.setattr(mc, "_read_resume_frame", lambda path: loaded.append(path))
+    mc.metropolis(5, **sampling, continue_chain=True)
+    assert not loaded
+    assert len(calls) == (1 if nonlinear or not reduce else 0)
+    frames = read(output, index=":")
+    assert [frame.info["mc_step"] for frame in frames] == [0, 7, 12]
+    np.testing.assert_array_equal(frames[0].numbers, final.numbers)
+    previous = frames[-1].arrays["sigmas"].copy()
+    output_bytes = output.read_bytes()
+    message = capsys.readouterr().out
+    assert "does not exist; loading start_from=" in message
+    assert start.read_bytes() == source_bytes
+
+    # File selection must not consume random draws or change the fixed-seed chain.
+    numpy_state = deepcopy(mc._rng_np.bit_generator.state)
+    std_state = random.getstate()
+    baseline = MonteCarlo(deepcopy(reference_model), scell, nsubs={0: [8]}, seed=57,
+                          predict_swap=True, reduce_structure=reduce)
+    baseline.metropolis(7, initial_decoration=final.numbers, **sampling)
+    baseline.metropolis(5, continue_chain=True, **sampling)
+    np.testing.assert_array_equal(baseline.structure.get_sigmas(), mc.structure.get_sigmas())
+    np.testing.assert_array_equal(numpy_state["state"]["state"], baseline._rng_np.bit_generator.state["state"]["state"])
+    assert std_state == random.getstate()
+
+    resumed = MonteCarlo(reference_model, scell, nsubs={0: [8]}, seed=58,
+                         predict_swap=True, reduce_structure=reduce, start_from=start,
+                         atoms_filename=output, atoms_mode="a", save_atoms_endpoints=True)
+    trajectory = resumed.metropolis(6, **sampling)
+    np.testing.assert_array_equal(trajectory._trajectory[0]["sigmas"], previous)
+    assert "exists; loading resume_from=" in capsys.readouterr().out
+    assert output.read_bytes().startswith(output_bytes)
+    frames = read(output, index=":")
+    assert len(frames) == 4  # No duplicate initial frame when resuming the same output.
+    assert frames[-1].info["mc_step"] == 6  # New invocation, not a cumulative counter.
+    assert np.count_nonzero(resumed.structure.get_sigmas()) == 8
+    assert start.read_bytes() == source_bytes
+    if nonlinear:
+        actual = resumed._emodel.get_correlations(resumed.structure, reduce_structure=reduce)
+        np.testing.assert_allclose(resumed._chain_state["correlations"], actual, atol=1e-12)
+        np.testing.assert_allclose(resumed._chain_state["current_energy"],
+                                   resumed._emodel.predict_on_correlations(actual), atol=1e-12)
+
+
+@pytest.mark.parametrize("output_exists", [False, True])
+def test_output_existence_selects_a_distinct_resume_source(tmp_path, output_exists):
+    _, scell, model = make_system()
+    start, resume, output = (tmp_path / name for name in ("300K.xyz", "restart.xyz", "250K.xyz"))
+    first, later, unrelated = [0, 1]*8, [0]*8 + [1]*8, [0, 0, 1, 1]*4
+    checkpoint(scell, start, first)
+    checkpoint(scell, resume, later)
+    sources = {path: path.read_bytes() for path in (start, resume)}
+    if output_exists:
+        checkpoint(scell, output, unrelated)
+    mc = MonteCarlo(model, scell, nsubs={0: [8]}, start_from=start, resume_from=resume,
+                    atoms_filename=output, atoms_mode="a", save_atoms_endpoints=True)
+    trajectory = mc.metropolis(0, energy_factor=1, temperature=250, boltzmann_constant=1)
+    np.testing.assert_array_equal(trajectory._trajectory[0]["sigmas"], later if output_exists else first)
+    frames = read(output, index=":")
+    assert len(frames) == (2 if output_exists else 1)
+    np.testing.assert_array_equal(frames[-1].arrays["sigmas"], later if output_exists else first)
+    assert all(path.read_bytes() == data for path, data in sources.items())
+
+
+@pytest.mark.parametrize("invalid", [
+    "missing_resume", "empty_resume", "invalid_resume", "composition", "missing_start",
+])
+def test_selected_checkpoint_errors_never_fall_back(tmp_path, invalid):
+    _, scell, model = make_system()
+    start, resume, output = (tmp_path / name for name in ("300K.xyz", "restart.xyz", "250K.xyz"))
+    checkpoint(scell, start, [0, 1]*8)
+    if invalid != "missing_start":
+        checkpoint(scell, output, [0, 1]*8)
+    else:
+        start.unlink()
+        checkpoint(scell, resume, [0]*8 + [1]*8)  # Existing resume cannot override absent output.
+    if invalid == "empty_resume":
+        resume.write_text("")
+    elif invalid == "invalid_resume":
+        resume.write_text("not a trajectory\n")
+    elif invalid == "composition":
+        checkpoint(scell, resume, [0]*16)
+    existing = {path: path.read_bytes() for path in (start, resume, output) if path.exists()}
+    mc = MonteCarlo(model, scell, nsubs={0: [8]}, start_from=start, resume_from=resume,
+                    atoms_filename=output, atoms_mode="w", save_atoms_endpoints=True)
+    with pytest.raises((ValueError, FileNotFoundError), match="checkpoint|composition"):
+        mc.metropolis(1, energy_factor=1, temperature=250, boltzmann_constant=1)
+    assert all(path.read_bytes() == data for path, data in existing.items())
+    if invalid == "missing_start":
+        assert not output.exists()
+
+
+def test_empty_output_selects_resume_and_w_does_not_hide_that(tmp_path):
+    _, scell, model = make_system()
+    start, output = tmp_path / "300K.xyz", tmp_path / "250K.xyz"
+    checkpoint(scell, start, [0, 1]*8)
+    output.touch()
+    mc = MonteCarlo(model, scell, nsubs={0: [8]}, start_from=start, atoms_filename=output,
+                    atoms_mode="w", save_atoms_endpoints=True)
+    with pytest.raises(ValueError, match="no complete frame"):
+        mc.metropolis(1, energy_factor=1, temperature=250, boltzmann_constant=1)
+    assert output.read_bytes() == b""
+
+
+def test_start_from_reset_and_explicit_fresh_run(tmp_path):
+    _, scell, model = make_system()
+    start, alternate, output = (tmp_path / name for name in ("300K.xyz", "restart.xyz", "250K.xyz"))
+    first, later = [0, 1]*8, [0]*8 + [1]*8
+    checkpoint(scell, start, first)
+    checkpoint(scell, alternate, later)
+    mc = MonteCarlo(model, scell, nsubs={0: [8]}, atoms_filename=output,
+                    atoms_mode="a", save_atoms_endpoints=True)
+    sampling = dict(energy_factor=1, temperature=250, boltzmann_constant=1)
+    mc.reset_chain(start_from=start, seed=5)
+    mc.metropolis(0, **sampling)
+    mc.reset_chain(start_from=start, resume_from=alternate, seed=6)
+    trajectory = mc.metropolis(0, continue_chain=True, **sampling)
+    np.testing.assert_array_equal(trajectory._trajectory[0]["sigmas"], later)
+    mc.reset_chain(start_from=start, seed=7)
+    trajectory = mc.metropolis(0, **sampling)
+    np.testing.assert_array_equal(trajectory._trajectory[0]["sigmas"], later)
+    # Reset with no file arguments clears the previous selection policy.
+    output.unlink()
+    mc.reset_chain(seed=8)
+    assert mc._start_from is None and mc._resume_from is None
+    mc.metropolis(0, **sampling)
+    assert mc._resume_source is None
+
+
+def test_checkpoint_options_conflict_with_explicit_decoration(tmp_path):
+    _, scell, model = make_system()
+    mc = MonteCarlo(model, scell, nsubs={0: [8]}, start_from=tmp_path / "300K.xyz")
+    with pytest.raises(ValueError, match="initial_decoration"):
+        mc.metropolis(0, initial_decoration=[1, 7]*8, energy_factor=1, temperature=250, boltzmann_constant=1)
+    with pytest.raises(ValueError, match="initial_decoration"):
+        mc.reset_chain(initial_decoration=[1, 7]*8, start_from=tmp_path / "300K.xyz")
+
+
+def test_selection_is_at_first_sampling_call_not_construction(tmp_path):
+    _, scell, model = make_system()
+    output = tmp_path / "250K.xyz"
+    mc = MonteCarlo(model, scell, nsubs={0: [8]}, start_from=tmp_path / "unused.xyz", atoms_filename=output)
+    expected = [0, 1]*8
+    checkpoint(scell, output, expected)  # Created after construction, before sampling.
+    trajectory = mc.metropolis(0, energy_factor=1, temperature=250, boltzmann_constant=1)
+    np.testing.assert_array_equal(trajectory._trajectory[0]["sigmas"], expected)
+
+
+@pytest.mark.parametrize("mode", ["auto", "w", "x"])
+def test_automatic_selection_precedes_output_mode(tmp_path, mode):
+    _, scell, model = make_system()
+    start, output = tmp_path / "300K.xyz", tmp_path / "250K.xyz"
+    checkpoint(scell, start, [0, 1]*8)
+    later = [0]*8 + [1]*8
+    checkpoint(scell, output, later, temperature=250)
+    before = output.read_bytes()
+    mc = MonteCarlo(model, scell, nsubs={0: [8]}, start_from=start, atoms_filename=output,
+                    atoms_mode=mode, save_atoms_endpoints=True)
+    sampling = dict(energy_factor=1, temperature=250, boltzmann_constant=1)
+    if mode == "x":
+        with pytest.raises(FileExistsError, match="already exists"):
+            mc.metropolis(0, **sampling)
+        assert output.read_bytes() == before
+    else:
+        trajectory = mc.metropolis(0, **sampling)
+        np.testing.assert_array_equal(trajectory._trajectory[0]["sigmas"], later)
+        assert len(read(output, index=":")) == 1
+        if mode == "auto":
+            assert output.read_bytes() == before
+
+
+def test_resume_alias_does_not_duplicate_or_truncate_wrong_file(tmp_path):
+    _, scell, model = make_system()
+    output, alias = tmp_path / "250K.xyz", tmp_path / "restart.xyz"
+    checkpoint(scell, output, [0, 1]*8)
+    alias.symlink_to(output)
+    before = output.read_bytes()
+    mc = MonteCarlo(model, scell, nsubs={0: [8]}, start_from=tmp_path / "unused.xyz", resume_from=alias,
+                    atoms_filename=output, atoms_mode="a", save_atoms_endpoints=True)
+    mc.metropolis(0, energy_factor=1, temperature=250, boltzmann_constant=1)
+    assert output.read_bytes() == before

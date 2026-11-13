@@ -311,6 +311,59 @@ reproduce the original proposal sequence exactly. New XYZ checkpoints include
 all sites and can be used for later resumes. Use ``reset_chain(resume_from=...)``
 to explicitly discard an in-memory chain and start from another saved frame.
 
+For an input that starts from a previous temperature on its first invocation
+and continues its own output on later invocations, supply ``start_from``::
+
+    mc = MonteCarlo(
+        model, scell, nsubs={0: [480]}, predict_swap=True,
+        start_from="anneal_harm_300K_snapshots.xyz",
+        atoms_filename="anneal_harm_250K_snapshots.xyz",
+        atoms_mode="a", save_atoms_every=10_000, save_atoms_endpoints=True,
+        seed=43,
+    )
+    trajectory = mc.metropolis(
+        500_000, energy_factor=float(len(scell)),  # Model in eV/atom.
+        temperature=250, boltzmann_constant=8.617330337217213e-5, nonlinear=True,
+    )
+
+With ``start_from``, omitted ``resume_from`` defaults to ``atoms_filename``.
+The output's existence is checked at the first ``metropolis`` call, before
+opening or writing output:
+
+==============================  ============================================
+State of atoms_filename         Configuration loaded
+==============================  ============================================
+Does not exist                  Last complete frame of start_from
+Exists                          Last complete frame of resume_from
+==============================  ============================================
+
+The first invocation in this example reads the 300 K file and creates a 250 K
+file whose initial frame is the loaded configuration. Later invocations load
+the last complete 250 K frame and append checkpoints, keeping the 300 K source
+unchanged. To resume from a different source, explicitly set
+``resume_from="restart.xyz"``: existence of ``atoms_filename``, not of
+``restart.xyz``, still selects between that source and ``start_from``.
+The sampler prints the selected source and why it was selected. A missing,
+empty or incompatible selected checkpoint raises an error, without silently
+trying the other source. An incomplete tail with an earlier complete frame is
+handled by the existing resume logic.
+
+The decision is made once for each file-based initialization. Internal batches
+and subsequent ``continue_chain=True`` stages reuse the chain and caches without
+rechecking files. ``reset_chain(start_from=..., seed=...)`` explicitly rearms
+the selection rule for the next call; it also accepts an optional alternate
+``resume_from``. ``reset_chain(seed=...)`` clears both file options and starts
+fresh. ``initial_decoration`` cannot be combined with either checkpoint option.
+``resume_from`` alone retains its existing unconditional loading behavior,
+including when the output file does not exist.
+
+Use ``atoms_mode="a"`` for a reusable input. ``"w"`` still explicitly replaces
+the output after loading the selected configuration, even when resuming from
+that same file. ``"x"`` refuses an existing output. Enable checkpoint writing
+to create the output used by the selection rule. Each new invocation restores
+the configuration with a new seeded random stream; it does not reconstruct the
+original random stream, infer completed work, or calculate remaining proposals.
+
 Reduced local updates require that a cluster does not wrap onto the same atom
 more than once. Such small periodic cells raise an error requesting larger
 periodic repeat lengths; the local flip calculation cannot treat these images
@@ -413,6 +466,47 @@ To continue from the final complete frame of ``anneal.xyz``, create a separate
     temperature = 150.0
     n_mc_sweeps = 40
 
+For a reusable single-temperature step, the following complete input loads
+300 K snapshots initially and resumes its own 250 K output on later invocations.
+Save it as ``anneal-250K.toml`` and run ``cell --input_file anneal-250K.toml``.
+This small example assumes a one-atom binary parent cell, a 64-atom supercell at
+half filling, and a saved model in eV/atom. Adjust paths, geometry, composition,
+length and the user-supplied energy conversion for the actual system::
+
+    do = ["anneal_250K"]
+
+    [anneal_250K]
+    command = "metropolis"
+    task = "runmc"
+    model_filepath = "model.pickle"
+    plat_filepath = "plat.json"
+    sc_shape = [4, 4, 4]
+    n_substitutions = {"0" = [32]}
+    ensemble = "canonical"
+    temperature = 250.0
+    n_mc_sweeps = 10
+    energy_factor = 64.0
+    boltzmann_constant = 8.617330337217213e-5
+    predict_swap = true
+    reduce_structure = true
+    nonlinear = true
+    start_from = "anneal_harm_300K_snapshots.xyz"
+    # resume_from defaults to atoms_filename when start_from is supplied.
+    atoms_filename = "anneal_harm_250K_snapshots.xyz"
+    atoms_mode = "a"
+    save_atoms_every = 64
+    save_atoms_endpoints = true
+    serialize = false
+    random_seed = 43
+    max_steps_per_batch = 100000
+
+To use a distinct continuation source, add ``resume_from = "restart.xyz"``.
+The 250 K output's existence still determines which source is loaded. These
+checkpoint settings also work with an explicit ``runs`` schedule. With either
+``start_from`` or ``resume_from``, a single-temperature step must explicitly
+provide a temperature and proposal/sweep count; every invocation adds that
+requested amount of work. Filenames do not set the sampling temperature.
+
 Resume restores the physical configuration and rebuilds nonlinear correlations
 and model energy before sampling. It starts a new seeded random stream.
 The continuation schedule is always explicit; completed or remaining sweeps
@@ -428,7 +522,7 @@ Each CLI step constructs a fresh MC object. Within its schedule, all later
 stages use ``continue_chain=True`` without passing another initial decoration,
 preserving site-index maps, both random streams, nonlinear correlation and
 energy caches, and acceptance-rate adaptation. A fresh named step without
-``resume_from`` starts a new configuration; Python callers can also explicitly
+``start_from`` or ``resume_from`` starts a new configuration; Python callers can also explicitly
 call ``reset_chain()``. ``continue_chain`` is routed to the first Python call
 if supplied, but does not share an in-memory chain between separate CLI steps.
 
@@ -448,7 +542,8 @@ sequence. Output metadata contains:
   substitutional sites.
 - ``mc_stage``: one-based temperature-stage number in this invocation.
 - ``mc_stage_step``: proposals within that stage.
-- ``mc_counter_origin``: ``fresh_start`` or ``xyz_resume``.
+- ``mc_counter_origin``: ``fresh_start`` or ``xyz_resume`` (also when loaded
+  through ``start_from``).
 
 These counters describe the current chain session, and never claim cumulative
 work performed before the source checkpoint. ``atoms_mode = "x"`` refuses an
