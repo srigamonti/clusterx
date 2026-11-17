@@ -5,6 +5,8 @@
 import numpy as np
 import spglib
 
+spglib.error.OLD_ERROR_HANDLING = False
+
 
 def get_spacegroup(parent_lattice):
     """
