@@ -7,9 +7,9 @@ __pycache__
 /.agents/*
 !/.agents/skills/
 !.gitlab-ci.yml
+!.python-version
 *#
 build
 dist
 mypy.ini
-pyproject.toml
 cellconfig.json
