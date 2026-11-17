@@ -361,6 +361,7 @@ class SuperCell(ParentLattice):
         Generate a random Structure with given number of substitutions.
 
         **Parameters:**
+
         ``nsubs``: None, int or dictionary (default: None)
             If dictionary, the ``nsubs`` argument must have the format
             ``{site_type0:[nsub01,nsub02,...], site_type1: ...}``

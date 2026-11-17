@@ -129,6 +129,7 @@ def lattice_wrap_index(index, lattice_shape):
     Inspired by: https://stackoverflow.com/questions/38066785/np-ndarray-with-periodic-boundary-conditions
 
     **parameters**
+
     ``index``: iterable
         one integer for each axis
     ``lattice_shape``: tuple
@@ -349,7 +350,7 @@ def list_integer_named_folders(root=".", prefix="", suffix="", containing_files=
 
         [1, 2, 5, 7, 8]
 
-    If prefix="run_", this returns::
+    If ``prefix="run_"``, this returns::
 
         ["run_2", "run_3", "run_4", "run_5"]
 
@@ -382,6 +383,7 @@ def list_integer_named_folders(root=".", prefix="", suffix="", containing_files=
     -------
     list[int] or list[str]
         Returns integers only when:
+
         - prefix == ""
         - suffix == ""
         - and none of the matched folder names uses zero padding

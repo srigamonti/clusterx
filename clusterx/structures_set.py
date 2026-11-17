@@ -94,6 +94,7 @@ class StructuresSet:
         to have been created using the `Structure.serialize()` method.
 
         Supported formats:
+
         - `.db`.   : ASE-compatible SQLite database file.
         - `.json`  : ASE-compatible JSON database file.
         - `.xyz`   : extended xyz file.
@@ -102,6 +103,7 @@ class StructuresSet:
         ----------
         filepath : str
             Path to the serialized file. The format is inferred from the file extension.
+
         quick_parse: see __init__
 
         Returns

@@ -508,10 +508,12 @@ def plot_columns(
     Per-series options (``[[plot_columns.series]]``)
     -------------------------------------------------
     Required (directly or via top-level defaults):
+
     - ``xcolumn`` (str): x-axis column from the loaded configurations table.
     - ``ycolumn`` (str): y-axis column from the loaded configurations table.
 
     Optional:
+
     - ``source_filepath`` (str): override top-level source for this series.
     - ``mask_name`` (str): mask name in the DerivativeStructures.
     - ``filter_ycolumn`` (str): optional column name used to filter rows before

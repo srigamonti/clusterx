@@ -432,10 +432,13 @@ def plot_predictions_vs_target(
     **Parameters:**
 
     ``sset``: StructuresSet object
+
     ``cemodel``: Model object
+
     ``prop_name``: name of the property to be plotted.
         Must be present in ``sset``, and, if cemodel is for multiple properties,
         must match one of the properties in ``cemodel.property_name``
+
     ``show_plot``: boolean (Default: True)
         If True, show the plot in a new window.
     ``save_plot``: boolean (Default: True)

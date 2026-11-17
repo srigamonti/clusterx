@@ -349,12 +349,15 @@ class StructureSelector:
         An additional StructuresSet containing the selected structures from all iterations is created and returned.
 
         ***Parameters***:
+
         method (string):
             method to use for selecting the structure; available options are:
+
             - 'global_averagedConcentration'
             - 'global_infiniteCrystalFiniteClusters'
             - 'global_vdWalleAndCeder'
             - 'global_byConcentration'
+
         lower_conc_limit: float
             Default: 0
             Used together with method 'global_averagedConcentration'; ignored for other methods

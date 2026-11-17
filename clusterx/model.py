@@ -315,7 +315,8 @@ class Model:
             it flags whether the member corrc correlationsCalculator computed
             orbits from scratch. This can be useful to konw, in order to serialize the
             model instance to accelerate next property predictions
-            Example usage:
+
+            Example usage::
 
                 model = Model(filepath="myfilepath.pickle")
                 model.predict(structure,flag={})
@@ -551,7 +552,7 @@ class Model:
     def invalidate_prediction_cache(self):
         """Discard folded coefficients after modifying a fitted estimator in place.
 
-        Estimator/step replacement and refits replacing final coef_/intercept_
+        Estimator/step replacement and refits replacing final ``coef_``/``intercept_``
         are detected automatically. Call this after editing fitted arrays in
         place or changing transformer/selector settings with set_params().
         Starting a MonteCarlo run through reset_mc() also clears the cache.

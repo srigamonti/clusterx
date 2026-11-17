@@ -45,7 +45,7 @@ class Structure(SuperCell):
     **Parameters:**
 
     ``super_cell``: SuperCell object
-         :class:`SuperCell <clusterx.super_cell.SuperCell>` object.
+        :class:`SuperCell <clusterx.super_cell.SuperCell>` object.
     ``decoration``: list of int (default: ``None``)
         Atomic numbers of the structure. Overriden by ``sigmas`` and ``atomic_symbols`` if not ``None``.
     ``decoration_symbols``: list of strings (default: ``None``)
@@ -58,10 +58,13 @@ class Structure(SuperCell):
         is ``{0: [10,11], 1: [25], 2: [12,25]}`` (*), then equivalent structures are obtained with
         ``decoration = [10,25,25]`` or ``decoration_symbols = ["Ne","Mn","Mn"]`` or ``sigmas = [0,0,1]``.
         If not ``None``, ``sigmas`` overrides ``decoration`` and ``decoration_symbols``.
+
     ``index_tracking``: Bool
+
     .. todo::
+
         * check input. If a structure is initialized with a non-allowed substitutional species, and error
-        should be raised.
+          should be raised.
 
     **Methods:**
     """
@@ -585,23 +588,25 @@ class Structure(SuperCell):
             in the sublattice should be flipped.
 
             - For an n-ary system with `sigma` values in the range [0, ..., n-1]:
-            If `sigma_initial = i`, the species `i` is flipped to a randomly chosen
-            different species `j ≠ i` from the same range, or to `sigma_final`, if given.
+              If `sigma_initial = i`, the species `i` is flipped to a randomly chosen
+              different species `j ≠ i` from the same range, or to `sigma_final`, if given.
 
             - If None (default):
-            A species `i` is randomly selected and flipped to a randomly chosen
-            `j ≠ i`, or to `sigma_final`, if given.
+              A species `i` is randomly selected and flipped to a randomly chosen
+              `j ≠ i`, or to `sigma_final`, if given.
 
             Examples:
+
             - Binary system (n = 2, sigma ∈ {0, 1}):
-                `sigma_initial = 0` flips to 1; `sigma_flip = 1` flips to 0.
+              `sigma_initial = 0` flips to 1; `sigma_flip = 1` flips to 0.
 
             - Ternary system (n = 3, sigma ∈ {0, 1, 2}):
-                `sigma_intial = 1` flips to either 0 or 2, chosen randomly.
+              `sigma_intial = 1` flips to either 0 or 2, chosen randomly.
 
         ``rng``: random number generator with .choice method.
 
         **Return:**
+
         ``atom_index``: integer
         ``sigma_initial``: integer
         ``sigma_final``: integer

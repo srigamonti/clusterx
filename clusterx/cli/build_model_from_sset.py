@@ -195,8 +195,10 @@ def build_model_from_sset(
         As in ``build_cpool``.
     basis_name : str
         As in ``build_ccalc``.
-    regression_model, selection_model, selection_must_include,
-    nonlinear_transformation, weights_filepath, standardize, test_size,
+    regression_model, selection_model, selection_must_include
+        As in ``build_nonlinear_model``.
+    nonlinear_transformation, weights_filepath, standardize, test_size
+        As in ``build_nonlinear_model``.
     random_state, shuffle
         As in ``build_nonlinear_model``.
     selection_threshold : float, default 0.0

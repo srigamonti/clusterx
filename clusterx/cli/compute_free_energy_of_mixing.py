@@ -237,7 +237,7 @@ def compute_free_energy_of_mixing(
     The JSON and returned dictionary contain settings, endmembers, references
     (beta=0 nodes), and results. Each result row includes composition, n_b,
     temperature, beta, mean_energy_per_site, mean_mixing_energy_per_site,
-    free_energy_of_mixing_per_site, and the corresponding *_stderr estimates
+    free_energy_of_mixing_per_site, and the corresponding ``*_stderr`` estimates
     for mean energy and free energy. Settings record species, atom/site counts,
     conversion factors, sampling controls and seeds.
     E_total and fields named mean_energy_per_site denote the scaled quantity

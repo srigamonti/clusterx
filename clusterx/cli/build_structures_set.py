@@ -65,10 +65,11 @@ def build_structures_set(
     """Build a StructuresSet from either discovered folders or explicit structure files.
 
     Supported modes:
+
     1. ``basepath`` is a folder path: discover integer-named subfolders and load
-          ``structure_fname`` from each one.
+       ``structure_fname`` from each one.
     2. ``basepath`` is a list/tuple of structure file paths: skip discovery and
-          load each provided file path directly (``structure_fname`` is ignored).
+       load each provided file path directly (``structure_fname`` is ignored).
     """
     cmd_message("head")
 
