@@ -131,7 +131,7 @@ def build_nonlinear_model(
 
     ccalc_filepath : str, optional
         Path to the pickle file of a serialized
-        :class:`~clusterx.calculators.CorrelationsCalculator` object.
+        :class:`~clusterx.correlations.CorrelationsCalculator` object.
         Default is ``"ccalc.pickle"``.
 
     xp_filepath : str, optional
