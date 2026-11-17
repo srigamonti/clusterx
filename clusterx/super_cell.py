@@ -22,8 +22,7 @@ from clusterx.utils import get_cl_idx_sc, normalize_shape_input
 
 
 class SuperCell(ParentLattice):
-    """
-    **Build a super cell**
+    """Build a super cell
 
     A :class:`SuperCell <clusterx.super_cell.SuperCell>` object acts as a blue-print for the creation of structures
     with arbitrary decorations.
@@ -34,13 +33,14 @@ class SuperCell(ParentLattice):
     the :class:`SuperCell <clusterx.super_cell.SuperCell>` class. Refer to the documentation of
     :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` for more methods.
 
-    **Parameters:**
-
-    ``parent_lattice``: :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` object
+    Parameters
+    ----------
+    parent_lattice : :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` object
         In **CELL**, a super cell is a periodic repetition of a parent lattice
         object. This parameter defines such a parent lattice for the created
         super cell.
-    ``p``: integer, or 1x3, 2x2, or 3x3 integer array
+
+    p : int, or 1x3, 2x2, or 3x3 int array
         Transformation matrix :math:`P`. The cartesian coordinates of the
         latttice vectors defining the created SuperCell object, are the rows of
         the matrix :math:`S` defined by :math:`S = PV` where the rows of
@@ -49,7 +49,8 @@ class SuperCell(ParentLattice):
         :py:meth:`ParentLattice.get_cell() <clusterx.parent_lattice.ParentLattice.get_cell()>`.
         The given matrix ``p`` must be compatible with the periodic boundary conditions of the parent lattice,
         i.e. the resulting super cell must not contain translations along the non-periodic directions.
-    ``sort_key``: list of three integers, optional
+
+    sort_key : list of three int, optional
         Create supercell object with sorted atomic coordinates
 
         Example:``sort_key=(2,1,0)`` will result in atoms sorted
@@ -63,21 +64,21 @@ class SuperCell(ParentLattice):
             sp = sorted(p, key=itemgetter(2,1,0))
 
         here p is a Nx3 array of vector coordinates.
-    ``filepath``: string (default: None)
+
+    filepath : str, default None
         The path of a JSON file containing a serialized SuperCell object, as generated
         by the ``SuperCell.serialize()`` method. This is the preferred argument.
 
-    ``json_db_filepath``: string (default: None)
+    json_db_filepath : str, default None
         **Deprecated.** Use ``filepath`` instead. If provided, this argument will still be accepted but a
         deprecation warning will be issued.
 
+    Notes
+    -----
     .. todo::
         Proper check of pbc when building the super cell. Either ignore
         translation in ``p`` along non-periodic directions or warn in some way
         if ``p`` is not compatible with pbc.
-
-
-    **Methods:**
     """
 
     def __init__(
@@ -320,12 +321,11 @@ class SuperCell(ParentLattice):
         return self.gen_structure(sigmas=np.zeros(len(self.get_tags()), dtype=np.int8))
 
     def gen_structure(self, sigmas=None, track_indices=False):
-        """
-        Generate a Structure with given configuration.
+        """Generate a Structure with given configuration.
 
-        **Parameters:**
-
-        ``sigmas``: array of integers
+        Parameters
+        ----------
+        sigmas : ndarray of int
             sigmas[idx] must be the ocupation variable for crystal site idx.
             For instance, supose that::
 
@@ -340,7 +340,6 @@ class SuperCell(ParentLattice):
             Then, the argument ``sigmas=[0,1,0,2,1]`` will produce the configuration::
 
                 [14,13,56,38,13]
-
         """
         from clusterx.structure import Structure  # to avoid circular import
 
@@ -357,12 +356,11 @@ class SuperCell(ParentLattice):
         track_indices=False,
         distribution="uniform",
     ):
-        """
-        Generate a random Structure with given number of substitutions.
+        """Generate a random Structure with given number of substitutions.
 
-        **Parameters:**
-
-        ``nsubs``: None, int or dictionary (default: None)
+        Parameters
+        ----------
+        nsubs : None, int or dict, default None
             If dictionary, the ``nsubs`` argument must have the format
             ``{site_type0:[nsub01,nsub02,...], site_type1: ...}``
             where ``site_type#`` and ``nsub##`` are, respectively, an integer indicating
@@ -376,13 +374,14 @@ class SuperCell(ParentLattice):
             If ``None``, the number of substitutions in each sublattice is
             generated at random.
 
-        ``rng``: numpy random number generator with the method `integers`
+        rng : object
+            NumPy random number generator with the method ``integers``.
 
-        ``track_indices``: bool (default: False)
+        track_indices : bool, default False
             internally keep track which sites are occupied with which species,
             enables faster generation of MonteCarlo steps.
 
-        ``distribution``: string (default: "binomial")
+        distribution : str, default "binomial"
             The distribution of concentrations. "uniform" means each nsubs is
             equally likely. "binomial" means that for each site the substitution
             is drawn randomly, resulting in a binomial distribution of concentrations.
@@ -430,9 +429,9 @@ class SuperCell(ParentLattice):
     ):
         """Generate a random decoration of the super cell with given number of substitutions.
 
-        Parameters:
-
-        ``nsubs``: dictionary
+        Parameters
+        ----------
+        nsubs : dict
             The format of the dictionary is as follows::
 
                 {site_type1:[n11,n12,...], site_type2:[n21,n22,...], ...}
@@ -440,14 +439,15 @@ class SuperCell(ParentLattice):
             it indicates how many substitutional atoms of every kind (n#1, n#2, ...)
             may replace the pristine species for sites of site_type#.
 
-        ``rng``: numpy random number generator with the function `integers`
+        rng : object
+            NumPy random number generator with the function ``integers``.
 
-        Returns:
-
-        decoration: list of int
+        Returns
+        -------
+        decoration : list of int
             list with the same length as the pristine structure.
             decoration[atom_idx] = species number sitting at site idx.
-        sigmas: list of int
+        sigmas : list of int
             sigma[atom_index] is an integer between 0 and M-1, where M is the
             total number of different species which may substitute an atom
             in this position.
@@ -507,8 +507,7 @@ class SuperCell(ParentLattice):
             atoms_db.write(neigs)
 
     def serialize(self, filepath="scell.json", fname=None):
-        """
-        Serialize a SuperCell object
+        """Serialize a SuperCell object
 
         Writes a `ASE's json database <https://wiki.fysik.dtu.dk/ase/ase/db/db.html>`_
         file containing a representation of the super cell.
@@ -517,12 +516,12 @@ class SuperCell(ParentLattice):
 
             ase gui scell.json
 
-        **Parameters:**
-
-        ``filepath``: string
+        Parameters
+        ----------
+        filepath : str
             Output file name.
 
-        ``fname``: string
+        fname : str
             *DEPRECATED*, use filepath instead. Output file name.
         """
         if fname is not None:

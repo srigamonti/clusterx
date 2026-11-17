@@ -23,17 +23,18 @@ from clusterx.visualization_utils import (
 def juview(plat, n=None):
     """Visualize structure object in Jupyter notebook
 
-    **Parameters:**
-
-    ``plat``: any of Atoms(ASE), ParentLattice, Supercell, Structure, StructureSet
+    Parameters
+    ----------
+    plat : any of Atoms(ASE), ParentLattice, Supercell, Structure, StructureSet
         structure object to be plotted
-    ``n``: integer or list of integer
+
+    n : int or list of int
         If integer, plot the first ``n`` structures. If list, plot range of structures.
         If ``None``, return all structures.
 
-    **Return:**
-
-        nglview display object
+    Returns
+    -------
+    nglview display object
     """
     import nglview
 
@@ -143,31 +144,33 @@ def plot_optimization_vs_number_of_clusters(
     The range of cluster pool sizes in the x-axis is determined by nclmin (minimum size)
     and nclmax (maximum size)
 
-    **Parameters:**
-
-    ``clsel``: ClustersSelector object
+    Parameters
+    ----------
+    clsel : ClustersSelector
         The ClustersSelector oject which was used for the cluster optimization.
 
-    ``xmin``: integer (Default: None)
+    xmin : int, default None
         Minimum cluster size in x-axis.
 
-    ``xmax``: integer (Default: None)
+    xmax : int, default None
         Maximum cluster size in x-axis.
 
-    ``yfactor``: float (Default:1.0)
+    yfactor : float, default 1.0
         Multipliplicative factor for y-values. Useful to pass unit conversion factors.
 
-    ``scale``: float (Default: 1.0)
+    scale : float, default 1.0
         Adjust this parameter to change font size, axes line width, and other details of the plot.
 
-    ``yaxis_label``: string (Default: "Errors")
+    yaxis_label : str, default "Errors"
         Label for the y-axis of the plot
 
-    ``show_plot``: boolean (Default: True)
+    show_plot : bool, default True
         If True, show the plot in a new window.
-    ``save_plot``: boolean (Default: True)
+
+    save_plot : bool, default True
         If True, save the plot to file.
-    ``fname``: string (Default: "plot_optimization_vs_nclusters.png")
+
+    fname : str, default "plot_optimization_vs_nclusters.png"
         Filepath to save the plot at.
     """
     from matplotlib.ticker import MaxNLocator
@@ -331,15 +334,18 @@ def plot_optimization_vs_sparsity(
     The plot shows the prediction and fitting errors as a function of the
     sparsity parameter when the LASSO method is used.
 
-    **Parameters:**
-
-    ``clsel``: ClustersSelector object
+    Parameters
+    ----------
+    clsel : ClustersSelector
         The ClustersSelector oject which was used for the optimization to be plotted.
-    ``show_plot``: boolean (Default: True)
+
+    show_plot : bool, default True
         If True, show the plot in a new window.
-    ``save_plot``: boolean (Default: True)
+
+    save_plot : bool, default True
         If True, save the plot to file.
-    ``fname``: string (Default: "plot_optimization_vs_sparsity.png")
+
+    fname : str, default "plot_optimization_vs_sparsity.png"
         Filepath to save the plot at.
     """
     _set_rc_params()
@@ -429,21 +435,24 @@ def plot_predictions_vs_target(
 
     The plot shows the prediction versus the target
 
-    **Parameters:**
+    Parameters
+    ----------
+    sset : StructuresSet
 
-    ``sset``: StructuresSet object
+    cemodel : Model
 
-    ``cemodel``: Model object
-
-    ``prop_name``: name of the property to be plotted.
+    prop_name
+        name of the property to be plotted.
         Must be present in ``sset``, and, if cemodel is for multiple properties,
         must match one of the properties in ``cemodel.property_name``
 
-    ``show_plot``: boolean (Default: True)
+    show_plot : bool, default True
         If True, show the plot in a new window.
-    ``save_plot``: boolean (Default: True)
+
+    save_plot : bool, default True
         If True, save the plot to file.
-    ``fname``: string (Default: "plot_predictions_vs_target.png")
+
+    fname : str, default "plot_predictions_vs_target.png"
         Filepath to save the plot at.
     """
     import math
@@ -551,38 +560,48 @@ def plot_property_vs_concentration(
     user wants to format the plot in a different way, or to write the data to a file
     for postprocessing (in the case that only the data is neeed, set ``show_plot`` to ``False``).
 
-    **Parameters:**
-
-    ``sset``: StructuresSet object
+    Parameters
+    ----------
+    sset : StructuresSet
         The property values will be plotted for structures in ``sset``.
-    ``property_name``: string
+
+    property_name : str
         The calculated property ``property_name`` will be extracted
         from the ``sset`` and depicted in the plot. If ``cemodel`` is not ``None``
         as well, then both predicted and calculated data are plot.
-    ``site_type``: integer
+
+    site_type : int
         The x axis of the plot will indicate the fractional concentration for
         site type ``site_type``
-    ``sigma``: integer
+
+    sigma : int
         The x axis of the plot will indicate the fractional concentration for
         the atomic species ``sigma`` in site type ``site_type``
-    ``cemodel``: Model object
+
+    cemodel : Model
         If not ``None``, the property values as predicted by ``cemodel`` will be
         depicted.
-    ``refs``: 1D Array containing two float (optional, default: None)
+
+    refs : 1D Array containing two float, default None
         the values of a reference energy at concentrations 0 and 1.
-    ``show_loo_predictions``: Boolean
+
+    show_loo_predictions : bool
         If true, show predicted properties corresponding to leave-one-out CV.
         That is, the predictions for the left-out samples in the CV procedure are
         also plotted.
-    ``show_plot``: boolean (Default: True)
+
+    show_plot : bool, default True
         If True, show the plot in a new window.
-    ``save_plot``: boolean (Default: True)
+
+    save_plot : bool, default True
         If True, save the plot to file.
-    ``fname``: string (Default: "property_vs_concentration.png")
+
+    fname : str, default "property_vs_concentration.png"
         Filepath to save the plot at.
 
-    **Returns:**
-
+    Returns
+    -------
+    dict
         Returns a dictionary with the data used to build the plot, with the following
         elements:
 
@@ -599,7 +618,6 @@ def plot_property_vs_concentration(
 
         Depending on the arguments to the call to ``plot_property_vs_concentration``, some of the
         returned dictionary elements may be missing.
-
     """
     _set_rc_params()
 

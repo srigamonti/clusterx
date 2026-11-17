@@ -42,15 +42,18 @@ class Structure(SuperCell):
     and :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` for additional methods for the
     ``Structure`` class.
 
-    **Parameters:**
-
-    ``super_cell``: SuperCell object
+    Parameters
+    ----------
+    super_cell : SuperCell
         :class:`SuperCell <clusterx.super_cell.SuperCell>` object.
-    ``decoration``: list of int (default: ``None``)
+
+    decoration : list of int, default None
         Atomic numbers of the structure. Overriden by ``sigmas`` and ``atomic_symbols`` if not ``None``.
-    ``decoration_symbols``: list of strings (default: ``None``)
+
+    decoration_symbols : list of str, default None
         Atomic symbols of the structure. Overriden by ``sigmas`` if not ``None``.
-    ``sigmas``: list of int (default: ``None``)
+
+    sigmas : list of int, default None
         Every site in a supercell is represented by an array of the species that
         can occupy the site. Thus, *taking as reference these arrays*, a possible
         representation of a *decoration* is by indicating the ordinal number of the
@@ -59,14 +62,15 @@ class Structure(SuperCell):
         ``decoration = [10,25,25]`` or ``decoration_symbols = ["Ne","Mn","Mn"]`` or ``sigmas = [0,0,1]``.
         If not ``None``, ``sigmas`` overrides ``decoration`` and ``decoration_symbols``.
 
-    ``index_tracking``: Bool
+    track_indices : bool
+        Whether to keep maps of site indices by sublattice and species.
 
+    Notes
+    -----
     .. todo::
 
         * check input. If a structure is initialized with a non-allowed substitutional species, and error
           should be raised.
-
-    **Methods:**
     """
 
     def __init__(
@@ -214,8 +218,7 @@ class Structure(SuperCell):
         filepath: str,
         parent_lattice: ParentLattice | None = None
     ) -> Structure:
-        """
-        Load a Structure object from a serialized file.
+        """Load a Structure object from a serialized file.
 
         Supports both binary and JSON-based serialization formats. The file is expected
         to have been created using the `Structure.serialize()` method.
@@ -229,7 +232,8 @@ class Structure(SuperCell):
         ----------
         filepath : str
             Path to the serialized file. The format is inferred from the file extension.
-        parent_lattice: ParentLattice (optional):
+
+        parent_lattice : ParentLattice, optional
             Provide ParentLattice if it is missing in the .xyz structure file for
             some reason. Overwrites ParentLattice from the structure file.
 
@@ -578,12 +582,12 @@ class Structure(SuperCell):
     ) -> tuple[int, int, int, int]:
         r"""Get a random flip index in given sublattice with given sigmas.
 
-        **Parameters:**
-
-        ``site_type``: integer (required)
+        Parameters
+        ----------
+        site_type : int (required)
             Indicate index of sub-lattice where atom is to be flipped.
 
-        ``sigma_initial``: int or None, optional (default: None)
+        sigma_initial : int or None, optional, default None
             Specifies which atomic species (denoted by the occupation variable `sigma`)
             in the sublattice should be flipped.
 
@@ -603,14 +607,14 @@ class Structure(SuperCell):
             - Ternary system (n = 3, sigma ∈ {0, 1, 2}):
               `sigma_intial = 1` flips to either 0 or 2, chosen randomly.
 
-        ``rng``: random number generator with .choice method.
+        rng : random number generator with .choice method
 
-        **Return:**
-
-        ``atom_index``: integer
-        ``sigma_initial``: integer
-        ``sigma_final``: integer
-        ``site_type``: integer
+        Returns
+        -------
+        atom_index : int
+        sigma_initial : int
+        sigma_final : int
+        site_type : int
         """
         # TODO: for semi-grand-canonical sampling, simplify this function
         if site_type is None:
@@ -707,19 +711,21 @@ class Structure(SuperCell):
     ) -> tuple[int, int, int]:
         r"""Return indices and sigmas of two randomly selected atoms in given sub-lattice.
 
-        **Parameters:**
-
-        ``site_type``: integer (required)
+        Parameters
+        ----------
+        site_type : int (required)
             Indicate index of sub-lattice where atoms are to be swapped.
 
-        ``sigma_initial``: integer (default: 0)
+        sigma_initial : int, default 0
             Sigma of site i before swap
 
-        ``sigma_final``: integer (default: 0)
+        sigma_final : int, default 0
             Sigma of site i after swap
 
-        **Return:**
-        indices i, j and sigmas sigmas[i], sigmas[j] of swap sites (after swap).
+        Returns
+        -------
+        tuple of int
+            indices i, j and sigmas sigmas[i], sigmas[j] of swap sites (after swap).
         """
         i, s_initial, s_final, site_type = self.get_random_flip(
             site_type, sigma_initial, sigma_final, rng
@@ -738,9 +744,9 @@ class Structure(SuperCell):
 
         See also :py:meth:`Structure.get_random_swap_binary() <clusterx.structure.Structure.swap_random_binary>`
 
-        **Parameters:**
-
-        ``site_types``: integer array (required)
+        Parameters
+        ----------
+        site_types : int array (required)
             Indicate indices of sub-lattices to be considered in the random sub-lattice selection.
         """
         if site_types is None:
@@ -774,9 +780,9 @@ class Structure(SuperCell):
     def update_decoration(self, decoration):
         """Update decoration of the structure object
 
-        **Parameters:**
-
-        ``decoration``:
+        Parameters
+        ----------
+        decoration
         """
         self.decor = decoration
         self.sigmas = np.zeros(len(decoration), dtype=np.int8)

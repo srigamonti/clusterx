@@ -18,49 +18,55 @@ def unique_non_sorted(a):
 
 
 class ParentLattice(Atoms):
-    """**Parent lattice class**
+    """Parent lattice class
 
     The parent lattice in a cluster expansion defines the atomic positions,
     the periodicity, the substitutional species, and the spectator sites, i.e. those
     atoms which are present in the crystal but are not substituted.
     ``ParentLattice`` subclasses ASE's ``Atoms`` class.
 
-    **Parameters:**
-
-    ``atoms``: ASE's ``Atoms`` object
+    Parameters
+    ----------
+    atoms : ASE's Atoms
         ``atoms`` object corresponding to the pristine lattice. If ``sites`` or
         ``site_symbols`` is not None, then the passed ``Atoms`` objects may not
         contain a definition of atomic species, i.e., can be initialized by only
         indicating atomic positions, unit cell, and periodic boundary conditions.
-    ``substitutions``: list of ASE's ``Atoms`` objects.
+
+    substitutions : list of ASE's Atoms objects
         Every ``Atoms`` object in the list, corresponds to a possible full
         substitution of only one sublattice. If set, overrides ``sites`` (see
         below).
-    ``numbers``: list of integer arrays or dict
+
+    numbers : list of int arrays or dict
         This is an array of length equal to the number of atoms in the parent
         lattice. Every element in the array is an array with species numbers,
         representing the species which can occupy the crystal
         sites (see examples below). This is overriden by ``substitutions``
         if set. If a dict, the dict keys must be the site indices.
-    ``symbols``: list of strings
+
+    symbols : list of str
         This is an array of length equal to the number of atoms in the parent
         lattice. Every element in the array is an array with species symbols
         (e.g. ``[["Cu","Au"]]``),
         representing the species which can occupy the crystal
         sites (see examples below). This is overriden by ``substitutions``
         if set.
-    ``filepath``: string
+
+    filepath : str
         Path to a Json database file, as created by ``ParentLattice.serialize()``.
         Overrides all the above. Allows to create a ``ParentLattice`` object
         from file.
-    ``json_db_filepath``: string, optional
+
+    json_db_filepath : str, optional
         Deprecated. Use ``filepath`` instead.
-    ``pbc``: three bool
+
+    pbc : three bool
         Periodic boundary conditions flags. Examples:
         (1, 1, 0), (True, False, False). Default value: (1,1,1)
 
-    **Examples:**
-
+    Examples
+    --------
     In all the examples below, you may visualize the created parent lattice
     by executing::
 
@@ -134,8 +140,6 @@ class ParentLattice(Atoms):
             positions are updated either by relaxation or deformation of the lattice.
         * remove deprecated sites and site_symbols parameters from __init__(), calls around the code,
             and documentation / tutorials
-
-    **Methods:**
     """
 
     def __init__(
@@ -336,7 +340,14 @@ class ParentLattice(Atoms):
         i.e., whether it consists of a single n-ary substitutional sublattice (plus any number of
         spectator sublattices). Otherwise returns ``False``.
 
-        **Example:**
+        Parameters
+        ----------
+        n : int
+            Integer number indicating how many different species can be hosted by
+            the substitutional sublattice.
+
+        Examples
+        --------
         Check whether a structure is a ternary::
 
             from clusterx.parent_lattice import ParentLattice
@@ -355,13 +366,6 @@ class ParentLattice(Atoms):
 
             If s.is_nary(3):
                 print("The structure is ternary")
-
-
-        **Parameters:**
-
-        ``n``: int
-            Integer number indicating how many different species can be hosted by
-            the substitutional sublattice.
         """
         _is_nary = False
         sublt = self.get_sublattice_types()
@@ -379,8 +383,8 @@ class ParentLattice(Atoms):
         attributes ``idx_subs`` and ``sites`` which define the substitutional
         framework of a ParentLattice.
 
-        Example:
-
+        Examples
+        --------
         Supose a ParentLattice object was initialized with four Atoms objects
         a1, a2, a3 and a4::
 
@@ -443,9 +447,9 @@ class ParentLattice(Atoms):
     def get_n_sub_sites(self, unique=True):
         """Return total number of substitutional sites
 
-        **Parameters:**
-
-        ``unique``: Boolean (default ``True``)
+        Parameters
+        ----------
+        unique : bool, default True
             If ``True``, return the number of site-types which may be substituted.
             If ``False``, return the number of sites which may be substituted.
         """
@@ -569,15 +573,16 @@ class ParentLattice(Atoms):
         where the key indicates the site type, ``pri#`` the atomic number of the pristine structure and
         ``sub##`` the possible substitutional atomic numbers for the site.
 
-        **Parameters:**
-
-        ``pretty_print``: boolean
+        Parameters
+        ----------
+        pretty_print : bool
             Whether to return a dictionary or a self-explanatory and nicely
             formatted string.
 
             DEPRECATED: Use `print_sublattice_types()` instead.
 
-        **Examples:**
+        Examples
+        --------
         For instance, if a ParentLattice object consists of six positions, such that
         the first three positions can be occupied by species 14 or 13, the 4th
         and 5th positions by species 56, vacant or species 38, and the 6th position
@@ -686,13 +691,15 @@ class ParentLattice(Atoms):
 
         Uses ``numpy.around()`` method.
 
-        **Parameters:**
-
-        ``decimals``: integer
+        Parameters
+        ----------
+        decimals : int
             Number of decimal places to round to (default: 0). If decimals is negative,
             it specifies the number of positions to the left of the decimal point.
 
-        **Return:**
+        Returns
+        -------
+        ParentLattice
             Returns a new ParentLattice object with rounded coordinates.
         """
 
@@ -719,12 +726,12 @@ class ParentLattice(Atoms):
 
             ase gui plat.json
 
-        **Parameters:**
-
-        ``filepath``: string
+        Parameters
+        ----------
+        filepath : str
             Output file name.
 
-        ``fname``: string
+        fname : str
             *DEPRECATED*, use ``filepath`` instead. Output file name.
         """
         if fname is not None:

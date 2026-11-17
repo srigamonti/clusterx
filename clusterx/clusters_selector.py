@@ -7,108 +7,107 @@ import numpy as np
 
 
 class ClustersSelector:
-    """Clusters selector class
+    """Select optimal cluster expansion models from training data and a clusters pool.
 
-    Objects of this class are used to select optimal cluster expansion models, i.e.
-    the optimal set of clusters, for given training data and clusters pool.
-
-    After initializing a ``ClustersSelector`` object, the actual selection of  clusters
-    is achieved by calling the method ``ClustersSelector.select_clusters()``
-
+    Objects of this class select the optimal set of clusters for the given
+    training data and clusters pool. After initializing a ``ClustersSelector``
+    object, call ``ClustersSelector.select_clusters()`` to perform the selection.
     Different optimality criteria can be used.
 
+    Parameters
+    ----------
+    basis : str, default "trigonometric"
+        Cluster basis used during the optimization task. For details and allowed
+        values, see :class:`clusterx.correlations.CorrelationsCalculator`.
+    selector_type : str, default "identity"
+        Selection method:
 
-    **Parameters:**
+        - ``"identity"``: no selection is performed. The optimal clusters pool is
+          the same as the argument ``cpool`` in
+          :meth:`~clusterx.clusters_selector.ClustersSelector.select_clusters`.
+        - ``"subsets_cv"``: cross-validation optimization of models defined by
+          subsets of the clusters pool.
+        - ``"lasso_cv"``: cross-validation optimization of the sparsity parameter.
+        - ``"lasso_on_residual"``: LASSO selection on the residual between a model
+          defined by ``set0`` and the output. The final model contains the union
+          of clusters in ``set0`` and those selected by LASSO on the residual.
+        - ``"OMP"``: Orthogonal Matching Pursuit.
 
-    ``basis``: *string*, default = ``"trigonometric"``
-        Cluster basis used during the optimization task. For details and allowed values,
-        read the documentation in :py:class:`clusterx.correlations.CorrelationsCalculator`
+        Deprecated names are described in Notes.
+    **selector_opts : dict
+        Keyword options passed directly to the constructor. These include general
+        options and options specific to ``selector_type``, described below.
 
-    ``selector_type``: *string*, default = ``"identity"``
-        can be ``"identity"``, ``"subsets_cv"``, ``"lasso_cv"`` and ``"lasso_on_residual"``.
+    Other Parameters
+    ----------------
+    fit_intercept : bool, default True
+        General option controlling whether to fit an intercept.
+    cv_type : {"loo", "5-fold", "10-fold"}, default "loo"
+        General cross-validation option. Use ``"loo"`` for leave-one-out CV,
+        ``"5-fold"`` for 5-fold CV, or ``"10-fold"`` for 10-fold CV.
+    cv_shuffle : bool, default False
+        General option. If ``cv_type`` is n-fold, this specifies whether to shuffle
+        the data for CV.
+    cv_random_state : int or None
+        General option. If ``cv_shuffle`` is ``True``, this controls the ordering
+        of the shuffling. If None, the shuffling is different in every call. An
+        integer gives the same shuffling for the same input, allowing reproducible
+        results.
+    standardize : bool, default False
+        General option. If ``True``, standardize correlations.
+    sparsity_max : float, default 1
+        Positive maximal sparsity parameter for ``selector_type="lasso_cv"``.
+    sparsity_min : float, default 0.01
+        Positive minimal sparsity parameter for ``selector_type="lasso_cv"``.
+    sparsity_step : float, optional
+        Positive sparsity step for ``selector_type="lasso_cv"``. If set to 0.0,
+        a logarithmic grid from ``sparsity_max`` to ``sparsity_min`` is created
+        automatically.
+    max_iter : int
+        Maximum number of iterations for the LASSO algorithm when
+        ``selector_type="lasso_cv"``.
+    tol : float
+        Small positive tolerance of the LASSO solution when
+        ``selector_type="lasso_cv"``.
+    sparsity_scale : {"log", "piece_log"}
+        Sparsity scale for ``selector_type="lasso_cv"``.
+    clusters_sets : {"size", "combinations", "size+combinations"}
+        Subset construction strategy for ``selector_type="subsets_cv"``:
 
-            * ``"identity"``: no slection is performed and the optimal clusters pool is the
-              same as the argument ``"cpool"`` in the :py:meth:`select_clusters()
-              <clusterx.clusters_selector.ClustersSelector.select_clusters>` method.
-            * ``"subsets_cv"``: a cross-validation optimization is performed on models defined
-              by subsets of the clusters pool.
-            * ``"lasso_cv"``: a cross-validation optimization is performed to find the optimal
-              sparsity parameter.
-            * ``"lasso_on_residual"``: a lasso selection is performed on the residual between
-              a model defined by ``set0`` (see below) the output. The final model contains the
-              union of clusters in ``"set0"`` and those selected by lasso on the residual.
-            * ``"OMP"``: Orthogonal Matching Pursuit.
-            * Deprecated options: ``"lasso"``, ``"linreg"``. Old ``"lasso"`` is identical to
-              ``"lasso_cv"`` and old ``"linreg"`` is identical to ``"subsets_cv"``
+        - ``"size"``: subpools of increasing size are extracted from the initial
+          pool, and cross-validation selects the optimal subpool.
+        - ``"combinations"``: all possible combinations of clusters from the pool
+          are considered. This can be very computationally demanding.
+        - ``"size+combinations"``: a fixed pool of clusters up to the size specified
+          by ``set0`` is always kept. Combinations are searched only for subsets of
+          ``nclmax`` clusters.
 
-    ``selector_opts``: dictionary of selector options
-        The possible key-value pairs in this dictionary correspond to either general options,
-        and options specific to the chosen ``selector_type``.
+    set0 : array of two numbers
+        For ``selector_type="subsets_cv"`` and
+        ``clusters_sets="size+combinations"``, specifies the size of the fixed
+        pool above which a combinatorial search is performed. The two elements
+        ``[int, float]`` give the maximum number of cluster points and the maximum
+        radius of the fixed subpool, respectively. This option also defines the
+        initial model for ``selector_type="lasso_on_residual"``, as described above.
+    nclmax : int
+        For ``selector_type="subsets_cv"`` and
+        ``clusters_sets="size+combinations"``, the maximum number of clusters in
+        the combinatorial subsets searched on top of the fixed subpool.
+    alpha : float, default 0
+        For subset selection, determines the regularization strength of the
+        scikit-learn ridge estimator. If set to 0, the estimator switches to
+        ordinary least squares.
+    alphas : list or ndarray of float, default []
+        For subset selection, determines the list of regularization strengths.
+        If ``len(alphas) > 1``, a scikit-learn RidgeCV estimator is used.
+    n_nonzero_coefs : int, default 1
+        Number of nonzero parameters for ``selector_type="OMP"``.
 
-        * General options:
-
-             * ``fit_intercept``: boolean (default ``True``).
-
-             * ``cv_type``: String. Either ``"loo"``, for leave-one-out CV; ``"5-fold"`` for 5-fold CV,
-               or ``10-fold`` for 10-fold CV. Default: ``"loo"``
-
-             * ``cv_shuffle``: Boolean. If ``cv_type`` is n-fold, this tells whether to shuffle the
-               data for CV. Default: ``False``.
-
-             * ``cv_random_state``: int or None. If ``cv_shuffle`` is ``True``, this controls the ordering
-               of the shuffling. If None, the shuffling is different in every call. If an integer is passed,
-               same shuffling is got for same integer input, so reproducible results can be obtained.
-
-             * ``standardize``: Boolean. If ``True``, standardize correlations. Default: ``False``.
-
-        * If ``selector_type`` is ``"lasso_cv"``: the selector_opts dict keys are:
-
-            * ``sparsity_max``: positive real, maximal sparsity parameter (default: 1)
-            * ``sparsity_min``: positive real, minimal sparsity parameter (default: 0.01)
-            * ``sparsity_step``: positive real, optional, if set to 0.0, a logarithmic grid from
-              sparsity_max to sparsity_min is automatically created.
-            * ``max_iter``: integer, maximum number of iterations for LASSO algorithm.
-            * ``tol``: small positive real, tolerance of LASSO solution.
-            * ``sparsity_scale``: either ``"log"`` or ``"piece_log"``.
-
-        * If ``selector_type`` is ``"subsets_cv"``: the selector_opts dict keys are:
-
-            * ``clusters_sets``: one of ``"size"``, ``"combinations"``, and ``"size+combinations"``.
-
-                * ``"size"``: Clusters sub_pools of increasing size are extracted from the initial
-                  pool, and cross validation selects the optimal sub-pool.
-                * ``"combinations"``: All possible combinations of clusters from the pool are considered,
-                  this can be very computationally demanding.
-                * ``"size+combinations"``: A fixed pool of clusters up to certain size (see ``set0``
-                  parameter below) is always kept and the combinations are searched only for subsets of
-                  ``nclmax`` (see below) clusters.
-
-                    * ``set0``: array with two elements ``[int,float]`` if ``clusters_sets`` is set to
-                      ``"size+combinations"``, this indicates the size of the fixed pool of clusters,
-                      above which a combinatorial search is performed. The first element of the array
-                      indicates the maximum number of cluster points and the second element the maximum
-                      radius, for the fixed subpool.
-                    * ``nclmax``: integer. If ``clusters_sets`` is set to ``"size+combinations"``, this
-                      indicates the maximum number of clusters in the combinatorial subsets of clusters
-                      to be searched for (on top of the fixed subpool, see above).
-
-           * ``alpha``: float (default: ``0``). For the subset selection a ridge estimator from
-             the scikit learn library is used. This parameter determines the regularization strength.
-             If set to ``0`` (default), the estimator switches to ordinary least squares.
-
-           * ``alphas``: list or numpy array of float (default: ``[]``). If the len(alphas) > 1, for
-             the subset selection a RidgeCV estimator from
-             the scikit learn library is used. This parameter determines the list regularization strengths.
-
-        * If ``selector_type`` is ``"OMP"``: the selector_opts dict keys are:
-
-            * ``n_nonzero_coefs``: number of nonzero parameters (default: 1)
-
-
-    **Notes:**
-
-    * Besides the indicated keys above, the ``**selector_opts`` dict may contain the key ``"method"``
-      (deprecated), which overrides the argument ``selector_type``.
+    Notes
+    -----
+    The deprecated selector type ``"lasso"`` is identical to ``"lasso_cv"``;
+    the deprecated type ``"linreg"`` is identical to ``"subsets_cv"``.
+    The deprecated keyword option ``method`` overrides ``selector_type``.
 
     .. todo::
 
@@ -186,21 +185,20 @@ class ClustersSelector:
         Returns a subpool containing
         the optimal set of clusters.
 
-        **Parameters:**
-
-        ``sset``: StructuresSet object
+        Parameters
+        ----------
+        sset : StructuresSet
             The structures set corresponding to the training data.
 
-        ``cpool``: ClustersPool object
+        cpool : ClustersPool
             the clusters pool from which the optimal model is selected.
 
-        ``prop``: string
+        prop : str
             property label (must be in sset) of property for which the optimal set of clusters is
             to be selected.
 
-        ``comat``: 2D numpy array (default "None")
+        comat : 2D ndarray, default "None"
             if the correlation matrix was precalculated, you can give it here
-
         """
         self.cpool = cpool
         self.plat = cpool.get_plat()

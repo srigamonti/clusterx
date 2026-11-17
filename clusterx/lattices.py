@@ -18,8 +18,8 @@ def HatZnO_10m10(a=3.2493, c=5.2054, u=0.345, nlayers=12, ads_symbol="X", vacuum
 
     Adsorption of H atoms occurs on top of Zn or on top of O.
 
-    Parameters:
-
+    Notes
+    -----
     a and c:  float
         bulk lattice parameters of Wurtzite ZnO
     u: float

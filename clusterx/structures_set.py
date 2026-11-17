@@ -18,8 +18,7 @@ from clusterx.utils import calculate_trafo_matrix, SuperCellIndexSearcher
 
 
 class StructuresSet:
-    """
-    **StructureSet class**
+    """StructureSet class
 
     Objects of this class contain a set of structures. This set can be used for
     various purposes, for instance as a training data set for
@@ -27,33 +26,31 @@ class StructuresSet:
     structures contained in a StructuresSet object must derive from a single
     ParentLattice object.
 
-    **Parameters:**
-
-    ``parent_lattice``: ParentLattice object
+    Parameters
+    ----------
+    parent_lattice : ParentLattice
         All the structures on a structures set must derive from the same parent
         lattice given here. This argument can be ommited if parsing from file (see
         below).
 
-    ``filepath``: String
+    filepath : str
         if provided, the structures set is initialized from a structures_set file, as created
         by ``StructuresSet.serialize()`` or ``StructuresSet.write_files()``. In this case,
         the ``parent_lattice`` argument can be ommited (if present, it is overriden).
 
-    ``calculator``: ASE calculator object (default: None)
+    calculator : ASE calculator object, default None
 
-    ``quick_parse``: Boolean (default: ``False``)
+    quick_parse : bool, default False
         if True, it assumes that, in the file to be parsed (see ``db_fname``),
         the atom indices of the structures are the same as those of the supercell.
         Otherwise, the atom positions of structures and supercell are verified for
         every structure in the structures set being parsed. This leads to a slower parsing
         but safer if not sure how the file was built.
 
-    **Examples:**
-
+    Examples
+    --------
     .. todo::
         * Refactor merge of two StructureSets
-
-    **Methods:**
     """
 
     def __init__(
@@ -87,8 +84,7 @@ class StructuresSet:
 
     @classmethod
     def from_file(cls, filepath: str, quick_parse=False) -> Structure:
-        """
-        Load a StructuresSet object from a serialized file.
+        """Load a StructuresSet object from a serialized file.
 
         Supports both SQLite and JSON-based serialization formats. The file is expected
         to have been created using the `Structure.serialize()` method.
@@ -104,7 +100,8 @@ class StructuresSet:
         filepath : str
             Path to the serialized file. The format is inferred from the file extension.
 
-        quick_parse: see __init__
+        quick_parse
+            see __init__
 
         Returns
         -------
@@ -248,15 +245,17 @@ class StructuresSet:
     def add_structure(self, structure, folder="", **props):
         """Add a structure to the StructuresSet object
 
-        **Parameters:**
-
-        ``structure``: Structure object
+        Parameters
+        ----------
+        structure : Structure
             Structure object for the structure to be added.
-        ``folder``: string (default:"")
+
+        folder : str, default ""
             optionally, path of the folder containing ab-initio runs. Paths are
             created automatically when calling ``StructuresSet.write_files()``.
             See related documentation for more details.
-        ``props``: keyword arguments
+
+        **props : keyword arguments
             keyword arguments to be stored in the properties dictionary of a
             StructuresSet object.
         """
@@ -297,18 +296,20 @@ class StructuresSet:
     def add_structures(self, structures=None, sort_key=None):
         """Add structures to the StructureSet object
 
-        **Parameters:**
-
-        ``structures``: list of Structure objects, path to database file, or StructuresSet object
+        Parameters
+        ----------
+        structures : list of Structure, path to database file, or StructuresSet
             Structures to be added
 
-        ``sort_key``: list of three integers (default:None)
+        sort_key : list of three int, default None
             Only relevant if ``structures`` is a database file. Sort atomic
             positions after reading. For example, the value (2,1,0)
             will sort as: increasing z-coordinate first, increasing
             y-coordinate second, increasing x-coordinate third. Useful to get
             well ordered slab structures, for instance.
 
+        Notes
+        -----
         .. todo::
             Look at possible issues when structures instance is str: it may fail if
             positions in actual structure are shuffled wrt parent lattice (a situation
@@ -344,13 +345,13 @@ class StructuresSet:
     def get_structure(self, sid):
         """Get one structure of the set
 
-        **Parameters:**
-
-        ``sid``: integer
+        Parameters
+        ----------
+        sid : int
             index of structure in the structure set.
 
-        **Returns:**
-
+        Returns
+        -------
         Structure object.
         """
         return self._structures[sid]
@@ -358,8 +359,8 @@ class StructuresSet:
     def get_structures(self):
         """Get all structures of the set
 
-        **Return:**
-
+        Returns
+        -------
         list of Structure objects.
         """
         return self._structures
@@ -375,16 +376,16 @@ class StructuresSet:
         return iter(self._structures)
 
     def get_images(self, rm_vac=True, n=None):
-        """
-        Return array of Atoms objects from structures set.
+        """Return array of Atoms objects from structures set.
 
-        **Parameters:**
-
-        ``rm_vac``: Boolean
+        Parameters
+        ----------
+        rm_vac : bool
             whether the returned Atoms objects contain vacancies, i.e. atoms with
             species number 0 or chemical symbol X. If true, vacancy sites are eliminated
             in the returned Atoms objects
-        ``n``: integer
+
+        n : int
             return the first ``n`` structures. If ``None``, return all structures.
         """
         from clusterx.utils import remove_vacancies
@@ -407,11 +408,12 @@ class StructuresSet:
     def get_subset(self, structure_indices=[], transfer_properties=True):
         """Return structures set instance containing a subset of structures of the original structures set
 
-        **Parameters**
-
-        ``structure_indices``: list or array
+        Parameters
+        ----------
+        structure_indices : list or array
             indices of the structures in the original StructuresSet to be included in the subset.
-        ``transfer_properties``: Boolean
+
+        transfer_properties : bool
             if True (default), copy the properties from the original StructuresSet to the subset.
         """
         folders = self.get_folders()
@@ -438,12 +440,11 @@ class StructuresSet:
         return subset
 
     def set_calculator(self, calc):
-        """
-        Assign calculator object to every structure in the structures set.
+        """Assign calculator object to every structure in the structures set.
 
-        **Parameters:**
-
-        ``calc``: Calculator object
+        Parameters
+        ----------
+        calc : Calculator
         """
         self._calculator = calc
         if self._calculator is not None:  # May be called with None from __init__
@@ -492,17 +493,16 @@ class StructuresSet:
         update_db=True,
         **kwargs,
     ):
-        """
-        Return array of calculated property for all structures in the structures set.
+        """Return array of calculated property for all structures in the structures set.
 
-        **Parameters**:
-
-        ``property_name``: string (default: "energy")
+        Parameters
+        ----------
+        property_name : str, default "energy"
             Name of the property to be calculated. This is used as a key for the
             ``self._props`` dictionary. The property values can be recovered by
             calling the method ``StructureSet.get_property_values(property_name)`` (see documentation).
 
-        ``property_calc``: function (default: ``None``)
+        property_calc : function, default None
             If none, the property value is calculated with the calculator object assigned
             to the structures set with  the method ``StructuresSet.set_calculator()``. If not
             None, it must be a function with the following signature::
@@ -513,17 +513,17 @@ class StructuresSet:
             is the structure object for structure index ``i``, and ``**kwargs`` are
             any additional keyword arguments. The function must return a number.
 
-        ``rm_vacancies``: Boolean (default:``True``)
+        rm_vacancies : bool, default True
             Only takes effect if ``property_func`` is ``None``, i.e., when an ASE calculator
             (or derived calculator) is used. If True, the "Atoms.get_potential_energy()" method
             is applied to a copy of Structure.atoms object with vacancy sites removed,
             i.e., atom positions containing species with species number 0 or species
             symbol "X".
 
-        ``update_db``: Boolean (default:``True``)
+        update_db : bool, default True
             Whether to update the database file (in case one is attached to the sset instance).
 
-        ``**kwargs``: keyword argument list, arbitrary length
+        **kwargs : keyword argument list, arbitrary length
             keyword arguments directly passed to ``property_func`` function.
             You may call this method as::
 
@@ -626,32 +626,31 @@ class StructuresSet:
             ...
             }
 
-
-        Parameters:
-
-        ``root``: String
+        Parameters
+        ----------
+        root : str
             path to the root folder containing the set of created folders
 
-        ``prefix``: String
+        prefix : str
             prefix for name of folder containing the files
 
-        ``suffix``: String
+        suffix : str
             suffix for name of folder containing the files
 
-        ``fnames``: array of Strings
+        fnames : array of Strings
             Array of file names for files contaning the structure. If not set defaults
             to ``geometry.json``.
 
-        ``formats``: array of Strings, optional
+        formats : array of Strings, optional
             Array of file formats corresponding to the file names in ``fnames``. Possible
             formats are listed in `ase.io.write <https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write>`_.
             If entirely ommited, or if an element of the array is ``None``, the format is
             guessed from the corresponding file name.
 
-        ``overwrite``: boolean
+        overwrite : bool
             Whether to overrite content of existing folders.
 
-        ``remove_vacancies``: Boolean
+        rm_vac : bool
             Vacancies are represented with chemical symbol ``X`` and atomic number
             0. Output file formats will contain lines with atomic positions corresponding
             to vacancies. If you want them absent in the files, set ``remove_vacancies``
@@ -716,12 +715,12 @@ class StructuresSet:
 
             ase db -w sset.db
 
-        **Parameters:**
-
-        ``filepath``: string
+        Parameters
+        ----------
+        filepath : str
             Output file name.
 
-        ``ase_db_type``: string or None, default is None
+        ase_db_type : str or None, default None
             Accepted values for the ASE database type:
 
             - ``'json'``: JSON format (saves to human readable json file.
@@ -733,9 +732,11 @@ class StructuresSet:
 
             if None, ASE guesses from the name
 
-        ``overwrite``: Boolean, defauls is False
+        overwrite : bool, defauls is False
             whether to overrite the serialized StructuresSet if it already exists.
 
+        Notes
+        -----
         .. todo::
             * At the moment, if properties where calculated using a calculator from ASE,
                 the last state of the calculator (energy, forces) is stored in the last
@@ -744,7 +745,6 @@ class StructuresSet:
                 undesired behaviors. However, it is not obvious how to get rid of it without
                 modifying ASE. So far we leave it like that, but should be removed in the
                 future.
-
         """
         if not overwrite and os.path.isfile(filepath):
             warnings.warn(f"File '{filepath}' already exists. Set overwrite=True to overwrite it. Nothing was written.")
@@ -830,18 +830,18 @@ class StructuresSet:
         method. Can be used as a template for reading different properties to
         be passed to ``StructureSet.read_property_values()``.
 
-        **Parameters:**
-
-        ``i``: integer
+        Parameters
+        ----------
+        i : int
             folder number
 
-        ``folder``: string
+        folder : str
             absolute or relative path of the folder containing the file/s to be read.
 
-        ``structure``: Structure object
+        structure : Structure
             structure object for structure index ``i``
 
-        ``**kwargs``: keyword arguments
+        **kwargs : keyword arguments
             Extra arguments needed for the property reading. See documentation of
             ``StructureSet.read_property_values()``.
         """
@@ -880,15 +880,15 @@ class StructuresSet:
         where ``"formation_energy_per_site"`` and  ``"total_energy"`` here are the
         string value of the parameter ``property_name`` in the call to ``read_property_values()``.
 
-        **Parameters:**
-
-        ``property_name``: string
+        Parameters
+        ----------
+        property_name : str
             key for the ``self._props`` dictionary of property values
 
-        ``write_to_file``: Boolean
+        write_to_file : bool
             Whether to write property values to a file with name ``property_name.dat``.
 
-        ``read_property``: function
+        property_parser : function
             Function to extract property value from ab-initio files. Return value
             must be scalar and signature is::
 
@@ -899,13 +899,13 @@ class StructuresSet:
             is the structure object for structure index ``i``, and ``**kwargs`` are
             any additional keyword arguments.
 
-        ``root``: string
+        root : str
             the root folder containing the subfolders with ab-initio data. See description above.
 
-        ``update_json_db``: Boolean (default:``True``)
+        update_json_db : bool, default True
             Whether to update the json database file (in case one is attached to the sset instance).
 
-        ``**kwargs``: keyword argument list, arbitrary length
+        **kwargs : keyword argument list, arbitrary length
             keyword arguments directly passed to ``read_property`` function.
             You may call this method as::
 
@@ -913,7 +913,6 @@ class StructuresSet:
 
             where ``arg1`` to  ``argN`` are the keyword arguments passed
             to the ``read_property(folder_path,**kwargs)`` function.
-
         """
         self._props[property_name] = []
         for i, folder in enumerate(self._folders):
@@ -970,15 +969,15 @@ class StructuresSet:
         If a folders' json-database (as created by ``StructuresSet.write_files()``)
         exists, it is updated.
 
-        **Parameters:**
-
-        ``property_name``: string
+        Parameters
+        ----------
+        property_name : str
             Name of the property
 
-        ``property_vals``: array
+        property_vals : array
             Array of property values
 
-        ``update_db``: Boolean (default:``True``)
+        update_db : bool, default True
             Whether to update the json database file (in case one is attached to the sset instance).
         """
         self._props[property_name] = property_vals
@@ -997,14 +996,14 @@ class StructuresSet:
 
         If an associated json database exists, it is updated with the new property.
 
-        **Parameters:**
-
-        ``property_name``: string
+        Parameters
+        ----------
+        property_name : str
             The name used to label the property in the structures set. This label is then listed
             in ``sset.get_property_names()`` and the property values for this label can be obtained
             by calling ``sset.get_property_values(property_name)``
 
-        ``property_file_name``: string
+        property_file_name : str
             In every folder of the list ``sset.get_folders()`` there must be a file named
             ``property_file_name`` containing a real number with the value of the property
         """
@@ -1028,16 +1027,16 @@ class StructuresSet:
     def get_property_values(self, property_name: str | List[str]):
         """Return list of property values.
 
-        **Parameters:**
-
-        ``property_name``: String | list of String
+        Parameters
+        ----------
+        property_name : str | list of str
             Name of the property or list of property names. If not sure,
             a list of property names can be obtained
             ``StructuresSet.get_property_names()``.
 
-        **Returns:**
-
-        ``props``: np.array
+        Returns
+        -------
+        props : ndarray
             A python array with the property values. If property_name is list,
             return list of lists with property values, first axis is
             number of samples, second axis is property. Otherwise return simple
@@ -1059,9 +1058,9 @@ class StructuresSet:
         Applies the given cluster expansion model to every structure in the
         structrues set and returns an array with the computed values.
 
-        **Parameters:**
-
-        ``cemodel``: Model object
+        Parameters
+        ----------
+        cemodel : Model
             Cluster expansion model for which predictions want to be computed.
         """
         predictions = []

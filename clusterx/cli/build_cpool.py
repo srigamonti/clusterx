@@ -63,20 +63,36 @@ def build_cpool(
     cpool_filepath="cpool.json",  # str
     vacancy_atomic_number=0,  # int
 ):
-    """
-    Build a pool of clusters.
+    """Build a pool of clusters.
 
-    Parameters:
-        npoints: A list of integers or a string representation of the list.
-        radii: A list of floats or a string representation of the list.
-        post_manual_select: List of cluster indices to manually select clusters out of the generated pool.
-        sset_filepath: Path to the structure set file (optional).
-        plat_filepath: Path to the parent lattice file (optional).
-        psc: Supercell definition (default: 1).
-        method: Method ID used to construct clusters (default: 0).
-        cpool_filepath: Output filepath for the cluster pool (default: "cpool.json").
-        vacancy_atomic_number: Atomic number for vacancy site (default: 0).
+    Parameters
+    ----------
+    npoints : list of int or str
+        A list of integers or a string representation of the list.
 
+    radii : list of float or str
+        A list of floats or a string representation of the list.
+
+    post_manual_select : list of int
+        List of cluster indices to manually select clusters out of the generated pool.
+
+    sset_filepath : str, optional
+        Path to the structure set file (optional).
+
+    plat_filepath : str, optional
+        Path to the parent lattice file (optional).
+
+    psc
+        Supercell definition (default: 1).
+
+    method : int
+        Method ID used to construct clusters, default 0.
+
+    cpool_filepath : str
+        Output filepath for the cluster pool, default "cpool.json".
+
+    vacancy_atomic_number : int
+        Atomic number for vacancy site, default 0.
     """
     if isinstance(npoints, str):
         npoints = convert_to_int_list(npoints)

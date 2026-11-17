@@ -18,22 +18,26 @@ class StructureSelector:
     the variance of predicted property values for a population of structures outside
     the training data is reduced.
 
-    **Parameters**
-
-    ``cpool``: ClustersPool() object
+    Parameters
+    ----------
+    cpool : ClustersPool
         Cluster pool to be used to calculate the correlations of the
         training set and the domain matrix.
-    ``training_set``: StructuresSet() object
+
+    training_set : StructuresSet
         Contains the current training set.
-    ``candidate_set``: StructuresSet() object
+
+    candidate_set : StructuresSet
         Pool of new structures, that might be selected to enter the training set.
         If it remains 'None', the class can only assess the training set.
-    ``correlations_calculator``: CorrelationsCalculator object
+
+    correlations_calculator : CorrelationsCalculator
         Used to calculate the correlations of structures and clusters.
         If this is not assigned a CorrelationsCalculator object, a default
         CorrelationsCalculator object with a trigonometric basis and the chosen
         cpool is used.
-    ``regularization_strength``: float
+
+    regularization_strength : float
         The default is 0.0, such that no regularization is applied to the
         Gram matrix X^T X.
         Regularization should be applied if the Gram matrix is not invertible,
@@ -41,7 +45,6 @@ class StructureSelector:
         the number of clusters in the cpool.
         Then an identity matrix multiplied by the regularization_strength is
         added to the Gram matrix, such that it becomes invertible.
-
     """
 
     def __init__(
@@ -91,11 +94,10 @@ class StructureSelector:
         Changes the set of candidates to be selected for the training set.
         The input parameter is, thus, a StructureSet object.
 
-        Parameters:
-
-        new_candidate_set: StructureSet object
+        Parameters
+        ----------
+        new_candidate_set : StructureSet
             The new set of candidate structures.
-
         """
         if not (isinstance(new_candidate_set, StructuresSet)):
             raise TypeError(
@@ -119,20 +121,24 @@ class StructureSelector:
         The options for this input parameter are 'averagedConcentration', 'infiniteCrystalFiniteClusters',
         'byConcentration', 'vdWalleAndCeder'.
         If 'byConcentration' is chosen, one needs to supply the parameter 'concentration' in the range [0, 1].
-        Parameters:
 
-        domain_calculation_method: string
+        Parameters
+        ----------
+        domain_calculation_method : str
             Defines the method used to calculate the domain matrix.
             Choose from: 'averagedConcentration', 'infiniteCrystalFiniteClusters','byConcentration',
             'vdWalleAndCeder'.
-        concentration: float
+
+        concentration : float
             Defines the concentration for which the domain matrix should be evaluated.
-        lower_conc_limit: float
+
+        lower_conc_limit : float
             Default: 0
             Used together with method 'global_averagedConcentration'; ignored for other methods
             Lower concentration limit for the system.
             Used in the calculation of the domain matrix as lower limit of integration over concentration.
-        upper_conc_limit: float
+
+        upper_conc_limit : float
             Default: 1
             Used together with method 'global_averagedConcentration'; ignored for other methods
             Upper concentration limit for the system.
@@ -172,29 +178,33 @@ class StructureSelector:
         Afterwards the structure is removed from the training set, and the next
         structure is taken. The routine selects the structure that minimizes the population variance.
 
-        Parameters:
-
-        method: string
+        Parameters
+        ----------
+        method : str
             Defines the method used to calculate the domain matrix. Options are
             'global_averagedConcentration', 'global_infiniteCrystalFiniteClusters', 'global_byConcentration',
             'global_vdWalleAndCeder' and 'greedy'.
-        concentration: float
+
+        concentration : float
             Defines the concentration for which the domain matrix should be evaluated.
             Provide a value in the range [0,1]. Must be provided if 'method' is 'global_byConcentration'.
             Ignored in all other cases
-        recompute_gram_matrix: bool
+
+        recompute_correlation_matrix : bool
             Default is False, such that the correlation matrix of the training set
             is only computed once in the beginning.
             In order to use an active learning workflow as defined in
             select_structures_set the correlation matrix has to be recomputed
             each time a structure is added to the training set, that is,
             in each step, since the training set changes in each iteration.
-        lower_conc_limit: float
+
+        lower_conc_limit : float
             Default: 0
             Used together with method 'global_averagedConcentration'; ignored for other methods
             Lower concentration limit for the system.
             Used in the calculation of the domain matrix as lower limit of integration over concentration.
-        upper_conc_limit: float
+
+        upper_conc_limit : float
             Default: 1
             Used together with method 'global_averagedConcentration'; ignored for other methods
             Upper concentration limit for the system.
@@ -339,8 +349,7 @@ class StructureSelector:
         concentrations: List[float] | None = None,
         candidate_correlations: np.ndarray | None = None,
     ) -> StructuresSet:
-        """
-        Active learning workflow to iteratively select a specified number of optimal structures from a candidate_set
+        """Active learning workflow to iteratively select a specified number of optimal structures from a candidate_set
         in order to reduce the variance of predicted property values among a population of
         structures for the training_set.
 
@@ -348,9 +357,9 @@ class StructureSelector:
         The selected structure is added to the training_set and removed from the candidate_set.
         An additional StructuresSet containing the selected structures from all iterations is created and returned.
 
-        ***Parameters***:
-
-        method (string):
+        Parameters
+        ----------
+        method : str
             method to use for selecting the structure; available options are:
 
             - 'global_averagedConcentration'
@@ -358,21 +367,24 @@ class StructureSelector:
             - 'global_vdWalleAndCeder'
             - 'global_byConcentration'
 
-        lower_conc_limit: float
+        lower_conc_limit : float
             Default: 0
             Used together with method 'global_averagedConcentration'; ignored for other methods
             Lower concentration limit for the system.
             Used in the calculation of the domain matrix as lower limit of integration over concentration.
-        upper_conc_limit: float
+
+        upper_conc_limit : float
             Default: 1
             Used together with method 'global_averagedConcentration'; ignored for other methods
             Upper concentration limit for the system.
             Used in the calculation of the domain matrix as upper limit of integration over concentration.
-        nr_structures (int, optional):
+
+        nr_structures : int, optional
             Default: None
             Specifies the number of structures you want to select from candidate_set.
             Not used if method is 'global_byConcentration', where on needs to provide a list of concentrations instead.
-        exclude_equivalent_candidates (bool):
+
+        exclude_equivalent_candidates : bool
             Default: False
             To avoid the presence of symmetrically equivalent structures in the candidate set,
             this parameter can be set to True.
@@ -381,24 +393,27 @@ class StructureSelector:
             This could lead to symmetrically inequivalent structures also being excluded, as they could have same
             correlations, especially if correlations are computed with a small clusters pool. To reduce this risk,
             it is advised to provide a clusters pool as large as possible for cpool_candidates.
-        cpool_candidates: (ClusterPool object, optional):
+
+        cpool_candidates
+            (ClusterPool object, optional):
             Clusters pool to calculate the candidate correlations in order to exclude structures with the same
             correlations. You may want to use a large clusters pool here.
             cpool_candidates is only used once to calculate the correlations.
             For structure selection a smaller clusters pool (set in the structure_selector) is used, as
             otherwise it would be computationally too expensive.
-        concentrations (list of floats, optional):
+
+        concentrations : list of floats, optional
             Default: None
             List of concentrations for which structure selection should be optimized.
             This does not /have to) correspond to the concentrations of the selected structures.
             Use together with method: 'global_byConcentration'
-        candidate_correlations (matrix: np.ndarray[float], optional):
+
+        candidate_correlations : matrix: ndarray[float], optional
             Default: None
             If not assigned, the correlation matrix for the candidate set is
             calculated with the correlations calculator of the structure selector.
             If you have already calculated this before, you can resuse the result
             and provide the candidate correlations matrix as input here.
-
         """
         method_list = [
             "global_averagedConcentration",

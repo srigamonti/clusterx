@@ -262,8 +262,10 @@ def metropolis(
     atom counts, unit conversions, or a default temperature/Boltzmann constant.
     Specify temperature directly or explicitly in every runs stage.
 
-    Checkpoint initialization for task="runmc"
-    ------------------------------------------
+    Notes
+    -----
+    .. rubric:: Checkpoint initialization for task="runmc"
+
     resume_from alone always loads that file's final complete frame, even when
     atoms_filename does not exist. It never infers a temperature or run length.
     With start_from, the existence of atoms_filename selects the source, BEFORE
@@ -286,8 +288,8 @@ def metropolis(
     Selection happens once for the new MC object. Later schedule stages reuse
     the chain, random streams and caches without rechecking files.
 
-    Output and reuse
-    ----------------
+    .. rubric:: Output and reuse
+
     Use atoms_mode="a" to create an absent output or append to an existing one.
     With the shorthand resume/output path, appending avoids duplicating the
     last loaded frame and removes an interrupted final XYZ tail before writing.
@@ -299,8 +301,8 @@ def metropolis(
     These options specify another explicit number of proposals/sweeps each
     invocation, not a cumulative target or an inferred remaining run length.
 
-    Reusable named-step TOML example
-    --------------------------------
+    .. rubric:: Reusable named-step TOML example
+
     Save as anneal-250K.toml and run ``cell --input_file anneal-250K.toml``.
     This example assumes a one-atom binary parent cell, a 64-site supercell at
     half filling, and a model predicting eV/atom; adjust paths, geometry, counts

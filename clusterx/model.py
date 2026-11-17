@@ -35,19 +35,24 @@ class Model:
 
     Model class to manage property estimation based on correlations and ECIs.
 
-    **Parameters:**
-
+    Parameters
+    ----------
     corrc : CorrelationsCalculator, optional
         The correlations calculator corresponding to the optimal model.
+
     property_name : str or list of str, optional
         The name of the property/properties to be queried in `StructureSet`.
+
     estimator : object, optional
         An estimator object to predict property values. Alternatively, ECIs can be set.
+
     ecis : List[float], optional
         Effective cluster interactions (multiplied by multiplicities). Overrides `estimator`.
+
     filepath : str, optional
         Path to a serialized model file (.json or .pickle). If provided, all other arguments are ignored.
-    standardize : bool, default=False
+
+    standardize : bool, default False
         If True, standardizes input using `sklearn.preprocessing.StandardScaler`.
     """
 
@@ -197,17 +202,19 @@ class Model:
     def serialize(self, filepath=None, fmt=None, db_name=None):
         """Write cluster expansion model to Json database
 
-        **Parameter:**
-
-        ``filepath``: string
+        Parameters
+        ----------
+        filepath : str
             Name of the file to store the Model instance. It can contain the relative or absolute path.
             If not given, and if db_name (deprecated) is None, filepathh is set
             to "cemodel.pickle" and fmt is overriden (set to pickle).
-        ``fmt``: string
+
+        fmt : str
             It can take the values ``"pickle"`` or ``"json"``.
             So far, object can only be re-initiated from a ``"pickle"`` file, therefore this is the preferred format.
             If not given, it is inferred from the filepathh.
-        ``db_name``: (DEPRECATED) string
+
+        db_name : (DEPRECATED) str
             Name of the json file containing the database
         """
 
@@ -302,16 +309,16 @@ class Model:
     def predict(self, structure: Structure, reduce_structure: bool = False, flag=None):
         """Predict property with the optimal cluster expansion model.
 
-        **Parameters:**
-
-        ``structure``: Structure object
+        Parameters
+        ----------
+        structure : Structure
             structure object to calculate property to.
 
-        ``reduce_structure``: bool, default: False
+        reduce_structure : bool, default False
             If true, use reduced structure to predict, only works for diagonal
             supercell transformation.
 
-        ``flag``: dict or None
+        flag : dict or None
             it flags whether the member corrc correlationsCalculator computed
             orbits from scratch. This can be useful to konw, in order to serialize the
             model instance to accelerate next property predictions
@@ -377,7 +384,10 @@ class Model:
     def predict_partial(self, structure: Structure, index: int, divide_n_body: bool = False):
         """Predict property using only the correlations around site `index`.
         This uses all correlations of all clusters that include this site.
-        Note: only works for diagonal super cells.
+
+        Notes
+        -----
+        only works for diagonal super cells.
         It is an additive energy contribution only for affine models.
         """
         _structure, _index = structure.get_reduced_structure(index)
@@ -528,17 +538,17 @@ class Model:
         This direct difference path assumes an affine model. Nonlinear Monte
         Carlo tracks the global correlation state with nonlinear=True instead.
 
-        **Parameters:**
-
-        ``structure``: Structure object
+        Parameters
+        ----------
+        structure : Structure
             structure object to calculate property difference to.
 
-        ``atom_index``: int
+        index : int
             index of the atom to be substituted
 
-        ``new_sigma``: int, default None
+        new_sigma : int, default None
 
-        ``reduce_structure``: bool, default: False
+        reduce_structure : bool, default False
             If true, use reduced structure to predict flip energy, only works
             for diagonal supercell transformation.
         """
@@ -664,15 +674,15 @@ class Model:
         This direct difference path assumes an affine model; use the nonlinear
         Monte Carlo path for models nonlinear in their correlations.
 
-        **Parameters:**
-
-        ``structure``: Structure object
+        Parameters
+        ----------
+        structure : Structure
             structure object to calculate property difference to.
 
-        ``i``: int
+        i : int
             index of first atom position has been swapped
 
-        ``j``: int
+        j : int
             index of second atom position has been swapped
         """
 
@@ -688,9 +698,9 @@ class Model:
     def report_errors(self, sset):
         """Report fit and CV scores
 
-        **Parameters**:
-
-        ``sset``: StructuresSet object
+        Parameters
+        ----------
+        sset : StructuresSet
             the scores are computed for the give structures set
         """
         properties = self.property_name if isinstance(self.property_name, list) else [self.property_name]
@@ -736,20 +746,23 @@ class Model:
     def get_all_errors(self, sset, srtd=False):
         """Return absolute errors of every structure in a structures set.
 
-        **Parameters:**
-
-        ``sset``: StructuresSet object
+        Parameters
+        ----------
+        sset : StructuresSet
             the errors are calculated for every structure in the structures set
-        ``srtd``: Boolean (default: ``False``)
+
+        srtd : bool, default False
             if ``True`` the output errors are sorted from smallest to largest.
 
-        **Returns:**
-        structured numpy array with fields::
+        Returns
+        -------
+        ndarray
+            structured numpy array with fields::
 
-            [('index','<i4'), ('error','<f4')]
+                [('index','<i4'), ('error','<f4')]
 
-        i.e., every element of the array contains a tuple with an integer, the structure index
-        and a float, the absolute error
+            i.e., every element of the array contains a tuple with an integer, the structure index
+            and a float, the absolute error
         """
         calc_vals = sset.get_property_values(property_name=self.property_name)
         predictions = sset.get_predictions(self)
@@ -771,9 +784,9 @@ class Model:
     def get_cv_score(self, sset, property_name_single, params=None):
         """Get leave-one-out cross-validation score over structures set.
 
-        **Parameters:**
-
-        ``params``: dictionary
+        Parameters
+        ----------
+        params : dict
             Parameters to pass to the fit method of the estimator.
         """
         from sklearn.model_selection import (
@@ -816,38 +829,38 @@ class ModelBuilder:
 
     Objects of this class represent a cluster expansion model.
 
-    **Parameters:**
-
-    ``basis``: string (Default: ``"trigonometric"``)
+    Parameters
+    ----------
+    basis : str, default "trigonometric"
         Basis set used to calculate the matrix of cluster correlations. For a detailed
         description and possible values of this parameter, look at the documentation
         for parameter ``basis`` in :class:`CorrelationsCalculator <clusterx.correlations.CorrelationsCalculator>`
 
-    ``selector_type``: string
+    selector_type : str
         Cluster selector type. For the possible values, look at the
         documentation for the parameter ``selector_type`` in the
         :class:`ClustersSelector <clusterx.clusters_selector.ClustersSelector>` class.
 
-    ``selector_opts``: dictionary
+    selector_opts : dict
         Cluster selector options. For the possible values, look at the
         documentation for the parameter ``selector_opts`` in the
         :class:`ClustersSelector <clusterx.clusters_selector.ClustersSelector>` class.
 
-    ``estimator_type``: string
+    estimator_type : str
         Estimator type. For the possible values, look at the documentation
         for the parameter ``estimator_type`` in the
         :class:`EstimatorFactory <clusterx.estimators.estimator_factory.EstimatorFactory>` class.
 
-    ``estimator_opts``: dictionary
+    estimator_opts : dict
         Estimator options. For the possible values, look at the documentation
         for the parameter ``estimator_opts`` in the
         :class:`EstimatorFactory <clusterx.estimators.estimator_factory.EstimatorFactory>` class.
 
-    ``filepath``: string (default: None)
+    filepath : str, default None
         If not None, it must be the path to a pickle file generated with ModelBuilder.serialize(). All other
         parameters are overriden
 
-    ``standardize``: Boolean (defaut:``False``)
+    standardize : bool (defaut:False)
         Whether to standardize the input. Uses StandardScaler of scikit-learn.
     """
 
@@ -956,24 +969,25 @@ class ModelBuilder:
 
         Acts as a Model factory.
 
-        **Parameters:**
-
-        ``sset``: StructuresSet object
+        Parameters
+        ----------
+        sset : StructuresSet
             structures set used for model training.
 
-        ``cpool``: ClustersPool object
+        cpool : ClustersPool
             clusters pool from which to select the best model using the method
             indicated in ``selector_type``.
 
-        ``prop``: String | list of Strings
+        prop : str or list of str
             Property name or list of property names.
             Must be a valid name as stored in ``sset``. The list of names can
             be obtained using ``sset.get_property_names()``.
 
-        ``corrc``: CorrelationsCalculator object (default: None)
+        corrc : CorrelationsCalculator, default None
             If not None, cpool and basis are overriden
 
-        ``kwargs``: Keyword arguments passed to the fit method of the estimator.
+        **kwargs : dict
+            Keyword arguments passed to the fit method of the estimator.
         """
         self.sset = sset
         self.plat = cpool.get_plat()
@@ -1037,9 +1051,9 @@ class ModelBuilder:
 
         Only pickle format is supported.
 
-        **Parameters:**
-
-        ``filepath``: string (default: "MODELBDR.pickle")
+        Parameters
+        ----------
+        filepath : str, default "MODELBDR.pickle"
             file path of the pickle file to serialize the model builder object
         """
         # from pathlib import Path

@@ -29,16 +29,16 @@ def microcanonical_temperature(e, ln_g):
 
     The micrononical temperature is given by
 
-    .. math:
+    .. math::
 
-        T = \frac{1}{k_B} \frac{1}{\frac{d ln(g(E))}{dE}}
+        T = \\frac{1}{k_B} \\frac{1}{\\frac{d ln(g(E))}{dE}}
 
-    **Parameters**:
-
-    ``e``: array of float
+    Parameters
+    ----------
+    e : ndarray of float
         energies in eV.
 
-    ``ln_g``: array of float
+    ln_g : ndarray of float
         natural logarithm of the configurational density of states.
     """
     grad = np.gradient(ln_g, e)
@@ -59,15 +59,15 @@ def cdos_interpolation(
 
     Essentially wraps ``scipy.interpolate.splrep``.
 
-    **Parameters**:
-
-    ``energy``: array of float
+    Parameters
+    ----------
+    energy : ndarray of float
         energies in eV
 
-    ``log_cdos``: array of float
+    log_cdos : ndarray of float
         natural logarithm of the configurational density of states
 
-    ``show_plot``: boolean
+    show_plot : bool
         whether to plot the interpolated CDOS
     """
     e = energy
@@ -128,17 +128,16 @@ def compute_thermodynamic_averages(temperatures, energy, log_cdos, filename=None
 
         & F(T) \\rightarrow F(T) - k_B T ln(c)
 
-    **Parameters**:
-
-    ``temperatures``: list of floats
+    Parameters
+    ----------
+    temperatures : list of floats
         Temperatures for which the thermodynamic property is calculated, in Kelvin.
 
-    ``energy``: array of floats
+    energy : array of floats
         energies for which the CDOS is given.
 
-    ``log_cdos``: array of floats
+    log_cdos : array of floats
         Natural logarithm of the CDOS for the given energies in ``energy`` array.
-
     """
     ln_maxfloat = math.log(sys.float_info.max)
     e = energy
@@ -203,31 +202,31 @@ def compute_thermodynamic_averages(temperatures, energy, log_cdos, filename=None
 def make_energy_windows(inverse_overlap, n_windows, emin, emax, sought_energy_bin_width):
     """Make energy windows for WL sampling
 
-    **Description**
         Determines boundaries of energy windows in an energy range for WL sampling.
 
-    **Parameters**
-
-    ``inverse_overlap``: integer
+    Parameters
+    ----------
+    inverse_overlap : int
         Inverse of the fraction of overlap of two contiguous windows.
         For instance, if ``inverse_overlap`` is 3, then 1/3rd of
         an energy window overlaps with 1/3rd of the contiguous window.
 
-    ``n_windows``: integer
+    n_windows : int
         Number of windows.
 
-    ``emin``: float
+    emin : float
         Minimum energy
 
-    ``emax``: float
+    emax : float
         Maximum energy
 
-    ``sought_energy_bin_width``: float
+    sought_energy_bin_width : float
         Desired energy bin width. The actual energy bin width will be a bit higher,
         to evenly fill the energy windows.
 
-    **Returns**
-
+    Returns
+    -------
+    dict
         The function returns a dictionary with the following structure::
 
             {
@@ -247,7 +246,6 @@ def make_energy_windows(inverse_overlap, n_windows, emin, emax, sought_energy_bi
                 "nbins_per_window_f",
                 "nbins_per_window_i"
             }
-
     """
     n_delta = int(inverse_overlap + (n_windows - 1) * (inverse_overlap - 1))
     delta = (emax - emin) / n_delta
@@ -436,7 +434,6 @@ def merge_windows(
 class WangLandau:
     """Wang Landau class
 
-    **Description**:
         Objects of this class are used to obtain the configurational density of states
         by performing samplings using the Wang Landau method. For details about the method,
         see F. Wang and D.P. Landau, PRL 86, 2050 (2001).
@@ -454,21 +451,21 @@ class WangLandau:
 
             If ``ensemble`` is 'gandcanonical', the sublattice is defined with ``sublattices_indices``.
 
-    **Parameters**:
-
-    ``energy_model``: :class:`Model <clusterx.model.Model>` object
+    Parameters
+    ----------
+    energy_model : :class:`Model <clusterx.model.Model>` object
         CE model for predicting the internal energy of the supercell (see ``scell`` below)
         in [eV]. If other units are employed, see parameter ``energy_factor`` below.
 
-    ``scell``: SuperCell object
+    scell : SuperCell
         Simulation cell in which the sampling is performed.
 
-    ``ensemble``: string (default: ``canonical``)
+    ensemble : str, default canonical
         ``canonical`` allows for swaps of atoms that conserve the concentration defined with ``nsubs``.
         ``grandcanonical`` allows for replacing atoms in the sub-lattices defined with ``sublattice_indices``.
         (So far, ``grandcanonical`` is not yet implemented.)
 
-    ``nsubs``: dictionary (default = None)
+    nsubs : dict, default None
         Defines the number of substituted atoms in each sub-lattice of the
         Supercell in which the sampling is performed.
 
@@ -480,14 +477,14 @@ class WangLandau:
         may replace the pristine species for sites of site_type#
         (see related documentation in SuperCell object).
 
-    ``sublattice_indices``: list of integers (default: None)
+    sublattice_indices : list of int, default None
         Defines the sublattices for the grand canonical sampling.
         Furthermore, it can be used to limit the canonical sampling
         to a reduced number of sublattices. E.g. in the case of nsubs = {0:[4,6], 1:[4]}. Here, sublattices 0 and 1
         contain substitutional sites, but only a sampling in sublattice 0 is wanted.
         Then, put ``sublattice_indices`` = [0].
 
-    ``energy_factor``: float (default: 1.0)
+    energy_factor : float, default 1.0
         Multiplicator factor (:math:`s`) applied to the predictions of ``energy_model``
         (:math:`E_{CE}`). Set this factor such that :math:`s *  E_{CE}` gives
         the total energy, in [eV], of the supercell (``scell`` below).
@@ -498,28 +495,29 @@ class WangLandau:
         the number of parent lattices contained in the supercell (this can be obtained
         with :meth:`scell.get_index() <clusterx.super_cell.SuperCell.get_index()>`).
 
-    ``chemical_potentials``: dictionary (default: None)
+    chemical_potentials : dict, default None
         Define the chemical potentials used for samplings in the grand canonical ensemble.
 
-    ``fileprefix``: string (default: 'cdos')
+    fileprefix : str, default 'cdos'
         Prefix for files in which the configurational density of states is saved.
 
-    ``predict_swap``: boolean (default: False)
-       If set to **True**, this parameter makes the sampling faster by calculating the correlation difference of the
-       proposed structure with respect to the previous structure.
+    predict_swap : bool, default False
+        If set to **True**, this parameter makes the sampling faster by calculating the correlation difference of the
+        proposed structure with respect to the previous structure.
 
-    ``reduce_structure``: bool (default: False)
+    reduce_structure : bool, default False
         If true, cluster orbits/correlations are computed and evaluated on
         subset of sigmas, in a box around central site in the structure.
         Incompatible with non-diagonal supercell shapes.
 
-    ``error_reset``: integer (default: None)
-       If not **None**  and ``predict_swap`` equal to **True**,
-       the correlations are calculated as usual (no differences) every n-th step.
+    error_reset : int, default None
+        If not **None**  and ``predict_swap`` equal to **True**,
+        the correlations are calculated as usual (no differences) every n-th step.
 
+    Notes
+    -----
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
-
     """
 
     def __init__(
@@ -767,7 +765,6 @@ class WangLandau:
     ):
         r"""Perform Wang Landau simulation
 
-        **Description**:
             The Wang-Landau algorithm uses the fact that a Markov chain with transition probability
             :math:`P_{1 -> 2} = \min[ 1, g(E_1)/g(E_2) ]`, with
             :math:`g(E)`  being the configurational density of states, yields a flat histogram in energy
@@ -806,26 +803,26 @@ class WangLandau:
             The percentage can be set for each :math:`f`.
             Usually, the lower :math:`f`, the larger the percentage can be set.
 
-        **Parameters**:
-
-        ``energy_range``: list of two floats [E_min, E_max] (default: [-2,2])
+        Parameters
+        ----------
+        energy_range : list of two floats [E_min, E_max], default [-2,2]
             Defines the energy range, in [eV], starting from energy E_min (center of first energy bin)
             until energy E_max.
 
-        ``energy_bin_width``: float (default: 0.2)
+        energy_bin_width : float, default 0.2
             Bin width w of each energy bin, in [eV].
 
             I.e., energy bins [E_min, E_min+w, E_min+2*w, ..., E_min+n*w ], if E_min+(n+1)*w would be larger than E_max.
 
-        ``f_range``: list of two floats (default: [2.71828182, 1.00010000])
+        f_range : list of two floats, default [2.71828182, 1.00010000]
             List defines the initial modification factor :math:`f_1` and the
             threshold for the last modification factor :math:`f_{final}`.
             I.e. [:math:`f_1`, :math:`f_{ final}`]
 
-        ``update_method``: string (default: 'square_root')
+        update_method : str, default 'square_root'
             Defines the method of how the modification factor is reduced. (for now: only `square_root` implemented)
 
-        ``flatness_conditions``: list
+        flatness_conditions : list
             Defines the flatness condition via the percentage :math:`p` for each modification factor. I.e.
 
             [[:math:`p_1`, :math:`f_1`], [:math:`p_2`, :math:`f_2`], [:math:`p_3`,
@@ -838,53 +835,54 @@ class WangLandau:
             The default usually produces reasonable results and is defined as:
             Default: [[0.5, 1.1], [0.8, 1.001], [0.9, 1.00001],[0.95, 1.0000001], [0.98, 1.00000001]]
 
-        ``initial_decoration``: list of integers
+        initial_decoration : list of int
             Atomic numbers of the initial structure, from which the sampling starts.
             If **None**, sampling starts with a structure randomly generated.
 
-        ``serialize``: boolean (default: False)
+        serialize : bool, default False
             If **True**, the ConfigurationalDensityOfStates object is serialized into a JSON file after the sampling.
 
-        ``filename``: string (default: ``cdos.json``)
+        filename : str, default cdos.json
             Name of a Json file in which the ConfigurationalDensityOfStates is serialized
             after the sampling if ``serialize`` is **True**.
 
-        ``serialize_during_sampling``: boolean (default: False)
+        serialize_during_sampling : bool, default False
             If **True**, the ConfigurationalDensityOfStates object is
             serialized every time after a flat histogramm is reached
             (i.e. the inner loop is completed). This allows for studying the
             CDOS while the final :math:`f` is not yet reached.
 
-        ``acc_prob_init_structure``: float (default: 1e-3)
+        acc_prob_init_structure : float, default 1e-3
             When searching for an initial structure inside a given energy window,
             this is the acceptance probability for moves which whose energy
             difference with the upper window bound increases or for moves whose
             energy difference with the lower window bound decreases.
 
-        ``itmax_init_structure``: integer
+        itmax_init_structure : int
             Maximum number of trials to search for initial structure inside given energy window.
 
-        ``nproc``: integer (default: 0)
+        nproc : int, default 0
             Number of processes to use for the initial structure search.
 
-        ``seed``: integer (default: None)
+        seed : int, default None
             Seed for the random.Random and numpy random number generator.
             If None, sequences are non-deterministic, if set with integer,
             sequences are deterministic, i.e. pseudo-random.
 
-        ``nonlinear``: boolean (default: False)
+        nonlinear : bool, default False
             Whether or not the model is nonlinear with respect to cluster
             correlations. If True, total cluster correlations have to be summed,
             if False, model can be applied to difference of correlations.
 
-        ``**kwargs``: keyworded argument list, arbitrary length
+        **kwargs : keyworded argument list, arbitrary length
             These arguments are added to the ConfigurationalDensityOfStates object that is initialized in this method.
 
-        **Returns**: ConfigurationalDensityOfStates object
+        Returns
+        -------
+        ConfigurationalDensityOfStates object
             Object contains the configurational density of states (CDOS)
             obtained from the last outer loop plus the CDOSs obtained from the
             previous outer loops.
-
         """
         if nonlinear and self._reduce_structure:
             raise ValueError("Combination of nonlinear and reduce_structure currently not supported.")
@@ -1162,29 +1160,26 @@ class WangLandau:
 class ConfigurationalDensityOfStates:
     """ConfigurationalDensityOfStates class
 
-    **Description**:
         Objects of this class are use to store and access the configurational density of states (CDOS) that
         was generated from a Wang-Landau sampling.
 
         Since the Wang-Landau algorithm is iterative, it contains the CDOS for each iteration of the outer loop.
 
-    **Parameters**:
-
-    ``scell``: SuperCell object (default: None)
+    Parameters
+    ----------
+    scell : SuperCell, default None
         Super cell in which the Wang-Landau sampling is performed.
 
-    ``filename``: string (default: cdos.json)
+    filename : str, default cdos.json
         The trajectoy can be stored in a json file ``filename``.
 
-    ``read``: boolean (default: False)
+    read : bool, default False
         If **True**, the CDOS is read from the Json file ``filename``.
 
-    ``**kwargs``: keyword arguments
-
+    **kwargs : keyword arguments
         Keyword arguments can be used to store additional information about the parameters used for
         the WangLandau.wang_landau_sampling rountine. This will be saved in the Json file
         ``filename`` under ``sampling_info``, if the object is serialized.
-
     """
 
     def __init__(self, scell=None, filename="cdos.json", read=False, **kwargs):
@@ -1285,15 +1280,15 @@ class ConfigurationalDensityOfStates:
     ):
         """Returns the energy_bins and configurational density of states (CDOS) as arrays, respectively.
 
-        **Parameters**:
-
-        ``ln``: boolean (default: False)
+        Parameters
+        ----------
+        ln : bool, default False
             Whether to return the natural logarithm of the CDOS.
 
-        ``normalization``: boolean (default: True)
+        normalization : bool, default True
             Whether to normalize the configurational density of states.
 
-        ``normalization_type``: integer (default: ``0``)
+        normalization_type : int, default 0
             If ``normalization`` is true, type of normalization applied. Possible values are:
 
                 * ``0``: :math:`g(E_{min}) = 1`
@@ -1303,14 +1298,14 @@ class ConfigurationalDensityOfStates:
                     where :math:`F` is a custom normalization factor
                     given by the argument ``set_normalization_ln``, see below.
 
-        ``set_normalization_ln``: float (default: None)
+        set_normalization_ln : float, default None
             If not **None**, the normalization is set by the exponential of the given value.
             See option ``2`` of ``normalization_type``.
 
-        ``discard_empty_bins``: boolean (default: True)
+        discard_empty_bins : bool, default True
             Whether to keep the energy bins that are not visited during the sampling.
 
-        ``modification_factor``: float (default: None)
+        modification_factor : float, default None
             If **None**, the CDOS from the last iteration is returned. If not **None**, the CDOS
             corresponding to the given modification factor is returned.
         """
@@ -1431,12 +1426,12 @@ class ConfigurationalDensityOfStates:
 
             & F(T) \\rightarrow F(T) - k_B T ln(c)
 
-        **Parameters**:
-
-        ``temperatures``: list of floats
+        Parameters
+        ----------
+        temperatures : list of floats
             Temperatures for which the thermodynamic property is calculated, in Kelvin.
 
-        ``prop_name``: string (default: U)
+        prop_name : str, default U
             Name of thermodynamic property.
 
             If **U**, the internal energy is calculated.
@@ -1447,7 +1442,7 @@ class ConfigurationalDensityOfStates:
 
             If **S**, the entropy is calculated.
 
-        ``modification_factor``: float (default: None)
+        modification_factor : float, default None
             If **None**, the CDOS from the last iteration is used for calculuting the thermodynamic property.
             If not **None**, the CDOS corresponding to the given modification factor is used.
         """
@@ -1633,14 +1628,15 @@ class ConfigurationalDensityOfStates:
 
 
 def rebin_histogram(counts, new_nbins):
-    """
-    Rebin a histogram by proportionally distributing counts into a new number
+    """Rebin a histogram by proportionally distributing counts into a new number
     of bins, assuming uniform density within each original bin.
 
     Parameters
     ----------
-    counts : array_like
+    counts
+        array_like
         Original bin counts (floats).
+
     new_nbins : int
         Number of bins in the rebinned histogram.
 

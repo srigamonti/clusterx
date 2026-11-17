@@ -6,22 +6,26 @@ import inspect
 
 
 def convert_to_float_list(input_str: str) -> List[float]:
-    """
-    Convert a string representation of a list of floats into an actual list of floats.
+    """Convert a string representation of a list of floats into an actual list of floats.
 
     This function can handle strings formatted either as '[1.2, 4.3]' or '1.2, 4.3',
     and will ignore any surrounding whitespace. It strips any surrounding brackets
     if they are present, splits the string by commas, and converts each substring to
     a float.
 
-    Parameters:
-    input_str (str): A string containing a comma-separated list of floats,
-                     optionally surrounded by brackets.
+    Parameters
+    ----------
+    input_str : str
+        A string containing a comma-separated list of floats,
+        optionally surrounded by brackets.
 
-    Returns:
-    List[float]: A list of floats parsed from the input string.
+    Returns
+    -------
+    List[float]
+        A list of floats parsed from the input string.
 
-    Examples:
+    Examples
+    --------
     >>> convert_to_float_list('[1.2, 4.3]')
     [1.2, 4.3]
 
@@ -36,7 +40,6 @@ def convert_to_float_list(input_str: str) -> List[float]:
 
     >>> convert_to_float_list(' ( 1.2, 4.3 ) ')
     [1.2, 4.3]
-
     """
 
     # Remove any surrounding brackets and white spaces
@@ -52,22 +55,26 @@ def convert_to_float_list(input_str: str) -> List[float]:
 
 
 def convert_to_int_list(input_str: str) -> List[int]:
-    """
-    Convert a string representation of a list of ints into an actual list of ints.
+    """Convert a string representation of a list of ints into an actual list of ints.
 
     This function can handle strings formatted either as '[1, 4]' or '1, 4',
     and will ignore any surrounding whitespace. It strips any surrounding brackets
     if they are present, splits the string by commas, and converts each substring to
     a float.
 
-    Parameters:
-    input_str (str): A string containing a comma-separated list of ints,
-                     optionally surrounded by brackets.
+    Parameters
+    ----------
+    input_str : str
+        A string containing a comma-separated list of ints,
+        optionally surrounded by brackets.
 
-    Returns:
-    List[float]: A list of ints parsed from the input string.
+    Returns
+    -------
+    List[float]
+        A list of ints parsed from the input string.
 
-    Examples:
+    Examples
+    --------
     >>> convert_to_int_list('[1, 4]')
     [1, 4]
 
@@ -82,7 +89,6 @@ def convert_to_int_list(input_str: str) -> List[int]:
 
     >>> convert_to_int_list(' ( 1 , 4 ) ')
     [1, 4]
-
     """
 
     # Remove any surrounding brackets and white spaces
@@ -230,8 +236,10 @@ def cmd_message(msglbl):
     """Display message in command execution
 
     Parameters
-    msglbl (str): Message label. Can take the following values:
-                  "head": Prints the argument values received by the command.
+    ----------
+    msglbl : str
+        Message label. Can take the following values:
+        "head": Prints the argument values received by the command.
     """
     if msglbl == "head":
         # Get the frame of the calling function

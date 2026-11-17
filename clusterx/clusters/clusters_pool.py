@@ -22,23 +22,25 @@ from clusterx.utils import transformation_containing_sphere_diag
 
 
 class ClustersPool:
-    """
-    **Clusters pool class**
+    """Clusters pool class
 
-    **Parameters:**
-
-    ``parent_lattice``: ParentLattice object
+    Parameters
+    ----------
+    parent_lattice : ParentLattice
         Parent lattice of the system.
-    ``npoints``: array of integers
+
+    npoints : ndarray of int
         The number of points of the clusters in the pool. Must be of the same
         dimension as ``radii``.
-    ``radii``: array of float
+
+    radii : ndarray of float
         The maximum radii of the clusters in the pool, for each corresponding
         number of points in ``npoints``. If ``super_cell`` is given (see below),
         any element of the ``radii`` array can be a negative number. In such a
         case, all clusters fitting in the given ``super_cell`` (for the
         corresponding number of points in npoints) are generated.
-    ``super_cell``: SuperCell object
+
+    super_cell : SuperCell
         If present, ``radii`` is overriden and the pool will consist of all
         possible simmetrically distinct clusters in the given super cell.
         Periodic boundary conditions of the parent lattice are taken into
@@ -48,21 +50,24 @@ class ClustersPool:
         (Note: Experimental feature.  The generated multiplicities may not be
         valid for clusters larger than half the size of the supercell. Use
         ``radii`` to get accurate multiplicities.)
-    ``method``: integer (0 or 1)
+
+    method : int (0 or 1)
         If 0, an elimination method is used to build the clusters pool. If 1, an
         incremental method is used instead. Use method 1 only if ``super_cell`` is
         ``None``.
-    ``filepath``: string (default: None)
+
+    filepath : str, default None
         Overrides all the above. Used to initialize from file. Path of a json
         file containing a serialized ClustersPool object, as generated
         by the ``ClustersPool.serialize()`` method.
-    ``json_db_filepath``: string (default: None)
+
+    json_db_filepath : str, default None
         *DEPRECATED*, use ``filepath`` instead. Overrides all the above. Used to initialize from file. Path of a json
         file containing a serialized ClustersPool object, as generated
         by the ``ClustersPool.serialize()`` method.
 
-    **Examples:**
-
+    Examples
+    --------
     The example below, will generate all possible clusters up to 2 points in the
     super cell ``scell``, while more compact clusters up to a radius of 4.1 and
     2.9 for 3 and 4 points, respectively, are generated::
@@ -84,8 +89,6 @@ class ClustersPool:
         cp.write_clusters_db(db_name="cpool.json")
 
     The example
-
-    **Methods:**
     """
 
     def __init__(
@@ -310,11 +313,13 @@ class ClustersPool:
     def get_subpool(self, cluster_indexes):
         """Return a ClustersPool object formed by a subset of the clusters pool
 
-        **Parameters:**
-
-        cluster_indexes: array of integers
+        Parameters
+        ----------
+        cluster_indexes : ndarray of int
             The indexes of the clusters to build the subpool from.
 
+        Notes
+        -----
         The original cluster order, multiplicities, and defining supercell are
         preserved. The sorted unique orders and maximum diameter for each order
         are determined from the retained clusters, without regenerating clusters
@@ -336,9 +341,9 @@ class ClustersPool:
     def get_clusters_sets(self, grouping_strategy="size", nclmax=0, set0=[0, 0]):
         """Return cluster sets for cluster selection based on CV
 
-        **Parameters:**
-
-        grouping_strategy: string
+        Parameters
+        ----------
+        grouping_strategy : str
             Can take the values "size" and "combinations". If "size", a set in the clusters set
             is determined by two parameters, the maximum number of points and the maximum radius.
             Thus, a set is formed by all clusters in the pool whose radius and npoints are smaller
@@ -346,14 +351,14 @@ class ClustersPool:
             When "combinations" is used, all possible sets up to nclmax number of clusters
             are returned.
 
-        nclmax: integer
+        nclmax : int
             The maximum clusters-set size when strategy="combinations" is used.
 
-        set0: [points, radius]
+        set0
+            [points, radius]
             The clusters-set, which is defined by the two parameters - maximum number of points (points)
             and the maximum radius, [points, radius] -, is included in all combinations,
             when strategy="size+combinations" is used.
-
         """
         if grouping_strategy == "size":
             from collections import Counter
@@ -434,11 +439,10 @@ class ClustersPool:
     def gen_clusters(self, method=0, append=False):
         """Generate pool of clusters
 
-        **Parameters:**
-
-        ``method``: int
-        0: Fast, default method. 1: Slow, use only for benchmarking purposes.
-
+        Parameters
+        ----------
+        method : int
+            0: Fast, default method. 1: Slow, use only for benchmarking purposes
         """
         if not append:
             self._cpool = []
@@ -685,12 +689,12 @@ class ClustersPool:
         ClustersPool object from this file, for this read the documentation
         for the ``json_db_filepath`` attribute of ClustersPool class.
 
-        **Parameters:**
-
-        ``filepath``: string (default: "cpool.json")
+        Parameters
+        ----------
+        filepath : str, default "cpool.json"
             Name of the file to save the ClustersPool object.
 
-        ``vacancy_atomic_number``: integer (default: 0)
+        vacancy_atomic_number : int, default 0
             In ``CELL``, vacancies are formally represented as a species with species
             number 0 and symbol ``X``. In some cases, e.g. visualization,
             you may want to give the vacancy a different species number. Set this variable
@@ -700,9 +704,8 @@ class ClustersPool:
             if you plan to use the generated file for creating a ``CPOOL`` object from
             the generated file.
 
-        ``db_name``: string (default: "cpool.json")
+        db_name : str, default "cpool.json"
             *DEPRECATED*, use ``filepath`` instead. Name of the json database file.
-
         """
         if db_name is not None:
             filepath = db_name
@@ -760,25 +763,25 @@ class ClustersPool:
     ):
         """Write cluster orbit to Atoms JSON database
 
-        **Parameters:**
-
-        ``orbit``: python list (default: ``None``)
+        Parameters
+        ----------
+        orbit : python list, default None
             list of ``Cluster`` objects. If ``None``, just the clusters in the ``ClustersPool`` object are written.
 
-        ``super_cell``: ``SuperCell`` object (default: ``None``)
+        super_cell
+            ``SuperCell`` object (default: ``None``)
             The supercell in which the clusters are supported.
             If ``None``, the ``SuperCell`` object of ``self`` (output of method ``get_cpool_scell()``) is used.
 
-        ``db_name``: string
+        db_name : str
             Name of the json file containing the database
 
-        ``vacancy_atomic_number``: integer (default: 0)
+        vacancy_atomic_number : int, default 0
             In ``CELL``, vacancies are formally represented as a species with species
             number 0 and symbol ``X``. In some cases, e.g. visualization,
             you may want to give the vacancy a different species number. Set this variable
             to a different number (different from all other species numbers in the
             corresponding parent lattice) if that is the case.
-
         """
         from subprocess import call
 
@@ -800,9 +803,9 @@ class ClustersPool:
 
     def get_cpool_atoms(self, orbit=None, super_cell=None, vacancy_atomic_number=0):
         """
-        **Parameters:**
-
-        ``vacancy_atomic_number``: integer (default: 0)
+        Parameters
+        ----------
+        vacancy_atomic_number : int, default 0
             In ``CELL``, vacancies are formally represented as a species with species
             number 0 and symbol ``X``. In some cases, e.g. visualization,
             you may want to give the vacancy a different species number. Set this variable
@@ -890,8 +893,7 @@ class ClustersPool:
         cluster_index=None,
         cluster_positions=None,
     ):
-        """
-        Get cluster orbit inside a supercell.
+        """Get cluster orbit inside a supercell.
 
         Returns a pool of clusters corresponding to a cluster orbit in the given super cell, the weights of each cluster
         in the orbit (accounting for the periodic boundary conditions) and the multiplicity of the cluster.
@@ -926,30 +928,35 @@ class ClustersPool:
 
         evaluates to ``True``.
 
-
-        **Parameters:**
-
-        ``super_cell``: SuperCell object
+        Parameters
+        ----------
+        super_cell : SuperCell
             The super cell in which the orbit is calculated.
-        ``cluster_sites``: Array of integer
+
+        cluster_sites : ndarray of int
             the atom indices of the cluster as referred to the SuperCell object
             given in ``super_cell``, or the ``ClustersPool.get_cpool_scell()`` superCell
             object (see ``cluster_index``).
-        ``cluster_species``: array of integer
+
+        cluster_species : ndarray of int
             Decoration (with species numbers) of the cluster for which the orbit is calculated. The species
             numbers serve as index for the site cluster basis functions. Thus, for  instance
             if in a given site, say, ``i=12``, the possible species to put are ``14``,
             ``15`` and ``16`` (``14`` for the pristine), then ``15`` represents the site
             basis function with label ``1`` and ``16`` the basis function with label ``2``.
-        ``tol``: float
+
+        tol : float
             tolerance to determine whether cluster and atom positions are the same.
-        ``no_trans``: Boolean
+
+        no_trans : bool
             set to True to ignore translations of the parent_lattice inside the SuperCell. Thus
             a reduced orbit is obtained which only contains the symmetry operations of the parent lattice.
-        ``cluster_index``: integer
+
+        cluster_index : int
             Index of a cluster in the pool. Overrides ``super_cell``, and the
             orbit is calculated on the supercell of the ``ClustersPool.get_cpool_scell()`` object.
-        ``cluster_positions``: list of vectors
+
+        cluster_positions : list of vectors
             the atoms positions in cartesian coordinates. cluster_positions[i] = [ix, iy, iz],
             where ix,iy and iz are float numbers representing the x, y and z cartesian coordinate, respectively,
             of atom i.
@@ -1074,9 +1081,9 @@ class ClustersPool:
 
         Displays on screen a table with information concerning the clusters pool.
 
-        **Parameters**:
-
-        ``ecis``: Array of float (optional)
+        Parameters
+        ----------
+        ecis : ndarray of float (optional)
             Effective cluster interactions. If not ``None``, the displayed
             table contains the ECI values in the last column.
         """
@@ -1093,9 +1100,9 @@ class ClustersPool:
 
         Prints a table with information concerning the clusters pool.
 
-        **Parameters**:
-
-        ``ecis``: Array of float (optional)
+        Parameters
+        ----------
+        ecis : ndarray of float (optional)
             Effective cluster interactions. If not ``None``, the displayed
             table contains the ECI values in the last column.
         """
@@ -1204,8 +1211,7 @@ class ClusterOrbit(ClustersPool):
         no_trans=False,
         cluster_positions=None,
     ):
-        """
-        Generate cluster orbit inside a supercell.
+        """Generate cluster orbit inside a supercell.
 
         Returns a pool of clusters corresponding to a cluster orbit in the given super cell, the weights of each cluster
         in the orbit (accounting for the periodic boundary conditions) and the multiplicity of the cluster.
@@ -1240,27 +1246,31 @@ class ClusterOrbit(ClustersPool):
 
         evaluates to ``True``.
 
-
-        **Parameters:**
-
-        ``super_cell``: SuperCell object
+        Parameters
+        ----------
+        super_cell : SuperCell
             The super cell in which the orbit is calculated.
-        ``cluster_sites``: Array of integer
+
+        cluster_sites : ndarray of int
             the atom indices of the cluster as referred to the SuperCell object
             given in ``super_cell``, or the ``ClustersPool.get_cpool_scell()`` superCell
             object (see ``cluster_index``).
-        ``cluster_species``: array of integer
+
+        cluster_species : ndarray of int
             Decoration (with species numbers) of the cluster for which the orbit is calculated. The species
             numbers serve as index for the site cluster basis functions. Thus, for  instance
             if in a given site, say, ``i=12``, the possible species to put are ``14``,
             ``15`` and ``16`` (``14`` for the pristine), then ``15`` represents the site
             basis function with label ``1`` and ``16`` the basis function with label ``2``.
-        ``tol``: float
+
+        tol : float
             tolerance to determine whether cluster and atom positions are the same.
-        ``no_trans``: Boolean
+
+        no_trans : bool
             set to True to ignore translations of the parent_lattice inside the SuperCell. Thus
             a reduced orbit is obtained which only contains the symmetry operations of the parent lattice.
-        ``cluster_index``: integer
+
+        cluster_index : int
             Index of a cluster in the pool. Overrides ``super_cell``, and the
             orbit is calculated on the supercell of the ``ClustersPool.get_cpool_scell()`` object.
         """
@@ -1375,8 +1385,7 @@ class ClusterOrbit(ClustersPool):
         no_trans=False,
         cluster_positions=None,
     ):
-        """
-        Generate cluster orbit inside a supercell.
+        """Generate cluster orbit inside a supercell.
 
         Returns a pool of clusters corresponding to a cluster orbit in the given super cell, the weights of each cluster
         in the orbit (accounting for the periodic boundary conditions) and the multiplicity of the cluster.
@@ -1411,27 +1420,31 @@ class ClusterOrbit(ClustersPool):
 
         evaluates to ``True``.
 
-
-        **Parameters:**
-
-        ``super_cell``: SuperCell object
+        Parameters
+        ----------
+        super_cell : SuperCell
             The super cell in which the orbit is calculated.
-        ``cluster_sites``: Array of integer
+
+        cluster_sites : ndarray of int
             the atom indices of the cluster as referred to the SuperCell object
             given in ``super_cell``, or the ``ClustersPool.get_cpool_scell()`` superCell
             object (see ``cluster_index``).
-        ``cluster_species``: array of integer
+
+        cluster_species : ndarray of int
             Decoration (with species numbers) of the cluster for which the orbit is calculated. The species
             numbers serve as index for the site cluster basis functions. Thus, for  instance
             if in a given site, say, ``i=12``, the possible species to put are ``14``,
             ``15`` and ``16`` (``14`` for the pristine), then ``15`` represents the site
             basis function with label ``1`` and ``16`` the basis function with label ``2``.
-        ``tol``: float
+
+        tol : float
             tolerance to determine whether cluster and atom positions are the same.
-        ``no_trans``: Boolean
+
+        no_trans : bool
             set to True to ignore translations of the parent_lattice inside the SuperCell. Thus
             a reduced orbit is obtained which only contains the symmetry operations of the parent lattice.
-        ``cluster_index``: integer
+
+        cluster_index : int
             Index of a cluster in the pool. Overrides ``super_cell``, and the
             orbit is calculated on the supercell of the ``ClustersPool.get_cpool_scell()`` object.
         """
@@ -1535,13 +1548,16 @@ class ClusterOrbit(ClustersPool):
         """For a given cluster, return the set of distinct clusters obtained by applying the point
         symmetries of the parent lattice.
 
-        **Returns:**
+        Returns
+        -------
+        ndarray
             2D array of shape (nc, np), where nc is the number of clusters of
             the small cluster orbit and np is the number of points of the cluster.
             E.g. the element [i,:] will be a vector of length np contaning the
             scaled poisitions of the points of cluster i.
 
-        **Note:**
+        Notes
+        -----
            This operation does not rely on a supercell. It just uses
            information from the parent lattice and the cluster.
         """
@@ -1634,12 +1650,12 @@ class ClusterOrbit(ClustersPool):
     ):
         """Write cluster orbit to Atoms JSON database
 
-        **Parameters:**
-
-        ``filepath``: string (default: ``cpool.json``)
+        Parameters
+        ----------
+        filepath : str, default cpool.json
             absolute or relative path where serialized structure is saved.
 
-        ``vacancy_atomic_number``: integer (default: 0)
+        vacancy_atomic_number : int, default 0
             In ``CELL``, vacancies are formally represented as a species with species
             number 0 and symbol ``X``. In some cases, e.g. visualization,
             you may want to give the vacancy a different species number. Set this variable
@@ -1649,7 +1665,7 @@ class ClusterOrbit(ClustersPool):
             if you plan to use the generated file for creating a ``CPOOL`` object from
             the generated file.
 
-        ``json_db_filepath``: string (default: ``None``)
+        json_db_filepath : str, default None
             DEPRECATED, use filepath instead.
         """
         from subprocess import call

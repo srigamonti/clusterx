@@ -81,8 +81,44 @@ def compute_free_energy_of_mixing(
     NB = x*N, where N counts binary substitutional sites, excluding spectators.
     Only configurational contributions represented by the CE are included.
 
-    Method and normalization
-    ------------------------
+    Parameters
+    ----------
+    model_filepath, plat_filepath, sc_shape
+        Saved model (default model.pickle), parent lattice (default plat.json),
+        and supercell shape (default 1). Direct CLI shapes use JSON, e.g.
+        -scsh '[4,4,4]'; TOML accepts an integer, vector or integer matrix.
+
+    compositions
+        Required B fraction or list of distinct fractions in [0, 1], e.g.
+        -x '[0.25,0.5,0.75]'. Each x*N must be an integer; compositions are not
+        silently rounded to fit the cell.
+
+    temperatures
+        Required positive distinct sampling temperature or list, unless a range is
+        supplied. Any input ordering is accepted. Sampling and output proceed
+        from highest to lowest T, equivalently increasing beta. Alternatively
+        provide ALL of temperature_start, temperature_stop and n_temperatures
+        (at least 2) for a linear temperature grid. Do not combine the two forms.
+        All nodes use the fixed supplied CE; see the physical-temperature
+        interpretation above when it models effective configuration free energy.
+
+    energy_factor, boltzmann_constant
+        Both must be supplied as finite positive numbers. energy_factor
+        multiplies model predictions to give TOTAL SUPERCELL energy in the
+        same energy unit as boltzmann_constant*T. The user is responsible for
+        both normalization and units; CELL infers neither.
+
+        For model energies in eV/atom, T in K and k_B in eV/K, use the TOTAL
+        atom count as energy_factor, including spectators. For meV/atom with
+        k_B in eV/K, use that count divided by 1000. Already-total energies in
+        the matching energy unit require an explicit factor 1. This conversion
+        count can differ from the number N of binary sites used in the output.
+        One factor must be valid for mixed and pure compositions alike.
+
+    Notes
+    -----
+    .. rubric:: Method and normalization
+
     With beta = 1/(boltzmann_constant*T), integrate the mean mixing energy:
 
         beta*delta_f_mix = -log(binomial(N, NB))/N
@@ -101,8 +137,8 @@ def compute_free_energy_of_mixing(
     from the highest simulated temperature. Refine the temperature grid,
     including the interval from beta=0, to check integration convergence.
 
-    Fixed CE and physical temperature
-    ---------------------------------
+    .. rubric:: Fixed CE and physical temperature
+
     The CE may represent configuration energies or effective configuration free
     energies at a chosen physical temperature. Only its parameters along the
     integration path must remain fixed. For example, a CE fitted to effective
@@ -120,39 +156,8 @@ def compute_free_energy_of_mixing(
     temperature-derivative terms and a consistent reference treatment, which
     are not implemented here.
 
-    Required inputs and units
-    -------------------------
-    model_filepath, plat_filepath, sc_shape:
-        Saved model (default model.pickle), parent lattice (default plat.json),
-        and supercell shape (default 1). Direct CLI shapes use JSON, e.g.
-        -scsh '[4,4,4]'; TOML accepts an integer, vector or integer matrix.
-    compositions:
-        Required B fraction or list of distinct fractions in [0, 1], e.g.
-        -x '[0.25,0.5,0.75]'. Each x*N must be an integer; compositions are not
-        silently rounded to fit the cell.
-    temperatures:
-        Required positive distinct sampling temperature or list, unless a range is
-        supplied. Any input ordering is accepted. Sampling and output proceed
-        from highest to lowest T, equivalently increasing beta. Alternatively
-        provide ALL of temperature_start, temperature_stop and n_temperatures
-        (at least 2) for a linear temperature grid. Do not combine the two forms.
-        All nodes use the fixed supplied CE; see the physical-temperature
-        interpretation above when it models effective configuration free energy.
-    energy_factor, boltzmann_constant:
-        Both must be supplied as finite positive numbers. energy_factor
-        multiplies model predictions to give TOTAL SUPERCELL energy in the
-        same energy unit as boltzmann_constant*T. The user is responsible for
-        both normalization and units; CELL infers neither.
+    .. rubric:: Sampling controls
 
-        For model energies in eV/atom, T in K and k_B in eV/K, use the TOTAL
-        atom count as energy_factor, including spectators. For meV/atom with
-        k_B in eV/K, use that count divided by 1000. Already-total energies in
-        the matching energy unit require an explicit factor 1. This conversion
-        count can differ from the number N of binary sites used in the output.
-        One factor must be valid for mixed and pure compositions alike.
-
-    Sampling controls
-    -----------------
     n_mc_eq (default 1000) discards equilibration proposals at EACH temperature.
     n_mc_steps (default 10000) is the number of subsequent production proposals
     per composition/temperature, not a sweep count. sample_interval (default 1)
@@ -175,6 +180,29 @@ def compute_free_energy_of_mixing(
     the chain or observation cadence. Online statistics and block means avoid
     storing full accepted-move histories. Direct CLI booleans take explicit
     true/false values. energy_key selects energy from a multi-output model.
+
+    .. rubric:: Output and uncertainty
+
+    output_filepath defaults to free_energy_of_mixing.json. Existing results
+    require explicit overwrite=true (CLI: -overwrite true). Input model files
+    are not rewritten while warming geometry caches.
+
+    The JSON and returned dictionary contain settings, endmembers, references
+    (beta=0 nodes), and results. Each result row includes composition, n_b,
+    temperature, beta, mean_energy_per_site, mean_mixing_energy_per_site,
+    free_energy_of_mixing_per_site, and the corresponding ``*_stderr`` estimates
+    for mean energy and free energy. Settings record species, atom/site counts,
+    conversion factors, sampling controls and seeds.
+    E_total and fields named mean_energy_per_site denote the scaled quantity
+    predicted by the supplied CE. For an effective configuration free-energy
+    model, these are mean effective free energies, not internal energies.
+
+    Production errors use block means; reference errors use independent-sample
+    statistics. Free-energy errors propagate node errors with quadrature weights
+    and neglect cross-temperature covariance. They exclude quadrature bias,
+    inadequate equilibration, finite-size and model errors. Check convergence
+    in the beta grid, reference sample count, equilibration, production length,
+    block length and supercell size, particularly near phase transitions.
 
     Examples
     --------
@@ -227,29 +255,6 @@ def compute_free_energy_of_mixing(
         max_steps_per_batch = 20000
         output_filepath = "mixing-free-energy.json"
         overwrite = false
-
-    Output and uncertainty
-    ----------------------
-    output_filepath defaults to free_energy_of_mixing.json. Existing results
-    require explicit overwrite=true (CLI: -overwrite true). Input model files
-    are not rewritten while warming geometry caches.
-
-    The JSON and returned dictionary contain settings, endmembers, references
-    (beta=0 nodes), and results. Each result row includes composition, n_b,
-    temperature, beta, mean_energy_per_site, mean_mixing_energy_per_site,
-    free_energy_of_mixing_per_site, and the corresponding ``*_stderr`` estimates
-    for mean energy and free energy. Settings record species, atom/site counts,
-    conversion factors, sampling controls and seeds.
-    E_total and fields named mean_energy_per_site denote the scaled quantity
-    predicted by the supplied CE. For an effective configuration free-energy
-    model, these are mean effective free energies, not internal energies.
-
-    Production errors use block means; reference errors use independent-sample
-    statistics. Free-energy errors propagate node errors with quadrature weights
-    and neglect cross-temperature covariance. They exclude quadrature bias,
-    inadequate equilibration, finite-size and model errors. Check convergence
-    in the beta grid, reference sample count, equilibration, production length,
-    block length and supercell size, particularly near phase transitions.
     """
     cmd_message("head")
     energy_factor = _positive_scalar(energy_factor, "energy_factor")

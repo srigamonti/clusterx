@@ -107,10 +107,13 @@ def transformation_containing_sphere_diag(r: float, cell: np.ndarray | Cell, ful
 def take_tile(grid: np.ndarray, i_grid: np.ndarray, p_reduced: tuple):
     """Map values from grid to reduced grid around grid index i_grid.
 
-    **parameters**
-    ``grid``: ndarray, shape (pX, pY, pZ, ..., pd n)
-    ``i_grid``: ndarray, shape (d + 1,)
-    ``p_reduced``: tuple of int, shape (d,)
+    Parameters
+    ----------
+    grid : ndarray, shape (pX, pY, pZ, ..., pd n)
+
+    i_grid : ndarray, shape (d + 1,)
+
+    p_reduced : tuple of int, shape (d,)
     """
     for axis, (d, p) in enumerate(zip(i_grid[:-1], p_reduced)):
         grid = np.take(grid, np.arange(d - p // 2, d + p // 2 + 1), axis=axis, mode="wrap")
@@ -128,11 +131,12 @@ def lattice_wrap_index(index, lattice_shape):
     """Returns periodic lattice index for a given iterable index.
     Inspired by: https://stackoverflow.com/questions/38066785/np-ndarray-with-periodic-boundary-conditions
 
-    **parameters**
-
-    ``index``: iterable
+    Parameters
+    ----------
+    index : iterable
         one integer for each axis
-    ``lattice_shape``: tuple
+
+    lattice_shape : tuple
         the shape of the lattice to index to
     """
     if not hasattr(index, "__iter__"):
@@ -207,17 +211,19 @@ def findmin(*args):
 def isclose(r1, r2, rtol=1e-4):
     """Determine whether two vectors are similar
 
-    **Parameters:**
-
-    ``r1,r2``: 1D arrays of integer or float
+    Parameters
+    ----------
+    r1, r2 : 1D arrays of int or float
         Vectors to be compared
-    ``rtol``: float
+
+    rtol : float
         Tolerance.
 
-    **Returns:**
-
-    Boolean: if the euclidean distance between ``r1`` and ``r2`` is smaller than
-    ``rtol``, ``True`` is returned, otherwise ``False`` is returned.
+    Returns
+    -------
+    bool
+        if the euclidean distance between ``r1`` and ``r2`` is smaller than
+        ``rtol``, ``True`` is returned, otherwise ``False`` is returned.
     """
 
     if len(r1) != len(r2):
@@ -234,18 +240,20 @@ def dict_compare(d1, d2, tol=None):
 
     https://stackoverflow.com/questions/4527942/comparing-two-dictionaries-in-python
 
-    **Parameters:**
-
-    ``d1,d2``: python dictionaries
+    Parameters
+    ----------
+    d1, d2 : python dict
         dictionaries to be compared
 
-    ``tol``: float
+    tol : float
         a small float number. If not ``None``, the comparison of dictionary
         values is regarded as a vector comparison and done with
         ``utils.isclose()``. For the meaning of ``tol``, read the documentation
         for ``rtol`` parameter of ``utils.isclose()``.
 
-    Return: boolean
+    Returns
+    -------
+    bool
         ``True`` if dicts are equal, ``False`` if they are different.
     """
     areeq = True
@@ -295,9 +303,9 @@ def dict_compare(d1, d2, tol=None):
 def sub_folders(root):
     """Return list of subfolders
 
-    Parameters:
-
-    root: string
+    Parameters
+    ----------
+    root : str
         path of the absolute folder for which you want to get the list of
         subfolders.
     """
@@ -308,9 +316,9 @@ def sub_folders(root):
 def _is_integrable(s):
     """Determine whether argument is integer or can be converted to integer
 
-    Parameters:
-
-    s: object
+    Parameters
+    ----------
+    s : object
         Can be any object for which we want to determine whether is integer or
         can be converted to integer.
     """
@@ -327,6 +335,35 @@ def list_integer_named_folders(root=".", prefix="", suffix="", containing_files=
     Scans folders in `root` and detects those whose names match:
 
         prefix + integer + suffix
+
+    Parameters
+    ----------
+    root : str
+        Path of the root folder in which to scan for integer-named folders.
+
+    prefix : str
+        Required prefix before the integer part.
+
+    suffix : str
+        Required suffix after the integer part.
+
+    containing_files : list[str]
+        File names that must exist inside the returned folders.
+
+    not_containing_files : list[str]
+        File names that must not exist inside the returned folders.
+
+    Returns
+    -------
+    list[int] or list[str]
+        Returns integers only when:
+
+        - prefix == ""
+        - suffix == ""
+        - and none of the matched folder names uses zero padding
+
+        Otherwise returns the original folder names as strings, preserving
+        zero padding.
 
     Examples
     --------
@@ -365,31 +402,6 @@ def list_integer_named_folders(root=".", prefix="", suffix="", containing_files=
     then this returns::
 
         ["01", "02", "10", "11"]
-
-    Parameters
-    ----------
-    root : str
-        Path of the root folder in which to scan for integer-named folders.
-    prefix : str
-        Required prefix before the integer part.
-    suffix : str
-        Required suffix after the integer part.
-    containing_files : list[str]
-        File names that must exist inside the returned folders.
-    not_containing_files : list[str]
-        File names that must not exist inside the returned folders.
-
-    Returns
-    -------
-    list[int] or list[str]
-        Returns integers only when:
-
-        - prefix == ""
-        - suffix == ""
-        - and none of the matched folder names uses zero padding
-
-        Otherwise returns the original folder names as strings, preserving
-        zero padding.
     """
     if containing_files is None:
         containing_files = []
@@ -460,12 +472,13 @@ def atat_to_cell(
     file from ``ATAT`` to a ``ParentLattice`` object in CELL. One may also read
     ``str.out`` files, which are converted to ``Structure`` objects in ``CELL``.
 
-    **Parameters:**
-
-    ``file_path``: string
+    Parameters
+    ----------
+    file_path : str
         string containing the path of the file to be parsed. The file must have
         format corresponding to a ``lat.in`` or ``str.out`` file from ATAT.
-    ``interpret_as``: string or None
+
+    interpret_as : str or None
         Indicate how to interpret the file in ``file_path``. Possible values are:
 
         * ``None``:
@@ -488,32 +501,35 @@ def atat_to_cell(
             lattice must be provided (see ``parent_lattice`` parameter below).
             In this case a ``Structure`` object will be returned.
 
-    ``parent_lattice``: ParentLattice object
+    parent_lattice : ParentLattice
         If ``interpret_as`` is ``super_cell`` or ``structure``, a parent lattice
         must be provided. This must be compatible with the information in the
         ``lat.in`` file that was used to create the ``str.out`` files. See the
         examples below.
-    ``pbc``: one or three bool (same as ASE's Atoms object)
+
+    pbc : one or three bool (same as ASE's Atoms)
         Periodic boundary conditions flags. Examples: True, False, 0, 1,
         (1, 1, 0), (True, False, False). Default value: False. The returned
         **CELL** objects will have these pbc's set up.
-    ``wrap``: boolean (default:``True``)
+
+    wrap : bool, default True
         Wrap atomic coordinates. If pbc is ``None``, pbc is set to (1,1,1).
         Set ``wrap`` to ``False`` if structure corresponds
         to a supercell, i.e., if the second matrix of the structure definition
         in either the lat.in or str.out file is different from the identity
         matrix.
 
-    **Returns:**
+    Returns
+    -------
+    object
+        Depending on the value of ``interpret_as``, the returned object can be python
+        arrays (``interpret_as=None``), a ``ParentLattice``
+        (``interpret_as="parent_lattice"``), a ``SuperCell``
+        (``interpret_as="super_cell"``), or a ``Structure``
+        (``interpret_as="Structure"``).
 
-    Depending on the value of ``interpret_as``, the returned object can be python
-    arrays (``interpret_as=None``), a ``ParentLattice``
-    (``interpret_as="parent_lattice"``), a ``SuperCell``
-    (``interpret_as="super_cell"``), or a ``Structure``
-    (``interpret_as="Structure"``).
-
-    **Examples:**
-
+    Examples
+    --------
     .. todo::
         Clarify wrap option. Right now it is not guaranteed to
         work when the supercell definition in lat.in is not the
@@ -522,7 +538,6 @@ def atat_to_cell(
         cartesian vectors of the parent lattice, but may define a
         supercell. Fix it such that the x matrix below referrs to
         a*b and not b as it is now.
-
     """
     from copy import deepcopy
 
@@ -659,12 +674,13 @@ class SuperCellIndexSearcher:
     def get_cluster_indices(self, positions_cluster, tol=1e-3):
         """Return atom indexes of cluster points in SuperCell
 
-        **Parameters:**
-
-        ``cl``: npoints x 3 matrix
+        Parameters
+        ----------
+        positions_cluster : npoints x 3 matrix
             matrix of cartesian coordinates of cluster points. Cluster
             positions are expected to be wrapped inside supercell ``sc``
-        ``tol``: real positive number
+
+        tol : real positive number
             tolerance to determine whether cluster and atom positions are the same.
         """
         _, idxs = self.kdtree.query(positions_cluster, k=1, distance_upper_bound=tol)
@@ -674,20 +690,23 @@ class SuperCellIndexSearcher:
 def get_cl_idx_sc(cl, sc, method=0, tol=1e-3):
     """Return atom indexes of cluster points in SuperCell
 
-    **Parameters:**
-
-    ``cl``: npoints x 3 matrix
+    Parameters
+    ----------
+    cl : npoints x 3 matrix
         matrix of cartesian or scaled coordinates of cluster points. Cluster
         positions are expected to be wrapped inside supercell ``sc``
-    ``sc``: natoms x 3 matrix
+
+    sc : natoms x 3 matrix
         matrix of cartesian or scaled coordinates of supercell atomic positions.
         The type of coordinates (either cartesion or scaled) must coincide with
         that of ``cl``
-    ``method``: integer
+
+    method : int
         Method to use. 0: (slow) nested for loop using numpy allclose. 1: (fast)
         calculates all distances from points in ``cl`` to atoms in ``sc``, and
         return indices for which distances are zero.
-    ``tol``: real positive number
+
+    tol : real positive number
         tolerance to determine whether cluster and atom positions are the same.
     """
     from scipy.spatial.distance import cdist
@@ -718,12 +737,12 @@ def add_noise(v, noise_level):
     distributed between -``noise_level`` and ``noise_level`` is added. The input
     vector ``v`` is left unchanged. The modified vector is returned.
 
-    **Parameters:**
-
-    ``v``: list of floats
+    Parameters
+    ----------
+    v : list of floats
         The input vector
 
-    ``noise_level``: float
+    noise_level : float
         Width of the uniform distribution used to add noise.
     """
     import random
@@ -742,16 +761,16 @@ def calculate_trafo_matrix(pcell, scell, rnd=5):
     of the super-cell lattice vectors; then, this function returns the matrix :math:`P=SV^{-1}`.
     If the resulting matrix is not integer (see ``rnd`` parameter), then ``None`` is returned.
 
-    **Parameters:**
-
-    ``pcell``: 3x3 array of float
+    Parameters
+    ----------
+    pcell : 3x3 ndarray of float
         The rows of this matrix correspond to the cartesian coordinates of a parent lattice
 
-    ``scell``: 3x3 array of float
+    scell : 3x3 ndarray of float
         The rows of this matrix correspond to the cartesian coordinates of a supercell
 
-    ``rnd``: integer (optional)
-         The matrix :math:`P=SV^{-1}` is rounded to ``rnd`` decimal places and checked for integrity.
+    rnd : int (optional)
+        The matrix :math:`P=SV^{-1}` is rounded to ``rnd`` decimal places and checked for integrity.
     """
     tmat = np.dot(scell, np.linalg.inv(pcell))
     if _is_integer_matrix(tmat, rnd):
@@ -770,18 +789,20 @@ def _str_grep(input_str, search_str, prepend=""):
 
 
 def mgrep(fpath, search_array, prepend="", root="."):
-    """
-    Grep strings in file and return matching lines.
+    """Grep strings in file and return matching lines.
 
-    **Parameters:**
-
-    ``fpath``: string
+    Parameters
+    ----------
+    fpath : str
         File path to grep
-    ``search_array``: array of strings
+
+    search_array : array of strings
         Each element of the array is an string to grep in ``fpath``.
-    ``prepend``: string
+
+    prepend : str
         prepend string ``prepend`` to each matching line.
-    ``root``: string
+
+    root : str
         File to grep should be in ``root/fpath``.
     """
     abs_path = os.path.join(root, fpath)
@@ -801,11 +822,12 @@ def mgrep(fpath, search_array, prepend="", root="."):
 def parent_lattice_to_atat(plat, out_fname="lat.in", for_str=False):
     """Serializes ParentLattice object to ATAT input file
 
-    **Parameters:**
-
-    ``plat``: ParentLattice object
+    Parameters
+    ----------
+    plat : ParentLattice
         ParentLattice object to be serialized
-    ``out_fname``: string
+
+    out_fname : str
         Output file path
     """
     cell = plat.get_cell()
@@ -843,12 +865,13 @@ class Exponential:
     """Basic exponential object of type ``coefficient`` * ``x`` ^ ``exponent``.
     Numerically evaluated using the method ``evaluate`` ( ``x`` ) .
 
-    **Parameters:**
+    Parameters
+    ----------
+    exponent
+        exponent of the exponential
 
-    ``exponent``: exponent of the exponential
-
-    ``coefficient``: coefficient of the exponential
-
+    coefficient
+        coefficient of the exponential
     """
 
     def __init__(self, exponent, coefficient=1):
@@ -919,12 +942,13 @@ class PolynomialBasis:
     Constructs orthonormal basis sets using ``scalcar_product`` .
     When initialized, all orthonormal basis sets to the order ``max_order`` are generated.
 
-    **Parameters**
+    Parameters
+    ----------
+    max_order
+        Maximal order to which the basis set is initialized.
 
-    ``max_order``: Maximal order to which the basis set is initialized.
-
-    ``symmetric``: Defines if the scalar product uses sigmas symmetrized around 0 or ascending from 0.
-
+    symmetric
+        Defines if the scalar product uses sigmas symmetrized around 0 or ascending from 0.
     """
 
     def __init__(self, max_order=10, symmetric=False):
@@ -981,9 +1005,11 @@ class PolynomialBasis:
 def poppush(x, val):
     """Left-shift array one position and writes new value to the right. Returns average.
 
-    **Parameters:**
-    ``x``: numpy array
-    ``val``: int or float
+    Parameters
+    ----------
+    x : ndarray
+
+    val : int or float
     """
     x[:-1] = x[1:]
     x[-1] = val
@@ -1028,9 +1054,12 @@ def remove_vacancies(at):
     """Remove every Atom containing 'X' as species symbol or 0 as atomic number
     from an Atoms object and return the resulting Atoms object.
 
-    **Parameters:**
-    ``at``: Atoms object
+    Parameters
+    ----------
+    at : Atoms
 
+    Notes
+    -----
     .. todo::
         find cleaner way to do this...
     """
@@ -1100,15 +1129,18 @@ def make_supercell(prim, P, wrap=True, tol=1e-5):
     configuration `\mathbf{h}_p` by `\mathbf{P h}_p =
     \mathbf{h}`.
 
-    **Parameters:**
-
-    ``prim``: ASE Atoms object
+    Parameters
+    ----------
+    prim : ASE Atoms
         Input configuration.
-    ``P``: 3x3 integer matrix
+
+    P : 3x3 int matrix
         Transformation matrix `\mathbf{P}`.
-    ``wrap``: bool
+
+    wrap : bool
         wrap in the end
-    ``tol``: float
+
+    tol : float
         tolerance for wrapping
     """
 
@@ -1146,8 +1178,7 @@ def decorate_supercell(
     wrap: bool = False,
     wrap_eps: float = 0.05,
 ):
-    """
-    Create a clusterx.Structure by decorating a SuperCell with species taken
+    """Create a clusterx.Structure by decorating a SuperCell with species taken
     from an ASE Atoms object.
 
     For each site in `scell`, this function finds a matching atom in `atoms`
@@ -1162,17 +1193,22 @@ def decorate_supercell(
     ----------
     scell : SuperCell
         The supercell object (from clusterx) providing the lattice and sites.
+
     atoms : Atoms
         ASE Atoms instance containing the atomic positions and species.
+
     tol : float, optional
         Distance tolerance for matching positions. Used only when ``tols``
         is ``None``. Default is 1e-5.
+
     tols : list[float], optional
         If provided, ``decorate_supercell`` ignores ``tol`` and tries each
         tolerance in increasing order until a valid decoration is found.
+
     wrap : bool, optional
         Whether to wrap ASE atomic positions into the unit cell before matching.
         Passed directly to `atoms.get_positions(wrap=wrap)`.
+
     wrap_eps : float, optional
         ``eps`` argument forwarded to position wrapping.
 
@@ -1337,11 +1373,12 @@ def super_structure(struc0, d):
     along its unit cell vectors. The number of repetitions along each cell vector is given
     by ``d``. It can be an integer, a three-vector, or a 3x3 matrix of integers.
 
-    **Parameters:**
-
-    ``struc0``: Structure object
+    Parameters
+    ----------
+    struc0 : Structure
         Original structure for the superstructure.
-    ``d``: int, three-component integer array, or 3x3 integer array
+
+    d : int, three-component int array, or 3x3 int array
         The super structure is obtained by the transformation d S, with d a
         3x3 matrix of integer and S the supercell cell vectors.
     """
@@ -1388,47 +1425,48 @@ def sset_equivalence_check(
     In the first case, the `SymmetryEquivalenceCheck` tool of ASE
     <https://wiki.fysik.dtu.dk/ase/ase/utils.html#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_ is used.
 
-    **Parameters:**
-
-    ``sset``: StructuresSet object
+    Parameters
+    ----------
+    sset : StructuresSet
         The structures set object to be analyzed.
 
-    ``to_primitive``: Boolean (default: ``True``)
+    to_primitive : bool, default True
         If ``True`` the structures are reduced to their primitive cells.
         This feature requires ``spglib`` to installed
         (*cf.* `ASE's SymmetryEquivalenceCheck <https://wiki.fysik.dtu.dk/ase/ase/utils.html?highlight=to_primitive#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_)
 
-    ``cpool``: ClustersPool object (default: ``None``)
+    cpool : ClustersPool, default None
         This parameter is optional. If given, the equivalence of a pair of structures
         is determined according to their cluster basis representation: two
         structures with the same cluster correlations for the clusters in ``cpool``
         are considered equivalent.
 
-    ``basis``: string (default: ``"trigonometric"``)
+    basis : str, default "trigonometric"
         Only used if ``cpool`` is not ``None``. Site basis functions used in the determination
         of cluster correlations.
 
-    ``comat``: 2D array of floats (default: ``None``)
+    comat : 2D array of floats, default None
         It overrides ``cpool`` and ``basis``. If a correlation matrix for the
         structures set sset was pre-computed, the equivalence in terms of cluster
         basis representation is performed by comparing the rows of this matrix (each
         row must correspond to a structure in the structures set).
 
+    Returns
+    -------
+    dict
+        Returns a dictionary. The keys (k) are structure indices of unique representative structures,
+        and the values (v) are arrays of integer, indicating all structure indices equivalent to k
+        (containing k itself too). For instance, the dictionary::
 
-    **Returns:**
-    Returns a dictionary. The keys (k) are structure indices of unique representative structures,
-    and the values (v) are arrays of integer, indicating all structure indices equivalent to k
-    (containing k itself too). For instance, the dictionary::
+            {"0": [0, 1, 3, 8, 9],
+             "2": [2, 5, 6],
+             "4": [4, 7]}
 
-        {"0": [0, 1, 3, 8, 9],
-         "2": [2, 5, 6],
-         "4": [4, 7]}
-
-    | indicates that in the structures set with indices [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] there are
-      just three distinct structures. These can be represented by strucutres 0, 2 and 4.
-      The structures [0, 1, 3, 8, 9] are all equivalent, etc.
-    | Notice that here equivalence is used in the sense explained above: It is symmetrical
-      equivalence only if ``cpool`` and ``comat`` are None.
+        | indicates that in the structures set with indices [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] there are
+          just three distinct structures. These can be represented by strucutres 0, 2 and 4.
+          The structures [0, 1, 3, 8, 9] are all equivalent, etc.
+        | Notice that here equivalence is used in the sense explained above: It is symmetrical
+          equivalence only if ``cpool`` and ``comat`` are None.
     """
     import numpy as np
 
@@ -1564,31 +1602,32 @@ def atoms_equivalence_check(atoms, to_primitive=True, pretty_print=False):
     The `SymmetryEquivalenceCheck` tool of ASE
     <https://wiki.fysik.dtu.dk/ase/ase/utils.html#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_ is used.
 
-    **Parameters:**
-
-    ``atoms``: array of Atoms objects
+    Parameters
+    ----------
+    atoms : array of Atoms objects
         The structures to be analyzed.
 
-    ``to_primitive``: Boolean (default: ``True``)
+    to_primitive : bool, default True
         If ``True`` the structures are reduced to their primitive cells.
         This feature requires ``spglib`` to installed
         (*cf.* `ASE's SymmetryEquivalenceCheck <https://wiki.fysik.dtu.dk/ase/ase/utils.html?highlight=to_primitive#ase.utils.structure_comparator.SymmetryEquivalenceCheck>`_)
 
+    Returns
+    -------
+    dict
+        Returns a dictionary. The keys (k) are structure indices of unique representative structures,
+        and the values (v) are arrays of integer, indicating all structure indices equivalent to k
+        (containing k itself too). For instance, the dictionary::
 
-    **Returns:**
-    Returns a dictionary. The keys (k) are structure indices of unique representative structures,
-    and the values (v) are arrays of integer, indicating all structure indices equivalent to k
-    (containing k itself too). For instance, the dictionary::
+            {"0": [0, 1, 3, 8, 9],
+             "2": [2, 5, 6],
+             "4": [4, 7]}
 
-        {"0": [0, 1, 3, 8, 9],
-         "2": [2, 5, 6],
-         "4": [4, 7]}
-
-    | indicates that in the structures set with indices [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] there are
-      just three distinct structures. These can be represented by strucutres 0, 2 and 4.
-      The structures [0, 1, 3, 8, 9] are all equivalent, etc.
-    | Notice that here equivalence is used in the sense explained above: It is symmetrical
-      equivalence only if ``cpool`` and ``comat`` are None.
+        | indicates that in the structures set with indices [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] there are
+          just three distinct structures. These can be represented by strucutres 0, 2 and 4.
+          The structures [0, 1, 3, 8, 9] are all equivalent, etc.
+        | Notice that here equivalence is used in the sense explained above: It is symmetrical
+          equivalence only if ``cpool`` and ``comat`` are None.
     """
     import numpy as np
     from ase.utils.structure_comparator import SymmetryEquivalenceCheck
@@ -1694,16 +1733,15 @@ def report_sset_equivalence_check(sset, sset_equivalence_check_output, property_
 
 
 def normalize_shape_input(p):
-    """
-    Normalize the supercell shape input into a 3x3 matrix.
+    """Normalize the supercell shape input into a 3x3 matrix.
 
-    Parameters:
-    -----------
-    p: None, int, list[int], list[list[int]], or np.ndarray
+    Parameters
+    ----------
+    p : None, int, list[int], list[list[int]], or ndarray
         The supercell shape specification.
 
-    Returns:
-    --------
+    Returns
+    -------
     np.ndarray or None
         A 3x3 numpy array if sc_shape is specified, otherwise None.
     """
@@ -1731,22 +1769,24 @@ def normalize_shape_input(p):
 def normalize_nsubs_list(
     nsubs_list: Optional[Union[int, List[int], List[List[int]]]],
 ) -> Optional[List[List[int]]]:
-    """
-    Normalize the input `nsubs_list` into a list of lists of integers.
+    """Normalize the input `nsubs_list` into a list of lists of integers.
 
-    Parameters:
-        nsubs_list (Optional[Union[int, List[int], List[List[int]]]]):
-            The input to normalize. It can be:
-            - An integer (e.g., 3)
-            - A list of integers (e.g., [3, 4, 7])
-            - A list of lists of integers (e.g., [[3, 4, 7], [1, 2]])
-            - None
+    Parameters
+    ----------
+    nsubs_list : Optional[Union[int, List[int], List[List[int]]]]
+        The input to normalize. It can be:
+        - An integer (e.g., 3)
+        - A list of integers (e.g., [3, 4, 7])
+        - A list of lists of integers (e.g., [[3, 4, 7], [1, 2]])
+        - None
 
-    Returns:
-        Optional[List[List[int]]]:
-            The normalized list of lists of integers, or None if input is None.
+    Returns
+    -------
+    list of list of int or None
+        The normalized list of lists of integers, or None if input is None.
 
-    Examples:
+    Examples
+    --------
         >>> normalize_nsubs_list(3)
         [[3]]
 
@@ -1803,8 +1843,7 @@ def rescale_by_first_nonzero(A):
 
 
 def check_and_convert_integer_matrix(A, tol=1e-8):
-    """
-    Check whether all elements of a matrix are (numerically) integers,
+    """Check whether all elements of a matrix are (numerically) integers,
     and return (is_integer_matrix, integer_matrix).
 
     Elements like 1.0 are considered integers.
@@ -1812,8 +1851,9 @@ def check_and_convert_integer_matrix(A, tol=1e-8):
 
     Parameters
     ----------
-    A : np.ndarray
+    A : ndarray
         Input array (e.g., 3x3)
+
     tol : float
         Tolerance for checking integer closeness
 
@@ -1858,23 +1898,28 @@ def find_sc_shape(
 
     Parameters
     ----------
-    scell : np.ndarray, shape (3, 3)
+    scell : ndarray, shape (3, 3)
         Supercell lattice matrix.
-    pcell : np.ndarray, shape (3, 3)
+
+    pcell : ndarray, shape (3, 3)
         Primitive cell lattice matrix.
+
     threshold_length : float, optional
         Matrix elements whose absolute value is below this threshold are
         zeroed before the inversion.  Default is ``1e-8``.
+
     tol_int : float, optional
         Tolerance passed to ``check_and_convert_integer_matrix`` when
         deciding whether the rescaled shape elements are integers.
         Default is ``1e-3``.
+
     n_atoms_scell : int, optional
         Number of atoms in the supercell.  When both ``n_atoms_scell`` and
         ``n_atoms_pcell`` are provided, the function checks that
         ``n_atoms_scell / n_atoms_pcell`` agrees with
         ``abs(det(shape_int))``.  A ``ValueError`` is raised if they
         disagree.
+
     n_atoms_pcell : int, optional
         Number of atoms in the primitive cell.  See ``n_atoms_scell``.
 
@@ -1883,12 +1928,12 @@ def find_sc_shape(
     is_shape_int : bool
         ``True`` if the rescaled shape matrix is integer-valued within
         ``tol_int``.
-    shape_int : np.ndarray of int, shape (3, 3)
+    shape_int : ndarray of int, shape (3, 3)
         The rescaled shape matrix rounded to the nearest integers.
-    shape_rescaled : np.ndarray, shape (3, 3)
+    shape_rescaled : ndarray, shape (3, 3)
         ``shape`` divided by the scale factor determined by
         ``rescale_by_first_nonzero``.
-    shape : np.ndarray, shape (3, 3)
+    shape : ndarray, shape (3, 3)
         Raw floating-point result of ``scell @ inv(pcell)`` (after
         threshold zeroing).
     """

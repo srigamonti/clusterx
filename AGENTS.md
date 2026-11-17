@@ -139,6 +139,29 @@ as compatibility aliases. Likewise preserve `print_plat_info` and
   Keep existing license notices. Avoid unrelated reformatting and dependency
   changes; explain any new dependency that is necessary.
 
+## Docstring convention
+
+- Use NumPy-style sections for structured docstrings: `Parameters`, `Returns`
+  or `Yields`, `Raises`, `See Also`, `Notes`, `References`, and `Examples`, as
+  applicable. Use `Attributes` for public class attributes and `Other Parameters`
+  for options collected through `**kwargs`. Keep concise prose-only docstrings
+  for simple objects; do not add empty sections.
+- Underline section headings with hyphens. Write parameter entries as
+  `name : type` with descriptions indented by four spaces. Document constructor
+  parameters in the class docstring. Keep names aligned with the actual API;
+  document keyword options individually and state when each option applies.
+- Use double backticks for code identifiers and literal values, explicit Sphinx
+  roles for cross-references, and reStructuredText code and math directives.
+  Separate lists and literal blocks with blank lines and align continuation
+  lines with their content. Prefer a raw docstring when it contains LaTeX.
+- Preserve scientific descriptions, equations, units, normalization, defaults,
+  and examples during formatting changes. Report existing accuracy problems
+  separately instead of guessing missing information or silently changing it.
+- Validate structured docstrings with a NumPy-aware Sphinx renderer. Use a
+  temporary configuration when the documentation repository has not yet enabled
+  one. Check that builds import the edited checkout, and compare executable ASTs
+  excluding docstrings for documentation-only refactors.
+
 ## CLI and NOMAD development
 
 These interfaces are actively growing. Inspect their current code and tests

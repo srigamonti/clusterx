@@ -161,8 +161,7 @@ def build_model_from_sset(
     prune=True,
     output_prefix: Optional[str] = None,
 ):
-    """
-    Build a (nonlinear) cluster expansion model from a structures set in one step.
+    """Build a (nonlinear) cluster expansion model from a structures set in one step.
 
     Chains the steps of ``build_cpool``, ``build_ccalc``, ``compute_comat`` and
     ``build_nonlinear_model``. Unless ``prune`` is false, it then identifies the
@@ -185,29 +184,40 @@ def build_model_from_sset(
     ----------
     property_name : str
         Property to model. Must be present in the structures set.
+
     sset_filepath : str
         Serialized StructuresSet with the training data.
+
     npoints, radii : list or str
         Clusters to build: numbers of points and corresponding maximum radii.
+
     plat_filepath : str, optional
         Parent lattice file. Default: the parent lattice of the structures set.
+
     psc, method, vacancy_atomic_number
         As in ``build_cpool``.
+
     basis_name : str
         As in ``build_ccalc``.
+
     regression_model, selection_model, selection_must_include
         As in ``build_nonlinear_model``.
+
     nonlinear_transformation, weights_filepath, standardize, test_size
         As in ``build_nonlinear_model``.
+
     random_state, shuffle
         As in ``build_nonlinear_model``.
+
     selection_threshold : float, default 0.0
         As in ``build_nonlinear_model`` but with a default of 0.0, i.e. the
         selection model removes no feature (features with exactly zero
         importance are still dropped from the pruned pool if the final
         regressor gives them zero weight). Raise it to select features.
+
     prune : bool, default True
         Whether to build the pruned clusters pool, correlations calculator and model.
+
     output_prefix : str, optional
         Prefix of created files (may include a directory, which is created).
     """
