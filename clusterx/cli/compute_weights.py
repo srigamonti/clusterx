@@ -91,14 +91,18 @@ def compute_weights(
 
 
 def _inverse_sigmoid(x, a=1):
-    """
-    Returns the value of the inverse sigmoid function.
+    """Returns the value of the inverse sigmoid function.
 
-    Parameters:
-    - x: Input value or array.
-    - a: Controls the steepness of the curve. Default is 1.
+    Parameters
+    ----------
+    x : float or ndarray
+        Input value or array.
+    a : float, default 1
+        Controls the steepness of the curve.
 
-    Returns:
-    - The value of the inverse sigmoid function at x.
+    Returns
+    -------
+    float or ndarray
+        The value of the inverse sigmoid function at x.
     """
     return 1 / (1 + np.exp(a * x))

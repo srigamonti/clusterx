@@ -50,15 +50,16 @@ def _collect_lattice_parameters(cells, sort_by_length=False):
 
 
 class SingleEntry:
-    """ "
+    """"
     This class is applicable for single entries in NOMAD.
     Using its entry id the data of the entry can be accessed.
 
-    **Parameters:**
-    ``entry_id``: *string*
+    Parameters
+    ----------
+    entry_id : str
         ID of the entry in the ONOMAD database
 
-    ``token``: *string*
+    token : str
         Default: None
         This only has to be overwritten if you want to access a NOMAD OASIS
         database or private data in NOMAD.
@@ -67,7 +68,7 @@ class SingleEntry:
         the NOMAD OASIS or the private data.
         You may use the function get_nomad_oasis_access_token to retrieve it.
 
-    ``base_url``: *string*
+    base_url : str
         base URL of the OASIS database
         The default is the base URL for NOMAD:
         'http://nomad-lab.eu/prod/v1/api/v1/'
@@ -151,13 +152,13 @@ class SingleEntry:
         return atoms
 
     def get_structure_object(self, filename: str = "structure.json"):
-        """
-        Returns the CELL structure object of a NOMAD entry.
+        """Returns the CELL structure object of a NOMAD entry.
         This requires that the structure object is saved as json file in the
         same directory as the associated run before uploading to NOMAD.
 
-        **Parameters:**
-        ``filename``: *string*
+        Parameters
+        ----------
+        filename : str
             Name of the structure object json file.
             Default: 'structure.json'
         """
@@ -185,8 +186,9 @@ class SingleEntry:
         The smallest lattice constant is returned first,
         the largest is returned last.
 
-        **Parameters:**
-        ``normalize``: bool
+        Parameters
+        ----------
+        normalize : bool
             Default:False
             If set to True the lattice constants are normalized to the
             parent lattice.
@@ -216,22 +218,23 @@ class SingleEntry:
 
 
 class Dataset:
-    """
-    This class is applicable to datasets in NOMAD.
+    """This class is applicable to datasets in NOMAD.
     Using its dataset id the data of all entries inside the dataset
     can be accessed.
 
-    **Parameters:**
-    ``dataset_id``: *string*
+    Parameters
+    ----------
+    dataset_id : str
         Rrefers to the dataset id that is assigned to the dataset in NOMAD
 
-    ``pagination_page_size``: *int*
+    pagination_page_size
+        *int*
         Maximum number of items contained in one response
         Set this to the number of entries in the dataset or lower to retrieve only a
         subset of the entries. In case of timeout errors try if decreasing
         the pagination_page_size solves your problem
 
-    ``token``: *string*
+    token : str
         Default ''
         This only has to be overwritten if you want to access a NOMAD OASIS
         database instead of NOMAD.
@@ -242,7 +245,7 @@ class Dataset:
         create the token by using
         'https://nomad-lab.eu/prod/v1/api/v1/extensions/docs#/auth/get_token_via_query_auth_token_get'
 
-    ``base_url``: *string*
+    base_url : str
         base URL of the OASIS database
         The default is the base URL for NOMAD:
         'http://nomad-lab.eu/prod/v1/api/v1/'
@@ -371,8 +374,7 @@ class Dataset:
         return values
 
     def get_structure_objects(self, filename="structure.json"):
-        """
-        Returns a list of structure objects for the entrys in the dataset.
+        """Returns a list of structure objects for the entrys in the dataset.
         This requires that the structure objects are saved as json files in the
         same directory as the associated runs before uploading to NOMAD.
         The structure objects can also have a different filename, but it has to be
@@ -380,8 +382,9 @@ class Dataset:
         get_structure_object of the SingleEntry class and specify the filename for
         each entry separately.
 
-        **Parameters:**
-        ``filename``: *string*
+        Parameters
+        ----------
+        filename : str
             Name of the structure object json file.
             Default: 'structure.json'
         """

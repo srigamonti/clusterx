@@ -22,7 +22,6 @@ from clusterx.utils import take_tile, ListDict, is_diagonal
 class MonteCarloLite:
     r"""Monte Carlo class for binary single sublattice CE models
 
-    **Description**:
         Objects of this class are used to perform Monte Carlo samplings.
 
         It is initialized with:
@@ -38,38 +37,39 @@ class MonteCarloLite:
 
             If ``ensemble`` is 'grandcanonical', the sublattice is defined with ``sublattices_indices``.
 
-    **Parameters**:
-
-    ``energy_model``: Model object
+    Parameters
+    ----------
+    energy_model : Model
         Model used for acceptance and rejection. Usually, the Model enables to
         calculate the total energy of a structure.
 
-    ``scell``: SuperCell object
+    scell : SuperCell
         Simulation cell in which the sampling is performed.
 
-    ``energy_scale_factor``: float or None
+    energy_scale_factor : float or None
         the energy given by energy_model times the energy_scale_factor must give the total
         energy in the simulation supercell. If None, it is assumed that the energy_model
         gives the energy per parent lattice and energy_scale_factor is set to scell.get_index().
 
-    ``boltzmann_constant``: float (optional, default 1.0)
+    boltzmann_constant : float, default 1.0
         Boltzmann constant kb. kb times the temperature must have the same units
         as the units of energy that energy model yields.
 
-    ``energy_key``: string (default: ``energy``)
+    energy_key : str, default energy
         For a multi-linear model, one of the predictions needs to be the energy prediction,
         energy_key needs to match one of the strings in energy_model.property_names, so that the energy
         prediction can be indexed from prediction vector.
 
-    ``reduce_structure``: bool (default: False)
+    reduce_structure : bool, default False
         If true, cluster orbits/correlations are computed and evaluated on
         subset of sigmas, in a box around central site in the structure.
         Incompatible with non-diagonal supercell shapes.
         NOTE: currently not used in MonteCarloLite, only in full MonteCarlo.
 
+    Notes
+    -----
     .. todo:
         Samplings in the grand canonical ensemble are not yet possible.
-
     """
 
     def __init__(
@@ -206,15 +206,16 @@ class MonteCarloLite:
         is_simulated_annealing: bool,
         keep_sigmas=1,
     ):
-        """
-        Load an MCRun from file if possible, otherwise create a new instance.
+        """Load an MCRun from file if possible, otherwise create a new instance.
 
         Parameters
         ----------
         mcrun_filepath : str or None
             Path to the MC run file. If None, a new instance is created.
+
         temperature : float
             Temperature for the MC run (used if creating new).
+
         ensemble : str
             Ensemble type (used if creating new).
 
@@ -297,7 +298,6 @@ class MonteCarloLite:
     ) -> MCRun:
         r"""Perform Monte-Carlo Metropolis simulation
 
-        **Description**:
             Perfom Monte-Carlo Metropolis sampling for
             ``no_of_sampling_steps`` sampling steps.
 
@@ -311,49 +311,51 @@ class MonteCarloLite:
             Note: The units of the ``energy`` :math:`E` and the factor :math:`k_B T` must be the same.
             With ``scale_factor``, :math:`k_B T` can be adjusted to the correct units (see below).
 
-        **Parameters**:
-
-        ``n_mc_steps``: integer
+        Parameters
+        ----------
+        n_mc_steps : int
             Number of sampling steps
 
-        ``temperature``: float
+        temperature : float
             Temperature at which the sampling is performed.
 
-        ``n_clics``: integer
+        n_clics : int
             Number of species flips (grandcanonical) or species swaps (canonical) per sampling step.
             Defaults to 1.
 
-        ``ensemble``: string (default: ``canonical``)
+        ensemble : str, default canonical
             ``canonical`` allows for swaps of atoms that conserve the concentration defined with ``nsubs``.
 
             ``grandcanonical`` allows for replacing atoms in the sub-lattices defined with ``sublattice_indices``.
             (So far, ``grandcanonical`` is not yet implemented.)
 
-        ``n_substitutions``: integer, optional
+        n_substitutions : int, optional
             Defines the number of substituted atoms in the sublattice.
 
-        ``initial_structure``: Structure object, optional
+        initial_structure : Structure, optional
             Initial structure from which the sampling starts.
 
-        ``initial_sigmas``: array, list, or tuple of int, optional
+        initial_sigmas : array, list, or tuple of int, optional
             Initial site occupation values (sigmas) from which the sampling starts.
 
-        ``chemical_potential``: dictionary (default: None)
+        chemical_potential : dict, default None
             Define the chemical potential in the grand canonical ensemble.
 
-        ``mcrun_filepath``: string (default: ``trajectory.json``)
+        mcrun_filepath : str, default trajectory.json
             Name of a Json file in which the trajectory is serialized after the sampling if ``serialize`` is **True**.
 
-        ``n_error_reset``: integer (default: None)
+        n_error_reset : int, default None
             If not **None*  and ``predict_swap`` equal to **True**, the correlations are calculated as usual (no differences) every n-th step.
 
-        ``random_seed``: Integer or None (default: None)
+        random_seed : int or None, default None
             Random seed to produce reproducible results
 
-        ``**kwargs``: keyworded argument list, arbitrary length
+        **kwargs : keyworded argument list, arbitrary length
             These arguments are added to the MonteCarloTrajectory object that is initialized in this method.
 
-        **Returns**: MonteCarloTrajectory object
+        Returns
+        -------
+        MonteCarloTrajectory object
             Trajectory containing the complete information of the sampling trajectory.
 
         Notes
@@ -540,9 +542,9 @@ class MonteCarloLite:
         ----------
         fmt : str, optional
             File format for output (default is "pickle").
+
         filepath : str, optional
             Path to the output file (default is "mcsetup.pickle").
-
         """
         file_ext = (
             os.path.splitext(filepath)[1].lower().lstrip(".")

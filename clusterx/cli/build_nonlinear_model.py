@@ -113,8 +113,7 @@ def build_nonlinear_model(
     random_state: int = 42,
     shuffle: bool = False,
 ):
-    """
-    Build and serialize a nonlinear cluster expansion (CE) model.
+    """Build and serialize a nonlinear cluster expansion (CE) model.
 
     This function constructs a nonlinear model for a given property based on a
     precomputed correlation matrix and correlation calculator. It combines
@@ -129,47 +128,60 @@ def build_nonlinear_model(
     property_name : str
         Name of the property to be modeled. Must exist in the ``StructuresSet``
         object used in correlation computations.
+
     ccalc_filepath : str, optional
         Path to the pickle file of a serialized
-        :class:`~clusterx.calculators.CorrelationsCalculator` object.
+        :class:`~clusterx.correlations.CorrelationsCalculator` object.
         Default is ``"ccalc.pickle"``.
+
     xp_filepath : str, optional
         Path to the ``.npz`` file containing the serialized correlation matrix
         (as produced by ``compute_comat``). Default is ``"xp.npz"``.
+
     model_filepath : str, optional
         Path to serialize the resulting
         :class:`~clusterx.model.Model` object. Default is ``"model.pickle"``.
+
     regression_model : dict, optional
         Dictionary specifying the regression estimator configuration, with
         keys ``"module"``, ``"class"``, and ``"args"``.  
         Defaults to ``{"module": "sklearn.linear_model",
         "class": "LinearRegression", "args": {}}``.
+
     selection_model : dict, optional
         Dictionary specifying a feature selection model, typically a LASSO
         variant. Defaults to
         ``{"module": "sklearn.linear_model", "class": "LassoCV",
         "args": {"alphas": 10, "cv": 10}}``.
+
     selection_threshold : float, optional
         Threshold applied to the selected interactions for filtering.
+
     selection_must_include : list of int, optional
         List of feature indices that must always be included in the model.
+
     nonlinear_transformation : dict, optional
         Dictionary specifying the nonlinear transformation settings.
         Defaults to
         ``{"module": "sklearn.preprocessing",
         "class": "PolynomialFeatures",
         "args": {"degree": 1, "include_bias": False}}``.
+
     weights_filepath : str, optional
         Path to an ``.npz`` file containing sample weights for fitting and
         evaluating the weighted mean squared error (MSE).
+
     standardize : bool, optional
         Whether to standardize the input data prior to fitting.
         Default is ``False``.
+
     test_size : float, optional
         Fraction of samples reserved for a final hold-out test set. If
         ``None`` or ``<= 0``, no split is performed.
+
     random_state : int, optional
         Random seed for the optional train/test split.
+
     shuffle : bool, optional
         Whether to shuffle before splitting.
 
@@ -526,8 +538,7 @@ def summarize_model(
     report: Optional[MarkdownReport] = None,
     top_n: int = 15,
 ):
-    """
-    Write a Markdown summary of a fitted estimator (selector or regressor).
+    """Write a Markdown summary of a fitted estimator (selector or regressor).
 
     Reports the estimator, cross-validation information (LassoCV, RidgeCV, or
     leave-one-out for Lasso), the number of non-zero coefficients, and the
@@ -538,22 +549,30 @@ def summarize_model(
     regressor : fitted estimator
         Estimator with ``coef_``, e.g. the ``estimator_`` of a SelectFromModel
         or the final regression step.
+
     x : array-like
         Features the estimator was fitted on, i.e. the input *after* all
         preceding pipeline steps.
+
     y : array-like
         Ground truth values.
+
     model_type : str
         Class name of the estimator, e.g. 'LassoCV', 'RidgeCV', 'Lasso', 'Ridge'.
+
     label : str
         Label of the pipeline stage, e.g. 'SELECTOR' or 'REGRESSOR'.
+
     feature_names : list of str, optional
         Names of the columns of ``x``, used when listing coefficients.
+
     index_map : array-like of int, optional
         For each column of ``x``, its index before feature selection. If given,
         it is listed next to the column index.
+
     report : MarkdownReport, optional
         Where to write the summary. Defaults to a console-echoing report.
+
     top_n : int
         Number of largest coefficients to list.
     """
@@ -734,37 +753,39 @@ def _build_pipeline(
     selection_must_include: list[int] = [],
     standardize: bool = False,
 ):
-    """
-    Build a regression pipeline with optional feature selection.
+    """Build a regression pipeline with optional feature selection.
 
     REGRESSOR < SELECTOR(None) < SCALER(None) < TRANSFORMER(None)
 
     Parameters
     ----------
     regression_model : dict
-        Final regression model configuration:
-        {
-            "module": "sklearn.linear_model",
-            "class": "RidgeCV",
-            "args": {"alphas": [0.1, 1.0, 10.0]}
-            "store_cv_results": True
-        }
+        Final regression model configuration::
+
+            {
+                "module": "sklearn.linear_model",
+                "class": "RidgeCV",
+                "args": {"alphas": [0.1, 1.0, 10.0]}
+                "store_cv_results": True
+            }
 
     nonlinear_transformation : dict
-        Feature transformation configuration (e.g., PolynomialFeatures):
-        {
-            "module": "sklearn.preprocessing",
-            "class": "PolynomialFeatures",
-            "args": {"degree": 2, "include_bias": False}
-        }
+        Feature transformation configuration (e.g., PolynomialFeatures)::
+
+            {
+                "module": "sklearn.preprocessing",
+                "class": "PolynomialFeatures",
+                "args": {"degree": 2, "include_bias": False}
+            }
 
     selection_model : dict or None, default None
-        Optional selection model configuration for SelectFromModel:
-        {
-            "module": "sklearn.linear_model",
-            "class": "LassoCV",
-            "args": {"cv": 5, "max_iter": 1000}
-        }
+        Optional selection model configuration for SelectFromModel::
+
+            {
+                "module": "sklearn.linear_model",
+                "class": "LassoCV",
+                "args": {"cv": 5, "max_iter": 1000}
+            }
 
     selection_threshold : str or float, default "mean"
         Threshold for SelectFromModel.

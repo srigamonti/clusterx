@@ -173,8 +173,7 @@ def generate_derivative_structures(
     skip_existing=False,
     non_recursive=False,
 ):
-    """
-    Generate derivative structures and (optionally) compute/plot properties.
+    """Generate derivative structures and (optionally) compute/plot properties.
 
     This command wraps several workflows around :class:`clusterx.derivative_structures.DerivativeStructures`,
     :class:`clusterx.parent_lattice.ParentLattice`, and :class:`clusterx.model.Model`.
@@ -194,28 +193,39 @@ def generate_derivative_structures(
     ----------
     sc_sizes : list[int], optional
         Supercell sizes to consider during enumeration/random generation.
-    shapes_nearest_orthogonal : bool or list[int], default ``False``
+
+    shapes_nearest_orthogonal : bool or list[int], default False
         If ``True`` (or a list of shape IDs), prefer supercell shapes with angles closest to orthogonal.
+
     nsubs_list : int or list[int] or list[list[int]], optional
         Number(s) of substitutions per supercell (can be a single int, a list, or a list per shape).
+
     sset_filepath : str, optional
         Path to a serialized :class:`clusterx.structures_set.StructuresSet` (needed by some plotting tasks).
+
     model_filepath : str, optional
         Path to a serialized :class:`clusterx.model.Model` used for CE predictions.
+
     plat_filepath : str, optional
         Path to a serialized :class:`clusterx.parent_lattice.ParentLattice` (required by enumeration/random tasks).
-    dss_filepath : str, default ``"dss.pickle"``
+
+    dss_filepath : str, default "dss.pickle"
         Output/input pickle filepath for the :class:`clusterx.derivative_structures.DerivativeStructures`.
+
     dss_filepaths : list[str], optional
         Input filepaths for ``task="merge_dsses"``.
+
     merge_mask_names : list[str | None], optional
         For ``task="merge_dsses"``, mask names to apply per input source
         (same length as ``dss_filepaths``). Use ``None`` to include all configurations
         for that source.
+
     property_name : str, optional
         Single property name to compute/plot. Mutually exclusive with ``property_names``.
+
     property_names : list[str], optional
         Multiple property names to compute/plot. Mutually exclusive with ``property_name``.
+
     property_solver : dict, optional
         Configuration for the custom solver used by
         ``task="compute_property_with_custom_solver"``. Provide ``filename``
@@ -228,10 +238,13 @@ def generate_derivative_structures(
 
         Optionally provide ``kwargs`` (a dictionary passed to the selected
         callable).
+
     sc_shape : int or list[int] or list[list[int]], optional
         Supercell shape specification. May be a scalar multiplier or an explicit 3×3 integer matrix.
-    per_formula_unit : bool, default ``False``
+
+    per_formula_unit : bool, default False
         If ``True``, compute/scale properties per formula unit.
+
     linear_reference : list[list[float]] or list[dict] or str, optional
         Linear-reference definition, active for
         ``task="compute_property_with_ce_model"`` (or ``"compute_property_ce"``)
@@ -243,14 +256,17 @@ def generate_derivative_structures(
         the computed values. ``None`` disables the linear-reference.
         The behavior and constraints are documented in
         :meth:`clusterx.derivative_structures.DerivativeStructures.compute_properties`.
+
     mask_name : str or list[str | None], optional
         Name of a mask to write/read within the serialized DSS object for downstream
         filtering. For ``task=merge_dsses``, a single string applies the same mask to
         all sources; a list is interpreted as per-source masks.
-    n_lowest : int, default ``1``
+
+    n_lowest : int, default 1
         Count of lowest-value configurations per concentration to mark (used by
         ``"mark_lowest_property_per_concentration"`` / ``"mark_lowest_and_random_properties_per_concentration"``).
-    n_random : int, default ``0``
+
+    n_random : int, default 0
         Task-dependent number of random configurations:
 
         - For ``task="random"``, the number to generate for each
@@ -259,19 +275,34 @@ def generate_derivative_structures(
           the number to sample per concentration and add to the mask alongside
           the ``n_lowest`` configurations. Duplicates are removed, so fewer
           than ``n_random`` additional configurations may be marked.
+
     random_state : int, optional
         Seed for random selection/generation.
-    task : str, default ``"do_full_enumeration"``
+
+    task : str, default "do_full_enumeration"
         Selects the workflow to run. See **Tasks** below.
+
     plotdata_filepath : str, optional
         When plotting multiple series, save the plotted ``.npz`` data to this path.
+
     colors, markers, sizes : list, optional
         Styling for multi-series scatter plots (length should match the number of series).
-    non_recursive : bool, default ``False``
+
+    non_recursive : bool, default False
         If ``True``, use the slower non-recursive enumeration method.
 
-    CLI flags (plac)
-    ----------------
+    Returns
+    -------
+    None
+        Results are persisted to ``dss_filepath`` and/or ``sset_filepath``; some tasks display plots.
+
+    Notes
+    -----
+    - Exactly one of ``property_name`` or ``property_names`` should be provided when computing/plotting properties.
+    - The serialized DSS object contains: configurations (DataFrame), masks (dict of config_id arrays), and supercell shape metadata used by conversion/plotting tasks.
+
+    .. rubric:: CLI flags (plac)
+
     Many parameters are exposed via short options when used as a CLI command:
 
     - ``--scsi`` → ``sc_sizes``
@@ -293,8 +324,8 @@ def generate_derivative_structures(
     - ``--task`` → ``task``
     - ``--rec`` → sets ``non_recursive=True`` (use non-recursive enumeration)
 
-    Tasks
-    -----
+    .. rubric:: Tasks
+
     ``"random"``
         Randomly generate up to ``n_random`` unique configurations per
         (supercell shape, substitution count) under the given constraints.
@@ -333,16 +364,6 @@ def generate_derivative_structures(
     ``"to_sset"`` / ``"convert_to_sset"``
         Convert the stored configurations (optionally filtered by ``mask_name``) into a
         :class:`clusterx.structures_set.StructuresSet` written to ``sset_filepath``.
-
-    Returns
-    -------
-    None
-        Results are persisted to ``dss_filepath`` and/or ``sset_filepath``; some tasks display plots.
-
-    Notes
-    -----
-    - Exactly one of ``property_name`` or ``property_names`` should be provided when computing/plotting properties.
-    - The serialized DSS object contains: configurations (DataFrame), masks (dict of config_id arrays), and supercell shape metadata used by conversion/plotting tasks.
 
     Examples
     --------
@@ -383,7 +404,7 @@ def generate_derivative_structures(
         dss_filepath = "random_structures.pickle"
         property_name = "energy"
 
-    **4) Select a method from a solver class**
+    4) Select a method from a solver class
 
     Use a class when you want to group related solvers or share instance state.
     The class is instantiated without arguments. The ``method`` key selects
@@ -1106,25 +1127,29 @@ def _do_merge_dss(
     store_source_map: bool = True,
     check_parent_lattice: bool = True,
 ) -> "DerivativeStructures":
-    """
-    Merge multiple serialized DerivativeStructures objects into a new DerivativeStructures.
+    """Merge multiple serialized DerivativeStructures objects into a new DerivativeStructures.
 
     Parameters
     ----------
-    paths:
+    paths
         Iterable of file paths to serialized DerivativeStructures objects.
-    mask_names:
+
+    mask_names
         Either a single mask name applied to all sources, or an iterable with one
         mask per source. A value of ``None`` for a source means include all data
         from that source.
-    provenance_col:
+
+    provenance_col
         Column name added to `configurations` to store an integer provenance id.
-    make_ids_unique:
+
+    make_ids_unique
         If True, offsets config_id and shape_id per file so they don't collide across sources.
         Recommended unless you're 100% sure ids are globally unique already.
-    store_source_map:
+
+    store_source_map
         If True, store a mapping {source_id: path} in the returned object as `source_paths`.
-    check_parent_lattice:
+
+    check_parent_lattice
         If True, sanity-check that all DSS share the same parent lattice (by repr()).
 
     Returns

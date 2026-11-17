@@ -20,6 +20,7 @@ class ColumnExpander(BaseEstimator, TransformerMixin):
     ----------
     n_columns_full : int
         Number of columns of the full (original) input matrix.
+
     kept_columns : sequence of int
         Indices, in the full input matrix, of the columns present in the
         reduced input. Must be sorted in increasing order, which is the

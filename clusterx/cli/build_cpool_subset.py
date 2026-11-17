@@ -31,14 +31,17 @@ def build_cpool_subset(
     cpool_filepath_read="cpool.json",  # str
     cpool_filepath_write="cpool-subset.json",  # str
 ):
-    """
-    Build a pool of clusters.
+    """Build a pool of clusters.
 
-    Parameters:
-        cluster_indices: list of int
-        cpool_filepath_read: Filepath where to read the pool of clusters from which a subset will be generated..
-        cpool_filepath_write: Filepath where to store the generated sub-pool of clusters.
+    Parameters
+    ----------
+    cluster_indexes : list of int
 
+    cpool_filepath_read : str
+        Filepath where to read the pool of clusters from which a subset will be generated.
+
+    cpool_filepath_write : str
+        Filepath where to store the generated sub-pool of clusters.
     """
     cmd_message("head")
 

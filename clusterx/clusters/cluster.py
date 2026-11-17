@@ -15,24 +15,24 @@ class Cluster:
     attributes still refer to the supercell (e.g. atom indexes), while other
     (e.g. atomic positions) are independent of the supercell definition.
 
-    **Parameters:**
-
-    ``atom_indexes``: array of integer
+    Parameters
+    ----------
+    atom_indexes : ndarray of int
         The atomic indices of the base super cell used for the initialization of
         the cluster.
-    ``atom_numbers``: array of integer
+
+    atom_numbers : ndarray of int
         In order to represent the selection of single-point basis functions for
         the cluster, atomic numbers are used in the initialization. The possible
         values to select from, correspond to the possible substitutional species
         that can occupy the site in the corresponding atom index in the array
         ``atom_indexes``.
-    ``super_cell``: SuperCell object (default: ``None``)
+
+    super_cell : SuperCell, default None
         If not given on initialization, only basic attributes (e.g. atom indices
         and numbers) are set. Otherwise, a complete definition is set up, containing
         atom coordinates, basis function indices, site types (which indicate which
         sublattices a cluster point belongs to), etc.
-
-    **Methods:**
     """
 
     def __init__(self, atom_indexes, atom_numbers, super_cell=None):
@@ -193,17 +193,19 @@ class Cluster:
 
         Uses symmetry operations as returned by spglib to find cluster multiplicity.
 
-        **Parameters:**
-
-        ``rr``: array of 3x3 matrices
+        Parameters
+        ----------
+        rr : array of 3x3 matrices
             rotations of the symmetry operations
-        ``tt``: array of 3x1 vectors
+
+        tt : array of 3x1 vectors
             translations of the symmetry operations.
             From spglib doc: The orders of the rotation matrices and the translation vectors
             correspond with each other, e.g. , the second symmetry operation is
             organized by the set of the second rotation matrix and second
             translation vector in the respective arrays.
-        ``cell``: 3x3 matrix
+
+        cell : 3x3 matrix
             The symmetry operations ``rr`` and ``tt`` refer to scaled coordinates.
             The parameter ``cell`` contains row-wise the corresponding cartesian
             coordinates of the cell vectors.

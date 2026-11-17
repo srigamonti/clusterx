@@ -13,20 +13,19 @@ class EstimatorFactory(object):
         """Create an estimator object from (or compatible with) the
         `scikit-learn <https://scikit-learn.org/stable/index.html>`_ library.
 
-        **Parameters:**
-
-        ``estimator_type``: string
+        Parameters
+        ----------
+        estimator_type : str
             If the string starts with ``"skl_"``, and the full string is ``"skl_EstimatorName"``,
             then an instance of the ``"EstimatorName"`` estimator of the
             `scikit-learn <https://scikit-learn.org/stable/index.html>`_ library is created.
 
-        ``estimator_opts``: dictionary
+        **estimator_opts : dict
             The estimator ``"EstimatorName"`` is initialized with the parameters given by the
             dictionary ``estimator_opts``
 
-
-        **Examples:**
-
+        Examples
+        --------
         In both examples below, ``X`` is the input matrix, ``y`` is the vector of property values,
         and ``X0`` is the input vector for a sample for which we want to predict the property value.
 
@@ -57,8 +56,6 @@ class EstimatorFactory(object):
 
             prediction0 = lasso.predict(X0)
             ...
-
-
         """
 
         if estimator_type.startswith("skl_"):

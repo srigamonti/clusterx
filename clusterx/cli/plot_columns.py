@@ -425,93 +425,169 @@ def plot_columns(
     and ``ycolumn``. Options available only per series use their built-in
     defaults.
 
-    Top-level options
-    -----------------
-    - ``source_filepath`` (str, optional): default serialized DerivativeStructures or
+    Parameters
+    ----------
+    source_filepath : str, optional
+        default serialized DerivativeStructures or
         StructuresSet file used by all series that do not explicitly set
         ``source_filepath``.
-    - ``xcolumn`` / ``ycolumn`` (str, optional): default x/y columns used by
+
+    xcolumn, ycolumn : str, optional
+        default x/y columns used by
         series that do not explicitly set them.
-    - ``title`` (str, optional): figure title.
-    - ``xlabel`` / ``ylabel`` (str, optional): axis labels.
-    - ``xfactor`` / ``yfactor`` (float): multiply each coordinate once before
+
+    title : str, optional
+        figure title.
+
+    xlabel, ylabel : str, optional
+        axis labels.
+
+    xfactor, yfactor : float
+        multiply each coordinate once before
         grouping, plotting, parity limits and export (both default to ``1.0``).
         Source properties are unchanged. Each series can override either factor.
-    - ``xrange`` / ``yrange`` (list[float, float], optional): axis limits in
+
+    xrange, yrange : list[float, float], optional
+        axis limits in
         displayed units, after coordinate scaling. Ticks, ``xtol``, distribution
         widths and x jitter also use displayed units and are not scaled again.
-    - ``rc_params`` (dict, optional): Matplotlib rcParams applied inside an
+
+    rc_params : dict, optional
+        Matplotlib rcParams applied inside an
         ``rc_context`` spanning figure creation, formatting and saving. Settings
         are restored even on errors. Set the backend before calling this command;
         ``backend`` is not a supported presentation setting here.
-    - ``colors`` (list[str], optional): default color palette for series without
+
+    colors : list[str], optional
+        default color palette for series without
         explicit ``color``.
-    - ``width`` / ``height`` (float, optional): figure size in inches. Defaults
+
+    width, height : float, optional
+        figure size in inches. Defaults
         preserve existing behavior: ``6x4`` for regular plots and ``6x6`` for
         ``target_vs_predictions``.
-    - For ``target_vs_predictions``, the figure is kept square. If ``width`` is
+
+        For ``target_vs_predictions``, the figure is kept square. If ``width`` is
         provided, the size becomes ``(width, width)`` (``height`` is ignored).
-    - ``target_vs_predictions`` (bool): enable parity-plot mode for target values
+
+    target_vs_predictions : bool
+        enable parity-plot mode for target values
         on x versus predictions on y. This uses a square plot frame, shared x/y
         limits, and a ``y=x`` reference line.
-    - ``loglog`` (bool): use logarithmic scale on both axes. All finite plotted
+
+    loglog : bool
+        use logarithmic scale on both axes. All finite plotted
         x/y values must be positive.
-    - ``symlog`` (bool): use symmetric logarithmic scale on both axes. This is
+
+    symlog : bool
+        use symmetric logarithmic scale on both axes. This is
         the signed-log option for data containing negative or zero values.
-    - ``symlog_linthresh`` (float, optional): half-width of the linear region
+
+    symlog_linthresh : float, optional
+        half-width of the linear region
         around zero for ``symlog``. If omitted, it is inferred from the smallest
         nonzero plotted absolute value.
-    - ``grid`` (bool): draw plot grid lines.
-    - ``grid_which`` (str): ``"major"`` (default), ``"minor"``, or ``"both"``.
-    - ``grid_axis`` (str): ``"both"`` (default), ``"x"``, or ``"y"``.
-    - ``grid_style`` (dict, optional): matplotlib grid style passed to
+
+    grid : bool
+        draw plot grid lines.
+
+    grid_which : str
+        ``"major"`` (default), ``"minor"``, or ``"both"``.
+
+    grid_axis : str
+        ``"both"`` (default), ``"x"``, or ``"y"``.
+
+    grid_style : dict, optional
+        matplotlib grid style passed to
         ``Axes.grid`` (e.g. ``linewidth``, ``linestyle``, ``alpha``, ``color``).
-    - ``show_yzero_axis`` (bool): draw a horizontal line at ``y=0``.
-    - ``show_xlabel`` / ``show_ylabel`` (bool): show/hide axis name labels.
-    - ``show_xticklabels`` / ``show_yticklabels`` (bool): show/hide numeric
+
+    show_yzero_axis : bool
+        draw a horizontal line at ``y=0``.
+
+    show_xlabel, show_ylabel : bool
+        show/hide axis name labels.
+
+    show_xticklabels, show_yticklabels : bool
+        show/hide numeric
         tick labels on each axis.
-    - ``xaxis_top`` (bool): if ``True``, place x-axis label, tick marks, and
+
+    xaxis_top : bool
+        if ``True``, place x-axis label, tick marks, and
         tick labels on the top side.
-    - ``yaxis_right`` (bool): if ``True``, place y-axis label, tick marks, and
+
+    yaxis_right : bool
+        if ``True``, place y-axis label, tick marks, and
         tick labels on the right side.
-    - ``xticks`` / ``yticks`` (list[float], optional): explicit tick locations
+
+    xticks, yticks : list[float], optional
+        explicit tick locations
         to apply to the x/y axes via ``Axes.set_xticks`` and ``Axes.set_yticks``.
-    - ``legend`` (bool): show legend.
-    - ``show_legend_frame`` (bool): show/hide the legend frame box.
-    - ``legend_location`` (str): legend position using Matplotlib ``loc``
+
+    legend : bool
+        show legend.
+
+    show_legend_frame : bool
+        show/hide the legend frame box.
+
+    legend_location : str
+        legend position using Matplotlib ``loc``
         names (e.g. ``"best"``, ``"upper left"``, ``"lower center"``).
-    - ``legend_ncols`` (int): positive number of legend columns (default ``1``).
-    - ``legend_bbox_to_anchor`` (list, optional): 2 or 4 finite numbers in axes
+
+    legend_ncols : int
+        positive number of legend columns (default ``1``).
+
+    legend_bbox_to_anchor : list, optional
+        2 or 4 finite numbers in axes
         fractions, passed as Matplotlib's ``bbox_to_anchor``. For two entries,
         anchor at (x, y); four entries specify (x, y, width, height). For a
         horizontal legend above the plot, use ``legend_ncols=2``,
         ``legend_location="lower center"`` and anchor ``[0.5, 1.04]``.
-    - ``legend_handlelength`` (float, optional): handle length passed to
+
+    legend_handlelength : float, optional
+        handle length passed to
         Matplotlib ``legend(handlelength=...)``.
-    - ``legend_handletextpad`` (float, optional): spacing between legend
+
+    legend_handletextpad : float, optional
+        spacing between legend
         handles and labels passed to ``legend(handletextpad=...)``.
-    - ``show_plot`` (bool): show interactive window.
-    - ``savefig`` (str, optional): output figure path (e.g. ``plot.png``).
-    - ``savefig_bbox_inches`` (str, optional): ``"tight"`` includes outside
+
+    show_plot : bool
+        show interactive window.
+
+    savefig : str, optional
+        output figure path (e.g. ``plot.png``).
+
+    savefig_bbox_inches : str, optional
+        ``"tight"`` includes outside
         legends and labels when saving PNG, PDF or SVG. Omitted by default to
         preserve existing figure dimensions. Legends participate in layout.
-    - ``annotations`` (list[dict], optional): text labels with required keys
+
+    annotations : list[dict], optional
+        text labels with required keys
         ``text`` (str), ``x`` and ``y`` (finite numbers). ``coordinates`` defaults
         to ``"axes fraction"``: (0, 0) is the lower-left axes corner, (1, 1) the
         upper-right, independent of data limits. ``"data"`` uses displayed data
         coordinates. Optional keys are ``ha``, ``va``, ``fontsize``, ``fontweight``.
         Other keys are rejected. Annotation coordinates are not scaled again.
-    - ``dpi`` (float): resolution used for ``savefig`` (default: ``300``).
-    - ``figdata_fname`` (str, optional): data export path
+
+    dpi : float
+        resolution used for ``savefig`` (default: ``300``).
+
+    figdata_fname : str, optional
+        data export path
         (``.json/.npz/.txt/.dat``).
 
-    Per-series options (``[[plot_columns.series]]``)
-    -------------------------------------------------
+    Notes
+    -----
+    .. rubric:: Per-series options (``[[plot_columns.series]]``)
+
     Required (directly or via top-level defaults):
+
     - ``xcolumn`` (str): x-axis column from the loaded configurations table.
     - ``ycolumn`` (str): y-axis column from the loaded configurations table.
 
     Optional:
+
     - ``source_filepath`` (str): override top-level source for this series.
     - ``mask_name`` (str): mask name in the DerivativeStructures.
     - ``filter_ycolumn`` (str): optional column name used to filter rows before
@@ -566,8 +642,16 @@ def plot_columns(
     string. Text exports retain their three numeric columns and add factors
     in the comment header.
 
-    Presentation example with named TOML steps
-    ------------------------------------------
+    .. rubric:: Color precedence
+
+    1) Per-series ``color``
+    2) Top-level ``colors[i]``
+    3) Internal default palette (tab10-like)
+
+    Examples
+    --------
+    .. rubric:: Presentation example with named TOML steps
+
     Run with ``cell --input_file plots.toml``. Both energy columns in this
     example are stored in eV/atom and displayed in meV/atom::
 
@@ -606,14 +690,6 @@ def plot_columns(
     ``-legend-bbox-to-anchor '[0.5,1.04]'``, and
     ``-annotations '[{"text":"300 K","x":0.06,"y":0.94}]'``.
 
-    Color precedence
-    ----------------
-    1) Per-series ``color``
-    2) Top-level ``colors[i]``
-    3) Internal default palette (tab10-like)
-
-    Example
-    -------
     .. code-block:: toml
 
             [plot_columns]

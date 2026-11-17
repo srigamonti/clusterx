@@ -40,9 +40,9 @@ class DerivativeStructures:
     ``DSGenerator`` remains available as a compatibility alias for existing
     imports and pickle files saved under the original class name.
 
-    **Parameters:**
-
-    ``parent_lattice``: :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` object
+    Parameters
+    ----------
+    parent_lattice : :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` object
         Parent lattice object. Derivative structures originate from this parent lattice.
     """
 
@@ -60,25 +60,29 @@ class DerivativeStructures:
         self.metadata = {}
 
     def serialize(self, filepath):
-        """
-        Serialize the current instance to a binary file using pickle.
+        """Serialize the current instance to a binary file using pickle.
 
-        Args:
-            filepath (str): Path to the file where the object will be saved.
+        Parameters
+        ----------
+        filepath : str
+            Path to the file where the object will be saved.
         """
         with open(filepath, "wb") as f:
             pickle.dump(self, f)
 
     @classmethod
     def from_file(cls, filepath):
-        """
-        Deserialize an instance of DerivativeStructures from a native pickle file.
+        """Deserialize an instance of DerivativeStructures from a native pickle file.
 
-        Args:
-            filepath (str): Path to the file from which the object will be loaded.
+        Parameters
+        ----------
+        filepath : str
+            Path to the file from which the object will be loaded.
 
-        Returns:
-            DerivativeStructures: An instance of the class loaded from the file.
+        Returns
+        -------
+        DerivativeStructures
+            An instance of the class loaded from the file.
         """
         with open(filepath, "rb") as f:
             dss = pickle.load(f)
@@ -191,20 +195,25 @@ class DerivativeStructures:
         return self.configurations.copy()
 
     def get_property(self, config_id, property_name):
-        """
-        Retrieve property value of a configuration by its config_id.
+        """Retrieve property value of a configuration by its config_id.
 
-        Parameters:
-        config_id (int): The ID of the configuration to retrieve.
+        Parameters
+        ----------
+        config_id : int
+            The ID of the configuration to retrieve.
 
-        property_name (str):
-        the name of the property
+        property_name : str
+            the name of the property
 
-        Returns:
-        float: The value of the property
+        Returns
+        -------
+        float
+            The value of the property
 
-        Raises:
-        KeyError: If the config_id is not found.
+        Raises
+        ------
+        KeyError
+            If the config_id is not found.
         """
         result = self.configurations[self.configurations["config_id"] == config_id]
         if not result.empty:
@@ -215,17 +224,22 @@ class DerivativeStructures:
         raise KeyError(f"Config ID {config_id} not found.")
 
     def get_fractional_concentration_binary(self, config_id):
-        """
-        Retrieve a fractional concentration of configuration by its config_id.
+        """Retrieve a fractional concentration of configuration by its config_id.
 
-        Parameters:
-        config_id (int): The ID of the configuration to retrieve.
+        Parameters
+        ----------
+        config_id : int
+            The ID of the configuration to retrieve.
 
-        Returns:
-        float: The fractional concentration
+        Returns
+        -------
+        float
+            The fractional concentration
 
-        Raises:
-        KeyError: If the config_id is not found.
+        Raises
+        ------
+        KeyError
+            If the config_id is not found.
         """
         result = self.configurations[self.configurations["config_id"] == config_id]
         if not result.empty:
@@ -327,30 +341,36 @@ class DerivativeStructures:
           For example, if the names are ``["p1", "p2"]``, return ``p1, p2`` or
           ``[p1, p2]``.
 
-        **Parameters**
-
-        ``property_name`` : str, optional
+        Parameters
+        ----------
+        property_name : str, optional
             Name of the single property column to compute. Use this or
             ``property_names``, but not both.
-        ``property_names`` : sequence of str, optional
+
+        property_names : sequence of str, optional
             Names of multiple property columns to compute. The order determines
             how the values returned by the selected method are assigned to
             columns. Use this or ``property_name``, but not both.
-        ``ase_calculator`` : ASE Calculator, optional
+
+        ase_calculator : ASE Calculator, optional
             Calculator used to compute potential energy from each generated
             structure. This produces one property.
-        ``cemodel`` : Model, optional
+
+        cemodel : Model, optional
             Cluster expansion model used to predict the property or properties.
-        ``property_solver`` : callable, optional
+
+        property_solver : callable, optional
             Custom function for computing the property or properties. It receives
             ``structure``, ``shape``, and ``concentration`` as positional
             arguments, plus ``row`` as a keyword argument. It may return a
             scalar for one property or an ordered sequence for multiple
             properties.
-        ``property_solver_kwargs`` : dict, optional
+
+        property_solver_kwargs : dict, optional
             Additional keyword arguments passed to ``property_solver``. Defaults
             to an empty dictionary.
-        ``linear_reference`` : str or two-point sequence, optional
+
+        linear_reference : str or two-point sequence, optional
             ``"least-squares"`` or ``"concentration-endpoints"`` fits a
             concentration-dependent reference separately for each computed
             property and subtracts it. Alternatively, provide two points as
@@ -359,17 +379,28 @@ class DerivativeStructures:
             reference subtraction. The explicit two-point form is intended for
             scalar results, not tuple or list results from a multi-property
             solver.
-        ``per_formula_unit`` : bool, default ``False``
+
+        per_formula_unit : bool, default False
             If True, divide each computed result by its configuration's
             supercell size. Use this with scalar results.
-        ``store_ensemble_predictions`` : bool, default ``False``
+
+        store_ensemble_predictions : bool, default False
             If True and ``cemodel`` uses a bagging ensemble, store each
             configuration's array of individual-estimator predictions in an
             additional ``<property>_ensemble_predictions`` column. This option
             is not supported together with ``per_formula_unit=True`` or an
             explicit two-point ``linear_reference``.
 
-        **Example: computing two values with a property solver**
+
+        Returns
+        -------
+        None
+            ``None``. The computed values are written to columns in
+            ``self.configurations``; missing columns are created automatically.
+
+        Examples
+        --------
+        .. rubric:: Example : computing two values with a property solver
 
         The returned values are assigned positionally: the first goes to
         ``"p1"`` and the second to ``"p2"``.
@@ -386,11 +417,6 @@ class DerivativeStructures:
                 property_solver=solve_properties,
                 property_solver_kwargs={"offset": 0.1},
             )
-
-        **Returns**
-
-        ``None``. The computed values are written to columns in
-        ``self.configurations``; missing columns are created automatically.
         """
         _filter_property_names(property_name, property_names)
         if property_solver_kwargs is None:
@@ -614,13 +640,13 @@ class DerivativeStructures:
         self.set_property_values_iteratively(value_func=_compute_frcon, property_name="frconc_binary")
 
     def add_property_column(self, property_name, default_value=None):
-        """
-        Adds a new column to the configurations DataFrame with the given property name.
+        """Adds a new column to the configurations DataFrame with the given property name.
 
-        **Parameters:**
-
+        Parameters
+        ----------
         property_name : str
             The name of the property to be added as a column.
+
         default_value : optional
             The default value to populate in the new column. If not provided, defaults to None.
         """
@@ -642,62 +668,68 @@ class DerivativeStructures:
         progress_description="Computing property values",
         **kwargs,
     ):
-        """
-        Sets property values iteratively using a function to compute values on the fly.
+        """Sets property values iteratively using a function to compute values on the fly.
 
-        **Parameters:**
-
+        Parameters
+        ----------
         value_func : callable
             A function that takes a row of the DataFrame and optional keyword arguments. When setting one property,
             it returns that property's value. When setting multiple properties, it returns a list, tuple, or other
             sequence of values, with one value per name in ``property_names`` and in the same order.
+
         property_name : str
             The name of the property whose values are to be set.
             Either this or property_names must be provided.
+
         property_names : list(str)
             The names of the properties whose values are to be set. For multiple properties, ``value_func`` must
             return one value for each name, in this order.
             Either this or property_name must be provided.
+
         create_if_missing : bool, optional
             If True, creates the column if it does not exist. Defaults to True.
+
         show_progress : bool, optional
             If True, displays a tqdm progress bar. Defaults to False.
+
         progress_description : str, optional
             Description shown on the progress bar.
-        kwargs : dict
+
+        **kwargs : dict
             Additional keyword arguments to pass to the value_func.
 
-        **Usage Example:**
-        ```python
-        def compute_value_with_args(row, multiplier, offset):
-            return row["sigma"] * multiplier + offset
+        Examples
+        --------
+        .. code-block:: python
 
-        generator.set_property_values_iteratively(
-            value_func=compute_value_with_args,
-            property_name="example_property",
-            multiplier=2,
-            offset=5
-        )
+            def compute_value_with_args(row, multiplier, offset):
+                return row["sigma"] * multiplier + offset
 
-        def compute_two_values(row):
-            p1 = len(row["sigma"])
-            p2 = sum(row["sigma"])
-            return p1, p2
+            generator.set_property_values_iteratively(
+                value_func=compute_value_with_args,
+                property_name="example_property",
+                multiplier=2,
+                offset=5
+            )
 
-        generator.set_property_values_iteratively(
-            value_func=compute_two_values,
-            property_names=["p1", "p2"],
-        )
+            def compute_two_values(row):
+                p1 = len(row["sigma"])
+                p2 = sum(row["sigma"])
+                return p1, p2
 
-        # A list return works too; its values map to property_names in order.
-        def compute_two_values_as_list(row):
-            return [len(row["sigma"]), sum(row["sigma"])]
+            generator.set_property_values_iteratively(
+                value_func=compute_two_values,
+                property_names=["p1", "p2"],
+            )
 
-        generator.set_property_values_iteratively(
-            value_func=compute_two_values_as_list,
-            property_names=["p1", "p2"],
-        )
-        ```
+            # A list return works too; its values map to property_names in order.
+            def compute_two_values_as_list(row):
+                return [len(row["sigma"]), sum(row["sigma"])]
+
+            generator.set_property_values_iteratively(
+                value_func=compute_two_values_as_list,
+                property_names=["p1", "p2"],
+            )
         """
         _filter_property_names(property_name, property_names)
         if property_name:
@@ -737,15 +769,16 @@ class DerivativeStructures:
             )
 
     def set_property_values_from_array(self, property_name, values, create_if_missing=True):
-        """
-        Sets property values using a provided array of values.
+        """Sets property values using a provided array of values.
 
-        **Parameters:**
-
+        Parameters
+        ----------
         property_name : str
             The name of the property whose values are to be set.
+
         values : list or array-like
             The values to set in the property column. Must match the number of rows in the DataFrame.
+
         create_if_missing : bool, optional
             If True, creates the column if it does not exist. Defaults to True.
         """
@@ -767,14 +800,17 @@ class DerivativeStructures:
         self.configurations[column_name] = values
 
     def add_scell_shape(self, shape):
-        """
-        Add a new cell shape matrix if it does not already exist.
+        """Add a new cell shape matrix if it does not already exist.
 
-        Parameters:
-        shape (np.ndarray): A 3x3 NumPy array representing the cell shape.
+        Parameters
+        ----------
+        shape : ndarray
+            A 3x3 NumPy array representing the cell shape.
 
-        Returns:
-        int: The shape_id of the newly added or existing cell shape.
+        Returns
+        -------
+        int
+            The shape_id of the newly added or existing cell shape.
         """
 
         sc_size = int(abs(round(np.linalg.det(shape))))
@@ -794,17 +830,22 @@ class DerivativeStructures:
         return new_id
 
     def get_scell_shape(self, shape_id):
-        """
-        Retrieve a cell shape matrix by its shape_id.
+        """Retrieve a cell shape matrix by its shape_id.
 
-        Parameters:
-        shape_id (int): The ID of the cell shape to retrieve.
+        Parameters
+        ----------
+        shape_id : int
+            The ID of the cell shape to retrieve.
 
-        Returns:
-        np.ndarray: The 3x3 NumPy array representing the cell shape.
+        Returns
+        -------
+        np.ndarray
+            The 3x3 NumPy array representing the cell shape.
 
-        Raises:
-        KeyError: If the shape_id is not found.
+        Raises
+        ------
+        KeyError
+            If the shape_id is not found.
         """
         result = self.scell_shapes[self.scell_shapes["shape_id"] == shape_id]
         if not result.empty:
@@ -812,17 +853,22 @@ class DerivativeStructures:
         raise KeyError(f"Shape ID {shape_id} not found.")
 
     def get_scell_size(self, shape_id):
-        """
-        Retrieve a cell shape matrix by its shape_id.
+        """Retrieve a cell shape matrix by its shape_id.
 
-        Parameters:
-        shape_id (int): The ID of the cell shape to retrieve.
+        Parameters
+        ----------
+        shape_id : int
+            The ID of the cell shape to retrieve.
 
-        Returns:
-        np.ndarray: The 3x3 NumPy array representing the cell shape.
+        Returns
+        -------
+        np.ndarray
+            The 3x3 NumPy array representing the cell shape.
 
-        Raises:
-        KeyError: If the shape_id is not found.
+        Raises
+        ------
+        KeyError
+            If the shape_id is not found.
         """
         result = self.scell_shapes[self.scell_shapes["shape_id"] == shape_id]
         if not result.empty:
@@ -830,13 +876,18 @@ class DerivativeStructures:
         raise KeyError(f"Shape ID {shape_id} not found.")
 
     def add_configuration(self, sigma, shape_id, **kwargs):
-        """
-        Add a new configuration.
+        """Add a new configuration.
 
-        Parameters:
-        sigma (tuple): A tuple of integers representing the atomic configuration.
-        shape_id (int): The shape_id linking the configuration to a cell shape.
-        **kwargs: Additional keyword arguments for the configuration.
+        Parameters
+        ----------
+        sigma : tuple
+            A tuple of integers representing the atomic configuration.
+
+        shape_id : int
+            The shape_id linking the configuration to a cell shape.
+
+        **kwargs : dict
+            Additional keyword arguments for the configuration.
         """
         new_id = len(self.configurations)
         row_dict = {"config_id": new_id, "sigma": sigma, "shape_id": shape_id, **kwargs}
@@ -862,30 +913,37 @@ class DerivativeStructures:
     ):
         """Generate derivative structures
 
-         **Parameters:**
-
-         ``supercell_sizes``: list or array of int
+        Parameters
+        ----------
+        supercell_sizes : list or ndarray of int
             List  of integers indicating the number of unit cells in each derivative supercell
-        ``shapes_nearest_orthogonal``: boolean or list of integers, default is False.
+
+        shapes_nearest_orthogonal : bool or list of int, default False
             If True, for the class of supercells belonging to a hermite normal form (HNF), it will
             select the supercells with angles between cell vectors pairwise closest to orthogonal.
             This search is by default done by transforming the HNFs by 3x3 determinant-1 matrices
             formed with the integers [1,0,-1]. If you pass a list of integers to this argument,
             the passed list will be used insted of the default [1,0,-1]. If False, the original
             HNFs determine the supercell shapes.
-        ``num_subs_list``: ragged list of lists or arrays of integers, or list of dict for multilattice case
+
+        num_subs_list : ragged list of lists or arrays of int, or list of dict for multilattice case
             every list or array in the ragged list, indicate the number of substituents to be
             considered in a given supercell. The first dimension must coincide with the
             dimension of ``supercell_sizes``.
-        ``sc_shape``: 3x3 matrix or None
+
+        sc_shape : 3x3 matrix or None
             if only decorations for a single supercell are wanted, specify it here.
-        ``sc_shapes``: list of 3x3 matrix or None
+
+        sc_shapes : list of 3x3 matrix or None
             list of sc_shapes to generate decorations.
-        ``n_random``: int or None
+
+        n_random : int or None
             If provided, generate only this number of random configurations per (shape, nsubs).
-         ``random_state``: int or None
+
+        random_state : int or None
             If provided, used to seed the random number generators for reproducibility.
-        ``recursive``: Bool, default True
+
+        recursive : bool, default True
             Use fast recursive algorithm for finding derivative structures. If all configurations
             for ``n`` substitutions are seek, the recursive algorithm finds before all of ``n-1``.
             Thus, a calculation with  ``num_subs_list=[[0,1,2,3]]`` takes the same numerical
@@ -958,20 +1016,21 @@ class DerivativeStructures:
         _scell_cache=None,
         _symper_cache=None,
     ):
-        """
-        Generate derivative structures.
+        """Generate derivative structures.
 
-        Parameters:
-        -----------
-        sc_shape: List[List[int]]
+        Parameters
+        ----------
+        sc_shape : List[List[int]]
             Shape of the supercell (3x3 list or array of integers).
-        nsubs: int
+
+        nsubs : int
             Number of substitutions.
-        n_random: Optional[int]
+
+        n_random : Optional[int]
             If provided, generate only this number of random configurations.
 
-        Returns:
-        --------
+        Returns
+        -------
         List[np.ndarray]
             List of unique sigma configurations.
         """
@@ -1338,8 +1397,7 @@ class DerivativeStructures:
 
     @staticmethod
     def _generate_labelings_for_sublattice(natoms, sublattice_positions, nsubs):
-        """
-        Returns generator of labelings for a sublattice
+        """Returns generator of labelings for a sublattice
 
         e.g.
         sublattice_positions = [3,5,6,7,9]
@@ -1347,12 +1405,13 @@ class DerivativeStructures:
 
         [(0,[3,5,9]),(1,[7])]
 
-        Parameters:
-        -----------
-            positions: list
-                index of atomic positions to allocate substitutions
-            nsubs: list
-                number of substitutions of every kind
+        Parameters
+        ----------
+        sublattice_positions : list
+            index of atomic positions to allocate substitutions
+
+        nsubs : list
+            number of substitutions of every kind
         """
 
         def recursive_build(level, used_indices):
@@ -1514,25 +1573,29 @@ class DerivativeStructures:
         skip_existing=True,
         show_progress=True,
     ):
-        """
-        Generate the binary complements of configurations (flip 0<->1 on substitutional sites).
+        """Generate the binary complements of configurations (flip 0<->1 on substitutional sites).
 
         Steps:
+
         1) Check that parent lattice is binary (self.plat.is_nary(2)).
         2) For each configuration, build/cached SuperCell for its shape_id.
         3) Require exactly one substitutional sublattice:
-                len(scell.get_substitutional_tags()) == 1
+           ``len(scell.get_substitutional_tags()) == 1``
         4) Flip sigma entries at scell.get_substitutional_sites() (only those sites).
         5) Either return a new DerivativeStructures object with the complemented configurations (mode="new"),
-            or extend self by adding them (mode="extend").
+           or extend self by adding them (mode="extend").
 
         Parameters
         ----------
         mask_name : str or None
             If provided, only configurations in the mask are processed (uses get_configurations()).
-        mode : {"new", "extend"}
+
+        mode
+            {"new", "extend"}
+
             - "new": return a new DerivativeStructures object with only complemented configs.
             - "extend": add complemented configs to self and return self.
+
         skip_existing : bool
             If True, do not add complements that already exist (same sigma and shape_id).
 
@@ -1713,21 +1776,26 @@ def get_unique_supercells(n, parent_lattice):
     [1] Gus L. W. Hart and Rodney W. Forcade *Phys. Rev. B*
     **80**, 014120 (2009).
 
-    **Parameters:**
-
-    ``n``: integer
+    Parameters
+    ----------
+    n : int
         index of the supercells, i.e., the number of atoms in the supercells is
         ``n*parent_lattice.get_natoms()``.
-    ``parent_lattice``: ParentLattice object
+
+    parent_lattice : ParentLattice
         The parent lattice
 
-    **Returns:** two arrays containing 3x3 matrices. The matrices ``S`` of the
-    first array contain the cartesian coordinates of the supercell vectors (row
-    wise), while the matrices ``H`` in the second array are the (integer)
-    transormation matrices with respect to the parent lattice ``U``. That is,
-    :math:`S=HU`
+    Returns
+    -------
+    tuple of two arrays
+        two arrays containing 3x3 matrices. The matrices ``S`` of the
+        first array contain the cartesian coordinates of the supercell vectors (row
+        wise), while the matrices ``H`` in the second array are the (integer)
+        transormation matrices with respect to the parent lattice ``U``. That is,
+        :math:`S=HU`
 
-    **Example:**
+    Examples
+    --------
     In the following example, all the supercells of index 4 for the FCC lattice
     are found. The supercells are stored in the file
     ``unique_supercells-fcc.json`` for visualization with the command
@@ -1785,7 +1853,6 @@ def get_unique_supercells(n, parent_lattice):
 
     The resulting supercells in this example correspond to Fig. 1 of
     Computational Materials Science 59 (2012) 101–107
-
     """
     pl_cell = parent_lattice.get_cell()
 
@@ -1837,11 +1904,12 @@ def get_HNFs(n, pbc=(1, 1, 1)):
     The algorithm here is based on Equation 1 of Gus L. W. Hart and Rodney W.
     Forcade, *Phys. Rev. B* **77**, 224115 (2008).
 
-    **Parameters:**
-
-    ``n``: integer
+    Parameters
+    ----------
+    n : int
         index of the HNF matrices.
-    ``pbc``: three bool
+
+    pbc : three bool
         Periodic boundary conditions flags. Examples:
         (1, 1, 0), (True, False, False). Default value: (1,1,1)
     """
@@ -1882,17 +1950,17 @@ def _get_minimal_sc_shape(h, all_matrices=None, cell=None):
 
 
 def _get_normalized_scalar_products(s: np.ndarray):
-    """
-    For a matrix of column vectors, return the normalized scalar products.
+    """For a matrix of column vectors, return the normalized scalar products.
 
-    **Parameters:**
-
-    ``s``: numpy.ndarray
+    Parameters
+    ----------
+    s : numpy.ndarray
         matrix of transformed cell vectors as columns
 
-    **Returns:**
-
-    Normalized scalar products between unique vector pairs
+    Returns
+    -------
+    array-like
+        Normalized scalar products between unique vector pairs
     """
     p_ij = []
     for i, j in [(0, 1), (0, 2), (1, 2)]:
@@ -1916,21 +1984,19 @@ def get_unique_supercells_small_angles(n, parent_lattice: object, elements: list
 
 
 def get_unique_supercells_nearest_orthogonal(n, parent_lattice: object, elements: list):
-    """
-    Return all unique supercells with pairwise lattice vectors angles closest to orthogonal.
+    """Return all unique supercells with pairwise lattice vectors angles closest to orthogonal.
     Transformation of those supercells is done by unimodal matrices constructed
     with integer matrix elements given by the paramter ``elements``
 
-    **Parameters:**
-
-    ``elements``: list[int]
+    Parameters
+    ----------
+    elements : list[int]
         transformation vector elements
 
         example: [-3,-2,-1,0,1,2,3]
 
         The algorithm will search all combinations of 3x3 matrices composed of
         those ``elements`` and filter those with determinant 1.
-
     """
 
     import multiprocessing

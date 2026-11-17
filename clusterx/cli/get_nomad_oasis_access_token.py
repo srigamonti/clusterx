@@ -44,8 +44,7 @@ def get_nomad_oasis_access_token(
     userpassword=None,
     output_file=None,
 ):
-    """
-    Obtain an access token for NOMAD or NOMAD OASIS.
+    """Obtain an access token for NOMAD or NOMAD OASIS.
 
     If credentials are not provided via arguments or a .env file, you will be
     prompted interactively and securely for your username and password.
@@ -55,12 +54,16 @@ def get_nomad_oasis_access_token(
     base_url : str, optional
         Base URL of the NOMAD / NOMAD OASIS API.
         Default is ``"https://nomad-lab.eu/prod/v1/staging/api/v1/"``.
+
     path_to_dotenv : str, optional
         Path to .env file containing OASIS_USER_NAME and OASIS_PASSWORD.
+
     username : str, optional
         Username for the NOMAD / NOMAD OASIS account.
+
     userpassword : str, optional
         Password for the NOMAD / NOMAD OASIS account (if not prompted).
+
     output_file : str, optional
         Optional file path to save the access token.
 

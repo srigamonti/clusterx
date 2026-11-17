@@ -124,8 +124,8 @@ def build_structures_set_from_nomad(
     Credentials can be supplied directly or loaded from a dotenv file;
     otherwise, the command prompts.
 
-    Example
-    -------
+    Examples
+    --------
     .. code-block:: bash
 
         $ cell build_structures_set_from_nomad DATASET_ID \\

@@ -78,19 +78,19 @@ def wrap_scaled_positions(s, pbc):
 
 
 def get_internal_translations(parent_lattice, super_cell):
-    """
-    Return the internal translations of a parent lattice with respect to a super cell.
+    """Return the internal translations of a parent lattice with respect to a super cell.
 
     Translations are expressed in scaled coordinates with respect to the super cell.
 
     The function returns a numpy array containing three-dimensional vectors representing the
     internal translation symmetries of the super cell.
 
-    **Parameters:**
-    ``parent_lattice``: ParentLattice instance
+    Parameters
+    ----------
+    parent_lattice : ParentLattice
         The ParentLattice object
 
-    ``super_cell``: SuperCell instance
+    super_cell : SuperCell
         The SuperCell object. Must be a supercell of the parent lattice given as first argument.
     """
     from ase import Atoms

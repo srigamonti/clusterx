@@ -32,21 +32,22 @@ def build_parent_lattice(species: str = "Si,Ge", filepath="plat.json"):
         Comma-separated list of chemical species to include in the parent lattice.
         The first species is used to generate the underlying atomic structure.
         Default is ``"Si,Ge"``.
+
     filepath : str, optional
         File path to which the generated :class:`~clusterx.parent_lattice.ParentLattice`
         is serialized. Default is ``"plat.json"``.
-
-    Examples
-    --------
-    .. code-block:: bash
-
-        $ clusterx build_parent_lattice -s Si,Ge -f plat.json
 
     Notes
     -----
     This command is primarily intended for demonstration or testing.
     For realistic parent lattices, users should define them explicitly using
     the :class:`~clusterx.parent_lattice.ParentLattice` interface.
+
+    Examples
+    --------
+    .. code-block:: bash
+
+        $ clusterx build_parent_lattice -s Si,Ge -f plat.json
     """
     species_list = species.split(",")
     pristine_atoms = bulk(species_list[0])

@@ -63,7 +63,6 @@ def _mc_count(value, name, minimum=0):
 class MonteCarlo:
     r"""Monte Carlo class
 
-    **Description**:
         Objects of this class are used to perform Monte Carlo samplings.
 
         It is initialized with:
@@ -79,23 +78,23 @@ class MonteCarlo:
 
             If ``ensemble`` is 'grandcanonical', the sublattice is defined with ``sublattices_indices``.
 
-    **Parameters**:
-
-    ``energy_model``: Model object
+    Parameters
+    ----------
+    energy_model : Model
         Model used for acceptance and rejection. Its predictions retain the
         fitted target's normalization and units. The user must convert them
         to total supercell energy with metropolis's explicit energy_factor.
 
-    ``scell``: SuperCell object
+    scell : SuperCell
         Simulation cell in which the sampling is performed.
 
-    ``ensemble``: string (default: ``canonical``)
+    ensemble : str, default canonical
         ``canonical`` allows for swaps of atoms that conserve the concentration defined with ``nsubs``.
 
         ``semigrand-canonical`` allows replacing atoms in sub-lattices defined with ``sublattice_indices``
         with other atoms in said sub-lattice.
 
-    ``nsubs``: dictionary (default = None)
+    nsubs : dict, default None
         Defines the number of substituted atoms in each sub-lattice of the
         Supercell in which the sampling is performed.
 
@@ -107,14 +106,14 @@ class MonteCarlo:
         may replace the pristine species for sites of site_type#
         (see related documentation in SuperCell object).
 
-    ``sublattice_indices``: list of integers (default = None)
+    sublattice_indices : list of int, default None
         Defines the sublattices for the grand canonical sampling.
         Furthermore, it can be used to limit the canonical sampling
         to a reduced number of sublattices. E.g. in the case of nsubs = {0:[4,6], 1:[4]}. Here, sublattices 0 and 1
         contain substitutional sites, but only a sampling in sublattice 0 is wanted.
         Then, put ``sublattice_indices`` = [0].
 
-    ``chemical_potentials``: dictionary (default: None)
+    chemical_potentials : dict, default None
         Define additive chemical-potential costs for semigrand sampling, in the
         same energy unit as k_B*T. Supply one value per allowed species,
         including pristine species (usually reference cost zero). To use
@@ -129,7 +128,7 @@ class MonteCarlo:
         Here, :math:`\Delta \mu_{\#i}` is the chemical potential difference of substitutional species i relative
         to the pristine species in sub-lattice with site_type#.
 
-    ``models``: List of Model objects
+    models : List of Model objects
         The properties returned from these Model objects are additionally
         calculated during the sampling and stored with their corresponding ``prop_name``
         to the dictionary ``key_value_pairs`` for each visited structure during the sampling.
@@ -137,34 +136,34 @@ class MonteCarlo:
         Properties from Model obejects can also be calculated after the
         sampling by using the MonteCarloTrajectory class.
 
-    ``predict_swap``: boolean (default: False)
-       If set to **True**, this parameter makes the sampling faster by calculating the correlation difference of the
-       proposed structure with respect to the previous structure.
+    predict_swap : bool, default False
+        If set to **True**, this parameter makes the sampling faster by calculating the correlation difference of the
+        proposed structure with respect to the previous structure.
 
-    ``reduce_structure``: bool (default: False)
+    reduce_structure : bool, default False
         If true, cluster orbits/correlations are computed and evaluated on
         subset of sigmas, in a box around central site in the structure.
         Incompatible with non-diagonal supercell shapes.
 
-    ``energy_key``: string (default: ``energy``)
+    energy_key : str, default energy
         For a multi-linear model, one of the predictions needs to be the energy prediction,
         energy_key needs to match one of the strings in energy_model.property_names, so that the energy
         prediction can be indexed from prediction vector.
 
-    ``filename``: string (default: ``trajectory.json``)
+    filename : str, default trajectory.json
         Path at which to store the MonteCarloTrajectory.
 
-    ``seed``: int or None (default: None)
+    seed : int or None, default None
         seed value for random number generators. For reproducible results,
         pass integer seed, otherwise seed=None
 
-    ``resume_from``: string or path-like (default: None)
+    resume_from : str or path-like, default None
         Start from the final complete frame of an XYZ/extxyz trajectory. The
         physical configuration is resumed with the random streams initialized
         from ``seed``; the original random stream is not restored. Without
         start_from this file is always used, regardless of output existence.
 
-    ``start_from``: string or path-like (default: None)
+    start_from : str or path-like, default None
         Enable automatic first-run/continuation selection. At the first
         metropolis call, inspect atoms_filename BEFORE opening it: if absent,
         load the final complete frame of start_from; if present, load the final
@@ -184,16 +183,15 @@ class MonteCarlo:
         existence of 250K.xyz still selects between that source and 300K.xyz.
         These options restore configurations, not exact original random streams.
 
-    ``save_atoms_endpoints``: boolean (default: False)
+    save_atoms_endpoints : bool, default False
         Write the initial configuration and each metropolis call's endpoint.
         Continuing calls share one stage boundary frame. Periodic checkpoints
         set by ``save_atoms_every`` follow the chain's proposal counter.
 
-    ``atoms_mode``: string (default: "auto")
+    atoms_mode : str, default "auto"
         Apply once per chain: "x" requires a new output file, "w" overwrites,
         "a" appends, and "auto" overwrites fresh runs and appends resumes.
         XYZ counters start at zero for each fresh start or file-based resume.
-
     """
 
     def __init__(
@@ -281,7 +279,6 @@ class MonteCarlo:
     ):
         r"""Perform Monte-Carlo Metropolis simulation
 
-        **Description**:
             Perfom Monte-Carlo Metropolis sampling for
             ``no_of_sampling_steps`` sampling steps.
 
@@ -306,31 +303,31 @@ class MonteCarlo:
             k_B*T; they are not multiplied by energy_factor. To express the
             conventional E - sum(mu*N), pass negative physical chemical potentials.
 
-        **Parameters**:
-
-        ``no_of_sampling_steps``: integer
+        Parameters
+        ----------
+        no_of_sampling_steps : int
             Number of sampling steps
 
-        ``temperature``: float or list of float
+        temperature : float or list of float
             Required positive temperature in units chosen by the user. If list,
             its length must equal ``no_of_sampling_steps``. Kelvin is not assumed.
 
-        ``boltzmann_constant``: float
+        boltzmann_constant : float
             Required finite positive k_B in energy per temperature unit. Its
             product with temperature must have the unit of the scaled TOTAL
             supercell energy change. There is no default unit system.
 
-        ``energy_factor``: float
+        energy_factor : float
             Required finite positive scalar multiplying model energy differences.
             Includes BOTH the extensive normalization (per atom, per parent cell,
             etc. to the full simulation supercell) and any energy-unit conversion.
             No list, reciprocal convention, or inferred atom count is accepted.
 
-        ``initial_decoration``: list of integers
+        initial_decoration : list of int
             Atomic numbers of the initial structure, from which the sampling starts.
             If ``None``, sampling starts with a structure randomly generated.
 
-        ``target_rate``: float (default: None)
+        target_rate : float, default None
             Real number between 0 and 1. Represents the targeted acceptance rate.
             If not ``None``, the initial temperature will be adjusted to match the given
             acceptance rate. The acceptance ratio during the simulation is computed using
@@ -338,17 +335,17 @@ class MonteCarlo:
             This changes the effective sampling temperature. Setting it to None
             restores the explicitly supplied temperature for fixed-temperature sampling.
 
-        ``n_clics``: integer
+        n_clics : int
             Number of species flips (grandcanonical) or species swaps (canonical) per sampling step.
             Defaults to 1.
 
-        ``serialize``: boolean (default: False)
+        serialize : bool, default False
             Serialize the MonteCarloTrajectory object into a Json file after the sampling.
 
-        ``filename``: string (default: ``trajectory.json``)
+        filename : str, default trajectory.json
             Name of a Json file in which the trajectory is serialized after the sampling if ``serialize`` is **True**.
 
-        ``nonlinear``: boolean (default: False)
+        nonlinear : bool, default False
             Whether or not the model is nonlinear with respect to cluster
             correlations. If True, cache global correlations and the current
             model energy, evaluating the trial correlations once per proposal.
@@ -356,33 +353,34 @@ class MonteCarlo:
             their direct energy-difference path even when this is True. If
             False, use the direct linear energy-difference path.
 
-        ``max_steps_per_batch``: integer (default: 100000)
+        max_steps_per_batch : int, default 100000
             Maximum number of proposal temperatures held in a temporary array at
             once. The Markov chain and random-number streams continue across these
             internal batches.
 
-        ``continue_chain``: boolean (default: False)
+        continue_chain : bool, default False
             Continue the configuration and cached nonlinear correlation state from
             the previous call. The default preserves the historical behavior of
             starting a new configuration for each call.
 
-        ``metadata``: dict or None
+        metadata : dict or None
             Optional descriptive information saved with the trajectory. Sampling
             options must be explicit arguments; unknown keywords are errors.
 
-        ``energy_observer``: callable or None
+        energy_observer : callable or None
             Optional callback ``energy_observer(step, total_energy)`` after each
             observation interval, including rejected moves. Energy is absolute
             model energy multiplied by energy_factor, also for reduced MC.
             No initial-state observation is made. The callback must not mutate
             the chain. This permits averages without accepted-move histories.
 
-        ``observation_interval``: positive integer
+        observation_interval : positive int
             Proposal spacing for the observer, counted within this call.
 
-        **Returns**: MonteCarloTrajectory object
+        Returns
+        -------
+        MonteCarloTrajectory object
             Trajectory containing the complete information of the sampling trajectory.
-
         """
         energy_factor = _positive_scalar(energy_factor, "energy_factor")
         boltzmann_constant = _positive_scalar(boltzmann_constant, "boltzmann_constant")
@@ -741,7 +739,9 @@ class MonteCarlo:
         initial_decoration are mutually exclusive. All resets initialize new
         random streams from seed, not the saved run's original random state.
 
-        Example: mc.reset_chain(start_from="300K.xyz", seed=43), with
+        Examples
+        --------
+        mc.reset_chain(start_from="300K.xyz", seed=43), with
         mc configured to write 250K.xyz, loads 300K.xyz for a new output or
         resumes 250K.xyz if it exists. Pass resume_from="restart.xyz" to use
         that alternate source when 250K.xyz exists. mc.reset_chain(seed=43)
@@ -1256,7 +1256,6 @@ def compute_free_energy_of_mixing(
 class MonteCarloTrajectory:
     """MonteCarloTrajectory class
 
-    **Description**:
         Objects of this class are used to store and access information of the trajectory generated from
         a Monte Carlo sampling performed with the MonteCarlo class.
 
@@ -1264,23 +1263,24 @@ class MonteCarloTrajectory:
         Alternative: If ``read`` is **True**, it is initalized from a Json file with name ``filename`` that
         was created from a MonteCarloTrajectory object before by ``MonteCarloTrajectory.serialize()``.
 
-    **Parameters**:
-
-    ``scell``: SuperCell object
+    Parameters
+    ----------
+    scell : SuperCell
         Super cell in which the sampling is performed.
 
-    ``filename``: string (default: trajectory.json)
+    filename : str, default trajectory.json
         The trajectoy can be stored in a json file with the path given by ``filename``.
 
-    ``read``: boolean (default: False)
+    read : bool, default False
         If **True**, the trajectory is read from the Json file ``filename``.
 
+    Notes
+    -----
     New trajectories require an explicit scalar ``energy_factor`` and
     ``boltzmann_constant``. Reading new JSON obtains these inputs from
     ``sampling_info``. For older files missing energy_factor, the user must
     declare it explicitly. ``metadata`` holds optional descriptive information;
     unknown constructor keywords are errors.
-
     """
 
     def __init__(self, scell=None, filename="trajectory.json", read=False, *, energy_factor=None,
@@ -1320,19 +1320,19 @@ class MonteCarloTrajectory:
         """Calculate the property for all decorations in the trajectory. The property can be
            calculated by a Model object or an external function ``prop_func``.
 
-        **Parameters**:
-            ``models``: list (default: empty list)
+        Parameters
+        ----------
+        models : list, default empty list
 
-            ``prop_func``: function (default: None)
-                This function recieves as arguments the Structure object and the dictionary
-                of trajectory entry at step i, and additional keyword arguments given by ``**kwargs``.
+        prop_func : function, default None
+            This function recieves as arguments the Structure object and the dictionary
+            of trajectory entry at step i, and additional keyword arguments given by ``**kwargs``.
 
-            ``prop_name``: string (default: None)
-                Name of property which is calculated by ``prop_func``.
+        prop_name : str, default None
+            Name of property which is calculated by ``prop_func``.
 
-            ``**kwargs``: keyworded argument list, arbitrary length
-                Additional parameters for the function ``prop_func``
-
+        **kwargs : keyworded argument list, arbitrary length
+            Additional parameters for the function ``prop_func``
         """
         for mo in models:
             if mo not in self._models:
@@ -1521,9 +1521,9 @@ class MonteCarloTrajectory:
            i.e. [[prob1_1,prop1_2,...,prop1_N], [prop2_1,prop2_2,...,prop2_N],...],
            and optional keyword arguments. With ``prop_list``, the property names of prob1, prop_2, ... are defined.
 
-        **Parameters:**
-
-        ``prop_name``: string (default: ``U``)
+        Parameters
+        ----------
+        prop_name : str, default U
             Name of property that is averaged.
             If **U**, return mean TOTAL supercell energy after applying energy_factor.
             Reduced MC retains its relative initial-state energy zero.
@@ -1533,16 +1533,15 @@ class MonteCarloTrajectory:
             target-rate adaptation. It does not include pressure/volume terms
             and is not normalized per atom or reported in units of k_B.
 
-        ``no_of_equilibration_steps``: integer
+        no_of_equilibration_steps : int
             Number of equilibration steps at the start of the Monte-Carlo sampling that are discarded from the average.
 
-        ``average_func``: function (default: ``None``)
+        average_func : function, default None
             If not **None**, the averaged property is obtained by this function. It gets as arguments an array and
             optional keyword arguments.
 
-        ``**kwargs``: keyword arguments
-           Additional arguments for ``average_func``.
-
+        **kwargs : keyword arguments
+            Additional arguments for ``average_func``.
         """
         step = 0
         prop_array = []
