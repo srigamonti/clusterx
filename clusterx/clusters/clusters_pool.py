@@ -7,7 +7,8 @@ import json
 from itertools import product, combinations
 
 from tqdm.notebook import tqdm
-import scipy
+from scipy.special import binom
+from scipy.spatial.distance import cdist
 from ase.db.jsondb import JSONDatabase
 from ase.atoms import Atoms
 import numpy as np
@@ -516,7 +517,7 @@ class ClustersPool:
         full_list = set()
 
         for i, (npts, radius) in enumerate(zip(npoints, radii)):
-            n_max = int(scipy.special.binom(len(idxs_sets[i]) - 1, npts - 1)) * len(
+            n_max = int(binom(len(idxs_sets[i]) - 1, npts - 1)) * len(
                 wyck_idxs
             )
 
@@ -1585,8 +1586,6 @@ class ClusterOrbit(ClustersPool):
     ):
         """Check for symmetric equivalence with respect to unit cell translations.
         Takes into account positions and species."""
-        from scipy.spatial import distance_matrix
-
         sp1 = scaled_positions1
         sp2 = scaled_positions2
         s1 = species1
@@ -1604,7 +1603,7 @@ class ClusterOrbit(ClustersPool):
         _sp2 = np.add(sp2, c12)
         sp2 = _sp2
 
-        d = distance_matrix(sp1, sp2)
+        d = cdist(sp1, sp2)
 
         n = len(sp1)
         jout = []
