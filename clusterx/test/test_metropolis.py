@@ -411,10 +411,7 @@ def test_metropolis_perov(plat_perov, model_perov):
         energies.append(mctraj.get_energies())
         offset = energies[0][0] if reduce else 0
         np.testing.assert_allclose(mctraj.get_energies()[-1] + offset, model_perov.predict(mc.structure))
-    energies[2] += energies[0][0]  # energies of reduce=True are offset
     np.testing.assert_allclose(energies[0], energies[1])
-    np.testing.assert_allclose(energies[0], energies[2])
-    np.testing.assert_allclose(energies[1], energies[2])
 
 
 @pytest.mark.xfail(reason="MCLite will not be updated")
@@ -504,10 +501,10 @@ def test_metropolis_clathrate_full_subs(
     assert os.path.isfile("trajectory-ternary.json")
 
 
-def test_linear_eq_nonlinear(plat_perov, model_perov):
+def test_linear_local_predictions_match_full_predictions(plat_perov, model_perov):
     scell = SuperCell(plat_perov, 2)
     energies = []
-    for predict_swap, nonlinear in [(False, False), (True, False), (True, True)]:
+    for predict_swap in [False, True]:
         mc = MonteCarlo(
             model_perov,
             scell,
@@ -515,54 +512,9 @@ def test_linear_eq_nonlinear(plat_perov, model_perov):
             predict_swap=predict_swap,
             seed=42,
         )
-        mctraj = mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, nonlinear=nonlinear, serialize=True,
+        mctraj = mc.metropolis(no_of_sampling_steps=1000, temperature=1e-3, serialize=True,
             energy_factor=1.0,
             boltzmann_constant=1.0,
         )
         energies.append(mctraj.get_energies())
     np.testing.assert_allclose(energies[0], energies[1])
-    np.testing.assert_allclose(energies[0], energies[2])
-    np.testing.assert_allclose(energies[1], energies[2])
-
-
-def test_nonlinear(plat_perov, corrc_perov):
-    from sklearn.pipeline import make_pipeline
-    from sklearn.linear_model import LinearRegression
-    from sklearn.preprocessing import PolynomialFeatures
-
-    pipeline = make_pipeline(PolynomialFeatures(2), LinearRegression())
-    n_corrs = len(corrc_perov.get_cpool())
-    np.random.seed(42)
-    X = np.random.uniform(low=-1, high=1, size=(100, n_corrs))
-    y = np.random.uniform(low=-1, high=1, size=(100,))
-    pipeline.fit(X, y)
-
-    model = Model(corrc_perov, "energy", estimator=pipeline)
-    scell = SuperCell(plat_perov, 2)
-
-    # check that the model is actually nonlinear
-    corrs = np.random.uniform(low=-1, high=1, size=(n_corrs,))
-    corrs_diff = np.random.uniform(low=-1, high=1, size=(n_corrs,))
-    e0 = model.predict_on_correlations(corrs)
-    e1 = model.predict_on_correlations(corrs + corrs_diff)
-    de = e1 - e0
-    de_lin = model.predict_on_correlations(corrs_diff)
-    assert not np.isclose(de, de_lin)
-
-    energies = []
-    for predict_swap, nonlinear in [(False, True), (True, True), (True, False)]:
-        mc = MonteCarlo(
-            model,
-            scell,
-            nsubs=None,
-            predict_swap=predict_swap,
-            seed=42,
-        )
-        mctraj = mc.metropolis(no_of_sampling_steps=1000, temperature=1, nonlinear=nonlinear, serialize=True,
-            energy_factor=1.0,
-            boltzmann_constant=1.0,
-        )
-        assert len(mctraj.get_energies()) > 10
-        energies.append(mctraj.get_energies())
-    np.testing.assert_allclose(energies[0], energies[1])
-    assert not len(energies[0]) == len(energies[2])

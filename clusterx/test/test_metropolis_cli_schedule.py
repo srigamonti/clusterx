@@ -14,7 +14,7 @@ import pytest
 import toml
 from ase import Atoms
 from ase.io import read, write
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import PolynomialFeatures
 
@@ -57,19 +57,12 @@ def assert_rng_equal(left, right):
     assert left["uinteger"] == right["uinteger"]
 
 
-@pytest.mark.parametrize("degree", [1, 2])
-def test_schedule_matches_uninterrupted_sampling_and_reuses_state(system, monkeypatch, degree):
+def test_schedule_matches_uninterrupted_sampling_and_reuses_state(system, monkeypatch):
     _, scell, model = system
-    if degree == 2:
-        features = np.random.default_rng(7).uniform(-1, 1, size=(100, len(model.ecis)))
-        target = features @ model.ecis + 0.7 * features[:, -1] ** 2
-        model = Model(model.corrc, "energy", estimator=make_pipeline(
-            PolynomialFeatures(2), Ridge(alpha=0.001)
-        ).fit(features, target))
     model.serialize("model.pickle")
     baseline = MonteCarlo(model, scell, nsubs={0: [4], 1: [4]}, seed=109,
                           predict_swap=True, reduce_structure=True)
-    reference = baseline.metropolis(35, temperature=0.3, nonlinear=True, energy_factor=len(scell),
+    reference = baseline.metropolis(35, temperature=0.3, energy_factor=len(scell),
                                     serialize=True, filename="reference.json",
         boltzmann_constant=1.0,
     )
@@ -100,7 +93,7 @@ def test_schedule_matches_uninterrupted_sampling_and_reuses_state(system, monkey
     result = cli.metropolis(**{**options(), "energy_factor": len(scell)},
                             runs=[{"temperature": 0.3, "n_mc_steps": 20},
                                               {"temperature": 0.3, "n_mc_steps": 15}],
-                            nonlinear=True, max_steps_per_batch=3,
+                            max_steps_per_batch=3,
                             save_atoms_every=7, save_atoms_endpoints=True,
                             atoms_filename="schedule.xyz", atoms_mode="x")
     mc = instances[0]
@@ -108,7 +101,7 @@ def test_schedule_matches_uninterrupted_sampling_and_reuses_state(system, monkey
     assert [call["no_of_sampling_steps"] for call in calls] == [20, 15]
     assert [call["continue_chain"] for call in calls] == [False, True]
     assert all(call["energy_factor"] == len(scell) for call in calls)
-    assert len(global_correlations) == (1 if degree == 2 else 0)
+    assert not global_correlations
     np.testing.assert_array_equal(mc.structure.get_sigmas(), expected_sigmas)
     assert_rng_equal(mc._rng_np.bit_generator.state, expected_np)
     assert random.getstate() == expected_std
@@ -127,27 +120,14 @@ def test_schedule_matches_uninterrupted_sampling_and_reuses_state(system, monkey
         np.testing.assert_array_equal(
             frame.numbers, Structure(scell, sigmas=frame.arrays["sigmas"]).get_decoration()
         )
-    if degree == 2:
-        cached = mc._chain_state
-        full = original_correlations(mc._emodel, mc.structure, reduce_structure=True)
-        np.testing.assert_allclose(cached["correlations"], full, atol=1e-12)
-        np.testing.assert_allclose(cached["current_energy"], mc._emodel.predict_on_correlations(full), atol=1e-12)
 
 
-@pytest.mark.parametrize("nonlinear", [False, True])
-def test_named_toml_schedule_and_continuation(system, tmp_path, nonlinear):
+def test_named_toml_schedule_and_continuation(system, tmp_path):
     _, scell, model = system
-    if nonlinear:
-        features = np.random.default_rng(71).uniform(-1, 1, size=(100, len(model.ecis)))
-        target = features @ model.ecis + 0.5 * features[:, -1] ** 2
-        model = Model(model.corrc, "energy", estimator=make_pipeline(
-            PolynomialFeatures(2), Ridge(alpha=0.001)
-        ).fit(features, target))
     model.serialize("model.pickle")
     configuration = {"do": ["anneal", "continue_anneal"], "unused_fit": {"command": "does_not_exist"}}
     base = options()
     base.pop("temperature")
-    base["nonlinear"] = nonlinear
     base["n_substitutions"] = {str(key): value for key, value in base["n_substitutions"].items()}
     for name, output, stages in [
         ("anneal", "anneal.xyz", [{"temperature": 0.7, "n_mc_sweeps": 1},
@@ -183,7 +163,7 @@ def test_direct_cli_routes_sampling_and_constructor_options(system, tmp_path):
                "-scsh", "[8,1,1]", "-nsubs", '{"0":[4],"1":[4]}', "-rs", "109", "-ef", "1", "-k_B", "1",
                "-runs", json.dumps([{"temperature": 0.5, "n_mc_steps": 3},
                                     {"temperature": 0.2, "n_mc_steps": 4}]),
-               "-serialize", "false", "-nonlinear", "true", "-reduce", "true", "-batch", "2",
+               "-serialize", "false", "-reduce", "true", "-batch", "2",
                "-endpoints", "true", "-atoms", "direct.extxyz", "-atoms_mode", "x"]
     completed = subprocess.run(command, text=True, capture_output=True)
     assert completed.returncode == 0, completed.stdout + completed.stderr
@@ -196,6 +176,19 @@ def test_direct_cli_routes_sampling_and_constructor_options(system, tmp_path):
     assert completed.returncode == 0, completed.stdout + completed.stderr
     np.testing.assert_array_equal(read("direct-continued.xyz", index=0).numbers,
                                   read("direct.extxyz", index=-1).numbers)
+
+
+def test_direct_cli_rejects_nonlinear_energy_model(system):
+    _, _, model = system
+    features = np.random.default_rng(7).uniform(-1, 1, size=(100, len(model.ecis)))
+    estimator = make_pipeline(PolynomialFeatures(2), LinearRegression()).fit(features, features[:, -1] ** 2)
+    Model(model.corrc, "energy", estimator=estimator).serialize("model.pickle")
+    command = [sys.executable, "-m", "clusterx.cli.main", "metropolis", "-task", "runmc",
+               "-scsh", "[8,1,1]", "-nsubs", '{"0":[4],"1":[4]}', "-ef", "1",
+               "-k_B", "1", "-temp", "1", "-n_steps", "1", "-pred_swap", "false"]
+    completed = subprocess.run(command, text=True, capture_output=True)
+    assert completed.returncode != 0
+    assert "requires a linear CE energy model" in completed.stderr
 
 
 @pytest.mark.parametrize("extra,match", [
@@ -273,14 +266,8 @@ def test_schedule_serialization_keeps_separate_stage_histories(system):
         assert history["sampling_info"]["target_rate"] == 0.35
 
 
-@pytest.mark.parametrize("nonlinear", [False, True])
-def test_named_start_from_can_be_invoked_repeatedly(system, tmp_path, nonlinear):
+def test_named_start_from_can_be_invoked_repeatedly(system, tmp_path):
     _, scell, model = system
-    if nonlinear:
-        features = np.random.default_rng(75).uniform(-1, 1, (100, len(model.ecis)))
-        model.estimator = make_pipeline(PolynomialFeatures(2), Ridge(alpha=0.001)).fit(
-            features, features @ model.ecis + 0.4 * features[:, -1]**2,
-        )
     model.serialize("model.pickle")
     initial = scell.gen_random_structure(nsubs={0: [4], 1: [4]}, rng=np.random.default_rng(76)).get_atoms()
     earlier = scell.gen_random_structure(nsubs={0: [4], 1: [4]}, rng=np.random.default_rng(77)).get_atoms()
@@ -290,7 +277,7 @@ def test_named_start_from_can_be_invoked_repeatedly(system, tmp_path, nonlinear)
     configuration = {"do": ["anneal_250K"], "anneal_250K": {
         "command": "metropolis", **options(), "start_from": "300K.xyz", "atoms_filename": "250K.xyz",
         "n_substitutions": {"0": [4], "1": [4]},
-        "atoms_mode": "a", "save_atoms_endpoints": True, "nonlinear": nonlinear,
+        "atoms_mode": "a", "save_atoms_endpoints": True,
         "runs": [{"temperature": 250, "n_mc_steps": 4}, {"temperature": 200, "n_mc_steps": 3}],
     }}
     path = tmp_path / "reusable.toml"

@@ -19,6 +19,8 @@ from clusterx.model import Model
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.thermodynamics.monte_carlo import MonteCarlo, MonteCarloTrajectory
+from clusterx.thermodynamics.monte_carlo_lite import MonteCarloLite
+from clusterx.thermodynamics.wang_landau import WangLandau
 
 
 cli = importlib.import_module("clusterx.cli.metropolis")
@@ -33,35 +35,36 @@ def system():
     return plat, SuperCell(plat, (8, 1, 1)), Model(corrc, "energy", ecis=np.array([0.25, -0.5]))
 
 
-@pytest.mark.parametrize("nonlinear", [False, True])
-@pytest.mark.parametrize("predict_swap,reduce", [(False, False), (True, False), (True, True)])
-def test_equivalent_model_normalizations_preserve_sampling(system, nonlinear, predict_swap, reduce):
-    _, scell, base = system
-    if nonlinear:
-        x = np.random.default_rng(17).uniform(0, 1, size=(80, 2))
-        y = 0.25 * x[:, 0] - 0.5 * x[:, 1] + 0.75 * x[:, 1]**2
-        pipeline = make_pipeline(PolynomialFeatures(2), LinearRegression()).fit(x, y)
-        # Exact rational coefficients remove irrelevant fit noise from zero-energy moves.
-        final = pipeline.steps[-1][1]
-        final.coef_ = np.round(final.coef_ * 4) / 4
-        final.intercept_ = np.round(final.intercept_ * 4) / 4
-        base = Model(base.corrc, "energy", estimator=pipeline)
+@pytest.mark.parametrize("sampler", [MonteCarlo, MonteCarloLite, WangLandau])
+def test_sampler_rejects_nonlinear_energy_model(system, sampler):
+    _, scell, linear_model = system
+    x = np.random.default_rng(17).uniform(0, 1, size=(80, 2))
+    estimator = make_pipeline(PolynomialFeatures(2), LinearRegression()).fit(x, x[:, 1] ** 2)
+    model = Model(linear_model.corrc, "energy", estimator=estimator)
+    with pytest.raises(ValueError, match="requires a linear CE"):
+        sampler(model, scell)
 
+
+def test_wang_landau_rejects_removed_nonlinear_option(system):
+    _, scell, model = system
+    sampler = WangLandau(model, scell, nsubs={0: [4]})
+    with pytest.raises(TypeError, match="nonlinear"):
+        sampler.wang_landau_sampling(nonlinear=True)
+
+
+@pytest.mark.parametrize("predict_swap,reduce", [(False, False), (True, False), (True, True)])
+def test_equivalent_model_normalizations_preserve_sampling(system, predict_swap, reduce):
+    _, scell, base = system
     references = []
     # Each representation yields the same total energy in the chosen energy unit.
     for model_multiplier, energy_factor in [(1, len(scell)), (1000, len(scell) / 1000), (len(scell), 1)]:
         model = deepcopy(base)
-        if nonlinear:
-            final = model.estimator.steps[-1][1]
-            final.coef_ *= model_multiplier
-            final.intercept_ *= model_multiplier
-        else:
-            model.ecis *= model_multiplier
+        model.ecis *= model_multiplier
         mc = MonteCarlo(model, scell, nsubs={0: [4]}, seed=83,
                         predict_swap=predict_swap, reduce_structure=reduce)
         trajectory = mc.metropolis(
             60, energy_factor=energy_factor, temperature=0.3, boltzmann_constant=1,
-            nonlinear=nonlinear, serialize=True, filename=f"units-{model_multiplier}.json",
+            serialize=True, filename=f"units-{model_multiplier}.json",
             max_steps_per_batch=7,
         )
         references.append((mc.structure.get_sigmas().copy(), mc._rng_np.bit_generator.state,

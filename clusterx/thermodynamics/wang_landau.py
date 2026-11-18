@@ -21,6 +21,7 @@ from clusterx.structure import Structure
 from clusterx.parent_lattice import ParentLattice
 from clusterx.super_cell import SuperCell
 from clusterx.model import Model
+from clusterx.thermodynamics.monte_carlo import _require_linear_energy_model
 from clusterx.utils import isclose, dict_compare
 
 
@@ -454,7 +455,7 @@ class WangLandau:
     Parameters
     ----------
     energy_model : :class:`Model <clusterx.model.Model>` object
-        CE model for predicting the internal energy of the supercell (see ``scell`` below)
+        Linear CE model for predicting the internal energy of the supercell (see ``scell`` below)
         in [eV]. If other units are employed, see parameter ``energy_factor`` below.
 
     scell : SuperCell
@@ -533,6 +534,7 @@ class WangLandau:
         reduce_structure: bool = False,
         error_reset=None,
     ):
+        _require_linear_energy_model(energy_model)
         self._em = energy_model
         self._ef = energy_factor
         self._scell = scell
@@ -760,7 +762,6 @@ class WangLandau:
         niter_per_sweep: int = 100000,
         nproc: int = 0,
         seed: int = None,
-        nonlinear: bool = False,
         **kwargs,
     ):
         r"""Perform Wang Landau simulation
@@ -869,10 +870,6 @@ class WangLandau:
             If None, sequences are non-deterministic, if set with integer,
             sequences are deterministic, i.e. pseudo-random.
 
-        nonlinear : bool, default False
-            Whether or not the model is nonlinear with respect to cluster
-            correlations. If True, total cluster correlations have to be summed,
-            if False, model can be applied to difference of correlations.
 
         **kwargs : keyworded argument list, arbitrary length
             These arguments are added to the ConfigurationalDensityOfStates object that is initialized in this method.
@@ -884,9 +881,9 @@ class WangLandau:
             obtained from the last outer loop plus the CDOSs obtained from the
             previous outer loops.
         """
-        if nonlinear and self._reduce_structure:
-            raise ValueError("Combination of nonlinear and reduce_structure currently not supported.")
-        self.nonlinear = nonlinear
+        if "nonlinear" in kwargs:
+            raise TypeError("Wang-Landau sampling no longer accepts 'nonlinear'; it requires a linear CE model.")
+        _require_linear_energy_model(self._em)
         # self._em.corrc.reset_mc(mc=True)
         self.np_rng = np.random.default_rng(seed)
         random.seed(seed)
@@ -939,12 +936,7 @@ class WangLandau:
                 energy_range, energy_bin_width, flatness_conditions, f_range
             )
 
-        if self._reduce_structure:
-            self.correlations = None
-            e = self._em.predict(struc, self._reduce_structure) * self._ef
-        else:  # this is also the case if nonlinear == True
-            self.correlations = self._em.corrc.get_cluster_correlations(struc)
-            e = self._em.predict_on_correlations(self.correlations) * self._ef
+        e = self._em.predict(struc, self._reduce_structure) * self._ef
 
         energies = cdos[:, 0]
         ibin, is_inside_range = self._locate_histogram_bin(e, energies, energy_bin_width)
@@ -1079,28 +1071,21 @@ class WangLandau:
 
         if self._steps_since_reset > self._error_steps:
             self._steps_since_reset = 1
-            self.correlations = self._em.corrc.get_cluster_correlations(struc)
-            e = self._em.predict_on_correlations(self.correlations) * self._ef
+            e = self._em.predict(struc) * self._ef
 
         ind1, ind2, site_type = struc.get_random_swap(self._sublattice_indices)
         struc.swap(ind1, ind2, site_type)
 
         # Compute new energy
-        e_new = None
-        correlations_diff = None
         if self._predict_swap:
             self._steps_since_reset += 1
-            if self.nonlinear:
-                correlations_diff = self._em.predict_correlations_swap(struc, ind1, ind2)
-                e_new = self._em.predict_on_correlations(self.correlations - correlations_diff) * self._ef
-            else:
-                de = self._em.predict_swap(
-                    struc,
-                    i=ind1,
-                    j=ind2,
-                    reduce_structure=self._reduce_structure,
-                )
-                e_new = e - de * self._ef  # subtract, because we computed swap "backwards"
+            de = self._em.predict_swap(
+                struc,
+                i=ind1,
+                j=ind2,
+                reduce_structure=self._reduce_structure,
+            )
+            e_new = e - de * self._ef  # subtract, because we computed swap "backwards"
         else:
             e_new = self._em.predict(struc) * self._ef
 
@@ -1123,8 +1108,6 @@ class WangLandau:
         if accept_swap:
             e = e_new
             ibin = ibin_new
-            if self.nonlinear and correlations_diff is not None:
-                self.correlations -= correlations_diff
         else:
             struc.swap(ind2, ind1, site_type=site_type)  # swap back to original
 

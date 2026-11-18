@@ -51,17 +51,14 @@ def polynomial_model(model, degree):
     y = 1.2 + 0.75 * x[:, 0]
     if degree >= 2:
         y -= 0.4 * x[:, 0]**2
-    if degree >= 3:
-        y += 0.1 * x[:, 0]**3
     pipeline = make_pipeline(PolynomialFeatures(degree), LinearRegression()).fit(x, y)
     return Model(model.corrc, "energy", estimator=pipeline)
 
 
-@pytest.mark.parametrize("degree", [1, 2, 3])
 @pytest.mark.parametrize("predict_swap,reduce", [(False, False), (True, False), (True, True)])
-def test_configuration_independent_energy_and_pure_limits(system, degree, predict_swap, reduce):
+def test_configuration_independent_energy_and_pure_limits(system, predict_swap, reduce):
     _, scell, model = system
-    model = polynomial_model(model, degree)
+    model = polynomial_model(model, 1)
     result = compute_free_energy_of_mixing(
         model, scell, [0, 0.25, 0.5, 1], [0.5, 2, 1],
         **settings(scell, predict_swap=predict_swap, reduce_structure=reduce),
@@ -69,16 +66,15 @@ def test_configuration_independent_energy_and_pure_limits(system, degree, predic
     assert result["settings"]["n_sites"] == 8
     assert result["settings"]["n_atoms"] == 16
     assert result["settings"]["species_b"] == 7
+    assert result["settings"]["nonlinear"] is False
     assert result["references"][1]["beta"] == 0
     for row in result["results"]:
         x, temperature = row["composition"], row["temperature"]
         # Spectators make conversion from model eV/atom to eV/binary-site a factor of two.
-        energy = 1.2 + 0.75*x - (0.4*x*x if degree >= 2 else 0) + (0.1*x**3 if degree >= 3 else 0)
-        e_b = 1.95 - (0.4 if degree >= 2 else 0) + (0.1 if degree >= 3 else 0)
-        mixing_energy = 2 * (energy - (1-x)*1.2 - x*e_b)
+        energy = 1.2 + 0.75*x
         entropy = -0.5 * temperature * math.log(math.comb(8, row["n_b"])) / 8
         assert row["mean_energy_per_site"] == pytest.approx(2 * energy, abs=1e-11)
-        assert row["free_energy_of_mixing_per_site"] == pytest.approx(mixing_energy + entropy, abs=1e-11)
+        assert row["free_energy_of_mixing_per_site"] == pytest.approx(entropy, abs=1e-11)
         assert row["free_energy_of_mixing_per_site_stderr"] < 1e-11
         if x in (0, 1):
             assert row["free_energy_of_mixing_per_site"] == 0
@@ -86,17 +82,11 @@ def test_configuration_independent_energy_and_pure_limits(system, degree, predic
     assert [r["temperature"] for r in result["results"][:3]] == [2, 1, 0.5]
 
 
-@pytest.mark.parametrize("degree", [1, 2])
 @pytest.mark.parametrize("predict_swap,reduce", [(False, False), (True, False), (True, True)])
-def test_energy_observer_includes_rejections_and_preserves_sampling(system, degree, predict_swap, reduce):
+def test_energy_observer_includes_rejections_and_preserves_sampling(system, predict_swap, reduce):
     plat, scell, _ = system
     pool = ClustersPool(plat, npoints=[1, 2], radii=[0, 1.01])
     model = Model(CorrelationsCalculator("binary-linear", plat, pool), "energy", ecis=np.array([0.5, -1.0]))
-    if degree == 2:
-        features = np.random.default_rng(1).uniform(0, 1, (60, 2))
-        target = 0.8 + features[:, 0] - features[:, 1] + 0.5*features[:, 1]**2
-        model = Model(model.corrc, "energy", estimator=make_pipeline(
-            PolynomialFeatures(2), LinearRegression()).fit(features, target))
     original = deepcopy(model)
     full = deepcopy(model)
     full.reset_mc(False)
@@ -109,7 +99,7 @@ def test_energy_observer_includes_rejections_and_preserves_sampling(system, degr
         assert np.all(mc.structure.get_decoration()[scell.get_spectator_sites()] == 2)
         observations.append((step, energy))
 
-    options = dict(energy_factor=3, temperature=0.05, boltzmann_constant=1, nonlinear=True)
+    options = dict(energy_factor=3, temperature=0.05, boltzmann_constant=1)
     # Attach the observer after equilibration, then reuse its energy origin after an unobserved call.
     mc.metropolis(11, **options)
     observed = mc.metropolis(60, **options, continue_chain=True, energy_observer=observe,
@@ -221,10 +211,9 @@ def test_temperature_order_output_and_bounded_storage(system, tmp_path, monkeypa
     compute_free_energy_of_mixing(model, scell, 0.5, 1, filename=path, overwrite=True, **settings(scell))
 
 
-@pytest.mark.parametrize("degree", [1, 2])
-def test_observer_cadence_and_cached_energy_origin(system, monkeypatch, degree):
+def test_observer_cadence_and_cached_energy_origin(system, monkeypatch):
     _, scell, model = system
-    model = polynomial_model(model, degree)
+    model = polynomial_model(model, 1)
     predictions, observations = [], []
     original = model.predict
 
@@ -234,17 +223,17 @@ def test_observer_cadence_and_cached_energy_origin(system, monkeypatch, degree):
 
     monkeypatch.setattr(model, "predict", predict)
     mc = MonteCarlo(model, scell, nsubs={0: [4]}, seed=4, predict_swap=True, reduce_structure=True)
-    options = dict(energy_factor=len(scell), temperature=1, boltzmann_constant=1, nonlinear=True)
+    options = dict(energy_factor=len(scell), temperature=1, boltzmann_constant=1)
     mc.metropolis(7, **options)
     assert not predictions  # Affine reduced sampling needs no absolute energy origin yet.
     for _ in range(2):
         mc.metropolis(7, **options, continue_chain=True, observation_interval=3,
                       energy_observer=lambda step, energy: observations.append((step, energy)))
-    assert len(predictions) == (1 if degree == 1 else 0)
+    assert len(predictions) == 1
     assert [step for step, _ in observations] == [3, 6, 3, 6]
 
 
-def test_unsupported_chemistry_and_nonlinear_settings(system):
+def test_unsupported_chemistry(system):
     _, scell, model = system
     ternary = ParentLattice(Atoms("H", cell=[1, 3, 4], pbc=[True, False, False]), numbers=[[1, 2, 7]])
     pool = ClustersPool(ternary, npoints=[1], radii=[0])
@@ -254,9 +243,14 @@ def test_unsupported_chemistry_and_nonlinear_settings(system):
         compute_free_energy_of_mixing(ternary_model, SuperCell(ternary, (8, 1, 1)), 0.5, 1, **settings(scell))
     with pytest.raises(ValueError, match="parent lattices"):
         compute_free_energy_of_mixing(model, SuperCell(ternary, (8, 1, 1)), 0.5, 1, **settings(scell))
-    with pytest.raises(ValueError, match="nonlinear=True"):
+
+
+@pytest.mark.parametrize("predict_swap", [False, True])
+def test_free_energy_rejects_nonlinear_energy_model(system, predict_swap):
+    _, scell, model = system
+    with pytest.raises(ValueError, match="requires a linear CE"):
         compute_free_energy_of_mixing(polynomial_model(model, 2), scell, 0.5, 1,
-                                     **settings(scell, nonlinear=False))
+                                     **settings(scell, predict_swap=predict_swap))
 
 
 def test_model_cache_file_restored_after_prediction_failure(system, monkeypatch):

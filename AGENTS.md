@@ -68,7 +68,7 @@ delegation, copying, mutation, and serialization before relying on inherited
 | Cluster construction | `clusterx/clusters/cluster.py`, `clusterx/clusters/clusters_pool.py`: `Cluster`, `ClustersPool`, `ClusterOrbit` |
 | Symmetry and geometry | `clusterx/symmetry.py`, `clusterx/utils.py` |
 | Correlations and models | `clusterx/correlations.py`, `clusterx/model.py`, `clusterx/estimators/` |
-| Selection and training sets | `clusterx/clusters_selector.py`, `clusterx/structure_selector.py` |
+| Cluster selection | `clusterx/clusters_selector.py` |
 | Derivative structures | `clusterx/derivative_structures.py`: `DerivativeStructures`, HNF-based supercells, configuration generation, symmetry reduction, degeneracies, masks, and properties |
 | Thermodynamics | `clusterx/thermodynamics/`: Monte Carlo, MonteCarloLite, Wang-Landau, and density-of-states analysis |
 | CLI | `clusterx/cli/`: command implementations, configuration handling, model-building pipelines, and reports |

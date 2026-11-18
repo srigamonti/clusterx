@@ -535,8 +535,7 @@ class Model:
         """Predict property change by flipping a species.
 
         Structure object remains unchanged
-        This direct difference path assumes an affine model. Nonlinear Monte
-        Carlo tracks the global correlation state with nonlinear=True instead.
+        This direct difference path assumes an affine model.
 
         Parameters
         ----------
@@ -671,8 +670,7 @@ class Model:
     ):
         """Predict property difference with the optimal cluster expansion model.
 
-        This direct difference path assumes an affine model; use the nonlinear
-        Monte Carlo path for models nonlinear in their correlations.
+        This direct difference path assumes an affine model.
 
         Parameters
         ----------

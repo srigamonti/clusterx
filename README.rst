@@ -237,34 +237,13 @@ When loading an older trajectory lacking that field, supply the factor explicitl
 to ``MonteCarloTrajectory(..., read=True, energy_factor=...)``; its old conversion
 settings are not inferred or migrated automatically.
 
-Nonlinear Monte Carlo
----------------------
+Monte Carlo batching and continuation
+-------------------------------------
 
-For models nonlinear in their correlations, including polynomial degrees two
-and higher, use ``predict_swap=True`` and pass ``nonlinear=True`` to
-``MonteCarlo.metropolis``. This also supports ``reduce_structure=True``.
-Recognized affine models keep their direct energy-difference path even when
-``nonlinear=True`` is requested.
-
-The nonlinear path initializes the global correlation vector and caches its
-model prediction. Each proposal adds the local correlation changes and evaluates
-the trial vector once. Recognized polynomial pipelines use a compiled sparse
-monomial evaluator, with fitted expansion, feature selection, scaling, bias,
-and feature order folded into its cached parameters. Other supported linear
-transformations retain the affine fast path; unsupported pipelines use sklearn's
-fitted predictor. Only accepted moves replace the cached correlations and
-prediction. The compiled cache is limited to 16 MiB and is rebuilt after loading
-a model or invalidating fitted prediction parameters. No degree-specific dense
-coefficient tensors are constructed.
-
-Reduced initialization streams one parent-cell neighborhood at a time, sums
-correlation contributions, and normalizes once before evaluating the model.
-It uses the same capped reduced-cell geometry cache as local moves. Added MC
-workspace consists of correlation vectors and reduced neighborhoods, independent
-of the full atom count for a fixed model. The fitted estimator still has its
-own workspace requirements, which depend on feature count and polynomial degree.
-Reduced trajectories continue to report energies relative to the initial state;
-the cached absolute prediction is kept separately.
+Monte Carlo energy models must be linear in their original cluster correlations,
+with an optional intercept. Supply explicit ECIs or a supported fitted affine
+estimator. This applies to Metropolis, Wang–Landau, MonteCarloLite, and
+configurational free-energy integration.
 
 Long proposal runs use bounded temporary temperature arrays by default. For
 example, run two million proposals in batches of 20,000 while retaining one
@@ -277,17 +256,16 @@ continuous chain::
         temperature=300,
         boltzmann_constant=8.617330337217213e-5,  # eV/K
         max_steps_per_batch=20_000,
-        nonlinear=True,
     )
 
 ``max_steps_per_batch`` defaults to 100,000 and bounds only temporary
-per-proposal temperature storage; structure and nonlinear correlation state
+per-proposal temperature storage; the configuration and sampling state
 are retained across those internal batches. Use ``serialize=False`` (the
 default) and periodic XYZ checkpoints when the accepted-state trajectory itself
 must not grow with run length. To continue with a later temperature schedule,
 call ``metropolis(..., continue_chain=True)`` on the same object. This retains
-the configuration, random streams, nonlinear correlations, cached energy, and
-acceptance-rate adaptation. Call ``mc.reset_chain(seed=...)`` to start fresh.
+the configuration, random streams, cached energy, and acceptance-rate
+adaptation. Call ``mc.reset_chain(seed=...)`` to start fresh.
 After changing or refitting the model, reset the chain before continuing so its
 cached energy uses the updated fitted model.
 
@@ -301,7 +279,7 @@ To start from the final complete frame in an XYZ/extxyz file, pass
     )
     trajectory = mc.metropolis(
         500_000, energy_factor=float(len(scell)),  # Model in eV/atom.
-        temperature=250, boltzmann_constant=8.617330337217213e-5, nonlinear=True,
+        temperature=250, boltzmann_constant=8.617330337217213e-5,
     )
 
 Resume checks the cell, periodicity, ordered site positions, allowed species,
@@ -323,7 +301,7 @@ and continues its own output on later invocations, supply ``start_from``::
     )
     trajectory = mc.metropolis(
         500_000, energy_factor=float(len(scell)),  # Model in eV/atom.
-        temperature=250, boltzmann_constant=8.617330337217213e-5, nonlinear=True,
+        temperature=250, boltzmann_constant=8.617330337217213e-5,
     )
 
 With ``start_from``, omitted ``resume_from`` defaults to ``atoms_filename``.
@@ -407,7 +385,6 @@ needed. Execute with ``cell --input_file anneal.toml``::
     ensemble = "canonical"
     predict_swap = true
     reduce_structure = true
-    nonlinear = true
     random_seed = 42
     energy_factor = 1008000.0  # USER conversion: eV/atom -> total supercell eV
     boltzmann_constant = 8.617330337217213e-5  # ASE kB in eV/K
@@ -446,7 +423,6 @@ To continue from the final complete frame of ``anneal.xyz``, create a separate
     ensemble = "canonical"
     predict_swap = true
     reduce_structure = true
-    nonlinear = true
     random_seed = 43
     resume_from = "anneal.xyz"
     energy_factor = 1008000.0  # USER conversion: eV/atom -> total supercell eV
@@ -489,7 +465,6 @@ length and the user-supplied energy conversion for the actual system::
     boltzmann_constant = 8.617330337217213e-5
     predict_swap = true
     reduce_structure = true
-    nonlinear = true
     start_from = "anneal_harm_300K_snapshots.xyz"
     # resume_from defaults to atoms_filename when start_from is supplied.
     atoms_filename = "anneal_harm_250K_snapshots.xyz"
@@ -507,8 +482,7 @@ checkpoint settings also work with an explicit ``runs`` schedule. With either
 provide a temperature and proposal/sweep count; every invocation adds that
 requested amount of work. Filenames do not set the sampling temperature.
 
-Resume restores the physical configuration and rebuilds nonlinear correlations
-and model energy before sampling. It starts a new seeded random stream.
+Resume restores the physical configuration and starts a new seeded random stream.
 The continuation schedule is always explicit; completed or remaining sweeps
 are never inferred from the source file. The cell, periodicity, ordered
 positions, optional sublattice tags, allowed species, and canonical composition
@@ -520,9 +494,9 @@ For a single-temperature continuation without ``runs``, supply both
 
 Each CLI step constructs a fresh MC object. Within its schedule, all later
 stages use ``continue_chain=True`` without passing another initial decoration,
-preserving site-index maps, both random streams, nonlinear correlation and
-energy caches, and acceptance-rate adaptation. A fresh named step without
-``start_from`` or ``resume_from`` starts a new configuration; Python callers can also explicitly
+preserving site-index maps, both random streams, cached energy, and
+acceptance-rate adaptation. A fresh named step without ``start_from`` or
+``resume_from`` starts a new configuration. Python callers can also explicitly
 call ``reset_chain()``. ``continue_chain`` is routed to the first Python call
 if supplied, but does not share an in-memory chain between separate CLI steps.
 
@@ -567,7 +541,7 @@ JSON, and boolean options take explicit ``true``/``false`` values, for example::
         -scsh '[8,1,1]' -nsubs '{"0":[4]}' \
         -runs '[{"temperature":300,"n_mc_sweeps":2},{"temperature":250,"n_mc_steps":100}]' \
         -ef 8.0 -k_B 8.617330337217213e-5 \
-        -serialize false -nonlinear true -batch 100000 \
+        -serialize false -batch 100000 \
         -endpoints true -atoms anneal.xyz -atoms_mode x -rs 42
 
 This direct-command example assumes a one-atom parent cell, hence eight atoms
@@ -579,8 +553,8 @@ Configurational free energy of mixing
 
 ``compute_free_energy_of_mixing`` calculates binary canonical mixing free
 energies by thermodynamic integration. It holds the supplied CE fixed throughout
-each integration and uses the maintained ``MonteCarlo`` sampler. Affine and nonlinear models can
-use local swap predictions, including ``reduce_structure=True``. One binary
+each integration and uses the maintained ``MonteCarlo`` sampler. Linear CE models
+can use local swap predictions, including ``reduce_structure=True``. One binary
 substitutional site type is supported; any spectator sites remain pristine.
 Species A and B are the first and second entries in that site's ordered
 allowed-species list (sigmas 0 and 1).
@@ -638,13 +612,12 @@ For context, see the `icet canonical free-energy discussion
 
 The beta=0 integration node is always included. Its mean energy is estimated
 from ``n_reference_samples`` independent uniform fixed-composition decorations,
-evaluated with the actual CE. This finite-cell reference is not obtained by
-substituting independent-site random correlations into a nonlinear model, or
-by extrapolating positive-temperature samples. At each positive temperature,
+evaluated with the supplied CE. Fixed-composition correlations differ from
+independent-site random correlations in a finite cell. At each positive temperature,
 ``n_mc_eq`` proposals are discarded before ``n_mc_steps`` production proposals.
 Energy observations occur every ``sample_interval`` production proposals and
 include rejected moves. The same chain continues across temperatures without
-target-rate adaptation or rebuilding valid nonlinear correlation caches.
+target-rate adaptation.
 
 Python example (assuming ``model`` predicts eV/atom and ``scell`` has a binary
 site count divisible by four; the same model is used at all sampling nodes)::
@@ -658,7 +631,7 @@ site count divisible by four; the same model is used at all sampling nodes)::
         energy_factor=float(len(scell)), boltzmann_constant=kB,
         n_mc_eq=10_000, n_mc_steps=100_000, sample_interval=10,
         n_reference_samples=2000, n_blocks=20, random_seed=42,
-        predict_swap=True, reduce_structure=True, nonlinear=True,
+        predict_swap=True, reduce_structure=True,
         max_steps_per_batch=20_000, filename="mixing-free-energy.json",
     )
 
@@ -690,7 +663,6 @@ your actual model; a parent cell containing spectators needs a different factor:
     random_seed = 42
     predict_swap = true
     reduce_structure = true
-    nonlinear = true
     max_steps_per_batch = 20000
     output_filepath = "mixing-free-energy.json"
     overwrite = false
@@ -704,7 +676,7 @@ JSON lists, for example::
         -scsh '[4,4,4]' -x '[0.25,0.5,0.75]' -temps '[4000,2000,1000,500]' \
         -ef 64 -k_B 8.617330337217213e-5 -n_eq 10000 -n_steps 100000 \
         -sample_every 10 -n_ref 2000 -blocks 20 -rs 42 \
-        -pred_swap true -reduce true -nonlinear true -out mixing-free-energy.json
+        -pred_swap true -reduce true -out mixing-free-energy.json
 
 The returned dictionary and JSON file have ``settings``, ``endmembers``,
 ``references`` (the beta=0 nodes), and ``results``. Each result includes

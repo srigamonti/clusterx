@@ -110,50 +110,6 @@ def test_perov(plat_perov, model_perov):
     print(np.array(cdos_weights))
 
 
-def test_nonlinear(plat_perov, corrc_perov):
-    """Test that WL returns same CDOS with predict_swap False and True, using a
-    nonlinear model."""
-    from sklearn.pipeline import make_pipeline
-    from sklearn.linear_model import LinearRegression
-    from sklearn.preprocessing import PolynomialFeatures
-
-    pipeline = make_pipeline(PolynomialFeatures(2), LinearRegression())
-    n_corrs = len(corrc_perov.get_cpool())
-    np.random.seed(42)
-    X = np.random.uniform(low=-1, high=1, size=(100, n_corrs))
-    y = np.random.uniform(low=-1, high=1, size=(100,))
-    pipeline.fit(X, y)
-    model = Model(corrc_perov, "energy", estimator=pipeline)
-    print("Intercept:", model.intercept)
-
-    p = [4, 4, 4]
-    scell = SuperCell(plat_perov, p)
-    nsubs = {0: [int(len(scell) / 5 * 3 / 2)], 2: [int(len(scell) / 5 / 2)]}
-
-    cdos_compare = []
-    for predict_swap in [False, True]:
-        wl = WangLandau(
-            energy_model=model,
-            scell=scell,
-            nsubs=nsubs,
-            predict_swap=predict_swap,
-            energy_factor=1.01,
-        )
-        cdos = wl.wang_landau_sampling(
-            energy_range=[0.3, 0.4],
-            energy_bin_width=0.01,
-            f_range=[4, 1.9],
-            flatness_conditions=[[0.5, 2], [0.5, 1]],
-            niter_per_sweep=10,
-            nproc=0,
-            seed=1,
-            nonlinear=True,
-        )
-        _, cdos_weights = cdos.get_cdos(ln=True, normalization=False)
-        cdos_compare.append(np.array(cdos_weights))
-    np.testing.assert_allclose(cdos_compare[0], cdos_compare[1])
-
-
 def test_swap(plat_perov, model_perov):
     """Test that WL returns same CDOS with predict_swap False and True."""
     p = [4, 4, 4]

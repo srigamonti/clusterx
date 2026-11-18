@@ -7,9 +7,6 @@ import numpy as np
 import pytest
 from ase import Atoms
 from ase.io import read, write
-from sklearn.linear_model import LinearRegression
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import PolynomialFeatures
 
 from clusterx.clusters.clusters_pool import ClustersPool
 from clusterx.correlations import CorrelationsCalculator
@@ -123,51 +120,6 @@ def test_reset_chain_reuses_requested_initial_decoration():
     np.testing.assert_array_equal(mc.structure.get_sigmas(), expected)
 
 
-def test_nonlinear_continuation_keeps_correlation_cache(monkeypatch):
-    _, scell, model = make_system()
-    width = len(model.corrc.get_cpool())
-    features = np.random.default_rng(12).normal(size=(100, width))
-    targets = features[:, 0] ** 2 + features[:, -1] * 0.3
-    model.estimator = make_pipeline(PolynomialFeatures(degree=2), LinearRegression()).fit(features, targets)
-
-    calls = 0
-    original = model.get_correlations
-
-    def counted(*args, **kwargs):
-        nonlocal calls
-        calls += 1
-        return original(*args, **kwargs)
-
-    monkeypatch.setattr(model, "get_correlations", counted)
-    whole = MonteCarlo(
-        model, scell, nsubs={0: [8]}, predict_swap=True, reduce_structure=True, seed=305
-    )
-    whole.metropolis(20, temperature=0.4, nonlinear=True, max_steps_per_batch=3,
-        energy_factor=1.0,
-        boltzmann_constant=1.0,
-    )
-    whole_sigmas = whole.structure.get_sigmas().copy()
-    whole_rng = whole._rng_np.bit_generator.state
-    assert calls == 1
-
-    calls = 0
-    split = MonteCarlo(
-        model, scell, nsubs={0: [8]}, predict_swap=True, reduce_structure=True, seed=305
-    )
-    split.metropolis(8, temperature=0.4, nonlinear=True, max_steps_per_batch=3,
-        energy_factor=1.0,
-        boltzmann_constant=1.0,
-    )
-    split.metropolis(12, temperature=0.4, nonlinear=True, continue_chain=True, max_steps_per_batch=5,
-        energy_factor=1.0,
-        boltzmann_constant=1.0,
-    )
-    np.testing.assert_array_equal(split.structure.get_sigmas(), whole_sigmas)
-    split_rng = split._rng_np.bit_generator.state
-    np.testing.assert_array_equal(split_rng["state"]["state"], whole_rng["state"]["state"])
-    assert calls == 1
-
-
 def test_target_rate_adaptation_continues_across_calls():
     _, scell, model = make_system()
     whole = MonteCarlo(model, scell, nsubs={0: [8]}, seed=409)
@@ -199,15 +151,9 @@ def checkpoint(scell, filename, sigmas, temperature=300):
     write(filename, atoms, format="extxyz")
 
 
-@pytest.mark.parametrize("nonlinear", [False, True])
 @pytest.mark.parametrize("reduce", [False, True])
-def test_start_from_then_resume_shorthand_and_cache_reuse(tmp_path, monkeypatch, capsys, nonlinear, reduce):
+def test_start_from_then_resume_shorthand_and_cache_reuse(tmp_path, monkeypatch, capsys, reduce):
     _, scell, model = make_system()
-    if nonlinear:
-        features = np.random.default_rng(52).normal(size=(80, 2))
-        model.estimator = make_pipeline(PolynomialFeatures(2), LinearRegression()).fit(
-            features, 0.3 + features[:, 0]**2 - 0.4*features[:, 1],
-        )
     reference_model = deepcopy(model)
     start, output = tmp_path / "300K.xyz", tmp_path / "250K.xyz"
     old = Structure(scell, sigmas=[0, 1]*8).get_atoms()
@@ -227,7 +173,7 @@ def test_start_from_then_resume_shorthand_and_cache_reuse(tmp_path, monkeypatch,
     mc = MonteCarlo(model, scell, nsubs={0: [8]}, seed=57, predict_swap=True, reduce_structure=reduce,
                     start_from=start, atoms_filename=output, atoms_mode="a", save_atoms_endpoints=True)
     sampling = dict(temperature=250, energy_factor=1, boltzmann_constant=1,
-                    nonlinear=True, max_steps_per_batch=3)
+                    max_steps_per_batch=3)
     first = mc.metropolis(7, **sampling)
     np.testing.assert_array_equal(first._trajectory[0]["sigmas"], initial)
     # Creating output in the first stage must not cause the next stage to reload it.
@@ -235,7 +181,7 @@ def test_start_from_then_resume_shorthand_and_cache_reuse(tmp_path, monkeypatch,
     monkeypatch.setattr(mc, "_read_resume_frame", lambda path: loaded.append(path))
     mc.metropolis(5, **sampling, continue_chain=True)
     assert not loaded
-    assert len(calls) == (1 if nonlinear or not reduce else 0)
+    assert len(calls) == (0 if reduce else 1)
     frames = read(output, index=":")
     assert [frame.info["mc_step"] for frame in frames] == [0, 7, 12]
     np.testing.assert_array_equal(frames[0].numbers, final.numbers)
@@ -268,11 +214,6 @@ def test_start_from_then_resume_shorthand_and_cache_reuse(tmp_path, monkeypatch,
     assert frames[-1].info["mc_step"] == 6  # New invocation, not a cumulative counter.
     assert np.count_nonzero(resumed.structure.get_sigmas()) == 8
     assert start.read_bytes() == source_bytes
-    if nonlinear:
-        actual = resumed._emodel.get_correlations(resumed.structure, reduce_structure=reduce)
-        np.testing.assert_allclose(resumed._chain_state["correlations"], actual, atol=1e-12)
-        np.testing.assert_allclose(resumed._chain_state["current_energy"],
-                                   resumed._emodel.predict_on_correlations(actual), atol=1e-12)
 
 
 @pytest.mark.parametrize("output_exists", [False, True])

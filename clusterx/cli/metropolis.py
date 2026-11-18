@@ -155,7 +155,6 @@ def _sampling_schedule(runs, temperature, n_mc_steps, n_mc_sweeps, nsites):
     save_atoms_endpoints=("Save initial configuration and each temperature endpoint", "option", "endpoints", _boolean),
     atoms_mode=("Checkpoint mode: x=new file, w=overwrite, a=append, auto=legacy", "option", "atoms_mode", str),
     max_steps_per_batch=("Maximum temporary temperature array length", "option", "batch", int),
-    nonlinear=("Cache global correlations for nonlinear models", "option", "nonlinear", _boolean),
     continue_chain=("Continue in memory; schedule stages always continue", "option", "continue", _boolean),
     serialize=("Store accepted-move histories as JSON; use false for large runs", "option", "serialize", _boolean),
     energy_key=("Energy property name for multi-output models", "option", "energy_key", str),
@@ -247,7 +246,6 @@ def metropolis(
     energy_key: str = "energy",
     n_mc_sweeps: float | None = None,
     max_steps_per_batch: int = 100_000,
-    nonlinear: bool = False,
     continue_chain: bool = False,
     serialize: bool = True,
     metadata: dict | None = None,
@@ -255,7 +253,8 @@ def metropolis(
 ):
     r"""Sample with an explicit TOTAL-supercell energy multiplier, k_B, and temperature.
 
-    The user is responsible for model normalization and units. For model energy
+    Supply a linear CE energy model. The user is responsible for model
+    normalization and units. For model energy
     eV/atom and T in K, use energy_factor=N_atoms and k_B in eV/K. For meV/atom
     and k_B in eV/K, use N_atoms/1000. A total-energy model still requires an
     explicit factor (1 when its energy unit matches k_B*T). CELL does not infer
@@ -281,10 +280,9 @@ def metropolis(
     The command prints the selected source and the output-existence decision.
     initial_decoration cannot be combined with either checkpoint option.
 
-    Loading restores cell/site/species/composition-compatible configurations
-    and rebuilds model correlations and energy before sampling, including for
-    nonlinear reduced models. random_seed initializes a new random stream;
-    checkpoint files do not restore the exact original proposal sequence.
+    Loading restores cell/site/species/composition-compatible configurations.
+    random_seed initializes a new random stream; checkpoint files do not
+    restore the exact original proposal sequence.
     Selection happens once for the new MC object. Later schedule stages reuse
     the chain, random streams and caches without rechecking files.
 
@@ -324,7 +322,6 @@ def metropolis(
         boltzmann_constant = 8.617330337217213e-5
         predict_swap = true
         reduce_structure = true
-        nonlinear = true
         start_from = "300K.xyz"
         # resume_from = "250K.xyz"  # Defaults to atoms_filename with start_from.
         atoms_filename = "250K.xyz"
@@ -344,7 +341,7 @@ def metropolis(
         cell metropolis -task runmc -mofp model.pickle -plfp plat.json \
             -scsh '[4,4,4]' -nsubs '{"0":[32]}' -temp 250 -sweeps 10 \
             -ef 64 -k_B 8.617330337217213e-5 -pred_swap true -reduce true \
-            -nonlinear true -start 300K.xyz -atoms 250K.xyz -atoms_mode a \
+            -start 300K.xyz -atoms 250K.xyz -atoms_mode a \
             -endpoints true -save_every 64 -serialize false -rs 43
 
     The Python API provides MonteCarlo(..., start_from=...) and
@@ -434,7 +431,6 @@ def metropolis(
                     serialize=serialize,
                     filename=output_path,
                     max_steps_per_batch=max_steps_per_batch,
-                    nonlinear=nonlinear,
                     continue_chain=continue_chain if index == 0 else True,
                     metadata=metadata,
                 )

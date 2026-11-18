@@ -37,6 +37,14 @@ from clusterx.model import Model
 from clusterx.utils import dict_compare, RunningAverage
 
 
+def _require_linear_energy_model(model: Model):
+    """Require an energy model affine in the original cluster correlations."""
+    if model.estimator is not None and model._get_affine_parameters(len(model.corrc.get_cpool())) is None:
+        raise ValueError(
+            "Monte Carlo requires a linear CE energy model with explicit ECIs or a supported affine estimator."
+        )
+
+
 def _positive_scalar(value, name):
     """Validate numerical inputs without inferring their physical units."""
     if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
@@ -81,7 +89,7 @@ class MonteCarlo:
     Parameters
     ----------
     energy_model : Model
-        Model used for acceptance and rejection. Its predictions retain the
+        Linear CE model used for acceptance and rejection. Its predictions retain the
         fitted target's normalization and units. The user must convert them
         to total supercell energy with metropolis's explicit energy_factor.
 
@@ -217,6 +225,7 @@ class MonteCarlo:
     ):
         if (ensemble == "semigrand-canonical") and (chemical_potentials is None):
             raise ValueError("`chemical_potentials` have to be given when ensemble is 'semigrand-canonical")
+        _require_linear_energy_model(energy_model)
         self._emodel = energy_model
         self._emodel.reset_mc(mc=True)
         self._scell = scell
@@ -270,7 +279,6 @@ class MonteCarlo:
         n_clics: int = 1,
         serialize: bool = False,
         filename: str = "trajectory.json",
-        nonlinear: bool = False,
         max_steps_per_batch: int = 100_000,
         continue_chain: bool = False,
         metadata: dict | None = None,
@@ -345,21 +353,13 @@ class MonteCarlo:
         filename : str, default trajectory.json
             Name of a Json file in which the trajectory is serialized after the sampling if ``serialize`` is **True**.
 
-        nonlinear : bool, default False
-            Whether or not the model is nonlinear with respect to cluster
-            correlations. If True, cache global correlations and the current
-            model energy, evaluating the trial correlations once per proposal.
-            Compatible with reduce_structure. Recognized affine models retain
-            their direct energy-difference path even when this is True. If
-            False, use the direct linear energy-difference path.
-
         max_steps_per_batch : int, default 100000
             Maximum number of proposal temperatures held in a temporary array at
             once. The Markov chain and random-number streams continue across these
             internal batches.
 
         continue_chain : bool, default False
-            Continue the configuration and cached nonlinear correlation state from
+            Continue the configuration and cached energy from
             the previous call. The default preserves the historical behavior of
             starting a new configuration for each call.
 
@@ -382,6 +382,7 @@ class MonteCarlo:
         MonteCarloTrajectory object
             Trajectory containing the complete information of the sampling trajectory.
         """
+        _require_linear_energy_model(self._emodel)
         energy_factor = _positive_scalar(energy_factor, "energy_factor")
         boltzmann_constant = _positive_scalar(boltzmann_constant, "boltzmann_constant")
         if metadata is not None and not isinstance(metadata, dict):
@@ -422,51 +423,27 @@ class MonteCarlo:
             self.initialize_structure(initial_decoration, self._nsubs)
         structure = self.structure
         sigmas = structure.get_sigmas()
-        use_correlations = nonlinear and self._predict_swap
-        if use_correlations and (self._emodel.estimator is None or self._emodel._get_affine_parameters(
-                len(self._emodel.corrc.get_cpool())) is not None):
-            use_correlations = False
-
         if continuing:
-            use_correlations = self._chain_state["use_correlations"]
-            correlations = self._chain_state.get("correlations")
             current_energy = self._chain_state["current_energy"]
-            e_last = current_energy
         elif self._reduce_structure:
             self._emodel.init_reduced_model(structure)
             self._emodel._init_interaction_dict(self._emodel.scell_reduced)
             structure.init_reduced_structure(self._emodel.scell_reduced)
-            if not use_correlations:
-                current_energy = 0.0
             if self._predict_swap:
                 self._check_reduced_local_geometry()
-        elif not use_correlations:
-            e_last = self._energy_value(self._emodel.predict(structure))
-            current_energy = e_last
+                current_energy = 0.0
+            else:
+                current_energy = self._energy_value(self._emodel.predict(structure, reduce_structure=True))
+        else:
+            current_energy = self._energy_value(self._emodel.predict(structure))
             self._emodel._init_interaction_dict(self._scell)
 
-        if use_correlations and not continuing:
-            correlations = self._emodel.get_correlations(structure, reduce_structure=self._reduce_structure)
-            # Estimator transforms may operate in place; keep MC's state private.
-            current_energy = self._energy_value(self._emodel.predict_on_correlations(correlations.copy()))
-            e_last = current_energy
-        elif not continuing and not self._predict_swap:
-            # Keep an absolute prediction separately from reduced trajectories,
-            # whose recorded energies remain relative to their initial state.
-            if self._reduce_structure:
-                current_energy = self._energy_value(self._emodel.predict(structure, reduce_structure=True))
-            else:
-                current_energy = e_last
-        if self._reduce_structure:
-            e_last = np.float64(0.0)
-
-        # Affine reduced MC normally needs only relative energies. Obtain an
-        # absolute origin only when observations need it, then carry it across
-        # calls without rebuilding correlations at temperature boundaries.
-        if use_correlations or not self._predict_swap or not self._reduce_structure:
-            absolute_start = current_energy
-        else:
+        e_last = np.float64(0.0) if self._reduce_structure else current_energy
+        # Reduced local predictions need an absolute origin only for energy observations.
+        if self._predict_swap and self._reduce_structure:
             absolute_start = self._chain_state.get("absolute_energy") if continuing else None
+        else:
+            absolute_start = current_energy
         if energy_observer is not None and absolute_start is None:
             absolute_start = self._energy_value(
                 self._emodel.predict(structure, reduce_structure=self._reduce_structure)
@@ -545,28 +522,15 @@ class MonteCarlo:
 
             de = 0.0
             if self._predict_swap:
-                if use_correlations:
-                    correlations_diff = np.zeros_like(correlations)
                 for i, new_sigma, old_sigma, site_type in flip_tuples:
-                    if use_correlations:
-                        correlations_diff += self._emodel.predict_correlations_diff(
-                            structure, i, old_sigma, new_sigma, reduce_structure=self._reduce_structure,
-                        )
-                    else:
-                        de += self._emodel.predict_flip(
-                            structure=structure,
-                            index=i,
-                            old_sigma=old_sigma,
-                            new_sigma=new_sigma,
-                            reduce_structure=self._reduce_structure,
-                        )
-                    structure.flip(i, old_sigma, new_sigma, site_type)
-                if use_correlations:
-                    trial_correlations = correlations + correlations_diff
-                    trial_energy = self._energy_value(
-                        self._emodel.predict_on_correlations(trial_correlations.copy())
+                    de += self._emodel.predict_flip(
+                        structure=structure,
+                        index=i,
+                        old_sigma=old_sigma,
+                        new_sigma=new_sigma,
+                        reduce_structure=self._reduce_structure,
                     )
-                    de = trial_energy - current_energy
+                    structure.flip(i, old_sigma, new_sigma, site_type)
             else:
                 for i, new_sigma, old_sigma, site_type in flip_tuples:
                     structure.flip(i, old_sigma, new_sigma, site_type)
@@ -597,9 +561,7 @@ class MonteCarlo:
 
             if accept_step:
                 e_last += de
-                if use_correlations:
-                    correlations = trial_correlations
-                if use_correlations or not self._predict_swap:
+                if not self._predict_swap:
                     current_energy = trial_energy
                 elif not self._reduce_structure:
                     current_energy += de
@@ -651,8 +613,6 @@ class MonteCarlo:
             traj.serialize()
 
         self._chain_state = {
-            "use_correlations": use_correlations,
-            "correlations": correlations.copy() if use_correlations else None,
             "current_energy": current_energy,
             "running_average": rave,
             "beta_scale": beta_scale,
@@ -689,7 +649,7 @@ class MonteCarlo:
         return True
 
     def _write_atoms_checkpoint(self, step, stage, stage_step, temperature, origin, energy=None):
-        """Snapshot sigmas without changing index maps, correlations, or random streams."""
+        """Snapshot sigmas without changing index maps or random streams."""
         if step == self._atoms_last_step:
             return
         atoms = self.structure.get_atoms()
@@ -1013,7 +973,6 @@ def compute_free_energy_of_mixing(
     random_seed: int | None = None,
     predict_swap: bool = True,
     reduce_structure: bool = False,
-    nonlinear: bool = True,
     energy_key: str = "energy",
     max_steps_per_batch: int = 100_000,
     filename: str | os.PathLike | None = None,
@@ -1040,7 +999,7 @@ def compute_free_energy_of_mixing(
     Results are per binary site in that user-chosen energy unit. No unit system
     or atom-count normalization is inferred.
 
-    The supplied CE is held fixed along the integration path, including the
+    The supplied linear CE is held fixed along the integration path, including the
     endmembers and beta=0 reference. It may represent configuration energies
     or effective configuration free energies at a chosen physical temperature.
     For example, keep a CE fitted at 300 K fixed while integrating the auxiliary
@@ -1059,9 +1018,8 @@ def compute_free_energy_of_mixing(
     and output are ordered from high to low T (increasing beta). Composite
     trapezoidal quadrature includes beta=0 explicitly. At beta=0, independent
     random decorations are drawn uniformly at fixed NB and their actual model
-    predictions averaged. Independent-site random correlations are not exact
-    at finite fixed composition and cannot replace these samples for nonlinear
-    models. n_reference_samples controls this reference estimate, not MC burn-in.
+    predictions averaged. Fixed-composition correlations differ from independent-site
+    random correlations in a finite cell. n_reference_samples controls the reference estimate.
 
     Each positive-temperature node discards n_mc_eq proposals, then measures
     n_mc_steps production proposals at sample_interval spacing, including
@@ -1125,10 +1083,7 @@ def compute_free_energy_of_mixing(
             raise FileExistsError(f"Output already exists: {output}; set overwrite=True explicitly")
         if not output.parent.is_dir():
             raise FileNotFoundError(f"Output directory does not exist: {output.parent}")
-    width = len(energy_model.corrc.get_cpool())
-    if (predict_swap and not nonlinear and energy_model.estimator is not None
-            and energy_model._get_affine_parameters(width) is None):
-        raise ValueError("Use nonlinear=True for estimators not recognized as affine")
+    _require_linear_energy_model(energy_model)
 
     # Keep input model artifacts read-only while warming geometry caches.
     cache_filepath = energy_model.corrc.pickle_file
@@ -1168,7 +1123,7 @@ def compute_free_energy_of_mixing(
                 "input_temperatures": ts.tolist(), "temperature_order": "decreasing_temperature_increasing_beta",
                 "n_mc_steps": n_mc_steps, "n_mc_eq": n_mc_eq, "sample_interval": sample_interval,
                 "n_reference_samples": n_reference_samples, "n_blocks": n_blocks,
-                "predict_swap": predict_swap, "reduce_structure": reduce_structure, "nonlinear": nonlinear,
+                "predict_swap": predict_swap, "reduce_structure": reduce_structure, "nonlinear": False,
                 "max_steps_per_batch": max_steps_per_batch, "seed_entropy": seed_sequence.entropy,
                 "quadrature": "composite_trapezoid_in_beta_including_zero",
                 "uncertainty": (
@@ -1211,7 +1166,7 @@ def compute_free_energy_of_mixing(
                     mean, error, sample_count = baseline, 0.0, 0
                 else:
                     sampling = dict(energy_factor=energy_factor, boltzmann_constant=boltzmann_constant,
-                                    temperature=float(temperature), nonlinear=nonlinear,
+                                    temperature=float(temperature),
                                     max_steps_per_batch=max_steps_per_batch, serialize=False)
                     if n_mc_eq:
                         mc.metropolis(n_mc_eq, continue_chain=continuing, **sampling)

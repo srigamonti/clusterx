@@ -152,7 +152,7 @@ def wang_landau(
     seed: Optional[int] = 1,
     **kwargs,
 ):
-    """Perform Wang-Landau sampling"""
+    """Perform Wang-Landau sampling with a linear CE energy model."""
     cmd_message("head")
 
     print(f"Info({get_command_name()}): Initialization")

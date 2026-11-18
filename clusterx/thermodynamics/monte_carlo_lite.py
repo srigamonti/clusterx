@@ -16,11 +16,12 @@ from tqdm import tqdm
 
 from clusterx.model import Model
 from clusterx.super_cell import SuperCell
+from clusterx.thermodynamics.monte_carlo import _require_linear_energy_model
 from clusterx.utils import take_tile, ListDict, is_diagonal
 
 
 class MonteCarloLite:
-    r"""Monte Carlo class for binary single sublattice CE models
+    r"""Monte Carlo class for linear binary single-sublattice CE models
 
         Objects of this class are used to perform Monte Carlo samplings.
 
@@ -81,6 +82,7 @@ class MonteCarloLite:
         energy_key: str = "energy",
         reduce_structure: bool = False,
     ):
+        _require_linear_energy_model(energy_model)
         prop = energy_model.property_name
         if prop is None or len(prop) == 0 or isinstance(prop, str):
             # Note: indexing with None only works for numpy arrays, not lists
@@ -364,6 +366,7 @@ class MonteCarloLite:
         may be provided. If none are given, the pristine structure or the one from a
         previous Metropolis run will be used.
         """
+        _require_linear_energy_model(self._emodel)
         rng = np.random.default_rng(random_seed)
         if random_seed is not None:
             random.seed(random_seed)

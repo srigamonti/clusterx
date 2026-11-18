@@ -41,7 +41,6 @@ commands = ["compute_free_energy_of_mixing"]
     random_seed=("Seed for independent reference and MC random streams", "option", "rs", int),
     predict_swap=("Use local energy/correlation changes", "option", "pred_swap", _boolean),
     reduce_structure=("Use reduced local geometry", "option", "reduce", _boolean),
-    nonlinear=("Support nonlinear fitted transformations", "option", "nonlinear", _boolean),
     energy_key=("Energy property of a multi-output model", "option", "energy_key", str),
     max_steps_per_batch=("Maximum temporary MC temperature-array size", "option", "batch", int),
     output_filepath=("JSON result destination", "option", "out", str),
@@ -66,7 +65,6 @@ def compute_free_energy_of_mixing(
     random_seed: int | None = None,
     predict_swap: bool = True,
     reduce_structure: bool = False,
-    nonlinear: bool = True,
     energy_key: str = "energy",
     max_steps_per_batch: int = 100_000,
     output_filepath: str = "free_energy_of_mixing.json",
@@ -74,7 +72,7 @@ def compute_free_energy_of_mixing(
 ):
     r"""Compute binary configurational mixing free energy with canonical Monte Carlo.
 
-    Use one saved cluster-expansion (CE) model, held fixed along the integration
+    Use one saved linear cluster-expansion (CE) model, held fixed along the integration
     path, and one binary substitutional site type, optionally with fixed spectators.
     Species A and B are the first and second entries in that site's ordered
     allowed-species list (sigmas 0 and 1). Each composition is sampled at fixed
@@ -133,7 +131,7 @@ def compute_free_energy_of_mixing(
 
     Composite trapezoidal quadrature includes beta=0 explicitly. Its mean
     energy is estimated from independent uniform fixed-composition decorations
-    evaluated with the actual model, also for nonlinear CE. It is not inferred
+    evaluated with the supplied linear CE. It is not inferred
     from the highest simulated temperature. Refine the temperature grid,
     including the interval from beta=0, to check integration convergence.
 
@@ -163,7 +161,7 @@ def compute_free_energy_of_mixing(
     per composition/temperature, not a sweep count. sample_interval (default 1)
     observes energy every specified number of production proposals, including
     rejected moves. Chains continue across temperatures with their cached
-    nonlinear state; no target-rate temperature adaptation is used.
+    energy; no target-rate temperature adaptation is used.
 
     n_reference_samples (default 1000, minimum 2) controls the independent beta=0
     samples for each mixed composition, separately from MC equilibration.
@@ -172,9 +170,7 @@ def compute_free_energy_of_mixing(
     least 2*n_blocks. Choose blocks long enough to resolve autocorrelation.
     random_seed fixes the reference and MC random streams for reproducibility.
 
-    predict_swap=true uses local energy/correlation changes. nonlinear=true
-    supports nonlinear fitted transformations and retains the affine model's
-    direct energy-difference path. reduce_structure=true uses local reduced
+    predict_swap=true uses local energy differences. reduce_structure=true uses local reduced
     geometry and requires diagonal supercells. max_steps_per_batch (default
     100000) bounds temporary proposal-temperature arrays; it does not change
     the chain or observation cadence. Online statistics and block means avoid
@@ -222,7 +218,7 @@ def compute_free_energy_of_mixing(
             -temps '[4000,2000,1000,750,500,300]' \
             -ef 64 -k_B 8.617330337217213e-5 -n_eq 10000 -n_steps 100000 \
             -sample_every 10 -n_ref 2000 -blocks 20 -rs 42 \
-            -pred_swap true -reduce true -nonlinear true -batch 20000 \
+            -pred_swap true -reduce true -batch 20000 \
             -out mixing-free-energy.json
 
     For a linear temperature range, replace -temps and its list with
@@ -251,7 +247,6 @@ def compute_free_energy_of_mixing(
         random_seed = 42
         predict_swap = true
         reduce_structure = true
-        nonlinear = true
         max_steps_per_batch = 20000
         output_filepath = "mixing-free-energy.json"
         overwrite = false
@@ -278,7 +273,7 @@ def compute_free_energy_of_mixing(
         model, scell, compositions, temperatures, energy_factor=energy_factor, boltzmann_constant=boltzmann_constant,
         n_mc_steps=n_mc_steps, n_mc_eq=n_mc_eq, sample_interval=sample_interval,
         n_reference_samples=n_reference_samples, n_blocks=n_blocks, random_seed=random_seed,
-        predict_swap=predict_swap, reduce_structure=reduce_structure, nonlinear=nonlinear, energy_key=energy_key,
+        predict_swap=predict_swap, reduce_structure=reduce_structure, energy_key=energy_key,
         max_steps_per_batch=max_steps_per_batch, filename=output_filepath, overwrite=overwrite,
     )
     print(f"Wrote {len(result['results'])} free-energy estimates to {output_filepath}")
