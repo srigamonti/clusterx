@@ -410,7 +410,8 @@ class SuperCell(ParentLattice):
                 raise ValueError(
                     f"Cannot initialize non-binary Structure with integer nsubs={nsubs}"
                 )
-            sigmas = rng.integers(2, size=len(self))
+            (site_type,) = (tag for tag, species in self.get_sublattice_types().items() if len(species) == 2)
+            _, sigmas = self.gen_random_decoration({site_type: [nsubs]}, rng)
         elif isinstance(nsubs, dict):
             _, sigmas = self.gen_random_decoration(nsubs, rng)
         else:

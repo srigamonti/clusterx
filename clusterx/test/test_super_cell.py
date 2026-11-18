@@ -107,3 +107,23 @@ def test_gen_random_structure(super_cell, distribution):
     assert isinstance(random_structure, Atoms)
     assert len(random_structure) == 24
     assert sum(random_structure.get_pbc()) == 2
+
+
+@pytest.mark.parametrize("nsubs", [0, 2, 8])
+@pytest.mark.parametrize("with_spectator", [False, True])
+def test_gen_random_structure_binary_substitution_count(nsubs, with_spectator):
+    pristine = Atoms("SiO", scaled_positions=[[0, 0, 0], [0.5, 0.5, 0.5]], cell=[3, 3, 3], pbc=True)
+    if not with_spectator:
+        del pristine[1]
+    substituted = pristine.copy()
+    substituted[0].symbol = "Ge"
+    scell = SuperCell(ParentLattice(pristine, substitutions=[substituted]), [2, 2, 2])
+    (binary_key,) = scell.get_substitutional_tags()
+    binary_sites = scell.get_tags() == binary_key
+
+    scalar = scell.gen_random_structure(nsubs=nsubs, rng=np.random.default_rng(42))
+    mapping = scell.gen_random_structure(nsubs={binary_key: [nsubs]}, rng=np.random.default_rng(42))
+
+    assert scalar.get_chemical_symbols().count("Ge") == nsubs
+    np.testing.assert_array_equal(scalar.sigmas, mapping.sigmas)
+    np.testing.assert_array_equal(scalar.numbers[~binary_sites], scell.numbers[~binary_sites])
