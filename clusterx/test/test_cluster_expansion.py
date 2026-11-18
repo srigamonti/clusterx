@@ -105,14 +105,14 @@ def test_cluster_expansion():
         2.674287, 3.207947, 3.054692, 3.367751, 3.946197
     ])
     rmse_ref = np.array([
-        2.157325e+00, 2.983903e-01, 2.878580e-01, 2.878580e-01,
-        2.878580e-01, 9.269026e-14, 9.946012e-15, 1.700114e-14,
-        1.101484e-14, 9.315294e-15, 4.286140e-14
+        2.157325, 0.2983903, 0.2878580, 0.2878580, 0.2878580,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
     ])
     ranks_ref = np.array([3, 9, 11, 11, 11, 16, 16, 16, 16, 16, 16])
     sizes_ref = np.array([3, 9, 11, 17, 21, 17, 23, 27, 20, 26, 30])
 
     np.testing.assert_allclose(cv, cv_ref, rtol=1e-6)
-    np.testing.assert_allclose(rmse, rmse_ref, rtol=1e-6)
+    # The last six fits reproduce the training energies to floating-point accuracy.
+    np.testing.assert_allclose(rmse, rmse_ref, rtol=1e-6, atol=1e-12)
     np.testing.assert_array_equal(ranks_ref, ranks)
     np.testing.assert_array_equal(sizes_ref, sizes)
