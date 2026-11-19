@@ -1,120 +1,1727 @@
-# Copyright (c) 2015-2023, CELL Developers.
+# Copyright (c) 2015-2026, CELL Developers.
 # This work is licensed under the terms of the Apache 2.0 license
 # See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
+import logging
+import pickle
+import random
+import tracemalloc
+import warnings
+from itertools import combinations, product
+from random import sample
+from typing import List, Optional, Set, Tuple, Union
+
 import numpy as np
-from clusterx.structures_set import StructuresSet
-from clusterx.super_cell import SuperCell
-from clusterx.utils import _is_integer_matrix
-from sys import getsizeof
-from itertools import combinations
+import pandas as pd
 import scipy
 from tqdm import tqdm
 
-class DSGenerator():
-    """Generation of derivative structures
-    
-    A :class:`DSGenerator <clusterx.derivative_structure.DSGenerator>` object is used to generate 
-    derivative structures from a :class:`parent lattice <clusterx.parent_lattice.ParentLattice>`. 
+from clusterx.super_cell import SuperCell
+from clusterx.utils import _is_integer_matrix
 
-    **Parameters:**
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    ``parent_lattice``: :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` object
+
+def _filter_property_names(property_name, property_names):
+    if property_name and property_names:
+        raise ValueError("Only one of property_name or property_names can be provided.")
+    if not (property_name or property_names):
+        raise ValueError("At least one of property_name or property_names must be provided.")
+
+
+class DerivativeStructures:
+    """Collection of derivative structures and their properties.
+
+    A :class:`DerivativeStructures <clusterx.derivative_structures.DerivativeStructures>`
+    object generates and stores derivative structures from a
+    :class:`parent lattice <clusterx.parent_lattice.ParentLattice>`.
+
+    ``DSGenerator`` remains available as a compatibility alias for existing
+    imports and pickle files saved under the original class name.
+
+    Parameters
+    ----------
+    parent_lattice : :class:`ParentLattice <clusterx.parent_lattice.ParentLattice>` object
         Parent lattice object. Derivative structures originate from this parent lattice.
     """
+
     def __init__(self, parent_lattice):
         self.plat = parent_lattice
-        self.scell_sizes = []
-        self.scell_shapes = []
-        self.num_subs = []
-        self.sigmas = []
-        self.properties = {}
 
-    def generate(self, supercell_sizes, num_subs_list):
+        self.scell_shapes = pd.DataFrame(columns=["shape_id", "shape"])
+
+        self.configurations = pd.DataFrame(columns=["config_id", "sigma", "shape_id"])
+
+        self.masks = {}
+
+        self.property_names = set()
+
+        self.metadata = {}
+
+    def serialize(self, filepath):
+        """Serialize the current instance to a binary file using pickle.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the file where the object will be saved.
+        """
+        with open(filepath, "wb") as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def from_file(cls, filepath):
+        """Deserialize an instance of DerivativeStructures from a native pickle file.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the file from which the object will be loaded.
+
+        Returns
+        -------
+        DerivativeStructures
+            An instance of the class loaded from the file.
+        """
+        with open(filepath, "rb") as f:
+            dss = pickle.load(f)
+
+        if not isinstance(dss, cls):
+            raise TypeError(f"Expected object of type {cls.__name__}, but got {type(dss).__name__}")
+
+        return dss
+
+    @classmethod
+    def from_structures_set_file(cls, filepath, quick_parse=False):
+        """Build a DerivativeStructures object from a serialized StructuresSet file."""
+        from clusterx.structures_set import StructuresSet
+
+        return cls.from_structures_set(StructuresSet.from_file(filepath=filepath, quick_parse=quick_parse))
+
+    @classmethod
+    def from_structures_set(cls, structures_set):
+        """
+        Build a DerivativeStructures object from a StructuresSet.
+
+        Each structure becomes one configuration. Unique supercell
+        transformations are stored in ``scell_shapes`` and all StructuresSet
+        properties are copied into configuration columns.
+        """
+        from clusterx.structures_set import StructuresSet
+
+        if not isinstance(structures_set, StructuresSet):
+            raise TypeError(f"Expected object of type StructuresSet, but got {type(structures_set).__name__}")
+
+        dss = cls(structures_set.get_parent_lattice())
+        property_values = structures_set.get_property()
+        rows = []
+
+        for config_id, structure in enumerate(structures_set):
+            shape = np.asarray(structure.get_supercell().get_transformation())
+            shape_id = dss.add_scell_shape(shape)
+            sigma = tuple(int(value) for value in structure.get_sigmas())
+            row = {"config_id": config_id, "sigma": sigma, "shape_id": shape_id}
+
+            for property_name, values in property_values.items():
+                row[property_name] = values[config_id] if config_id < len(values) else None
+
+            rows.append(row)
+
+        columns = ["config_id", "sigma", "shape_id"] + list(property_values)
+        dss.configurations = pd.DataFrame(rows, columns=columns)
+        dss.property_names = set(property_values)
+
+        if "mask" in property_values:
+            for config_id, mask_name in enumerate(property_values["mask"]):
+                if isinstance(mask_name, str):
+                    dss.masks.setdefault(mask_name, []).append(config_id)
+
+        return dss
+
+    def to_structures_set(self, mask_name=None, include_properties=True):
+        """Build a StructuresSet from this derivative-structure collection.
+
+        If ``mask_name`` is provided, only configurations in that mask are
+        converted and the output StructuresSet receives a ``mask`` property with
+        that mask name.
+        """
+        from clusterx.structures_set import StructuresSet
+
+        sset = StructuresSet(parent_lattice=self.plat)
+        data = self.get_configurations(mask_name=mask_name)
+        scell_cache = {}
+
+        for _, row in data.iterrows():
+            shape_id = row["shape_id"]
+            if shape_id not in scell_cache:
+                scell_cache[shape_id] = SuperCell(
+                    self.plat,
+                    self.get_scell_shape(shape_id),
+                )
+
+            props = {}
+            if mask_name is not None:
+                props["mask"] = mask_name
+            sset.add_structure(
+                scell_cache[shape_id].gen_structure(sigmas=row["sigma"]),
+                **props,
+            )
+
+        if include_properties:
+            for property_name in self.get_property_names():
+                if property_name in data.columns:
+                    sset.set_property_values(
+                        property_name=property_name,
+                        property_vals=data[property_name].tolist(),
+                        update_db=False,
+                    )
+
+        return sset
+
+    def add_mask(self, mask_name, config_id_list):
+        self.masks[mask_name] = config_id_list
+
+    def get_mask(self, mask_name):
+        return self.masks[mask_name]
+
+    def get_property_names(self):
+        """Return the set of property column names."""
+        return self.property_names.copy()
+
+    def get_configurations(self, mask_name=None):
+        if mask_name is not None:
+            return self.configurations[self.configurations["config_id"].isin(self.get_mask(mask_name))]
+        return self.configurations.copy()
+
+    def get_property(self, config_id, property_name):
+        """Retrieve property value of a configuration by its config_id.
+
+        Parameters
+        ----------
+        config_id : int
+            The ID of the configuration to retrieve.
+
+        property_name : str
+            the name of the property
+
+        Returns
+        -------
+        float
+            The value of the property
+
+        Raises
+        ------
+        KeyError
+            If the config_id is not found.
+        """
+        result = self.configurations[self.configurations["config_id"] == config_id]
+        if not result.empty:
+            if property_name not in self.configurations.columns:
+                raise ValueError(f"Property '{property_name}' does not exist in the configurations DataFrame.")
+
+            return result.iloc[0][property_name]
+        raise KeyError(f"Config ID {config_id} not found.")
+
+    def get_fractional_concentration_binary(self, config_id):
+        """Retrieve a fractional concentration of configuration by its config_id.
+
+        Parameters
+        ----------
+        config_id : int
+            The ID of the configuration to retrieve.
+
+        Returns
+        -------
+        float
+            The fractional concentration
+
+        Raises
+        ------
+        KeyError
+            If the config_id is not found.
+        """
+        result = self.configurations[self.configurations["config_id"] == config_id]
+        if not result.empty:
+            column_name = "frconc_binary"
+
+            if column_name not in self.configurations.columns:
+                self.add_fractional_concentration_binary()
+
+            result = self.configurations[self.configurations["config_id"] == config_id]
+            return result.iloc[0][column_name]
+        raise KeyError(f"Config ID {config_id} not found.")
+
+    def get_multiplicity(self, config_id):
+        """Retrieve the symmetry multiplicity of a configuration."""
+        result = self.configurations[self.configurations["config_id"] == config_id]
+        if result.empty:
+            raise KeyError(f"Config ID {config_id} not found.")
+
+        if "multiplicity" not in self.configurations.columns:
+            self.add_multiplicity()
+
+        result = self.configurations[self.configurations["config_id"] == config_id]
+        return int(result.iloc[0]["multiplicity"])
+
+    def add_multiplicity(self, recompute=False, show_progress=True):
+        """Add the symmetry multiplicity for each configuration.
+
+        The multiplicity is the number of distinct symmetry-related sigma
+        configurations for the configuration's supercell shape.
+
+        Set ``show_progress`` to False to disable the progress bar.
+        """
+        if "multiplicity" in self.configurations.columns and not recompute:
+            return
+
+        symper_cache = {}
+
+        def _compute_multiplicity(row):
+            shape_id = row["shape_id"]
+            if shape_id not in symper_cache:
+                sc_shape = self.get_scell_shape(shape_id)
+                scell = SuperCell(self.plat, sc_shape)
+                symper_cache[shape_id] = [tuple(per) for per in scell.get_sym_perm()]
+
+            sigma = row["sigma"]
+            symmetry_hashes = {hash(tuple(sigma[i] for i in per)) for per in symper_cache[shape_id]}
+            return int(len(symmetry_hashes))
+
+        self.set_property_values_iteratively(
+            value_func=_compute_multiplicity,
+            property_name="multiplicity",
+            show_progress=show_progress,
+            progress_description="Computing multiplicities",
+        )
+
+    def compute_properties(
+        self,
+        property_name=None,
+        property_names=None,
+        ase_calculator=None,
+        cemodel=None,
+        property_solver=None,
+        property_solver_kwargs=None,
+        linear_reference=None,
+        per_formula_unit=False,
+        store_ensemble_predictions=False,
+    ):
+        """Compute one or more properties for every configuration.
+
+        Exactly one property-name argument must be supplied:
+
+        * Use ``property_name`` to compute one property. The selected computation
+          method must return one scalar value for each configuration.
+        * Use ``property_names`` to compute several properties. The selected
+          method must return a sequence with exactly one value per name, in the
+          same order. For example, with ``property_names=["p1", "p2"]``, return
+          ``(p1, p2)`` or ``[p1, p2]``.
+
+        For each row in ``self.configurations``, the configuration's structure is
+        generated and passed to the selected computation method. Pass one of
+        ``ase_calculator``, ``cemodel``, or ``property_solver``. If more than one
+        is provided, the first non-``None`` option in that order is used:
+
+        * ``ase_calculator`` is an ASE calculator. Its potential energy is
+          computed from the generated structure's atoms. This method produces a
+          single property.
+        * ``cemodel`` is a cluster expansion model. ``cemodel.predict`` is called
+          with the generated structure. Use a model that returns one value for a
+          single property, or one value per requested property for multiple
+          properties.
+        * ``property_solver`` is a callable invoked once per configuration as
+          ``property_solver(structure, shape, concentration, row=row, **kwargs)``.
+          Here, ``structure`` is the generated clusterx structure, ``shape`` is
+          the supercell shape, ``concentration`` is the binary fractional
+          concentration, and ``row`` is that configuration's pandas Series.
+          Extra keyword arguments come from ``property_solver_kwargs``. For one
+          property, return a scalar. For multiple properties, return a tuple,
+          list, or other sequence with one value per entry in ``property_names``.
+          For example, if the names are ``["p1", "p2"]``, return ``p1, p2`` or
+          ``[p1, p2]``.
+
+        Parameters
+        ----------
+        property_name : str, optional
+            Name of the single property column to compute. Use this or
+            ``property_names``, but not both.
+
+        property_names : sequence of str, optional
+            Names of multiple property columns to compute. The order determines
+            how the values returned by the selected method are assigned to
+            columns. Use this or ``property_name``, but not both.
+
+        ase_calculator : ASE Calculator, optional
+            Calculator used to compute potential energy from each generated
+            structure. This produces one property.
+
+        cemodel : Model, optional
+            Cluster expansion model used to predict the property or properties.
+
+        property_solver : callable, optional
+            Custom function for computing the property or properties. It receives
+            ``structure``, ``shape``, and ``concentration`` as positional
+            arguments, plus ``row`` as a keyword argument. It may return a
+            scalar for one property or an ordered sequence for multiple
+            properties.
+
+        property_solver_kwargs : dict, optional
+            Additional keyword arguments passed to ``property_solver``. Defaults
+            to an empty dictionary.
+
+        linear_reference : str or two-point sequence, optional
+            ``"least-squares"`` or ``"concentration-endpoints"`` fits a
+            concentration-dependent reference separately for each computed
+            property and subtracts it. Alternatively, provide two points as
+            ``[(x0, p0), (x1, p1)]``, where each point is a
+            ``(concentration, property_value)`` pair. Set to ``None`` to skip
+            reference subtraction. The explicit two-point form is intended for
+            scalar results, not tuple or list results from a multi-property
+            solver.
+
+        per_formula_unit : bool, default False
+            If True, divide each computed result by its configuration's
+            supercell size. Use this with scalar results.
+
+        store_ensemble_predictions : bool, default False
+            If True and ``cemodel`` uses a bagging ensemble, store each
+            configuration's array of individual-estimator predictions in an
+            additional ``<property>_ensemble_predictions`` column. This option
+            is not supported together with ``per_formula_unit=True`` or an
+            explicit two-point ``linear_reference``.
+
+
+        Returns
+        -------
+        None
+            ``None``. The computed values are written to columns in
+            ``self.configurations``; missing columns are created automatically.
+
+        Examples
+        --------
+        .. rubric:: Example : computing two values with a property solver
+
+        The returned values are assigned positionally: the first goes to
+        ``"p1"`` and the second to ``"p2"``.
+
+        .. code-block:: python
+
+            def solve_properties(structure, shape, concentration, row, offset):
+                p1 = concentration + offset
+                p2 = len(row["sigma"])
+                return p1, p2  # A list, such as [p1, p2], works as well.
+
+            generator.compute_properties(
+                property_names=["p1", "p2"],
+                property_solver=solve_properties,
+                property_solver_kwargs={"offset": 0.1},
+            )
+        """
+        _filter_property_names(property_name, property_names)
+        if property_solver_kwargs is None:
+            property_solver_kwargs = {}
+        scell_cache = {}
+
+        def _get_structure_object(row):
+            shape_id = row["shape_id"]
+            if shape_id in scell_cache:
+                scell = scell_cache[shape_id]
+            else:
+                scell = SuperCell(self.plat, p=self.get_scell_shape(shape_id))
+                scell_cache[shape_id] = scell
+
+            return scell.gen_structure(sigmas=row["sigma"])
+
+        def _is_bagging_estimator(estimator):
+            return hasattr(estimator, "estimators_") and isinstance(getattr(estimator, "estimators_", None), list)
+
+        def _get_ensemble_predictions_from_cemodel(struc):
+            """
+            Return the per-estimator predictions for a structure if cemodel.estimator
+            is a fitted bagging regressor. Otherwise return None.
+            """
+            if cemodel is None or not hasattr(cemodel, "estimator"):
+                return None
+
+            estimator = cemodel.estimator
+            if not _is_bagging_estimator(estimator):
+                return None
+
+            # Use the same representation as Model.predict(struc) is expected to use:
+            # correlations/features for a single structure.
+            x = cemodel.corrc.get_correlation_matrix([struc])
+
+            preds = np.array([base_est.predict(x)[0] for base_est in estimator.estimators_])
+            return preds
+
+        if ase_calculator is not None:
+
+            def _value_func(row):
+                struc = _get_structure_object(row)
+                ats = struc.get_atoms()
+                ats.calc = ase_calculator
+                return ats.get_potential_energy()
+
+        elif cemodel is not None:
+
+            def _value_func(row):
+                struc = _get_structure_object(row)
+                return cemodel.predict(struc)
+
+        elif property_solver is not None:
+
+            def _value_func(row):
+                struc = _get_structure_object(row)
+                conc = self.get_fractional_concentration_binary(row["config_id"])
+                return property_solver(
+                    struc,
+                    self.get_scell_shape(row["shape_id"]),
+                    conc,
+                    row=row,
+                    **property_solver_kwargs,
+                )
+
+        # else: # TODO: add this in a later version
+        #    raise ValueError("At least one of ase_calculator, cemodel, or property_solver must be provided.")
+
+        if per_formula_unit:
+
+            def _normalize_per_fu(f):
+                def _wrapper(row):
+                    sc_size = self.get_scell_size(row["shape_id"])
+                    return f(row) / sc_size
+
+                return _wrapper
+
+            _value_func = _normalize_per_fu(_value_func)
+
+        if isinstance(linear_reference, list):
+
+            def _subtract_linear_reference(f):
+                def _wrapper(row):
+                    (x0, p0), (x1, p1) = linear_reference
+                    conc = self.get_fractional_concentration_binary(row["config_id"])
+
+                    # straight line through (x0, p0) and (x1, p1)
+                    linref = p0 + (p1 - p0) * (conc - x0) / (x1 - x0)
+                    return f(row) - linref
+
+                return _wrapper
+
+            _value_func = _subtract_linear_reference(_value_func)
+
+        # ------------------------------------------------------------
+        # Main property computation
+        # ------------------------------------------------------------
+        if property_name:  # single property is computed
+            self.set_property_values_iteratively(property_name=property_name, value_func=_value_func)
+        elif property_names:  # multiple properties are computed
+            self.set_property_values_iteratively(property_names=property_names, value_func=_value_func)
+
+        # ------------------------------------------------------------
+        # Optional storage of ensemble predictions
+        # ------------------------------------------------------------
+        if (
+            cemodel is not None
+            and store_ensemble_predictions
+            and hasattr(cemodel, "estimator")
+            and _is_bagging_estimator(cemodel.estimator)
+        ):
+            if property_name:
+                property_names_to_store = [property_name]
+            else:
+                property_names_to_store = list(property_names)
+
+            if per_formula_unit:
+                raise NotImplementedError(
+                    "store_ensemble_predictions=True is not yet implemented together with per_formula_unit=True."
+                )
+
+            if isinstance(linear_reference, list):
+                raise NotImplementedError(
+                    "store_ensemble_predictions=True is not yet implemented together "
+                    "with an explicit linear_reference list."
+                )
+
+            ensemble_preds_all = []
+            for _, row in self.configurations.iterrows():
+                struc = _get_structure_object(row)
+                preds = _get_ensemble_predictions_from_cemodel(struc)
+                ensemble_preds_all.append(preds)
+
+            for pname in property_names_to_store:
+                self.configurations[f"{pname}_ensemble_predictions"] = ensemble_preds_all
+
+        if linear_reference == "least-squares":
+            # get linear reference from linear fit with y = a * conc + b
+            if property_name:
+                property_names = [property_name]
+            self.add_fractional_concentration_binary()
+            concentrations = self.configurations["frconc_binary"]
+            for column in property_names:
+                values = self.configurations[column]
+                a, b = np.polyfit(concentrations, values, deg=1)  # might raise warning if only one unique value
+                linref = a * concentrations + b
+                self.set_property_values_from_array(column, values - linref)
+
+        elif linear_reference == "concentration-endpoints":
+            # get linear reference from highest and lowest concentration points
+            if property_name:
+                property_names = [property_name]
+            self.add_fractional_concentration_binary()
+            concentrations = self.configurations["frconc_binary"]
+            i0, i1 = np.argmin(concentrations), np.argmax(concentrations)
+            x0, x1 = concentrations[i0], concentrations[i1]
+            for column in property_names:
+                values = self.configurations[column]
+                p0, p1 = values[i0], values[i1]
+                linref = p0 + (p1 - p0) * (concentrations - x0) / (x1 - x0)
+                self.set_property_values_from_array(column, values - linref)
+
+    def add_fractional_concentration_binary(self, recompute=False):
+        """
+        Adds a new column to the configurations DataFrame with the name 'frconc_binary'.
+
+        The values in the column are the computed fractional concentration.
+        The parent_lattice definition must correspond to a binary compound.
+        """
+
+        if "frconc_binary" in self.configurations.columns and not recompute:
+            return
+
+        do_round = True
+        round_precision = 6
+        # Check if the parent lattice corresponds to a binary compound
+        if not self.plat.is_nary(2):
+            raise ValueError("The system should be a binary for this function to be used.")
+
+        # Dictionary to cache fractional concentration values
+        frconc_dict = {}
+        plat = self.plat
+
+        def _compute_frcon(row):
+            """
+            Computes the fractional concentration for a given row.
+            Uses caching for efficiency.
+            """
+            nsubs = sum(row["sigma"])
+
+            # Create a unique key based on shape_id and nsubs
+            key = f"{row['shape_id']}_{nsubs}"
+
+            # Return cached value if available
+            if key in frconc_dict:
+                return frconc_dict[key]
+
+            # Compute fractional concentration
+            sc_shape = self.get_scell_shape(row["shape_id"])
+            scell = SuperCell(self.plat, p=sc_shape)
+            struc = scell.gen_structure(sigmas=row["sigma"])
+
+            # Identify the binary sublattice
+            sublt = plat.get_sublattice_types()
+            sublattice_id = None
+            for i, (k, v) in enumerate(sublt.items()):
+                if len(v) == 2:  # Binary sublattice
+                    sublattice_id = i
+                    break
+
+            # Get fractional concentration
+            conc = struc.get_fractional_concentrations()[sublattice_id][1]
+
+            if do_round:
+                conc = round(conc, round_precision)
+
+            # Cache and return the result
+            frconc_dict[key] = conc
+            return conc
+
+        self.set_property_values_iteratively(value_func=_compute_frcon, property_name="frconc_binary")
+
+    def add_property_column(self, property_name, default_value=None):
+        """Adds a new column to the configurations DataFrame with the given property name.
+
+        Parameters
+        ----------
+        property_name : str
+            The name of the property to be added as a column.
+
+        default_value : optional
+            The default value to populate in the new column. If not provided, defaults to None.
+        """
+        column_name = property_name
+
+        if column_name in self.configurations.columns:
+            raise ValueError(f"Column '{column_name}' already exists in the configurations DataFrame.")
+
+        self.configurations[column_name] = default_value
+        self.property_names.add(column_name)
+
+    def set_property_values_iteratively(
+        self,
+        value_func,
+        property_name=None,
+        property_names=None,
+        create_if_missing=True,
+        show_progress=False,
+        progress_description="Computing property values",
+        **kwargs,
+    ):
+        """Sets property values iteratively using a function to compute values on the fly.
+
+        Parameters
+        ----------
+        value_func : callable
+            A function that takes a row of the DataFrame and optional keyword arguments. When setting one property,
+            it returns that property's value. When setting multiple properties, it returns a list, tuple, or other
+            sequence of values, with one value per name in ``property_names`` and in the same order.
+
+        property_name : str
+            The name of the property whose values are to be set.
+            Either this or property_names must be provided.
+
+        property_names : list(str)
+            The names of the properties whose values are to be set. For multiple properties, ``value_func`` must
+            return one value for each name, in this order.
+            Either this or property_name must be provided.
+
+        create_if_missing : bool, optional
+            If True, creates the column if it does not exist. Defaults to True.
+
+        show_progress : bool, optional
+            If True, displays a tqdm progress bar. Defaults to False.
+
+        progress_description : str, optional
+            Description shown on the progress bar.
+
+        **kwargs : dict
+            Additional keyword arguments to pass to the value_func.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            def compute_value_with_args(row, multiplier, offset):
+                return row["sigma"] * multiplier + offset
+
+            generator.set_property_values_iteratively(
+                value_func=compute_value_with_args,
+                property_name="example_property",
+                multiplier=2,
+                offset=5
+            )
+
+            def compute_two_values(row):
+                p1 = len(row["sigma"])
+                p2 = sum(row["sigma"])
+                return p1, p2
+
+            generator.set_property_values_iteratively(
+                value_func=compute_two_values,
+                property_names=["p1", "p2"],
+            )
+
+            # A list return works too; its values map to property_names in order.
+            def compute_two_values_as_list(row):
+                return [len(row["sigma"]), sum(row["sigma"])]
+
+            generator.set_property_values_iteratively(
+                value_func=compute_two_values_as_list,
+                property_names=["p1", "p2"],
+            )
+        """
+        _filter_property_names(property_name, property_names)
+        if property_name:
+            column_names = [property_name]
+        elif property_names:
+            column_names = property_names
+
+        for column_name in column_names:
+            if column_name not in self.configurations.columns:
+                if create_if_missing:
+                    self.configurations[column_name] = None
+                    self.property_names.add(column_name)
+                    print(f"Created new column '{column_name}' in the configurations DataFrame.")
+                else:
+                    raise ValueError(f"Column '{column_name}' does not exist in the configurations DataFrame.")
+
+        if show_progress:
+            values = [
+                value_func(row, **kwargs)
+                for _, row in tqdm(
+                    self.configurations.iterrows(),
+                    total=len(self.configurations),
+                    desc=progress_description,
+                )
+            ]
+            if len(column_names) == 1:
+                self.configurations[column_names[0]] = values
+            else:
+                self.configurations[column_names] = values
+        elif len(column_names) == 1:
+            self.configurations[column_names[0]] = self.configurations.apply(
+                lambda row: value_func(row, **kwargs), axis=1
+            )
+        else:
+            self.configurations[column_names] = self.configurations.apply(
+                lambda row: value_func(row, **kwargs), axis=1, result_type="expand"
+            )
+
+    def set_property_values_from_array(self, property_name, values, create_if_missing=True):
+        """Sets property values using a provided array of values.
+
+        Parameters
+        ----------
+        property_name : str
+            The name of the property whose values are to be set.
+
+        values : list or array-like
+            The values to set in the property column. Must match the number of rows in the DataFrame.
+
+        create_if_missing : bool, optional
+            If True, creates the column if it does not exist. Defaults to True.
+        """
+        column_name = property_name
+
+        if column_name not in self.configurations.columns:
+            if create_if_missing:
+                self.configurations[column_name] = None
+                self.property_names.add(column_name)
+                print(f"Created new column '{column_name}' in the configurations DataFrame.")
+            else:
+                raise ValueError(f"Column '{column_name}' does not exist in the configurations DataFrame.")
+
+        if len(values) != len(self.configurations):
+            raise ValueError(
+                "Length of values array does not match the number of rows in the configurations DataFrame."
+            )
+
+        self.configurations[column_name] = values
+
+    def add_scell_shape(self, shape):
+        """Add a new cell shape matrix if it does not already exist.
+
+        Parameters
+        ----------
+        shape : ndarray
+            A 3x3 NumPy array representing the cell shape.
+
+        Returns
+        -------
+        int
+            The shape_id of the newly added or existing cell shape.
+        """
+
+        sc_size = int(abs(round(np.linalg.det(shape))))
+
+        match = self.scell_shapes[self.scell_shapes["shape"].apply(lambda x: np.array_equal(x, shape))]
+        if not match.empty:
+            return match.iloc[0]["shape_id"]
+
+        new_id = len(self.scell_shapes)
+        self.scell_shapes = pd.concat(
+            [
+                self.scell_shapes,
+                pd.DataFrame({"shape_id": [new_id], "shape": [shape], "size": [sc_size]}),
+            ],
+            ignore_index=True,
+        )
+        return new_id
+
+    def get_scell_shape(self, shape_id):
+        """Retrieve a cell shape matrix by its shape_id.
+
+        Parameters
+        ----------
+        shape_id : int
+            The ID of the cell shape to retrieve.
+
+        Returns
+        -------
+        np.ndarray
+            The 3x3 NumPy array representing the cell shape.
+
+        Raises
+        ------
+        KeyError
+            If the shape_id is not found.
+        """
+        result = self.scell_shapes[self.scell_shapes["shape_id"] == shape_id]
+        if not result.empty:
+            return result.iloc[0]["shape"]
+        raise KeyError(f"Shape ID {shape_id} not found.")
+
+    def get_scell_size(self, shape_id):
+        """Retrieve a cell shape matrix by its shape_id.
+
+        Parameters
+        ----------
+        shape_id : int
+            The ID of the cell shape to retrieve.
+
+        Returns
+        -------
+        np.ndarray
+            The 3x3 NumPy array representing the cell shape.
+
+        Raises
+        ------
+        KeyError
+            If the shape_id is not found.
+        """
+        result = self.scell_shapes[self.scell_shapes["shape_id"] == shape_id]
+        if not result.empty:
+            return int(result.iloc[0]["size"])
+        raise KeyError(f"Shape ID {shape_id} not found.")
+
+    def add_configuration(self, sigma, shape_id, **kwargs):
+        """Add a new configuration.
+
+        Parameters
+        ----------
+        sigma : tuple
+            A tuple of integers representing the atomic configuration.
+
+        shape_id : int
+            The shape_id linking the configuration to a cell shape.
+
+        **kwargs : dict
+            Additional keyword arguments for the configuration.
+        """
+        new_id = len(self.configurations)
+        row_dict = {"config_id": new_id, "sigma": sigma, "shape_id": shape_id, **kwargs}
+        row_dict = {k: [v] for k, v in row_dict.items()}
+        self.configurations = pd.concat(
+            [
+                self.configurations,
+                pd.DataFrame(row_dict),
+            ],
+            ignore_index=True,
+        )
+
+    def generate(
+        self,
+        supercell_sizes=None,
+        shapes_nearest_orthogonal=False,
+        num_subs_list=None,
+        sc_shape=None,
+        sc_shapes=None,
+        n_random=None,
+        random_state=None,
+        recursive=True,
+    ):
         """Generate derivative structures
 
-        **Parameters:**
-
-        ``supercell_sizes``: list or array of int
+        Parameters
+        ----------
+        supercell_sizes : list or ndarray of int
             List  of integers indicating the number of unit cells in each derivative supercell
-        ``num_subs_list``: ragged list of lists or arrays of integers
-            every list or array in the ragged list, indicate the number of substituents to be 
-            considered in a given supercell. The first dimension must coincide with the 
+
+        shapes_nearest_orthogonal : bool or list of int, default False
+            If True, for the class of supercells belonging to a hermite normal form (HNF), it will
+            select the supercells with angles between cell vectors pairwise closest to orthogonal.
+            This search is by default done by transforming the HNFs by 3x3 determinant-1 matrices
+            formed with the integers [1,0,-1]. If you pass a list of integers to this argument,
+            the passed list will be used insted of the default [1,0,-1]. If False, the original
+            HNFs determine the supercell shapes.
+
+        num_subs_list : ragged list of lists or arrays of int, or list of dict for multilattice case
+            every list or array in the ragged list, indicate the number of substituents to be
+            considered in a given supercell. The first dimension must coincide with the
             dimension of ``supercell_sizes``.
+
+        sc_shape : 3x3 matrix or None
+            if only decorations for a single supercell are wanted, specify it here.
+
+        sc_shapes : list of 3x3 matrix or None
+            list of sc_shapes to generate decorations.
+
+        n_random : int or None
+            If provided, generate only this number of random configurations per (shape, nsubs).
+
+        random_state : int or None
+            If provided, used to seed the random number generators for reproducibility.
+
+        recursive : bool, default True
+            Use fast recursive algorithm for finding derivative structures. If all configurations
+            for ``n`` substitutions are seek, the recursive algorithm finds before all of ``n-1``.
+            Thus, a calculation with  ``num_subs_list=[[0,1,2,3]]`` takes the same numerical
+            effort as ``num_subs_list=[[3]]`` when recursive is ``True``.
         """
-        for sc_size, num_subs in zip(supercell_sizes, num_subs_list): # sc_size: number of unit cells in supercell
-            #unique_scs, unique_trafos = get_unique_supercells_large_angles(sc_size, self.plat, [-2,-1,0,1,2])
-            unique_scs, unique_trafos = get_unique_supercells(sc_size, self.plat)
+        if random_state is not None:
+            random.seed(random_state)
+            np.random.seed(random_state)
 
-            for idx, t in enumerate(unique_trafos):
-                print(f'Start scell shape {idx+1} of {len(unique_trafos)}')
-                scell_fe = SuperCell(self.plat,t)
-                natoms = scell_fe.get_natoms()
-            
-                symper = scell_fe.get_sym_perm()
-            
+        scell_cache = {}
+        symper_cache = {}
+
+        for i, num_subs in enumerate(num_subs_list):
+            if sc_shape is None and sc_shapes is None:
+                sc_size = supercell_sizes[i]
+
+                if shapes_nearest_orthogonal is False:
+                    _, unique_sc_shapes = get_unique_supercells(sc_size, self.plat)
+                elif shapes_nearest_orthogonal is True:
+                    _, unique_sc_shapes = get_unique_supercells_nearest_orthogonal(
+                        sc_size, self.plat, elements=[1, 0, -1]
+                    )
+                elif isinstance(shapes_nearest_orthogonal, list):
+                    _, unique_sc_shapes = get_unique_supercells_nearest_orthogonal(
+                        sc_size, self.plat, elements=shapes_nearest_orthogonal
+                    )
+                else:
+                    raise TypeError("Expected False, True, or a list of integers.")
+
+            elif sc_shapes is None:
+                sc_size = int(abs(round(np.linalg.det(sc_shape))))
+                unique_sc_shapes = [sc_shape]
+
+            else:
+                sc_size = int(abs(round(np.linalg.det(sc_shapes[i]))))
+                unique_sc_shapes = [sc_shapes[i]]
+
+            for idx, t in enumerate(unique_sc_shapes):
+                print(
+                    f"Start enum of scell shape {idx + 1} of {len(unique_sc_shapes)}. Size: {sc_size}, nsubs:{num_subs}"
+                )
+
                 for nsubs in num_subs:
+                    print("\n")
+                    self.generate_for_shape_nsubs(
+                        sc_shape=t,
+                        nsubs=nsubs,
+                        n_random=n_random,
+                        recursive=recursive,
+                        _scell_cache=scell_cache,
+                        _symper_cache=symper_cache,
+                    )
 
-                    full_list = set()
-                    ssites = scell_fe.get_substitutional_sites()
+                # if recursive:
+                #     self.generate_for_shape_nsubs(
+                #         sc_shape=t, nsubs=max(num_subs), n_random=n_random, recursive=recursive
+                #     )
+                # else:
+                #     for nsubs in num_subs:
+                #         self.generate_for_shape_nsubs(sc_shape=t, nsubs=nsubs, n_random=n_random, recursive=recursive)
 
-                    i=0
-                    list_sigmas = []
+        print(f"\nEnumeration complete. Found {len(self.configurations)} unique configurations.\n")
 
-                    n_max = int(scipy.special.binom(len(ssites), nsubs))
-                    print(f'Max nr of configurations for {nsubs} substitutions in {natoms}-atom size scell (no sym accounted): {n_max}')
+    def generate_for_shape_nsubs(
+        self,
+        sc_shape: List[List[int]],
+        nsubs: Optional[Union[int, dict]] = None,
+        n_random: Optional[int] = None,
+        recursive: bool = True,
+        _scell_cache=None,
+        _symper_cache=None,
+    ):
+        """Generate derivative structures.
 
-                    for con in tqdm(combinations(ssites,nsubs), total=n_max, desc="Finding unique sigmas"):
-                        sigmas = np.zeros(natoms, dtype = "int")
-                        np.put(sigmas, con, [1])
+        Parameters
+        ----------
+        sc_shape : List[List[int]]
+            Shape of the supercell (3x3 list or array of integers).
 
-                        if tuple(sigmas.tolist()) not in full_list:
-                            list_sigmas.append(sigmas)
+        nsubs : int
+            Number of substitutions.
 
-                        _sigmass = []
-                        for per in symper:
-                            _sigmass.append(sigmas[np.ix_(per)])
-                        sigmass = np.unique(_sigmass, axis=0)
-                        for s_ in sigmass:
-                            full_list.add(tuple(s_.tolist()))
-                            
-                        i = i+1
-                        
-                        """if i == 10000:
-                            print("SSET_Size = "+str(getsizeof(list_sigmas)))
-                            print("full_list_Size = "+str(getsizeof(full_list)))
-                            i=0
-                        """
-                    self.scell_sizes.append(sc_size)
-                    self.scell_shapes.append(t)
-                    self.num_subs.append(nsubs)
-                    self.sigmas.append(list_sigmas)
+        n_random : Optional[int]
+            If provided, generate only this number of random configurations.
 
-    def compute_properties(self, property_name, cemodel):
-        self.properties[property_name] = []
-        self.concentrations = []
+        Returns
+        -------
+        List[np.ndarray]
+            List of unique sigma configurations.
+        """
+        self._validate_inputs(sc_shape, nsubs)
+        shape_id = self.add_scell_shape(shape=sc_shape)
 
-        scsize0 = self.scell_sizes[0]
-        scshape0 = self.scell_shapes[0]
-        scell = SuperCell(self.plat, p=scshape0)
-        for i, (scsize, scshape, nsubs, sigmas) in tqdm(enumerate(zip(self.scell_sizes, self.scell_shapes, self.num_subs, self.sigmas)), total=len(self.scell_sizes), desc="Computing properties"):
-            
-            self.properties[property_name].append([])
-            self.concentrations.append([])
+        if _scell_cache is None:
+            _scell_cache = {}
+        if _symper_cache is None:
+            _symper_cache = {}
 
-            if scsize != scsize0 or (scshape != scshape0).any():
-                scell = SuperCell(self.plat, p=scshape)
-                scsize0 = scsize
-                scshape0 = scshape
+        logging.info(
+            "Start enum for supercell size: %s, nsubs: %s",
+            self.get_scell_size(shape_id),
+            nsubs,
+        )
 
-            for sigma in sigmas:
-                struc = scell.gen_structure(sigmas = sigma)
-                conc = struc.get_fractional_concentrations()
-                pval = cemodel.predict(struc)
-                self.properties[property_name][i].append(pval)
-                self.concentrations[i].append(conc[0][1])
+        if shape_id not in _scell_cache:
+            _scell_cache[shape_id] = SuperCell(self.plat, self.get_scell_shape(shape_id))
+        scell = _scell_cache[shape_id]
+        natoms = scell.get_natoms()
+        if shape_id not in _symper_cache:
+            _symper_cache[shape_id] = [tuple(per) for per in scell.get_sym_perm()]
+        symper_tuples = _symper_cache[shape_id]
+        nsites_per_type = scell.get_nsites_per_type()
+        ems = scell.get_ems()
+        ssites = scell.get_substitutional_sites()
+        stypes = scell.get_tags()
+        scindex = int(abs(scell.get_index()))
+        stypes_plat = self.plat.get_sublattice_types()
+
+        def partial_binom_sum(N, n):
+            if n < 0:
+                return 0
+            else:
+                return partial_binom_sum(N, n - 1) + scipy.special.binom(N, n)
+
+        if isinstance(nsubs, int):
+            if nsubs > len(ssites):
+                logging.error("nsubs cannot exceed the number of substitutional sites.")
+                raise ValueError("nsubs cannot exceed the number of substitutional sites.")
+
+            if n_random is None:
+                if recursive:
+                    # Identify the binary sublattice
+                    binary_sublattice_id = None
+                    for i, (k, v) in enumerate(stypes_plat.items()):
+                        if len(v) == 2:  # Binary sublattice
+                            binary_sublattice_id = i
+                            break
+
+                    n_max = int(partial_binom_sum(len(ssites), nsubs) / scindex)
+                    with tqdm(total=n_max, desc="Finding unique sigmas") as pbar:
+                        num_conf = self._generate_all_configurations_recursive(
+                            ssites,
+                            {binary_sublattice_id: [nsubs]},
+                            natoms,
+                            shape_id,
+                            symper_tuples,
+                            ems,
+                            stypes,
+                            pbar=pbar,
+                        )
+                else:
+                    num_conf = self._generate_all_configurations(ssites, nsubs, natoms, shape_id, symper_tuples)
+
+            else:
+                num_conf = self._generate_random_configurations(
+                    ssites, nsubs, natoms, shape_id, symper_tuples, n_random
+                )
+
+        elif isinstance(nsubs, dict):
+            site_type_by_index = scell.get_tags()
+
+            estimated_nconf = 1
+            for site_type, nsites in nsites_per_type.items():
+                nsubs_in_type = np.sum(nsubs.get(str(site_type), [0]))
+                if len(stypes_plat[site_type]) > 1:
+                    if recursive:
+                        estimated_nconf *= partial_binom_sum(nsites_per_type[int(site_type)], nsubs_in_type)
+                    else:
+                        estimated_nconf *= scipy.special.binom(nsites, nsubs_in_type)
+            estimated_nconf /= scindex
+            estimated_nconf = int(estimated_nconf)
+
+            if n_random is None:
+                if recursive:
+                    with tqdm(total=estimated_nconf, desc="Finding unique sigmas") as pbar:
+                        num_conf = self._generate_all_configurations_recursive(
+                            ssites,
+                            nsubs,
+                            natoms,
+                            shape_id,
+                            symper_tuples,
+                            ems,
+                            stypes,
+                            pbar=pbar,
+                        )
+                else:
+                    num_conf = self._generate_all_configurations_multilattice(
+                        nsubs, natoms, shape_id, symper_tuples, site_type_by_index
+                    )
+
+            else:
+                raise NotImplementedError()
+                # num_conf = self._generate_random_configurations(ssites, nsubs, natoms, shape_id, symper, n_random)
+
+        logging.info(
+            "Found %s unique configurations of %s substitutions in %s-atom size scell.",
+            num_conf,
+            nsubs,
+            natoms,
+        )
+
+    @staticmethod
+    def _validate_sigma(sigma: Tuple[int], nsubs, stypes):
+        """Check if a given sigma configuration is valid based on the number of
+        substitutions and site types."""
+        sigma_nsubs = {}
+        for site_type in nsubs:
+            sigma_nsubs[site_type] = []
+            for _ in nsubs[site_type]:
+                sigma_nsubs[site_type].append(0)
+
+        for site_type, max_nsubs_list in nsubs.items():
+            for i, max_nsubs in enumerate(max_nsubs_list):
+                n = 0
+                for sigma_j, stype_j in zip(sigma, stypes):
+                    if sigma_j == i + 1 and stype_j == int(site_type):
+                        n += 1
+                        sigma_nsubs[site_type][int(i)] += 1
+                        if n > max_nsubs:
+                            return False
+        return True
+
+    def get_child_sigmas(
+        self,
+        sigma: tuple[int],
+        ssites: list[int],
+        symper_tuples: list[tuple],
+        ems: list[int],
+        seen_hashes: set[int],
+        nsubs,
+        stypes,
+    ):
+        children = set()
+        for site in ssites:
+            for sigmai in range(1, ems[site]):
+                if sigmai != sigma[site]:
+                    newsigma = sigma[:site] + (sigmai,) + sigma[site + 1 :]
+                    if DerivativeStructures._validate_sigma(newsigma, nsubs, stypes):
+                        children.add(newsigma)
+
+        unique_children = {}  # dict with child hash as key and degeneracy as value
+        for child in children:
+            if hash(child) not in seen_hashes:
+                all_hashes = {hash(tuple(child[i] for i in per)) for per in symper_tuples}
+                seen_hashes |= all_hashes
+                unique_children[child] = len(all_hashes)  # save degeneracy
+
+        return unique_children, seen_hashes
+
+    def _generate_all_configurations_recursive(
+        self,
+        ssites: list[int],
+        nsubs: dict[str, list[int]],
+        natoms: int,
+        shape_id: int,
+        symper_tuples: list[tuple],
+        ems: list[int],
+        stypes: np.ndarray[int],
+        sigma0: tuple[int] | None = None,
+        seen_hashes: set[int] | None = None,
+        current_nsubs: int = 0,
+        pbar: tqdm | None = None,
+        all_hashes: set[int] | None = None,
+        degeneracy: int | None = None,
+        all_sigmas: list[tuple[tuple[int], int]] | None = None,
+    ):
+        is_root = all_sigmas is None
+        if sigma0 is None:
+            sigma0 = (0,) * natoms
+
+        if seen_hashes is None:
+            seen_hashes = set()
+
+        if all_hashes is None:
+            all_hashes = set()
+
+        if all_sigmas is None:
+            all_sigmas = []
+
+        if degeneracy is None:
+            hashes_sigma0 = {hash(tuple(sigma0[i] for i in per)) for per in symper_tuples}
+            degeneracy = len(hashes_sigma0)
+
+        all_sigmas.append((sigma0, degeneracy))
+        all_hashes.add(hash(sigma0))
+
+        if pbar:
+            pbar.update(1)
+
+        children, seen_hashes = self.get_child_sigmas(sigma0, ssites, symper_tuples, ems, seen_hashes, nsubs, stypes)
+        if pbar and len(children) != 0:
+            pbar.set_postfix(
+                nseen=len(seen_hashes),
+                nchildren=len(children),
+                nsub=sum(1 for x in list(children.keys())[0] if x != 0),
+            )
+        for child, degeneracy in children.items():
+            self._generate_all_configurations_recursive(
+                ssites,
+                nsubs,
+                natoms,
+                shape_id,
+                symper_tuples,
+                ems,
+                stypes,
+                sigma0=child,
+                seen_hashes=seen_hashes,
+                current_nsubs=current_nsubs + 1,
+                pbar=pbar,
+                all_hashes=all_hashes,
+                degeneracy=degeneracy,
+                all_sigmas=all_sigmas,
+            )
+
+        # arrive here after all children have been processed,
+        # add all unique sigmas to the configurations DataFrame
+        if is_root:
+            start_id = len(self.configurations)
+            new_configurations = pd.DataFrame(
+                [
+                    {"config_id": new_id, "sigma": sigma, "shape_id": shape_id, "degeneracy": degeneracy}
+                    for new_id, (sigma, degeneracy) in zip(range(start_id, start_id + len(all_sigmas)), all_sigmas)
+                ]
+            )
+            self.configurations = pd.concat(
+                [self.configurations, new_configurations],
+                ignore_index=True,
+            )
+        return len(all_hashes)
+
+    def _generate_all_configurations(
+        self,
+        ssites,
+        nsubs,
+        natoms,
+        shape_id,
+        symper,
+        cache_quota_bytes=2 * 1024 * 1024 * 1024,
+    ):
+        n_max = int(scipy.special.binom(len(ssites), nsubs))
+        logging.info(
+            "Max number of configurations for %s substitutions in %s-atom size scell (no sym accounted): %s",
+            nsubs,
+            natoms,
+            n_max,
+        )
+        logging.info("Starting to find unique configurations...")
+        tracemalloc.start()
+        num_conf_start = len(self.configurations)
+
+        pbar = tqdm(combinations(ssites, nsubs), total=n_max, desc="Finding unique sigmas")
+        sigmas_hash_set = set()
+
+        # Precompute permutations as index tuples
+        self._symper_tuples = [tuple(per) for per in symper]
+
+        mode = "fast"
+        switched_mode = False
+        rows = []  # store sigma, shape_id, and degeneracy for batch insertion
+
+        for con in pbar:
+            current_mem, _ = tracemalloc.get_traced_memory()
+
+            sigma_trial = self._create_sigma_array(natoms, con)
+
+            if current_mem > cache_quota_bytes and not switched_mode:
+                mode = "slow"
+                switched_mode = True
+                logging.info("Cache quota exceeded, switching to slow mode.")
+                sigmas_hash_set = set()
+                for sigma in self.configurations["sigma"]:
+                    trial_hash_canonical = min(hash(tuple(sigma_trial[i] for i in per)) for per in self._symper_tuples)
+                    sigmas_hash_set.add(trial_hash_canonical)
+
+            if mode == "fast":
+                sigma_hash = hash(tuple(sigma_trial))
+
+                if sigma_hash not in sigmas_hash_set:
+                    all_trial_hashes = {hash(tuple(sigma_trial[i] for i in per)) for per in self._symper_tuples}
+                    degeneracy = len(all_trial_hashes)
+                    sigmas_hash_set |= all_trial_hashes
+                    rows.append((sigma_trial, shape_id, degeneracy))
+
+            else:
+                # Slow path: only store the canonical hash
+                all_trial_hashes = {hash(tuple(sigma_trial[i] for i in per)) for per in self._symper_tuples}
+                degeneracy = len(all_trial_hashes)
+                trial_hash_canonical = min(all_trial_hashes)
+                if trial_hash_canonical not in sigmas_hash_set:
+                    sigmas_hash_set.add(trial_hash_canonical)
+                    rows.append((sigma_trial, shape_id, degeneracy))
+
+            # Show memory usage in tqdm postfix
+            pbar.set_postfix(
+                mem=self._format_bytes(current_mem),
+                mode=mode,
+                nconf=len(self.configurations["sigma"]),
+            )
+
+        tracemalloc.stop()
+
+        start_id = len(self.configurations)
+        new_configurations = pd.DataFrame(rows, columns=["sigma", "shape_id", "degeneracy"])
+        new_configurations["config_id"] = range(start_id, start_id + len(new_configurations))
+        self.configurations = pd.concat(
+            [self.configurations, new_configurations],
+            ignore_index=True,
+        )
+
+        return len(self.configurations) - num_conf_start
+
+    def _generate_all_configurations_multilattice(self, nsubs, natoms, shape_id, symper, site_type_by_index):
+        full_list: Set[Tuple[int, ...]] = set()
+        logging.info("Starting to find unique configurations...")
+
+        num_conf_start = len(self.configurations)
+
+        configurations = DerivativeStructures._generate_multilattice_configurations(natoms, site_type_by_index, nsubs)
+
+        for sigma in configurations:
+            if tuple(sigma) not in full_list:
+                unique_transformations = self._transformations_unique(sigma, symper)
+                degeneracy = len(unique_transformations)
+                full_list |= unique_transformations
+                self.add_configuration(sigma=sigma, shape_id=shape_id, degeneracy=degeneracy)
+
+        return len(self.configurations) - num_conf_start
+
+    @staticmethod
+    def _generate_multilattice_configurations(natoms, site_type_by_index, nsubs):
+        site_type_by_index = np.array(site_type_by_index)
+
+        sublattice_positions = {
+            sublattice_type: list(np.where(site_type_by_index == int(sublattice_type))[0]) for sublattice_type in nsubs
+        }
+        # Create generators for each domain
+
+        sublattice_labelings = {
+            sublattice_type: DerivativeStructures._generate_labelings_for_sublattice(
+                natoms, sublattice_positions[sublattice_type], nsubs[sublattice_type]
+            )
+            for sublattice_type in nsubs
+        }
+
+        # Use product of generators
+        for combo in product(*sublattice_labelings.values()):
+            combined = np.zeros(natoms, dtype=int)
+            for arr in combo:
+                combined += arr  # safe because positions are disjoint
+            yield combined
+
+    @staticmethod
+    def _generate_labelings_for_sublattice(natoms, sublattice_positions, nsubs):
+        """Returns generator of labelings for a sublattice
+
+        e.g.
+        sublattice_positions = [3,5,6,7,9]
+        nsubs = [3,1]
+
+        [(0,[3,5,9]),(1,[7])]
+
+        Parameters
+        ----------
+        sublattice_positions : list
+            index of atomic positions to allocate substitutions
+
+        nsubs : list
+            number of substitutions of every kind
+        """
+
+        def recursive_build(level, used_indices):
+            if level == len(nsubs):
+                yield []
+                return
+
+            available = [i for i in sublattice_positions if i not in used_indices]
+            for indices in combinations(available, nsubs[level]):
+                new_used = used_indices | set(indices)
+                for rest in recursive_build(level + 1, new_used):
+                    yield [(level + 1, indices)] + rest
+
+        for assignment in recursive_build(0, set()):
+            full_arr = np.zeros(natoms, dtype=int)
+            for value, idxs in assignment:
+                for idx in idxs:
+                    full_arr[idx] = value
+            yield full_arr
+
+    @staticmethod
+    def _format_bytes(size_bytes):
+        """Convert bytes into human-readable format (KB, MB, GB)."""
+        if size_bytes < 1024:
+            return f"{size_bytes:.2f} B"
+        elif size_bytes < 1024**2:
+            return f"{size_bytes / 1024:.2f} KB"
+        elif size_bytes < 1024**3:
+            return f"{size_bytes / 1024**2:.2f} MB"
+        else:
+            return f"{size_bytes / 1024**3:.2f} GB"
+
+    def _generate_random_configurations(self, ssites, nsubs, natoms, shape_id, symper, n_random):
+        full_list: Set[Tuple[int, ...]] = set()
+        attempts = 0
+        attempts_total = 0
+        # max_attempts = n_random * 10  # Limit attempts to avoid infinite loops
+        max_attempts = 1000  # Limit attempts to avoid infinite loops
+
+        logging.info("Starting to generate %s random unique configurations...", n_random)
+
+        num_conf_start = len(self.configurations)
+
+        pbar = tqdm(total=n_random, desc="Generating configurations")
+        tracemalloc.start()
+
+        while len(self.configurations) - num_conf_start < n_random and attempts < max_attempts:
+            con = tuple(sorted(sample(ssites, nsubs)))
+            sigma = self._create_sigma_array(natoms, con)
+
+            is_new = not any(tuple(sigma.take(per, axis=0)) in full_list for per in symper)
+
+            if is_new:
+                self.add_configuration(sigma=sigma, shape_id=shape_id)
+                full_list.add(tuple(sigma))
+                pbar.update(1)
+
+                # Snapshot memory after update
+                current, peak = tracemalloc.get_traced_memory()
+                pbar.set_postfix(mem=self._format_bytes(current))
+                attempts = 0
+
+            attempts += 1
+            attempts_total += 1
+
+        pbar.close()
+        tracemalloc.stop()
+
+        num_conf = len(self.configurations) - num_conf_start
+
+        if num_conf < n_random:
+            logging.info(
+                "%s unique configurations could be generated after %s attempts. Desired number: %s",
+                num_conf,
+                attempts_total,
+                n_random,
+            )
+        return num_conf
+
+    def _generate_random_configurations2(self, ssites, nsubs, natoms, shape_id, symper, n_random):
+        full_list: Set[Tuple[int, ...]] = set()
+        attempts = 0
+        attempts_total = 0
+        # max_attempts = n_random * 10  # Limit attempts to avoid infinite loops
+        max_attempts = 1000  # Limit attempts to avoid infinite loops
+
+        logging.info("Starting to generate %s random unique configurations...", n_random)
+
+        num_conf_start = len(self.configurations)
+
+        pbar = tqdm(total=n_random, desc="Generating configurations")
+        tracemalloc.start()
+
+        while len(self.configurations) - num_conf_start < n_random and attempts < max_attempts:
+            con = tuple(sorted(sample(ssites, nsubs)))
+            sigma = self._create_sigma_array(natoms, con)
+
+            if tuple(sigma) not in full_list:
+                self.add_configuration(sigma=sigma, shape_id=shape_id)
+                self._update_full_list(sigma, symper, full_list)
+                attempts = 0
+                pbar.update(1)
+
+                # Snapshot memory after update
+                current, peak = tracemalloc.get_traced_memory()
+                pbar.set_postfix(mem=self._format_bytes(current))
+
+            attempts += 1
+            attempts_total += 1
+
+        pbar.close()
+        tracemalloc.stop()
+
+        num_conf = len(self.configurations) - num_conf_start
+
+        if num_conf < n_random:
+            logging.info(
+                "%s unique configurations could be generated after %s attempts. Desired number: %s",
+                num_conf,
+                attempts_total,
+                n_random,
+            )
+        return num_conf
+
+    def _validate_inputs(self, sc_shape, nsubs):
+        if not (
+            isinstance(sc_shape, (list, np.ndarray)) and len(sc_shape) == 3 and all(len(row) == 3 for row in sc_shape)
+        ):
+            raise ValueError("sc_shape must be a 3x3 list or array of integers.")
+
+        if not (isinstance(nsubs, dict) or (isinstance(nsubs, int) and nsubs >= 0)):
+            raise ValueError("nsubs must be a dict or a non-negative integer.")
+
+    def _create_sigma_array(
+        self, natoms: int, con: Tuple[int], sigma: int = 1, sigmas: np.ndarray = None
+    ) -> np.ndarray:
+        """Create a sigma array from a combination."""
+        if sigmas is None:
+            sigmas = np.zeros(natoms, dtype="int")
+
+        np.put(sigmas, con, sigma)
+        return sigmas
+
+    def _update_full_list(self, sigmas, symper, full_list):
+        """Update the set of unique configurations."""
+        # NOTE: usage of this should be replaced with _transformations_unique
+        for sigmas_perm in [sigmas[np.ix_(per)] for per in symper]:
+            full_list.add(tuple(sigmas_perm))
+
+    def _transformations_unique(self, sigmas: np.ndarray, symper: List[np.ndarray]) -> Set[Tuple[int]]:
+        """Get unique (in terms of sigma permutation) transformations of a
+        sigma array, that are equivalent by symmetry."""
+        return {tuple(sigmas[np.ix_(per)]) for per in symper}
+
+    def add_binary_complements(
+        self,
+        mask_name=None,
+        mode="new",
+        skip_existing=True,
+        show_progress=True,
+    ):
+        """Generate the binary complements of configurations (flip 0<->1 on substitutional sites).
+
+        Steps:
+
+        1) Check that parent lattice is binary (self.plat.is_nary(2)).
+        2) For each configuration, build/cached SuperCell for its shape_id.
+        3) Require exactly one substitutional sublattice:
+           ``len(scell.get_substitutional_tags()) == 1``
+        4) Flip sigma entries at scell.get_substitutional_sites() (only those sites).
+        5) Either return a new DerivativeStructures object with the complemented configurations (mode="new"),
+           or extend self by adding them (mode="extend").
+
+        Parameters
+        ----------
+        mask_name : str or None
+            If provided, only configurations in the mask are processed (uses get_configurations()).
+
+        mode
+            {"new", "extend"}
+
+            - "new": return a new DerivativeStructures object with only complemented configs.
+            - "extend": add complemented configs to self and return self.
+
+        skip_existing : bool
+            If True, do not add complements that already exist (same sigma and shape_id).
+
+        Returns
+        -------
+        DerivativeStructures
+            The new collection (mode="new") or self (mode="extend").
+
+        Raises
+        ------
+        ValueError
+            If parent lattice is not binary, or if a configuration's supercell does not have
+            exactly one substitutional sublattice.
+        """
+
+        from clusterx.super_cell import SuperCell
+
+        if not self.plat.is_nary(2):
+            raise ValueError(
+                "add_binary_complements() requires a binary ParentLattice: self.plat.is_nary(2) must be True."
+            )
+
+        if mode not in {"new", "extend"}:
+            raise ValueError("mode must be 'new' or 'extend'.")
+
+        # Choose target container
+        if mode == "new":
+            out = self.__class__(self.plat)
+            out.scell_shapes = self.scell_shapes.copy(deep=True)
+            out.masks = dict(self.masks)
+            out.property_names = set(self.property_names)
+        else:
+            out = self
+
+        # Configs to process
+        configs_df = self.get_configurations(mask_name=mask_name)
+
+        # Cache per shape_id: {"sub_sites": [...]} (you can also store scell/tags if useful)
+        shape_cache = {}
+
+        # Existing membership structure
+        # Important: build membership *once* (not per row), and keep it cheap.
+        # We include shape_id in the key because the same sigma tuple can appear for different shapes.
+        if skip_existing:
+            existing = set(
+                (int(r.shape_id), tuple(r.sigma))
+                for r in out.configurations[["shape_id", "sigma"]].itertuples(index=False)
+            )
+        else:
+            existing = None
+
+        # We will collect new rows in bulk
+        new_shape_ids = []
+        new_sigmas = []
+
+        # Fast iteration over rows: itertuples is much faster than iterrows
+        row_iter = configs_df[["shape_id", "sigma", "config_id"]].itertuples(index=False)
+
+        if show_progress:
+            row_iter = tqdm(row_iter, total=len(configs_df), desc="Generating complements")
+
+        for r in row_iter:
+            shape_id = int(r.shape_id)
+            sigma = tuple(r.sigma)
+
+            cache_entry = shape_cache.get(shape_id)
+            if cache_entry is None:
+                scell = SuperCell(self.plat, p=self.get_scell_shape(shape_id))
+                tags = scell.get_substitutional_tags()
+                if len(tags) != 1:
+                    raise ValueError(
+                        f"Expected exactly one substitutional sublattice "
+                        f"(len(get_substitutional_tags())==1), but got {len(tags)} "
+                        f"for shape_id={shape_id}."
+                    )
+                sub_sites = list(scell.get_substitutional_sites())
+                cache_entry = {"sub_sites": sub_sites}
+                shape_cache[shape_id] = cache_entry
+
+            sub_sites = cache_entry["sub_sites"]
+
+            # Flip only substitutional sites
+            sigma_list = list(sigma)
+            for i in sub_sites:
+                v = sigma_list[i]
+                if v == 0:
+                    sigma_list[i] = 1
+                elif v == 1:
+                    sigma_list[i] = 0
+                else:
+                    raise ValueError(
+                        f"Non-binary occupation value {v} at sigma[{i}] "
+                        f"for config_id={r.config_id}, shape_id={shape_id}. "
+                        f"Expected only 0/1 on substitutional sites."
+                    )
+            flipped = tuple(sigma_list)
+
+            if skip_existing:
+                key = (shape_id, flipped)
+                if key in existing:
+                    continue
+                existing.add(key)
+
+            new_shape_ids.append(shape_id)
+            new_sigmas.append(flipped)
+
+        if not new_sigmas:
+            return out
+
+        # Add everything in ONE concat (critical for performance)
+        start_id = len(out.configurations)
+        new_df = pd.DataFrame(
+            {
+                "config_id": range(start_id, start_id + len(new_sigmas)),
+                "sigma": new_sigmas,
+                "shape_id": new_shape_ids,
+            }
+        )
+        out.configurations = pd.concat([out.configurations, new_df], ignore_index=True)
+
+        return out
 
 
+# Keep the historical module attribute so existing imports, isinstance checks,
+# and pickle files referencing clusterx.derivative_structures.DSGenerator work.
+DSGenerator = DerivativeStructures
 
 
 def _divisors(n):
@@ -123,9 +1730,9 @@ def _divisors(n):
     factors = {}
     nn = n
     i = 2
-    while i*i <= nn:
+    while i * i <= nn:
         while nn % i == 0:
-            if not i in factors:
+            if i not in factors:
                 factors[i] = 0
             factors[i] += 1
             nn //= i
@@ -140,7 +1747,7 @@ def _divisors(n):
         if k == len(primes):
             yield 1
         else:
-            rest = generate(k+1)
+            rest = generate(k + 1)
             prime = primes[k]
             for factor in rest:
                 prime_to_i = 1
@@ -150,7 +1757,7 @@ def _divisors(n):
                     prime_to_i *= prime
 
     # in python3, `yield from generate(0)` would also work
-    #for factor in generate(0):
+    # for factor in generate(0):
     #    yield factor
 
     r = []
@@ -159,7 +1766,8 @@ def _divisors(n):
 
     return sorted(r)
 
-def get_unique_supercells(n,parent_lattice):
+
+def get_unique_supercells(n, parent_lattice):
     """Find full list of unique supercells of index n.
 
     Following Ref.[1], the complete set of symmetrically inequivalent HNFs of
@@ -168,21 +1776,26 @@ def get_unique_supercells(n,parent_lattice):
     [1] Gus L. W. Hart and Rodney W. Forcade *Phys. Rev. B*
     **80**, 014120 (2009).
 
-    **Parameters:**
-
-    ``n``: integer
+    Parameters
+    ----------
+    n : int
         index of the supercells, i.e., the number of atoms in the supercells is
         ``n*parent_lattice.get_natoms()``.
-    ``parent_lattice``: ParentLattice object
+
+    parent_lattice : ParentLattice
         The parent lattice
 
-    **Returns:** two arrays containing 3x3 matrices. The matrices ``S`` of the
-    first array contain the cartesian coordinates of the supercell vectors (row
-    wise), while the matrices ``H`` in the second array are the (integer)
-    transormation matrices with respect to the parent lattice ``U``. That is,
-    :math:`S=HU`
+    Returns
+    -------
+    tuple of two arrays
+        two arrays containing 3x3 matrices. The matrices ``S`` of the
+        first array contain the cartesian coordinates of the supercell vectors (row
+        wise), while the matrices ``H`` in the second array are the (integer)
+        transormation matrices with respect to the parent lattice ``U``. That is,
+        :math:`S=HU`
 
-    **Example:**
+    Examples
+    --------
     In the following example, all the supercells of index 4 for the FCC lattice
     are found. The supercells are stored in the file
     ``unique_supercells-fcc.json`` for visualization with the command
@@ -205,15 +1818,15 @@ def get_unique_supercells(n,parent_lattice):
 
         pl = ParentLattice(pris_fcc,sites=sites)
 
-        unique_scs, unique_trafos = utils.get_unique_supercells(4,pl)
+        unique_scs, unique_sc_shapes = utils.get_unique_supercells(4,pl)
 
         sset = StructuresSet(pl,filename="unique_supercells-fcc.json")
-        for t in unique_trafos:
+        for t in unique_sc_shapes:
             scell = SuperCell(pl,t)
             sset.add_structure(Structure(scell,scell.get_atomic_numbers()),write_to_db = True)
 
     The generated structures are the same as those found in Fig. 2 and Table IV
-    of Phys. Rev. B 77, 224115 2008.
+    of Phys. Rev. B 77, 224115 2008.
 
     The next example, shows a case of reduced dimensionality, that of a 2D
     square lattice::
@@ -226,49 +1839,50 @@ def get_unique_supercells(n,parent_lattice):
 
         pl = ParentLattice(pris, sites=sites, pbc=(1,1,0))
 
-        unique_scs, unique_trafos = utils.get_unique_supercells(4,pl)
+        unique_scs, unique_sc_shapes = utils.get_unique_supercells(4,pl)
 
         sset = StructuresSet(pl,filename="test_get_unique_supercells-square_lattice.json")
-        for t in unique_trafos:
+        for t in unique_sc_shapes:
             scell = SuperCell(pl,t)
             sset.add_structure(Structure(scell,scell.get_atomic_numbers()),write_to_db = True)
 
         #isok0 = len(unique_scs) == 4 and
         print("n: ",len(unique_scs))
         print("SCS: ", unique_scs)
-        print("TRA: ", unique_trafos)
+        print("TRA: ", unique_sc_shapes)
 
     The resulting supercells in this example correspond to Fig. 1 of
     Computational Materials Science 59 (2012) 101–107
-
     """
     pl_cell = parent_lattice.get_cell()
 
-    hnfs = get_HNFs(n,pbc=parent_lattice.get_pbc())
+    hnfs = get_HNFs(n, pbc=parent_lattice.get_pbc())
 
     all_scs = []
     for hnf in hnfs:
-        all_scs.append(np.dot(hnf,pl_cell))
+        all_scs.append(np.dot(hnf, pl_cell))
 
     n_scs = len(all_scs)
     unique_scs = []
-    unique_trafos = []
-    sc_sg, sc_sym = parent_lattice.get_sym() # Scaled to parent_lattice
+    unique_sc_shapes = []
+    sc_sg, sc_sym = parent_lattice.get_sym()  # Scaled to parent_lattice
     nexts = np.asarray(np.arange(n_scs))
     unique_scs.append(all_scs[0])
-    unique_trafos.append(hnfs[0])
+    unique_sc_shapes.append(hnfs[0])
 
     while len(nexts) > 1:
         i = nexts[0]
         the_list = nexts[1:]
-        nexts=[]
+        nexts = []
         bi = all_scs[i]
         for j in the_list:
             bj = all_scs[j]
             j_is_next = True
-            for r in sc_sym['rotations']:
-                rr = np.dot(pl_cell,np.dot(r,np.linalg.inv(pl_cell))) # Rotations are in lattice coordinates, so we have to transorm them to cartesian.
-                m = np.around(np.dot(np.linalg.inv(bi.T),np.dot(rr,bj.T)),5)
+            for r in sc_sym["rotations"]:
+                rr = np.dot(
+                    pl_cell, np.dot(r, np.linalg.inv(pl_cell))
+                )  # Rotations are in lattice coordinates, so we have to transorm them to cartesian.
+                m = np.around(np.dot(np.linalg.inv(bi.T), np.dot(rr, bj.T)), 5)
                 if _is_integer_matrix(m):
                     j_is_next = False
                     break
@@ -278,113 +1892,138 @@ def get_unique_supercells(n,parent_lattice):
 
         if len(nexts) > 0:
             unique_scs.append(all_scs[nexts[0]])
-            unique_trafos.append(hnfs[nexts[0]])
+            unique_sc_shapes.append(hnfs[nexts[0]])
 
-    return unique_scs, unique_trafos
+    return unique_scs, unique_sc_shapes
 
 
-def get_HNFs(n,pbc=(1,1,1)):
+def get_HNFs(n, pbc=(1, 1, 1)):
     """Return complete set of Hermite normal form (HNF) :math:`3x3` matrices
     of index ``n``.
 
     The algorithm here is based on Equation 1 of Gus L. W. Hart and Rodney W.
     Forcade, *Phys. Rev. B* **77**, 224115 (2008).
 
-    **Parameters:**
-
-    ``n``: integer
+    Parameters
+    ----------
+    n : int
         index of the HNF matrices.
-    ``pbc``: three bool
+
+    pbc : three bool
         Periodic boundary conditions flags. Examples:
         (1, 1, 0), (True, False, False). Default value: (1,1,1)
     """
 
     _hnfs = []
     for a in _divisors(n):
-        for c in _divisors(int(n/a)):
-            f = int(n/(a*c))
+        for c in _divisors(int(n / a)):
+            f = int(n / (a * c))
             for b in range(c):
                 for d in range(f):
                     for e in range(f):
                         hnf = []
-                        hnf.append([a,0,0])
-                        hnf.append([b,c,0])
-                        hnf.append([d,e,f])
+                        hnf.append([a, 0, 0])
+                        hnf.append([b, c, 0])
+                        hnf.append([d, e, f])
                         _hnfs.append(np.array(hnf).T)
 
     hnfs = []
     for hnf in _hnfs:
         include = True
         for i, bc in enumerate(pbc):
-            if not bc and (hnf[i] != np.identity(3,dtype="int")[i]).any():
+            if not bc and (hnf[i] != np.identity(3, dtype="int")[i]).any():
                 include = False
                 break
         if include:
             hnfs.append(hnf)
 
-    return(hnfs)
+    return hnfs
 
-def _get_minimal_trafo(h, all_matrices = None, cell = None):
 
+def _get_minimal_sc_shape(h, all_matrices=None, cell=None):
     def minimum_key(x):
         return max(_get_normalized_scalar_products(np.dot(x, cell)))
 
-    trafos = [np.dot(np.reshape(mat, (3,3)), h) for mat in all_matrices]
-    minimal = min(trafos, key = minimum_key)
+    sc_shapes = [np.dot(np.reshape(mat, (3, 3)), h) for mat in all_matrices]
+    minimal = min(sc_shapes, key=minimum_key)
     return minimal
 
+
 def _get_normalized_scalar_products(s: np.ndarray):
-    """
-    For a matrix of column vectors, return the normalized scalar products.
-    
-    **Parameters:**
-    
-    ``s``: numpy.ndarray
+    """For a matrix of column vectors, return the normalized scalar products.
+
+    Parameters
+    ----------
+    s : numpy.ndarray
         matrix of transformed cell vectors as columns
-        
-    **Returns:**
-    
-    Normalized scalar products between unique vector pairs
+
+    Returns
+    -------
+    array-like
+        Normalized scalar products between unique vector pairs
     """
     p_ij = []
-    for i, j in [(0,1), (0,2), (1,2)]:
+    for i, j in [(0, 1), (0, 2), (1, 2)]:
         S_i = s.T[i]
         S_j = s.T[j]
         denominator = np.linalg.norm(S_i) * np.linalg.norm(S_j)
         nominator = abs(np.dot(S_i, S_j))
-        p_ij.append(nominator/denominator)
+        p_ij.append(nominator / denominator)
     p_ij = np.array(p_ij)
     return p_ij
 
 
-def get_unique_supercells_large_angles(n, parent_lattice: object, elements: list):
-    """
-    Return all unique supercells with large angles. 
-    Transformation of those supercells is done by unimodal matrices with matrix elements given by the paramter ``elements``   
+def get_unique_supercells_small_angles(n, parent_lattice: object, elements: list):
+    warnings.warn(
+        "'get_unique_supercells_small_angles' is deprecated and will be removed in a future release. "
+        "Please use 'get_unique_supercells_nearest_orthogonal' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return get_unique_supercells_nearest_orthogonal(n, parent_lattice, elements)
 
-    **Parameters:**
-    
-    ``elements``: list[int]
-        transformation vector elements 
+
+def get_unique_supercells_nearest_orthogonal(n, parent_lattice: object, elements: list):
+    """Return all unique supercells with pairwise lattice vectors angles closest to orthogonal.
+    Transformation of those supercells is done by unimodal matrices constructed
+    with integer matrix elements given by the paramter ``elements``
+
+    Parameters
+    ----------
+    elements : list[int]
+        transformation vector elements
 
         example: [-3,-2,-1,0,1,2,3]
 
-        The algorithm will search all combinations of 3x3 matrices composed of those ``elements``.
-
+        The algorithm will search all combinations of 3x3 matrices composed of
+        those ``elements`` and filter those with determinant 1.
     """
 
-    from itertools import product
     import multiprocessing
-    from clusterx.super_cell import SuperCell # needed by make_supercell
     from functools import partial
+    from itertools import product
+
+    from clusterx.super_cell import SuperCell  # needed by make_supercell
 
     _, harray = get_unique_supercells(n, parent_lattice)
 
     parent_lattice_cell = parent_lattice.get_cell().array.T
 
-    all_matrices = list(filter(lambda x: abs(np.linalg.det(np.reshape(x, (3,3)))) == 1, product(elements, repeat = 9)))
+    all_matrices = list(
+        filter(
+            lambda x: int(abs(np.linalg.det(np.reshape(x, (3, 3))))) == 1,
+            product(elements, repeat=9),
+        )
+    )
 
     with multiprocessing.Pool() as pool:
-        small_angle_trafos = pool.map(partial(_get_minimal_trafo, all_matrices = all_matrices, cell = parent_lattice_cell), harray)
+        small_angle_sc_shapes = pool.map(
+            partial(
+                _get_minimal_sc_shape,
+                all_matrices=all_matrices,
+                cell=parent_lattice_cell,
+            ),
+            harray,
+        )
 
-    return [SuperCell(parent_lattice, p) for p in small_angle_trafos], small_angle_trafos
+    return [SuperCell(parent_lattice, p) for p in small_angle_sc_shapes], small_angle_sc_shapes

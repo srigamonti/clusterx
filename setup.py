@@ -1,13 +1,37 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
-setup(name='clusterX',
-      version='2.1.0',
-      description='CELL (aka clusterX) is a python package for building Cluster Expansion models of simple and complex alloys and performing thermodynamical analyses of materials.',
-      url='http://sol.physik.hu-berlin.de/cell/',
-      author='CELL Developers',
-      author_email='srigamonti@physik.hu-berlin.de',
-      license='http://www.apache.org/licenses/LICENSE-2.0',
-      packages=find_packages(),
-      install_requires=['numpy', 'scipy', 'scikit-learn', 'matplotlib','ase','plac','pytest','spglib','sympy','nglview','ipywidgets','pytest-html', 'tqdm'],
-      entry_points={'console_scripts': ['cell=clusterx.cli.main:main']}
+setup(
+    name="clusterX",
+    version="2.4.0",
+    description=(
+        "CELL (aka clusterX) is a python package for building Cluster Expansion models of "
+        "simple and complex alloys and performing thermodynamical analyses of materials."
+    ),
+    url="http://sol.physik.hu-berlin.de/cell/",
+    author="CELL Developers",
+    author_email="srigamonti@physik.hu-berlin.de",
+    license="http://www.apache.org/licenses/LICENSE-2.0",
+    packages=find_packages(),
+    python_requires=">=3.10",
+    install_requires=[
+        "numpy",
+        "scipy",
+        "scikit-learn",
+        "matplotlib",
+        "ase>=3.25.0",
+        "plac",
+        "toml",
+        "pytest",
+        "spglib",
+        "nglview",
+        "ipywidgets",
+        "pytest-html",
+        "tqdm",
+        "pandas",
+        "numba>=0.59.0",
+        "python-dotenv"
+    ],
+    extras_require={"dev": ["ruff"]},
+    entry_points={"console_scripts": ["cell=clusterx.cli.main:main"]},
+    flake8={"max-line-length": 120},
 )

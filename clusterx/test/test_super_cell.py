@@ -1,0 +1,129 @@
+"""Tests for the SuperCell class."""
+
+import pytest
+from ase import Atoms
+import numpy as np
+
+from clusterx.parent_lattice import ParentLattice
+from clusterx.super_cell import SuperCell
+
+
+@pytest.fixture
+def parent_lattice():
+    cell = [[3, 0, 0], [0, 1, 0], [0, 0, 5]]
+    positions = [[0, 0, 0], [1, 0, 0], [2, 0, 0]]
+    pbc = [True, True, False]
+    pri = Atoms(["H", "H", "H"], positions=positions, cell=cell, pbc=pbc)
+    su1 = Atoms(["C", "H", "H"], positions=positions, cell=cell, pbc=pbc)
+    su2 = Atoms(["H", "He", "H"], positions=positions, cell=cell, pbc=pbc)
+    su3 = Atoms(["H", "N", "H"], positions=positions, cell=cell, pbc=pbc)
+
+    return ParentLattice(pri, substitutions=[su1, su2, su3], pbc=pbc)
+
+
+@pytest.fixture
+def super_cell(parent_lattice):
+    return SuperCell(parent_lattice, [2, 2, 2])
+
+
+@pytest.fixture
+def parent_lattice_cubic():
+    # parent lattice with single site and one substitution
+    cell = [1, 1, 1]
+    positions = [[0, 0, 0]]
+    pbc = [True, True, True]
+
+    pri = Atoms(["Cu"], positions=positions, cell=cell, pbc=pbc)
+    sub = Atoms(["Au"], positions=positions, cell=cell, pbc=pbc)
+    plat = ParentLattice(pri, substitutions=[sub], pbc=pbc)
+    return plat
+
+
+@pytest.fixture
+def super_cell_cubic(parent_lattice_cubic):
+    return SuperCell(parent_lattice_cubic, [2, 2, 2])
+
+
+def test_large(parent_lattice_cubic):
+    p = 100
+    sc = SuperCell(parent_lattice_cubic, p)  # 1 million atoms
+    n = p**3
+    assert len(sc) == n
+    # check ase-generated arrays exist
+    assert sc.arrays["numbers"].shape == (n,)
+    assert sc.arrays["positions"].shape == (n, 3)
+    assert sc.arrays["tags"].shape == (n,)
+
+
+def test_symmetries(parent_lattice_cubic, super_cell_cubic):
+    sc_sym = super_cell_cubic.get_symmetry_table()
+    assert len(sc_sym) == 3072
+
+
+def test_translations(super_cell_cubic):
+    _ = super_cell_cubic.get_internal_translations()
+    _ = super_cell_cubic.get_transformation()
+
+
+def test_non_diagonal(parent_lattice_cubic):
+    scell = SuperCell(parent_lattice_cubic, [[1, 1, 0], [-1, 1, 0], [0, 0, 2]])
+    translations = scell.get_internal_translations()
+    print(translations)
+
+
+def test_serialize_load(super_cell):
+    super_cell.serialize()
+    _ = SuperCell(filepath="scell.json")
+
+
+def test_super_cell_init(parent_lattice):
+    """Test the initialization of the SuperCell class."""
+    scell = SuperCell(parent_lattice, [1, 1, 1])
+    assert scell.get_parent_lattice() == parent_lattice
+    np.testing.assert_array_equal(scell.get_transformation(), np.diag([1, 1, 1]))
+
+
+def test_methods(super_cell):
+    """Test the methods of the SuperCell class."""
+    assert super_cell.get_parent_lattice() is not None
+    super_cell.compute_sym_perm()
+    assert super_cell.get_sym_perm() is not None
+    assert super_cell.get_sym() is not None
+    assert super_cell.get_sym_platt() is not None
+    assert super_cell.get_internal_translations() is not None
+
+
+@pytest.mark.parametrize("distribution", ["uniform", "binomial"])
+def test_gen_random_structure(super_cell, distribution):
+    """Test the generation of a random structure."""
+    rng = np.random.default_rng(seed=42)
+    random_structure = super_cell.gen_random_structure(nsubs=None, distribution=distribution, rng=rng)
+    # regression test
+    match distribution:
+        case "uniform":
+            assert np.sum(random_structure.sigmas) == 6
+        case "binomial":
+            assert np.sum(random_structure.sigmas) == 17
+    assert isinstance(random_structure, Atoms)
+    assert len(random_structure) == 24
+    assert sum(random_structure.get_pbc()) == 2
+
+
+@pytest.mark.parametrize("nsubs", [0, 2, 8])
+@pytest.mark.parametrize("with_spectator", [False, True])
+def test_gen_random_structure_binary_substitution_count(nsubs, with_spectator):
+    pristine = Atoms("SiO", scaled_positions=[[0, 0, 0], [0.5, 0.5, 0.5]], cell=[3, 3, 3], pbc=True)
+    if not with_spectator:
+        del pristine[1]
+    substituted = pristine.copy()
+    substituted[0].symbol = "Ge"
+    scell = SuperCell(ParentLattice(pristine, substitutions=[substituted]), [2, 2, 2])
+    (binary_key,) = scell.get_substitutional_tags()
+    binary_sites = scell.get_tags() == binary_key
+
+    scalar = scell.gen_random_structure(nsubs=nsubs, rng=np.random.default_rng(42))
+    mapping = scell.gen_random_structure(nsubs={binary_key: [nsubs]}, rng=np.random.default_rng(42))
+
+    assert scalar.get_chemical_symbols().count("Ge") == nsubs
+    np.testing.assert_array_equal(scalar.sigmas, mapping.sigmas)
+    np.testing.assert_array_equal(scalar.numbers[~binary_sites], scell.numbers[~binary_sites])

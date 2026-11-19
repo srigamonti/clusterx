@@ -1,0 +1,838 @@
+# Copyright (c) 2015-2026, CELL Developers.
+# This work is licensed under the terms of the Apache 2.0 license
+# See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
+from __future__ import annotations
+
+import os
+import pickle
+import random
+import warnings
+from collections import deque
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Tuple, Any
+
+import numpy as np
+from tqdm import tqdm
+
+from clusterx.model import Model
+from clusterx.super_cell import SuperCell
+from clusterx.thermodynamics.monte_carlo import _require_linear_energy_model
+from clusterx.utils import take_tile, ListDict, is_diagonal
+
+
+class MonteCarloLite:
+    r"""Monte Carlo class for linear binary single-sublattice CE models
+
+        Objects of this class are used to perform Monte Carlo samplings.
+
+        It is initialized with:
+
+        - a Model object, that enables to calculate the energy of a structure,
+
+        - a SuperCell object, in which the sampling is performed,
+
+        - specification of the thermodynamic ensemble:
+
+            If ``ensemble`` is 'canonical', the composition for the sampling is defined with ``nsubs``. In case
+            of multilattices, the sublattice for the sampling can be refined with ``sublattice_indices``.
+
+            If ``ensemble`` is 'grandcanonical', the sublattice is defined with ``sublattices_indices``.
+
+    Parameters
+    ----------
+    energy_model : Model
+        Model used for acceptance and rejection. Usually, the Model enables to
+        calculate the total energy of a structure.
+
+    scell : SuperCell
+        Simulation cell in which the sampling is performed.
+
+    energy_scale_factor : float or None
+        the energy given by energy_model times the energy_scale_factor must give the total
+        energy in the simulation supercell. If None, it is assumed that the energy_model
+        gives the energy per parent lattice and energy_scale_factor is set to scell.get_index().
+
+    boltzmann_constant : float, default 1.0
+        Boltzmann constant kb. kb times the temperature must have the same units
+        as the units of energy that energy model yields.
+
+    energy_key : str, default energy
+        For a multi-linear model, one of the predictions needs to be the energy prediction,
+        energy_key needs to match one of the strings in energy_model.property_names, so that the energy
+        prediction can be indexed from prediction vector.
+
+    reduce_structure : bool, default False
+        If true, cluster orbits/correlations are computed and evaluated on
+        subset of sigmas, in a box around central site in the structure.
+        Incompatible with non-diagonal supercell shapes.
+        NOTE: currently not used in MonteCarloLite, only in full MonteCarlo.
+
+    Notes
+    -----
+    .. todo:
+        Samplings in the grand canonical ensemble are not yet possible.
+    """
+
+    def __init__(
+        self,
+        energy_model: Model,
+        scell: SuperCell,
+        energy_scale_factor: float | None = None,
+        boltzmann_constant: float = 1.0,
+        energy_key: str = "energy",
+        reduce_structure: bool = False,
+    ):
+        _require_linear_energy_model(energy_model)
+        prop = energy_model.property_name
+        if prop is None or len(prop) == 0 or isinstance(prop, str):
+            # Note: indexing with None only works for numpy arrays, not lists
+            self._energy_prediction_index = None
+        else:
+            self._energy_prediction_index = prop.index(energy_key)
+        self._emodel = energy_model
+        self._emodel.reset_mc(True)
+
+        self._scell = scell
+
+        self._energy_scale_factor = (
+            energy_scale_factor
+            if energy_scale_factor is not None
+            else self._scell.get_index()
+        )
+        self._kb = boltzmann_constant
+
+        if not self._scell.is_nary(2):
+            raise ValueError(
+                "MonteCarloLite.init(): MonteCarloLite works only for binary materials."
+            )
+
+        self._sublattice_index: int
+        for (
+            sublattice_index,
+            atomic_numbers,
+        ) in self._scell.get_sublattice_types().items():
+            if len(atomic_numbers) == 2:
+                self._sublattice_index = int(sublattice_index)
+                break
+
+        self.structure = self._scell.get_pristine_structure()
+
+        if reduce_structure:
+            if not is_diagonal(p := self._scell.get_transformation()):
+                raise ValueError(
+                    f"Cannot reduce structure with non-diagonal SuperCell shape {p}"
+                )
+            self.e_pristine = None  # undefined, we only care about energy differences
+            self._emodel.init_reduced_model()
+            self._emodel._init_interaction_dict(self._emodel.scell_reduced)
+        else:
+            self.e_pristine = self._emodel.predict(self.structure)[
+                self._energy_prediction_index
+            ]
+            self._emodel._init_interaction_dict(self._scell)
+        self._reduce_structure = reduce_structure
+
+        print("\n" + "=" * 70)
+        print("MonteCarloLite Initialized")
+        print("=" * 70)
+        print(f"Sublattice index:          {self._sublattice_index}")
+        print(f"Energy scale factor:       {self._energy_scale_factor}")
+        print(f"Boltzmann constant (kB):   {self._kb}")
+        print(f"Supercell size:            {self._scell.get_index()} parent lattices")
+        print(f"Energy model:              {type(self._emodel).__name__}")
+        print(f"Energy model - num params: {len(self._emodel.ecis)}")
+        print("=" * 70 + "\n")
+
+    @classmethod
+    def from_file(cls, filepath: str) -> MonteCarloLite:
+        """
+        Load a MonteCarloLite object from a serialized file.
+
+        Supported formats:
+        - `.pickle`: Full Python object serialization using `pickle`.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the serialized file. The format is inferred from the file extension.
+
+        Returns
+        -------
+        Structure
+            A reconstructed Structure object based on the contents of the file.
+
+        Raises
+        ------
+        ValueError
+            If the file extension is not supported.
+        """
+        file_ext = os.path.splitext(filepath)[1].lower()
+        if file_ext == ".pickle":
+            return cls._load_from_pickle(filepath)
+        else:
+            raise ValueError(f"Unsupported file format: {file_ext}")
+
+    @staticmethod
+    def _load_from_pickle(filepath: str) -> MonteCarloLite:
+        with open(filepath, "rb") as f:
+            return pickle.load(f)
+
+    @staticmethod
+    def _validate_initialization_args_metropolis(
+        initial_sigmas: Optional[Any] = None,
+        initial_structure: Optional[Any] = None,
+        n_substitutions: Optional[Any] = None,
+    ) -> None:
+        """
+        Ensure that at most one of the three initialization parameters is provided.
+        Raises ValueError if more than one is given.
+        If none is provided, the pristine structure or the one from a previous
+        Metropolis run will be used.
+        """
+        provided = sum(
+            x is not None for x in (initial_sigmas, initial_structure, n_substitutions)
+        )
+
+        if provided > 1:
+            raise ValueError(
+                "Only one of 'initial_sigmas', 'initial_structure', or 'n_substitutions' "
+                "must be given, not multiple. If none is provided, the pristine structure "
+                "or the one from a previous Metropolis run will be used."
+            )
+
+    def _load_or_create_mcrun(
+        self,
+        mcrun_filepath: Optional[str],
+        temperature: float,
+        ensemble: str,
+        is_simulated_annealing: bool,
+        keep_sigmas=1,
+    ):
+        """Load an MCRun from file if possible, otherwise create a new instance.
+
+        Parameters
+        ----------
+        mcrun_filepath : str or None
+            Path to the MC run file. If None, a new instance is created.
+
+        temperature : float
+            Temperature for the MC run (used if creating new).
+
+        ensemble : str
+            Ensemble type (used if creating new).
+
+        Returns
+        -------
+        MCRun
+            Loaded or newly created MC run instance.
+        """
+        path = Path(mcrun_filepath) if mcrun_filepath is not None else None
+
+        if path is None:
+            warnings.warn(
+                "No file path provided for the MC run. A new run will be created; "
+                "trajectory will not be saved to a file.",
+                UserWarning,
+            )
+            return MCRun(
+                self._scell.get_parent_lattice(),
+                self._scell.get_transformation(),
+                temperature,
+                ensemble,
+                keep_sigmas=keep_sigmas,
+            )
+
+        if path.exists() and not is_simulated_annealing:
+            mcrun = MCRun.from_file(path)
+
+            # Warn if stored temperature differs from requested one
+            if not np.isclose(mcrun.temperature, temperature, rtol=1e-8, atol=0.0):
+                print(mcrun.temperature, temperature)
+                warnings.warn(
+                    f"Temperature in saved MC run ({mcrun.temperature}) "
+                    f"differs from requested temperature ({temperature}).",
+                    UserWarning,
+                )
+
+            if mcrun.keep_sigmas != keep_sigmas:
+                warnings.warn(
+                    f"keep_sigmas in saved MC run ({mcrun.keep_sigmas}) "
+                    f"differs from requested keep_sigmas ({keep_sigmas})."
+                    f"Setting keep_sigmas to ({keep_sigmas}).",
+                    UserWarning,
+                )
+
+            mcrun.resume_from_last_step()  # resume after last recorded step
+            mcrun.set_keep_sigmas(keep_sigmas)
+            return mcrun
+
+        if not is_simulated_annealing:
+            print(f"MC run file not found at: {path}. Starting a new run instance.")
+        else:
+            print(
+                f"Simulated annealing. Starting a new run instance and ignoring state at {path}.",
+            )
+
+        return MCRun(
+            self._scell.get_parent_lattice(),
+            self._scell.get_transformation(),
+            temperature,
+            ensemble,
+            keep_sigmas=keep_sigmas,
+        )
+
+    def metropolis(
+        self,
+        temperature=None,
+        n_mc_steps=None,
+        n_clics=1,
+        ensemble: str = "canonical",
+        n_substitutions=None,
+        initial_structure=None,
+        initial_sigmas=None,
+        chemical_potential=None,
+        mcrun_filepath=None,
+        keep_sigmas=1,
+        n_error_reset=None,
+        random_seed: Optional[int] = None,
+        is_simulated_annealing=False,
+        **kwargs,
+    ) -> MCRun:
+        r"""Perform Monte-Carlo Metropolis simulation
+
+            Perfom Monte-Carlo Metropolis sampling for
+            ``no_of_sampling_steps`` sampling steps.
+
+            During the sampling, a new structure at step i is accepted
+            with the probability given by :math:`\min( 1, \exp( - (E_i - E_{i-1})/(k_B T)) )`
+
+            The energy :math:`E_i` of visited structure at step i is calculated from the Model
+            ``energy_model``. The factor :math:`k_B T` is the product of the temperature :math:`T`
+            and the Boltzmann constant :math:`k_B`.
+
+            Note: The units of the ``energy`` :math:`E` and the factor :math:`k_B T` must be the same.
+            With ``scale_factor``, :math:`k_B T` can be adjusted to the correct units (see below).
+
+        Parameters
+        ----------
+        n_mc_steps : int
+            Number of sampling steps
+
+        temperature : float
+            Temperature at which the sampling is performed.
+
+        n_clics : int
+            Number of species flips (grandcanonical) or species swaps (canonical) per sampling step.
+            Defaults to 1.
+
+        ensemble : str, default canonical
+            ``canonical`` allows for swaps of atoms that conserve the concentration defined with ``nsubs``.
+
+            ``grandcanonical`` allows for replacing atoms in the sub-lattices defined with ``sublattice_indices``.
+            (So far, ``grandcanonical`` is not yet implemented.)
+
+        n_substitutions : int, optional
+            Defines the number of substituted atoms in the sublattice.
+
+        initial_structure : Structure, optional
+            Initial structure from which the sampling starts.
+
+        initial_sigmas : array, list, or tuple of int, optional
+            Initial site occupation values (sigmas) from which the sampling starts.
+
+        chemical_potential : dict, default None
+            Define the chemical potential in the grand canonical ensemble.
+
+        mcrun_filepath : str, default trajectory.json
+            Name of a Json file in which the trajectory is serialized after the sampling if ``serialize`` is **True**.
+
+        n_error_reset : int, default None
+            If not **None*  and ``predict_swap`` equal to **True**, the correlations are calculated as usual (no differences) every n-th step.
+
+        random_seed : int or None, default None
+            Random seed to produce reproducible results
+
+        **kwargs : keyworded argument list, arbitrary length
+            These arguments are added to the MonteCarloTrajectory object that is initialized in this method.
+
+        Returns
+        -------
+        MonteCarloTrajectory object
+            Trajectory containing the complete information of the sampling trajectory.
+
+        Notes
+        -----
+        At most one of `n_substitutions`, `initial_structure`, or `initial_sigmas`
+        may be provided. If none are given, the pristine structure or the one from a
+        previous Metropolis run will be used.
+        """
+        _require_linear_energy_model(self._emodel)
+        rng = np.random.default_rng(random_seed)
+        if random_seed is not None:
+            random.seed(random_seed)
+            np.random.seed(random_seed)
+
+        mcrun = self._load_or_create_mcrun(
+            mcrun_filepath, temperature, ensemble, is_simulated_annealing, keep_sigmas
+        )
+
+        self._validate_initialization_args_metropolis(
+            initial_sigmas, initial_structure, n_substitutions
+        )
+
+        if len(mcrun.sigmas) > 0:
+            sigmas = mcrun.sigmas[-1]
+            self.structure.set_arrays(sigmas=sigmas)
+        elif n_substitutions is not None:
+            _, sigmas = self._scell.gen_random_decoration(
+                nsubs={self._sublattice_index: [n_substitutions]}
+            )
+            self.structure.set_arrays(sigmas=sigmas)
+        elif initial_structure is not None:
+            sigmas = initial_structure.get_sigmas()
+            self.structure.set_arrays(sigmas=sigmas)
+        elif initial_sigmas is not None:
+            self.structure.set_arrays(sigmas=initial_sigmas)
+        else:
+            sigmas = self.structure.get_sigmas()
+        scaledbeta = self._energy_scale_factor / self._kb / temperature
+        structure = self.structure
+
+        if self._reduce_structure:
+            e = np.array([0.0])  # undefined, we only care about energy differences
+            p = np.diagonal(structure.get_transformation())
+            p_reduced = np.diagonal(self._emodel.scell_reduced.get_transformation())
+            grid_shape = p.tolist() + [1]
+            structure_reduced, _ = structure.get_reduced_structure(p_reduced, index=0)
+            scell_factor = np.prod(p) / np.prod(p_reduced)
+        else:
+            e = self._emodel.predict(structure)[self._energy_prediction_index]
+            scell_factor = 1.0
+
+        # save which sites are occupied by which species
+        occupation_indices = [
+            ListDict(),
+            ListDict(),
+        ]  # use ListDict for fast insertion and removal
+        if self._reduce_structure:
+            sigma_grid = sigmas.reshape(grid_shape)
+            for ix in range(grid_shape[0]):
+                for iy in range(grid_shape[1]):
+                    for iz in range(grid_shape[2]):
+                        for ib in range(grid_shape[3]):
+                            sigma = sigma_grid[ix, iy, iz, ib]
+                            occupation_indices[sigma].add((ix, iy, iz, ib))
+            # make sure that sigma_grid can be accessed quickly
+            sigma_grid = np.ascontiguousarray(sigma_grid)
+        else:
+            for i, sigma in enumerate(sigmas):
+                occupation_indices[sigma].add(i)
+
+        mcrun.add_step(0, sigmas, e)
+
+        progress = tqdm(range(1, n_mc_steps + 1), total=n_mc_steps, desc="MMC sim.")
+
+        i_reset = 0
+        e_error = 0
+        for i in progress:
+            atom_indices = []
+            new_sigmas = []
+            old_sigmas = []
+            for j in range(n_clics):
+                if ensemble == "grandcanonical":
+                    atom_index = rng.integers(low=0, high=len(sigmas))
+                    sigma_initial = sigmas[atom_index]
+                    sigma_final = 1 - sigmas[atom_index]
+                    atom_indices.append(atom_index)
+                    old_sigmas.append(sigma_initial)
+                    new_sigmas.append(sigma_final)
+                elif ensemble == "canonical":
+                    atom_index = rng.integers(low=0, high=len(sigmas))
+                    sigma_initial = sigmas[atom_index]
+                    sigma_final = 1 - sigmas[atom_index]
+                    atom_index_other = occupation_indices[sigma_final].choice()
+                    sigma_initial_other = sigmas[atom_index_other]
+                    sigma_final_other = 1 - sigmas[atom_index_other]
+                    # NOTE: this can include the same index multiple times
+                    atom_indices.append(atom_index)
+                    atom_indices.append(atom_index_other)
+                    old_sigmas.append(sigma_initial)
+                    old_sigmas.append(sigma_initial_other)
+                    new_sigmas.append(sigma_final)
+                    new_sigmas.append(sigma_final_other)
+
+            de = 0.0
+            for atom_index, new_sigma, old_sigma in zip(
+                atom_indices, new_sigmas, old_sigmas
+            ):
+                # assign structure and calculate where flip is taking place
+                if self._reduce_structure:
+                    sigma_grid_r, atom_index_r = take_tile(
+                        sigma_grid, atom_index, p_reduced
+                    )
+                    structure_reduced.sigmas = sigma_grid_r.flatten()
+                    structure_pred = structure_reduced
+                    index = np.ravel_multi_index(atom_index_r, sigma_grid_r.shape)
+                else:
+                    structure_pred = structure
+                    index = atom_index
+
+                # calculate flip energy
+                de += self._emodel.predict_flip(
+                    structure_pred,
+                    index=index,
+                    old_sigma=old_sigma,
+                    new_sigma=new_sigma,
+                    scell_factor=scell_factor,
+                )[self._energy_prediction_index]
+
+                # perform flip
+                sigmas[atom_index] = int(new_sigma)
+                occupation_indices[old_sigma].remove(atom_index)
+                occupation_indices[new_sigma].add(atom_index)
+
+            e1 = e + de
+
+            if de <= 0:
+                accept_clic = True
+            else:
+                accept_clic = rng.uniform(0, 1) <= np.exp(-de * scaledbeta)
+
+            if accept_clic:
+                e = e1
+                sigmas = self.structure.get_sigmas()
+                mcrun.add_step(i, sigmas, e)
+            else:
+                # reset sigmas in reverse order
+                for atom_index, new_sigma, old_sigma in zip(
+                    atom_indices[::-1], new_sigmas[::-1], old_sigmas[::-1]
+                ):
+                    sigmas[atom_index] = old_sigma
+                    structure.sigmas = sigmas
+                    occupation_indices[new_sigma].remove(atom_index)
+                    occupation_indices[old_sigma].add(atom_index)
+                    # self.structure.update_arrays(
+                    #    atom_indices=atom_indices[::-1], new_sigmas=old_sigmas[::-1]
+                    # )
+
+            if (
+                n_error_reset is not None
+                and n_error_reset > 0
+                and i % n_error_reset == 0
+            ):
+                e0 = e
+                e = self._emodel.predict(self.structure)[self._energy_prediction_index]
+                mcrun.energies[-1] = e
+                e_error = e - e0
+                i_reset = i
+
+            ratio = mcrun.acceptance_ratio_last(1000)
+            progress.set_description(
+                f"MMC sim. | Acc. ratio: {ratio:.4f} | E-reset@{i_reset}: {e_error:.3e}"
+            )
+
+        mcrun.add_step(i, sigmas, e)  # record last step
+
+        if mcrun_filepath is not None:
+            mcrun.serialize(filepath=mcrun_filepath)
+
+        return mcrun
+
+    def serialize(self, filepath="mcsetup.pickle", fmt="pickle"):
+        """Save the structure to a file in the specified format.
+
+        Parameters
+        ----------
+        fmt : str, optional
+            File format for output (default is "pickle").
+
+        filepath : str, optional
+            Path to the output file (default is "mcsetup.pickle").
+        """
+        file_ext = (
+            os.path.splitext(filepath)[1].lower().lstrip(".")
+        )  # remove leading dot
+        fmt = fmt or file_ext  # use file extension as format if fmt is not provided
+
+        if fmt == "pickle":
+            with open(filepath, "wb") as f:
+                pickle.dump(self, f)
+        else:
+            raise NotImplementedError(f"Serialization format '{fmt}' is not supported.")
+
+
+class MCRun:
+    def __init__(self, plat, scshape, temperature, ensemble, keep_sigmas: int = 1):
+        """
+        keep_sigmas : int >= 0, default 1
+            0 = keep none; 1 = keep only the latest; n = keep the last n.
+        """
+        if keep_sigmas < 0:
+            raise ValueError("keep_sigmas must be >= 0")
+
+        # Core metadata
+        self.plat = plat
+        self.scshape = scshape
+        self.temperature = temperature
+        self.ensemble = ensemble
+
+        # Trajectory (lightweight; keep full history)
+        self.accepted_steps: List[int] = []
+        self.energies: List[float] = []
+
+        # Sigmas (bounded)
+        self._keep_sigmas = int(keep_sigmas)
+        self.sigmas = deque(maxlen=self._keep_sigmas) if self._keep_sigmas > 0 else None
+
+        # Offset for continuing runs
+        self._step_offset: int = 0
+
+    # --- Retention control -------------------------------------------------
+    @property
+    def keep_sigmas(self) -> int:
+        return self._keep_sigmas
+
+    def set_keep_sigmas(self, n: int) -> None:
+        """Change retention; shrinking discards oldest immediately."""
+        if n < 0:
+            raise ValueError("keep_sigmas must be >= 0")
+        n = int(n)
+        if n == self._keep_sigmas:
+            return
+
+        if n == 0:
+            self.sigmas = None
+        else:
+            recent = []
+            if self.sigmas is not None:
+                recent = list(self.sigmas)[-n:]
+            self.sigmas = deque(recent, maxlen=n)
+
+        self._keep_sigmas = n
+
+    # --- Offset management -------------------------------------------------
+    def set_step_offset(self, offset: int) -> None:
+        if offset < 0:
+            raise ValueError("step offset must be non-negative")
+        self._step_offset = offset
+
+    def resume_from_last_step(self) -> None:
+        self._step_offset = (self.accepted_steps[-1] + 1) if self.accepted_steps else 0
+
+    @property
+    def step_offset(self) -> int:
+        return self._step_offset
+
+    # --- Recording steps ---------------------------------------------------
+    def add_step(self, step_index: int, sigmas, energy: float) -> None:
+        """Append a Monte Carlo step to the run history."""
+        global_index = self._step_offset + int(step_index)
+        self.accepted_steps.append(global_index)
+        self.energies.append(energy)
+        if self._keep_sigmas > 0:
+            self.sigmas.append(np.array(sigmas, dtype=np.uint8))
+
+    # --- Convenience -------------------------------------------------------
+    def last_sigma(self) -> Optional[np.ndarray]:
+        if self._keep_sigmas == 0 or not self.sigmas:
+            return None
+        return self.sigmas[-1]
+
+    def iter_recent_sigmas(self) -> Iterable[Tuple[int, np.ndarray]]:
+        """
+        Yield (step, sigma) for the retained window, oldest -> newest.
+        Uses the invariant: retained sigmas correspond to the last len(sigmas)
+        entries in accepted_steps.
+        """
+        if self._keep_sigmas == 0 or not self.sigmas:
+            return iter(())
+        k = len(self.sigmas)
+        steps = self.accepted_steps[-k:]
+        # materialize sigmas to align indexes (deque iterable is fine, but we might resize later)
+        sigs = list(self.sigmas)
+        return zip(steps, sigs)
+
+    def last_sigma_with_step(self) -> Tuple[Optional[int], Optional[np.ndarray]]:
+        """
+        Convenience: return (last_step, last_sigma) or (None, None) if none retained.
+        """
+        if self._keep_sigmas == 0 or not self.sigmas:
+            return None, None
+        return self.accepted_steps[-1], self.sigmas[-1]
+
+    def acceptance_ratio_last(self, m: int) -> float:
+        """
+        Estimate the acceptance ratio over the span that covers the last `m`
+        accepted steps.
+
+        We only store accepted step indices (self.accepted_steps). Let the last
+        m accepted global indices be [i_1, ..., i_m] (i_1 <= ... <= i_m).
+        The number of attempts spanned by this window is (i_m - i_1 + 1).
+        The number of accepted moves in this window is m.
+        The ratio is m / (i_m - i_1 + 1).
+
+        Notes
+        -----
+        - If fewer than m accepted steps exist, this uses all that are available.
+        - If there are no accepted steps recorded, returns 0.0.
+        - This ratio reflects acceptance **over the attempted steps covered by
+          those m accepts**, not “last m attempts”.
+        """
+        if m <= 0:
+            raise ValueError("m must be a positive integer")
+
+        n_acc = len(self.accepted_steps)
+        if n_acc == 0:
+            return 0.0
+
+        m_used = min(m, n_acc)
+        first_idx = self.accepted_steps[-m_used]
+        last_idx = self.accepted_steps[-1]
+        attempts_spanned = last_idx - first_idx + 1
+
+        # attempts_spanned should be >= m_used always; guard just in case
+        if attempts_spanned <= 0:
+            return 0.0
+
+        return m_used / attempts_spanned
+
+    def serialize(self, filepath: str = None):
+        """Serialize the MCRun object using pickle."""
+        with open(filepath, "wb") as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def from_file(cls, filepath: str) -> MCRun:
+        """Deserialize an MCRun object from a pickle file."""
+        with open(filepath, "rb") as f:
+            return pickle.load(f)
+
+    def __repr__(self):
+        return (
+            f"<MCRun(ensemble={self.ensemble}, T={self.temperature}, "
+            f"n_steps={self.accepted_steps[-1]}, n_accepted_steps={len(self.accepted_steps)})>"
+            f"acceptance_ratio={self.acceptance_ratio_last(1000)})>"
+        )
+
+
+def specific_heat(mc_setup, mc_run, n_eq: int = 1) -> Dict[str, float]:
+    """
+    Compute per-site specific heat from a Monte Carlo trajectory where only ACCEPTED
+    steps were logged, using a numerically stable weighted Welford update.
+
+    We treat each accepted energy E[j] as constant over its dwell time (number of MC
+    steps until the next acceptance). Dwell lengths are the *weights* in the averages.
+
+    Returns a dict with:
+        - 'C'      : specific heat per site
+        - 'E_mean' : mean energy over the production window
+        - 'E_var'  : variance of energy over the production window (population variance)
+        - 'n_prod' : number of MC steps in the production window
+    """
+    # Pull inputs
+    accepted_energies = mc_run.energies
+    accepted_indices = mc_run.accepted_steps
+    T = mc_run.temperature
+    kB = mc_setup._kb
+    N = mc_setup._energy_scale_factor
+
+    # Use highest practical precision available on this platform
+    # (np.longdouble is >= float64 on many Unix platforms; on Windows it may equal float64)
+    work_dtype = (
+        np.longdouble
+        if np.finfo(np.longdouble).eps < np.finfo(np.float64).eps
+        else np.float64
+    )
+
+    idx = np.asarray(accepted_indices, dtype=np.int64)
+    E = np.asarray(accepted_energies, dtype=work_dtype)
+
+    # Basic validation
+    if idx.size == 0 or E.size == 0 or idx.size != E.size:
+        raise ValueError(
+            "accepted_indices and accepted_energies must be non-empty and of equal length."
+        )
+    if np.any(np.diff(idx) < 0):
+        raise ValueError("accepted_indices must be strictly increasing.")
+
+    n_steps = int(
+        idx[-1]
+    )  # assume last logged accepted step equals total steps counter
+    if n_eq < 0 or n_steps <= 0:
+        raise ValueError("n_eq must be >= 0 and n_steps must be > 0.")
+    if n_eq >= n_steps:
+        raise ValueError("No production steps: n_eq must be less than n_steps.")
+    if T <= 0 or N <= 0 or kB <= 0:
+        raise ValueError("T, N, and kB must be positive.")
+
+    # Production window [start_prod, end_prod)
+    start_prod = int(n_eq)
+    end_prod = int(n_steps)
+
+    # Index of last acceptance at or before start_prod (could be -1 if none)
+    j0 = np.searchsorted(idx, start_prod, side="right") - 1
+
+    # Weighted Welford state
+    W = work_dtype(0.0)  # total weight (production steps)
+    mean = work_dtype(0.0)  # running mean
+    M2 = work_dtype(0.0)  # running sum of weighted squared deviations
+    M2_c = work_dtype(0.0)  # Kahan compensator for M2 (optional but cheap)
+
+    def kahan_add(total, c, x):
+        y = x - c
+        t = total + y
+        c_new = (t - total) - y
+        return t, c_new
+
+    def accumulate(dwell_len: int, energy: work_dtype):
+        nonlocal W, mean, M2, M2_c
+        w = work_dtype(dwell_len)
+        if w <= 0:
+            return
+        W_new = W + w
+        # Welford weighted update
+        delta = energy - mean
+        mean += (w * delta) / W_new
+        delta2 = energy - mean
+        incr = w * delta * delta2
+        M2, M2_c = kahan_add(M2, M2_c, incr)
+        W = W_new
+
+    # Case A: we know the energy at start_prod
+    if j0 >= 0:
+        next_idx = int(idx[j0 + 1]) if (j0 + 1) < idx.size else end_prod
+        dwell = max(0, min(next_idx, end_prod) - start_prod)
+        accumulate(dwell, E[j0])
+
+        # Subsequent segments within [start_prod, end_prod)
+        for j in range(j0 + 1, idx.size):
+            seg_start = int(idx[j])
+            if seg_start >= end_prod:
+                break
+            seg_end = int(idx[j + 1]) if (j + 1) < idx.size else end_prod
+            if seg_end <= start_prod:
+                continue
+            dwell = min(seg_end, end_prod) - max(seg_start, start_prod)
+            accumulate(dwell, E[j])
+    else:
+        # Case B: no acceptance before start_prod → start at first acceptance ≥ start_prod
+        j1 = np.searchsorted(idx, start_prod, side="left")
+        for j in range(j1, idx.size):
+            seg_start = int(idx[j])
+            if seg_start >= end_prod:
+                break
+            seg_end = int(idx[j + 1]) if (j + 1) < idx.size else end_prod
+            dwell = min(seg_end, end_prod) - seg_start
+            accumulate(dwell, E[j])
+
+    if W <= 0:
+        raise ValueError(
+            "No production data after applying n_eq; check indices and n_steps."
+        )
+
+    # Population (time-average) variance over production window
+    E_mean = float(mean)
+    E_var = float(max(work_dtype(0.0), M2 / W))
+    C = E_var / (N * kB * (T**2))
+
+    return {"C": float(C), "E_mean": E_mean, "E_var": E_var, "n_prod": float(W)}

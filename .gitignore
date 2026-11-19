@@ -3,7 +3,13 @@
 clusterX.egg-info
 __pycache__
 .*
+!/.agents/
+/.agents/*
+!/.agents/skills/
 !.gitlab-ci.yml
+!.python-version
 *#
 build
 dist
+mypy.ini
+cellconfig.json

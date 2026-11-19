@@ -1,105 +1,249 @@
-from clusterx.parent_lattice import ParentLattice
-from clusterx.super_cell import SuperCell
-from clusterx.structures_set import StructuresSet
-from clusterx.model import ModelBuilder
-from clusterx.clusters.clusters_pool import ClustersPool
-from clusterx.calculators.emt import EMT2
+# Copyright (c) 2015-2026, CELL Developers.
+# This work is licensed under the terms of the Apache 2.0 license
+# See accompanying license for details or visit https://www.apache.org/licenses/LICENSE-2.0.txt.
 
-from clusterx.thermodynamics.monte_carlo import MonteCarlo
-
-from ase.build import bulk
-
-import numpy as np
 import random
 
-def seed_rnd_generator(seed = 0):
+import pytest
+from ase import Atoms
+from ase.build import bulk
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+from clusterx.parent_lattice import ParentLattice
+from clusterx.super_cell import SuperCell
+from clusterx.model import Model
+from clusterx.clusters.clusters_pool import ClustersPool
+from clusterx.correlations import CorrelationsCalculator
+from clusterx.thermodynamics.monte_carlo import MonteCarlo
+from clusterx.test.defaults import get_clathrate_supercell, get_clathrate_model
+
+
+@pytest.fixture
+def plat():
+    pri = bulk("H", crystalstructure="sc", a=1.0)
+    sub = bulk("He", crystalstructure="sc", a=1.0)
+    return ParentLattice(atoms=pri, substitutions=[sub], pbc=(1, 1, 1))
+
+
+@pytest.fixture
+def cpool(plat):
+    return ClustersPool(plat, npoints=[1, 2], radii=[0, 1.1])
+
+
+@pytest.fixture
+def corrc(plat, cpool):
+    return CorrelationsCalculator("trigonometric", plat, cpool)
+
+
+@pytest.fixture
+def model(plat, cpool, corrc):
+    mult = cpool.get_multiplicities()
+
+    corrc = CorrelationsCalculator("trigonometric", plat, cpool)
+    model = Model(corrc, "energy2", ecis=mult)
+    model.reset_mc(True)
+    return model
+
+
+@pytest.fixture
+def model_estimator(plat, cpool, corrc):
+    mult = cpool.get_multiplicities()
+    estimator = LinearRegression(fit_intercept=True)
+    estimator.coef_ = np.array(mult)
+    estimator.intercept_ = 1.0
+
+    corrc = CorrelationsCalculator("trigonometric", plat, cpool)
+    model = Model(corrc, "energy", estimator=estimator)
+    model.reset_mc(True)
+    return model
+
+
+def seed_rngs(seed=0):
     random.seed(seed)
     np.random.seed(seed)
 
-# binary case
 
-def test_predict_swap_energy_model():
-    structure = bulk("Si")
-    substitutions = structure.copy()
-    substitutions.set_chemical_symbols(["Ge", "Ge"])
-    pl = ParentLattice(atoms=structure, substitutions=[substitutions], pbc=(1,1,1))
-    scell = SuperCell(pl, 2)
-    seed_rnd_generator()
-    sset = StructuresSet(parent_lattice=pl, calculator=EMT2())
-    for nsub in range(2,15):
-        for _ in range(3):
-            structure = scell.gen_random_structure(nsubs={0:[nsub]})
-            sset.add_structure(structure)
-    sset.calculate_property()
-    cpool = ClustersPool(pl, npoints=[1,2], radii=[0,3])
-    mb = ModelBuilder(basis = "trigonometric")
-    model = mb.build(sset=sset, cpool=cpool, prop="energy")
+# test cases (TODO):
+# estimator: None (just ECI), linear, non-linear
+@pytest.mark.parametrize("basis", ["binary-linear", "trigonometric", "polynomial"])
+def test_swap_clathrate(basis):
+    seed_rngs(42)  # is specific, so that swap changes energy
+    scell = get_clathrate_supercell()
+    model = get_clathrate_model(basis)
+    model.reset_mc(True)
 
-    # This is a horrible workaround. The behavior of the CorrelationsCalculator is different 
-    # when performing MC simulations, so we run a short one here to allow for predicting a swap.
-    predict_full = MonteCarlo(energy_model=model, scell = scell, nsubs={0:[4]})
-    _ = predict_full.metropolis(temperature=100, no_of_sampling_steps = 1)
+    structure = scell.gen_random_structure()
+    i0, i1 = 0, 1
+    e0 = model.predict(structure)
+    e_diff_swap = model.predict_swap(structure, i0, i1)
+    structure.swap(i0, i1)
+    e1 = model.predict(structure)
+    np.testing.assert_allclose(e1 - e0, e_diff_swap)
 
-    # To make sure the same indices are swapped in prediction and for the swap
-    swap_idx1 = 0
-    swap_idx2 = 6
 
-    seed_rnd_generator()
-    structure = scell.gen_random_structure(nsubs={0:[5]})
-    energy_predict_swap = model.predict_swap(structure, ind1=swap_idx1, ind2=swap_idx2)
-    print("Predict swap correlations:", model.predict_swap(structure, ind1=swap_idx1, ind2=swap_idx2, correlation=True))
-    model.corrc.reset_mc()
-    energy_original_predicted = model.predict(structure)
-    print(f"Original structure sigmas: {structure.get_sigmas()}")
-    print("correlations of original", model.corrc.get_cluster_correlations(structure))
-    structure.swap(swap_idx1,swap_idx2)
-    print(f"Swapped structure sigmas: {structure.get_sigmas()}")
-    energy_swapped_predicted = model.predict(structure)
-    print("correlations of swapped", model.corrc.get_cluster_correlations(structure))
+def test_swap(plat, model):
+    seed_rngs(42)
 
-    assert not np.isclose(energy_swapped_predicted, energy_original_predicted), "Energies of swapped structure is too similar to energy of original structure"
-    swapped_energy = energy_original_predicted - energy_swapped_predicted
-    assert np.isclose(swapped_energy, energy_predict_swap), f"Prediction of swap differs from energy difference after swap: real:{swapped_energy}, predicted:{energy_predict_swap}"
+    p = [3, 3, 3]  # for 2*2*2 supercell, results are unreliable due to wrapping
+    scell = SuperCell(plat, p)
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
+    preds_full = []
+    preds_swap = []
+    for i in range(len(scell)):
+        for j in range(len(scell)):
+            if j > i:
+                continue
+            pred_init = model.predict(structure)
+            pred_swap = model.predict_swap(structure, i, j)
+            structure.swap(i, j)
+            pred_final = model.predict(structure)
+            preds_full.append(pred_final - pred_init)
+            preds_swap.append(pred_swap)
+    np.testing.assert_allclose(preds_swap, preds_full, atol=1e-10)
 
-def test_predict_swap_monte_carlo_binary():
-    structure = bulk("Si")
-    substitutions = structure.copy()
-    substitutions.set_chemical_symbols(["Ge", "Ge"])
-    pl = ParentLattice(atoms=structure, substitutions=[substitutions], pbc=(1,1,1))
-    scell = SuperCell(pl, 2)
-    seed_rnd_generator()
-    sset = StructuresSet(parent_lattice=pl, calculator=EMT2())
 
-    for nsub in range(1,16):
-        for _ in range(5):
-            structure = scell.gen_random_structure(nsubs={0:[nsub]})
-            sset.add_structure(structure)
+@pytest.mark.parametrize("reduce", [False, True])
+def test_flip_2D(reduce):
+    seed_rngs(42)
+    pri = Atoms("Cu", positions=[[0, 0, 0]], cell=[1, 1, 1], pbc=[1, 1, 0])
+    sub = Atoms("Au", positions=[[0, 0, 0]], cell=[1, 1, 1], pbc=[1, 1, 0])
+    plat = ParentLattice(atoms=pri, substitutions=[sub])
+    p = [10, 10, 1]
+    scell = SuperCell(plat, p)
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
+    cpool = ClustersPool(plat, npoints=[2], radii=[1.5])
+    corrc = CorrelationsCalculator("trigonometric", plat, cpool)
+    model = Model(corrc, "energy", ecis=[1, 1])
+    if reduce:
+        model.init_reduced_model(structure)
+        model._init_interaction_dict(model.scell_reduced)
+        structure.init_reduced_structure(model.scell_reduced)
 
-    sset.calculate_property()
+    preds_full = []
+    preds_flip = []
+    for i in range(len(structure)):
+        pred_init = model.predict(structure)
+        old_sigma = structure.sigmas[i]
+        new_sigma = 1 - old_sigma
+        pred_flip = model.predict_flip(structure, i, old_sigma, new_sigma, reduce)
+        structure.sigmas[i] = new_sigma
+        pred_final = model.predict(structure)
+        preds_full.append(pred_final - pred_init)
+        preds_flip.append(pred_flip)
+    np.testing.assert_allclose(preds_flip, preds_full, atol=1e-12)
 
-    cpool = ClustersPool(pl, npoints=[1,2,3], radii=[0,3,4])
 
-    from time import perf_counter
+@pytest.mark.parametrize("model_", ["model", "model_estimator"])
+@pytest.mark.parametrize("reduce", [False, True])
+def test_flip(plat, model_, reduce, request):
+    model = request.getfixturevalue(model_)
+    seed_rngs(42)
 
-    mb = ModelBuilder()
-    mb.initialize()
-    model = mb.build(sset=sset, cpool=cpool, prop="energy")
+    p = [5, 5, 5]
+    scell = SuperCell(plat, p)
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2))
+    if reduce:
+        model.init_reduced_model(structure)
+        model._init_interaction_dict(model.scell_reduced)
+        structure.init_reduced_structure(model.scell_reduced)
+    preds_full = []
+    preds_flip = []
+    for i in range(len(structure)):
+        pred_init = model.predict(structure)
+        old_sigma = structure.sigmas[i]
+        new_sigma = 1 - old_sigma
+        pred_flip = model.predict_flip(structure, i, old_sigma, new_sigma, reduce)
+        structure.sigmas[i] = new_sigma
+        pred_final = model.predict(structure)
+        preds_full.append(pred_final - pred_init)
+        preds_flip.append(pred_flip)
+    np.testing.assert_allclose(preds_flip, preds_full)
 
-    predict_full = MonteCarlo(energy_model=model, scell = scell, nsubs={0:[4]})
-    seed_rnd_generator()
-    t1 = perf_counter()
-    traj_full = predict_full.metropolis(temperature=100, no_of_sampling_steps = 100)
-    t2 = perf_counter()
-    print(f"time full: {t2-t1}")
-    seed_rnd_generator()
-    traj_full2 = predict_full.metropolis(temperature=100, no_of_sampling_steps = 100)
 
-    predict_swap = MonteCarlo(energy_model=model, scell = scell, nsubs={0:[4]}, predict_swap=True)
-    seed_rnd_generator()
-    t1 = perf_counter()
-    traj_swap = predict_swap.metropolis(temperature=100, no_of_sampling_steps = 100)
-    t2 = perf_counter()
-    print(f"time swap: {t2-t1}")
+@pytest.mark.parametrize("reduce", [False, True])
+def test_predict_partial_flip(plat, model, reduce):
+    rng = np.random.default_rng()
+    p = [5, 5, 5]
+    scell = SuperCell(plat, p)
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2), rng=rng)
 
-    assert len(traj_full._trajectory) == len(traj_swap._trajectory), "Different length for trajectories."
-    assert np.allclose(traj_full.get_energies(), traj_swap.get_energies()), "Energies of structures visited with 'predict_swap' differ from full CE prediction."
+    model.init_reduced_model(structure)
+    model._init_interaction_dict(model.scell_reduced)
+    structure.init_reduced_structure(model.scell_reduced)
+
+    preds_full = []
+    preds_partial = []
+    for i in range(len(structure)):
+        pred_init = model.predict(structure, reduce_structure=reduce)
+        pred_partial_i = model.predict_partial(structure, i)
+        old_sigma = structure.sigmas[i]
+        new_sigma = 1 - old_sigma
+
+        structure.sigmas[i] = new_sigma
+        pred_final = model.predict(structure, reduce_structure=reduce)
+        pred_partial_f = model.predict_partial(structure, i)
+        preds_full.append(pred_final - pred_init)
+        preds_partial.append(pred_partial_f - pred_partial_i)
+    np.testing.assert_allclose(preds_partial, preds_full)
+
+
+def test_predict_partial_full(plat, model):
+    rng = np.random.default_rng()
+    p = [5, 5, 5]
+    scell = SuperCell(plat, p)
+    structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2), rng=rng)
+
+    model.init_reduced_model(structure)
+    model._init_interaction_dict(model.scell_reduced)
+    structure.init_reduced_structure(model.scell_reduced)
+
+    for _ in range(100):
+        structure = scell.gen_random_structure(nsubs=int(np.prod(p) / 2), rng=rng)
+        structure.init_reduced_structure(model.scell_reduced)
+
+        pred_full = model.predict(structure)
+        pred_partial = model.predict(structure, reduce_structure=True)
+        np.testing.assert_allclose(pred_partial, pred_full, atol=1e-10)
+
+
+def test_flip_scale_sc(plat, model):
+    for i in range(3, 10):
+        model.reset_mc(True)
+        p = [3, 3, 3 * i]
+        scell = SuperCell(plat, p)
+        structure = scell.get_pristine_structure()
+        pred_init = model.predict(structure)
+        old_sigma = structure.sigmas[0]
+        new_sigma = 1 - old_sigma
+        pred_flip = model.predict_flip(structure, 0, old_sigma, new_sigma)
+        structure.sigmas[i] = new_sigma
+        pred_final = model.predict(structure)
+        np.testing.assert_allclose(pred_flip, pred_final - pred_init)
+
+
+def test_metropolis(plat, model):
+    seed = 42
+    p = [4, 4, 4]
+    scell = SuperCell(plat, p)
+    nsubs = {0: [4]}
+    nsteps = 10  # might fail for larger nsteps and similar or smaller p
+
+    mc_full = MonteCarlo(
+        energy_model=model,
+        scell=scell,
+        nsubs=nsubs,
+        predict_swap=False,
+        seed=seed,
+    )
+    traj_full = mc_full.metropolis(temperature=100, no_of_sampling_steps=nsteps,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
+
+    mc_swap = MonteCarlo(energy_model=model, scell=scell, nsubs=nsubs, predict_swap=True, seed=seed)
+    traj_swap = mc_swap.metropolis(temperature=100, no_of_sampling_steps=nsteps,
+        energy_factor=1.0,
+        boltzmann_constant=1.0,
+    )
+    np.testing.assert_allclose(traj_swap.get_energies(), traj_full.get_energies())

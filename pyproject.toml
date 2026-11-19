@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clusterX"
+version = "2.4.0"
+description = "CELL (aka clusterX) is a python package for building Cluster Expansion models of simple and complex alloys and performing thermodynamical analyses of materials."
+authors = [{ name = "CELL Developers", email = "srigamonti@physik.hu-berlin.de" }]
+license = { text = "http://www.apache.org/licenses/LICENSE-2.0" }
+requires-python = ">=3.12"
+dependencies = [
+	"numpy",
+	"scipy",
+	"scikit-learn",
+	"matplotlib",
+	"ase>=3.25.0",
+	"plac",
+	"toml",
+	"spglib",
+	"nglview",
+	"ipywidgets",
+	"pytest-html",
+	"tqdm",
+	"pandas",
+	"numba>=0.59.0",
+	"python-dotenv",
+]
+
+[project.urls]
+Homepage = "http://sol.physik.hu-berlin.de/cell/"
+
+[project.scripts]
+cell = "clusterx.cli.main:main"
+
+[tool.setuptools.packages.find]
+
+[tool.flake8]
+max-line-length = 120
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.5",
+]
