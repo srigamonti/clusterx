@@ -7,4 +7,4 @@
 
 """CELL (aka clusterX)"""
 
-__version__ = "1.0.0.dev5"
+__version__ = "2.4.1"

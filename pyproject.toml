@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clusterX"
-version = "2.4.0"
+version = "2.4.1"
 description = "CELL (aka clusterX) is a python package for building Cluster Expansion models of simple and complex alloys and performing thermodynamical analyses of materials."
 authors = [{ name = "CELL Developers", email = "srigamonti@physik.hu-berlin.de" }]
 license = { text = "http://www.apache.org/licenses/LICENSE-2.0" }
@@ -17,7 +17,7 @@ dependencies = [
 	"ase>=3.25.0",
 	"plac",
 	"toml",
-	"spglib",
+	"spglib>=2.8.0",
 	"nglview",
 	"ipywidgets",
 	"pytest-html",

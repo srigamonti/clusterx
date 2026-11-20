@@ -420,7 +420,7 @@ wheels = [
 
 [[package]]
 name = "clusterx"
-version = "2.4.0"
+version = "2.4.1"
 source = { editable = "." }
 dependencies = [
     { name = "ase" },
@@ -460,7 +460,7 @@ requires-dist = [
     { name = "python-dotenv" },
     { name = "scikit-learn" },
     { name = "scipy" },
-    { name = "spglib" },
+    { name = "spglib", specifier = ">=2.8.0" },
     { name = "toml" },
     { name = "tqdm" },
 ]
